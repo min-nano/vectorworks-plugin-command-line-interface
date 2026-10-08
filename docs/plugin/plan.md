@@ -11,12 +11,11 @@
 | 3 | **読む道具**: `layers` / `classes` / `layer_objects` / `object_counts` | 実機で、元のプラグインの `vw_*` と同じ図面に対して同じ結果になる | 要 |
 | 4 | **配布**: 梱包（`bin/vw2026`）・`vw-install` / `vw-uninstall`（PATH を含む）・安定版のリリース・`cleanup-dev-release.yml`・スクリプトのテスト | CI（スクリプトのテストで、PATH の歯止めを押さえる）。実機でインストール → 新しい端末で `vw2026 status` → アンインストールでリンクだけが消える | 要 |
 | 5 | **自動アップデート**: メニュー「アップデートを確認」・道具 `update` / `restart` | CI（`UpdaterFlowTests`）。実機で本体だけ変わる更新（再起動なし・`payload_version` が変わる）と、殻が変わる更新（`restart_if_needed`）の両方 | 要 |
-| 6 | **状態と停止**: メニュー「CLI ブリッジの状態…」・停止と再開（[未決 1](open-questions.md)） | 実機で、停止すると `vw2026 status` が `live:false` になり、再開で戻る | 要 |
 
 その先（順序は未定）:
 
 - **他のプラグインの機能をユニバーサル名で呼ぶ**（[SDK リファレンス #217](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/217) の結果しだい）。
-- **図面に書く道具**（undo の作法・人の操作との混在の扱いを決めてから。[未決 3](open-questions.md)）。
+- **図面に書く道具**（undo の作法・人の操作との混在の扱いを決めてから。[未決 2](open-questions.md)）。
 - 構造設計支援プラグインの開発版ブリッジの移行（当面は並存）。
 
 ## 実機の確かめ方（MCP なし）

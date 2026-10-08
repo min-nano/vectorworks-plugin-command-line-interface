@@ -1,7 +1,7 @@
 # 元のプラグインから移すもの
 
 パスは元のリポジトリ（HEAD 6ffd221）のものです。**移したら名前空間を `VwCli` に、プラグイン名を
-`cli` / `cliDev` に置き換えます。** 経緯の説明は写さず、決めごとだけを持ってきます（経緯は
+`cli` / `cli_dev` に置き換えます。** 経緯の説明は写さず、決めごとだけを持ってきます（経緯は
 元の `docs/` を指す）。
 
 ## そのまま移す（名前の置き換えだけ）
@@ -26,12 +26,12 @@
 
 | 元 | 先 | 作り替え |
 | --- | --- | --- |
-| `src/Extensions/ExtMcpPalette.cpp` のタイマー部（`StartMcpBridgeClock` / `ClockTick` / `ServeOnce` / `RunShellAction` / `SettleReport`） | `src/Clock.{h,cpp}` | パレットを除く。道具の名前を `update` / `restart` に。**開発版だけでなく両方で**開始する。停止中は何もしない |
+| `src/Extensions/ExtMcpPalette.cpp` のタイマー部（`StartMcpBridgeClock` / `ClockTick` / `ServeOnce` / `RunShellAction` / `SettleReport`） | `src/Clock.{h,cpp}` | パレットを除く。道具の名前を `update` / `restart` に。**開発版だけでなく両方で**開始する |
 | `src/draw/McpBridge.cpp` | `src/core/Serve.{h,cpp}`＋`src/tools/*` | 手順（SDK に依らない）と道具（SDK 依存）を分ける。道具の名前から `vw_` を外す。印の形を作法に合わせる |
-| `src/ModuleMain.cpp` | 同じ | 登録はメニュー 2 つだけ。`StartClock()` を `#ifdef` なしで呼ぶ |
+| `src/ModuleMain.cpp` | 同じ | 登録はメニュー「アップデートを確認」の 1 つだけ。`StartClock()` を `#ifdef` なしで呼ぶ |
 | `src/BuildConfig.h` | 同じ | [識別子](identifiers.md) |
 | `src/Extensions/ExtMenuCheckUpdate.*` | 同じ | UUID・ユニバーサル名 |
-| `resources/min-nano_structure{,Dev}.vwr` | `resources/cli{,Dev}.vwr` | `.vwstrings` は UTF-16LE（BOM 付き）・CRLF のまま。鍵は `category` / `updateTitle` / `updateHelp` / `statusTitle` / `statusHelp` |
+| `resources/min-nano_structure{,Dev}.vwr` | `resources/cli{,_dev}.vwr` | `.vwstrings` は UTF-16LE（BOM 付き）・CRLF のまま。鍵は `category` / `updateTitle` / `updateHelp` |
 | `CMakeLists.txt` | 同じ | IFC の部分を除く。`VwCliCore` は `src/core/*` だけ |
 
 ## 移さない
@@ -41,4 +41,4 @@
 - 実機テスト（`draw/Feedback` / `core/FeedbackSession` / `core/FeedbackScratch`）。
 - パレット（`resources/common.vwr/html/mcp.html`・`CExtMcpPalette`・`ExtMcpMenu`）。
 - MCP サーバ（`scripts/mcp/`・`.mcp.json`）。このリポジトリには含めない。
-- 自動レビュー（`pr-review.yml`）は[未決 5](open-questions.md)。
+- 自動レビュー（`pr-review.yml`）。差し当たり持たない。

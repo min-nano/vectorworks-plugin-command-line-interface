@@ -21,7 +21,7 @@
 
 ## スプールの用意
 
-- 場所は `VW2026_SPOOL` があればそれ、無ければ `<一時ディレクトリ>/vectorworks-cli-bridge`
+- 場所は `VW2026_SPOOL` があればそれ、無ければ `<一時ディレクトリ>/vectorworks2026-cli-bridge`
   （開発版は `-dev`）。一時ディレクトリは `std::filesystem::temp_directory_path`。**探索しません**
   （探すのは呼ぶ側の役割）。
 - `prepare`: 0700 で作り、既にあれば持ち主と権限を確かめる（POSIX）。失敗したら 10 秒後に
@@ -51,7 +51,7 @@
 
 | フィールド | 値 |
 | --- | --- |
-| `plugin` | `cli` / `cliDev`（`PLUGIN_VWR_ID`） |
+| `plugin` | `cli` / `cli_dev`（`PLUGIN_VWR_ID`） |
 | `channel` | `stable` / `dev` |
 | `version` | `VW_BUILD_VERSION`（本体の短い sha） |
 | `branch` | `VW_BUILD_BRANCH` |
@@ -60,9 +60,8 @@
 | `pid` | Vectorworks のプロセス ID（`getpid` / `GetCurrentProcessId`） |
 | `busy` / `busy_id` / `busy_until` | 長く走る道具の最中だけ |
 
-- **印を消すのは「受け付けを停止したとき」だけ**です（本体の入れ替えでは消さない。
-  [ABI](abi.md#vw_payload_shutdown-で生存の印を消さない理由)）。Vectorworks の終了時は
-  消せれば消し、消せなくても古びれば「動いていない」と判定されます。
+- **本体の入れ替えでは印を消しません**（[ABI](abi.md#vw_payload_shutdown-で生存の印を消さない理由)）。
+  Vectorworks が終了すると印は書き直されなくなり、15 秒で古びて「動いていない」と判定されます。
 
 ## 道具の表
 
@@ -84,10 +83,10 @@ struct Tool {
   `kind` は `read` / `write` / `long` / `shell` を小文字で載せます（呼ぶ側が「図面を変えるか」を
   判定できるように。MCP のラッパーが確認を挟む手掛かりになる）。
 - 引数の検査は道具の中で行います（JSON Schema の検証器は持たない）。知らない引数は失敗で返します。
-- **種類 `write` の道具は、undo の作法を通すまで表に載せません**（[未決 3](open-questions.md)）。
+- **種類 `write` の道具は、undo の作法を通すまで表に載せません**（[未決 2](open-questions.md)）。
 
 ## 見え方（view）
 
-殻とメニューが読む JSON です。`phase`（`serving` / `paused` / `stopped` / `error`）・`spool`・
+殻が読む JSON です。`phase`（`serving` / `paused` / `error`）・`spool`・
 `served`・`failed`・`lastTool`・`secondsSinceRequest`・`message`・`version`・`reportDone`・
 `action`。判断は持たせず、殻は `action` と `reportDone` だけを見ます。

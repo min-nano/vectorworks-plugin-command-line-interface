@@ -15,7 +15,7 @@
 | 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH`・`VW_SHELL_ID` を両方のモジュールへ |
 | mac | `Module-Info.plist.in`（`VWBuildChannel` / `VWBuildBranch` / `VWBuildCommit` / `VWShellId`）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr`・同梱スクリプトは `Contents/Resources/` |
 | Windows | `.vlb`・隣に `<name>.commit` / `.branch` / `.shell-id` と `.vwr`・同梱スクリプト |
-| 系列 | `add_vw_plugin(VwCli "cli" io.github.min-nano.cli stable)` / `add_vw_plugin(VwCliDev "cliDev" io.github.min-nano.cli-dev dev DEV)` |
+| 系列 | `add_vw_plugin(VwCli "cli" io.github.min-nano.cli stable)` / `add_vw_plugin(VwCliDev "cli_dev" io.github.min-nano.cli-dev dev DEV)` |
 
 `add_vw_plugin` は元の関数（元:`CMakeLists.txt` L565-756）をそのまま使えます。
 
@@ -49,8 +49,8 @@ src/Extensions/*
   （`https://release.vectorworks.net/latest/Vectorworks/2026-NNA-eng-{mac,win}-SDK.zip`）から
   取ります。キャッシュのキーは `vw-sdk-2026-NNA-{mac,win}-v3`。
 - リリースは `GITHUB_TOKEN`（`contents: write`）で行います。
-- 自動レビュー（元の `pr-review.yml`）を移すなら `CLAUDE_CODE_OAUTH_TOKEN` が要ります
-  （[未決 5](open-questions.md)）。
+- 自動レビュー（元の `pr-review.yml`）は差し当たり移しません（移すなら Secrets に
+  `CLAUDE_CODE_OAUTH_TOKEN` が要る）。
 - 署名は元と同じくアドホック（`codesign --force --deep --sign -`）。Developer ID と公証はしません。
 
 ## 梱包
@@ -81,7 +81,7 @@ cli.vwlibrary.zip                       cli.vlb.zip
   落とす）。タイトル **`Dev: <branch> (<sha>)`**・`--prerelease`。
 - 本文に `channel=` / `branch=` / `commit=` / `built=` を載せる（更新側が `branch=` を読む）。
 - 資産: `cli.vwlibrary.zip` / `cli.vlb.zip` / `vw-install.{sh,ps1}` / `vw-uninstall.{sh,ps1}`
-  （開発版は `cliDev.*`）。
+  （開発版は `cli_dev.*`）。
 - **CLI 単体の資産**（`vw2026-darwin-universal` / `vw2026-windows-amd64.exe`）も添えます。
   ラッパー（MCP など）の開発やテストで CLI だけを取りたいときのためです（CLI はスプールが
   ローカルにあるときだけ働くので、プラグインの代わりにはならない）。

@@ -11,8 +11,8 @@ import (
 // スプールのディレクトリ名。安定版と開発版のプラグインが同居しても取り違えないよう、
 // 開発版は別の名前にする（docs/protocol.md「スプールの場所」）。
 const (
-	StableSpoolName = "vectorworks-cli-bridge"
-	DevSpoolName    = "vectorworks-cli-bridge-dev"
+	StableSpoolName = "vectorworks2026-cli-bridge"
+	DevSpoolName    = "vectorworks2026-cli-bridge-dev"
 )
 
 // SpoolName は配布の系列（"stable" / "dev"）からスプールのディレクトリ名を返す。

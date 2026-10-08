@@ -6,24 +6,23 @@
 
 | 項目 | 安定版 | 開発版 |
 | --- | --- | --- |
-| プラグイン名（ファイル名・フォルダ名・`PLUGIN_VWR_ID`） | `cli` | `cliDev` |
-| 表示名（メニューのカテゴリ） | 未決（[未決 2](open-questions.md)） | 同じ＋`Dev` |
-| 殻 | `cli.vwlibrary` / `cli.vlb` | `cliDev.vwlibrary` / `cliDev.vlb` |
-| 本体 | `cli.vwpayload` | `cliDev.vwpayload` |
-| リソース | `cli.vwr` | `cliDev.vwr` |
-| バンドル ID（mac） | `io.github.min-nano.cli` | `io.github.min-nano.cli-dev` |
-| スプール | `<temp>/vectorworks-cli-bridge` | `<temp>/vectorworks-cli-bridge-dev` |
+| プラグイン名（ファイル名・フォルダ名・`PLUGIN_VWR_ID`） | `cli` | `cli_dev` |
+| 表示名（メニューのカテゴリ） | 未決（[未決 1](open-questions.md)） | 同じ＋` Dev` |
+| 殻 | `cli.vwlibrary` / `cli.vlb` | `cli_dev.vwlibrary` / `cli_dev.vlb` |
+| 本体 | `cli.vwpayload` | `cli_dev.vwpayload` |
+| リソース | `cli.vwr` | `cli_dev.vwr` |
+| バンドル ID（mac） | `io.github.min-nano.cli` | `io.github.min-nano.cli-dev`（バンドル ID に `_` は使えない） |
+| スプール | `<temp>/vectorworks2026-cli-bridge` | `<temp>/vectorworks2026-cli-bridge-dev` |
 | コマンド | `vw2026` | `vw2026`（`--channel dev` で開発版の橋へ） |
 | CMake のターゲット | `VwCli` / `VwCliPayload` | `VwCliDev` / `VwCliDevPayload` |
 | リリースのタグ | `stable` | `dev-<ブランチの slug>` |
-| インストール先 | `<Plug-Ins>/cli/` | `<Plug-Ins>/cliDev/` |
+| インストール先 | `<Plug-Ins>/cli/` | `<Plug-Ins>/cli_dev/` |
 
 ## メニューコマンド
 
 | コマンド | クラス | ユニバーサル名 | UUID（安定版） | UUID（開発版） |
 | --- | --- | --- | --- | --- |
 | アップデートを確認 | `CExtMenuCheckUpdate` | `CExtMenuCheckUpdate_VwCli` / `…_VwCliDev` | `5ab5a377-7c80-46c9-91ae-9800126c6704` | `b0465dca-0bc8-40eb-b658-17a57196cc25` |
-| CLI ブリッジの状態 | `CExtMenuBridgeStatus` | `CExtMenuBridgeStatus_VwCli` / `…_VwCliDev` | `0c04c696-5d70-4d17-bf30-f81d3ce42811` | `18b54000-a4ca-4cad-aa89-b95441d0dbc0` |
 
 - メニューのカテゴリは `.vwr` の `"category"` 1 つを全メニュー定義が引きます（元と同じ）。
 - 開発版は安定版と同居できるよう、名前・ユニバーサル名・UUID・バンドル ID・スプールを
@@ -35,13 +34,13 @@
 
 ```cpp
 #ifdef VW_DEV_BUILD
-#  define PLUGIN_VWR_ID   "cliDev"
+#  define PLUGIN_VWR_ID   "cli_dev"
 #  define PLUGIN_CHANNEL  "dev"
-#  define PLUGIN_SPOOL    "vectorworks-cli-bridge-dev"
+#  define PLUGIN_SPOOL    "vectorworks2026-cli-bridge-dev"
 #else
 #  define PLUGIN_VWR_ID   "cli"
 #  define PLUGIN_CHANNEL  "stable"
-#  define PLUGIN_SPOOL    "vectorworks-cli-bridge"
+#  define PLUGIN_SPOOL    "vectorworks2026-cli-bridge"
 #endif
 // VW_BUILD_VERSION / VW_BUILD_BRANCH / VW_SHELL_ID は CMake が渡す（無ければ "local"）
 ```

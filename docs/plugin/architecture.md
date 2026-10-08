@@ -33,7 +33,6 @@ Vectorworks ──読み込む──▶ 殻 cli.vwlibrary / cli.vlb          …
 | `plugin_module_main`（起動時） | VCOM の初期化・SDK のコールバックを記憶・拡張機能の登録・**OS タイマーの開始** | なし（本体は最初の受け付けで読み込む） |
 | OS タイマー（250 ms ごと） | 見送りの判定 → `PayloadUse` で本体を確保 → `vw_payload_serve` → 殻に頼む道具を実行 | `vw_payload_serve` |
 | メニュー「アップデートを確認 (CLI)」 | 自動アップデートの流れ（`UpdaterFlow`） | なし |
-| メニュー「CLI ブリッジの状態…」 | 状態を表示し、受け付けの停止・再開を切り替える（[未決 1](open-questions.md)） | `vw_payload_serve` の見え方を読むだけ |
 
 **起動時に更新を確認しません。** 元のプラグインと同じく、確認はメニューと `update` 道具の
 ときだけです（再起動を SDK に頼めるのは Vectorworks が完全に動いている最中だけ）。
@@ -46,7 +45,6 @@ OS タイマー（殻）
   ├─ gSDK が無い・開始から 10 秒以内 → 何もしない
   ├─ undo の記録が開いている（IsCurrentlyBuildingAnUndoEvent）→ 見送る
   ├─ 本体が使用中（PayloadInUse）・入れ子（受け付け中にまた呼ばれた）→ 見送る
-  ├─ 受け付けが停止されている → 何もしない（生存の印も書かない）
   └─ PayloadUse（入れ替えの判定・読み込み）
         └─ vw_payload_serve(shellReport, &out)        … 本体
               ├─ 前の回の殻の結果（shellReport）を応答として書く
@@ -70,7 +68,37 @@ OS タイマー（殻）
   呼ばれ、開いている undo の記録へ書き込みが混ざる）。Windows はスレッドタイマー
   （`SetTimer(nullptr, 0, 250, …)`）。経緯は元:`docs/dev-notes/milestones/m41-bridge-os-timer.md`。
 - 元のプラグインにあったパレット（JS タイマー）は**持ちません**。M41 で受け付けは OS タイマーへ
-  移っており、パレットは状態を見せるだけでした。状態はメニューと `vw2026 status` で見ます。
+  移っており、パレットは状態を見せるだけでした。状態は `vw2026 status` で見ます。
+
+## 受け付けを止めない・処理中は見送る
+
+**利用者が受け付けを止める手段は持ちません**（止めたければアンインストールする）。代わりに、
+Vectorworks の処理の妨げにならないよう、次のときはその回の受け付けを**見送ります**。
+
+| 見送る条件 | 理由 |
+| --- | --- |
+| undo の記録が開いている（`gSDK->IsCurrentlyBuildingAnUndoEvent()`） | その間の書き込みは開いている記録へ混ざる。VW のモーダルダイアログの最中はここに当たる（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 6・7） |
+| 本体が使用中（`PayloadInUse()`）・受け付けの入れ子 | 本体のコードがスタックに載っている（長く走る道具の最中など） |
+| 開始から 10 秒以内 | Vectorworks の起動処理と重ねない |
+
+- 何も要求が無いときの 1 回の費用は、スプールの一覧を読むことと、2 秒に 1 回の生存の印の
+  書き直しだけです。利用者がドラッグやレンダリングをしている最中にも刻みは届きますが、
+  そのとき VW は undo の記録を開いていないので、読む道具はそのまま応えます（同 Findings の表）。
+- mac は `kCFRunLoopDefaultMode` にだけ登録するので、モーダルの最中はそもそも刻みません。
+  **Windows の `SetTimer` はモーダルの最中も刻む**ので、上の undo の条件が見送りを担います。
+- 見送った要求は消さずに残るので、次に受け付けたときに処理されます（呼ぶ側の待ち時間の内なら
+  応答が届く。過ぎれば呼ぶ側が取り下げる）。
+
+## メニューを持つ理由
+
+メニューは「アップデートを確認」の 1 つだけを持ちます。
+
+- **本体が読み込めないときの復旧の経路**になるため。殻まで変わる更新のあと、新しい本体を古い殻が
+  読めない（ABI の版が違う）と、ブリッジは動かず `vw2026 call update` が届きません。殻だけで
+  動くメニューなら、そこから入れ直せます。
+- **拡張機能を 1 つも登録しないプラグインが読み込まれ、`plugin_module_main` が呼ばれるかは
+  確かめていません**（Findings に無い）。タイマーの開始は元のプラグインと同じく
+  `plugin_module_main` で行うので、実機で通った形（メニューを登録する）に揃えます。
 
 ## ソースの配置
 
@@ -88,7 +116,7 @@ src/
 ├─ core/                                   … SDK に依らない（Json・Bridge）。本体とテストがリンク
 └─ tools/                                  … 本体: 道具の表（ToolTable.cpp）と中身（SDK 依存）
 scripts/                                   … vw-install / vw-uninstall / vw-update / vw-token（.sh / .ps1）
-resources/                                 … cli.vwr / cliDev.vwr（文字列）
+resources/                                 … cli.vwr / cli_dev.vwr（文字列）
 tests/                                     … 無 SDK の単体テスト・スクリプトのテスト
 protocol/fixtures/                         … 作法の見本（C++ と Go の両方のテストが読む）
 cli/                                       … vw2026（Go）
