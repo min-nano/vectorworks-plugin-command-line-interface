@@ -12,14 +12,15 @@ vw2026 tools
 vw2026 call layers '{"include_sheets":false}'
 ```
 
-> **開発中です。** いまあるのは受け渡しの作法と CLI（`cli/`）だけで、プラグインはこれから
-> 作ります（[設計「進め方」](docs/design.md#進め方)）。
+> **開発中です。** いまあるのは受け渡しの作法と CLI（`cli/`）とプラグインの設計だけで、
+> プラグインはこれから作ります（[実装の順序](docs/plugin/plan.md)）。
 
 ## ドキュメント
 
 | ファイル | 中身 |
 | --- | --- |
 | [docs/design.md](docs/design.md) | 目的・決めたこと・構成・安全の前提・配布・進め方 |
+| [docs/plugin/](docs/plugin/README.md) | プラグインの設計（構成・境界・ブリッジ・道具・識別子・ビルド・配布・移植・実装の順序・未決） |
 | [docs/protocol.md](docs/protocol.md) | 受け渡しの作法（プラグインと呼ぶ側の約束。真実はここ） |
 | [docs/cli.md](docs/cli.md) | `vw2026` のコマンド・指定・終了コード・ビルド |
 | [docs/sdk-research.md](docs/sdk-research.md) | SDK リファレンスでの調査を待っているもの |

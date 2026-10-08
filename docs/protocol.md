@@ -61,13 +61,15 @@
 ## 生存の印（`bridge.json`）
 
 ```json
-{"plugin":"cli","version":"1.2.3+abcdef0","protocol":1,"beat":1760000000,"pid":4242}
+{"plugin":"cli","channel":"stable","version":"abcdef0","branch":"main","protocol":1,"beat":1760000000,"pid":4242}
 ```
 
 | フィールド | 意味 |
 | --- | --- |
-| `plugin` | プラグイン名 |
-| `version` | 受け答えをしている本体の版（殻と本体の入れ替えを確かめる手掛かり） |
+| `plugin` | プラグイン名（`cli` / `cliDev`） |
+| `channel` | 配布の系列（`stable` / `dev`） |
+| `version` | 受け答えをしている本体の版（短い sha。殻と本体の入れ替えを確かめる手掛かり） |
+| `branch` | 本体を作ったブランチ |
 | `protocol` | この作法の版。呼ぶ側は一致しなければ要求を置かない |
 | `beat` | 最後に書き直した時刻（epoch 秒）。プラグイン側は数秒ごとに書き直す |
 | `pid` | Vectorworks のプロセス ID |
@@ -114,7 +116,7 @@
 
 | 道具 | 結果 |
 | --- | --- |
-| `tools` | `{"protocol":1,"tools":[{"name":…,"description":…,"inputSchema":{…},"timeoutSeconds":…}]}`。`inputSchema` は JSON Schema。`timeoutSeconds` は既定より長くかかりうる道具だけ |
+| `tools` | `{"protocol":1,"tools":[{"name":…,"description":…,"inputSchema":{…},"kind":…,"timeoutSeconds":…}]}`。`inputSchema` は JSON Schema。`kind` は `read` / `write` / `long` / `shell`（図面を変えるか・殻が処理するかを呼ぶ側が判定できるように）。`timeoutSeconds` は既定より長くかかりうる道具だけ |
 
 道具の名前は `[a-z0-9_]+(\.[a-z0-9_]+)*`。プラグインが自分で持つ道具は接頭辞なし
 （`ping` / `layers` …）、ほかのプラグインの機能を呼ぶ道具は `<提供者>.<名前>` にする予定です
@@ -131,6 +133,6 @@
 | 場所の明示 | `VW_MCP_SPOOL` | `VW2026_SPOOL` |
 | 道具の一覧 | `vw_tools` | `tools` |
 | 道具の名前 | `vw_` 接頭辞 | 接頭辞なし・提供者は `.` で区切る |
-| 生存の印 | `commit` / `branch` / `served` / `failed` | `version` / `pid`（数は印に載せない） |
+| 生存の印 | `commit` / `branch` / `served` / `failed` | `channel` / `version` / `branch` / `pid`（数は印に載せない） |
 | 長く走る道具 | `busy` / `busy_until` | それに `busy_id` を加える（呼ぶ側が自分の要求か判定できる） |
 | id | 連番＋乱数（1 プロセス内の順） | 時刻＋乱数（プロセスをまたいで送った順） |

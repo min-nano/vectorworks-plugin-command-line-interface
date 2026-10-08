@@ -52,7 +52,9 @@ func ValidID(id string) bool {
 // Status は生存の印（bridge.json）。未知のフィールドは Raw に残る。
 type Status struct {
 	Plugin    string  `json:"plugin"`
+	Channel   string  `json:"channel"`
 	Version   string  `json:"version"`
+	Branch    string  `json:"branch"`
 	Protocol  int     `json:"protocol"`
 	Beat      float64 `json:"beat"`
 	PID       int     `json:"pid"`
