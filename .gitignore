@@ -1,0 +1,15 @@
+# Go
+/cli/vwcli
+/cli/vwcli.exe
+/dist/
+
+# Build output
+build*/
+
+# Local copy of the Vectorworks SDK
+/vw-sdk/
+/vw-sdk-win/
+*-SDK.zip
+
+# macOS
+.DS_Store
