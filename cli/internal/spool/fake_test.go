@@ -87,7 +87,7 @@ func (f *fakePlugin) loop() {
 			// rename で確保してから読む。失敗したら別の橋が先に確保したか、呼ぶ側が取り下げた
 			// ので、黙って飛ばす（「読めなかった要求」として偽の失敗を返さない）。
 			path := filepath.Join(f.dir, id+workSuffix)
-			if os.Rename(filepath.Join(f.dir, name), path) != nil {
+			if claim(filepath.Join(f.dir, name), path) != nil {
 				continue
 			}
 			data, err := os.ReadFile(path)
