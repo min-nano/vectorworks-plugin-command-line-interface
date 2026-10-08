@@ -3,7 +3,7 @@
 // 起動は OS の標準の方法にだけ頼る。macOS は `open -a`（既に動いていれば前面に出すだけで、
 // 2 つ目は起動しない）。Windows は既定のインストール先の実行ファイルを探し、既に
 // 動いていれば起動しない（実行ファイルを直接起動すると 2 つ目が立ち上がりうる）。
-// app（VWCLI_APP）で明示でき、.app で終わらなければ実行ファイルとしてそのまま起動する
+// app（VW2026_APP）で明示でき、.app で終わらなければ実行ファイルとしてそのまま起動する
 // （テスト用の代替プログラムもこの経路）。
 package launch
 
@@ -35,7 +35,7 @@ var ErrAlreadyRunning = errors.New("vectorworks is already running")
 func Command(app string) ([]string, error) {
 	if app != "" && !(runtime.GOOS == "darwin" && strings.HasSuffix(strings.TrimRight(app, "/"), ".app")) {
 		if info, err := os.Stat(app); err != nil || info.IsDir() {
-			return nil, fmt.Errorf("VWCLI_APP does not point to a file: %s", app)
+			return nil, fmt.Errorf("VW2026_APP does not point to a file: %s", app)
 		}
 		return []string{app}, nil
 	}
@@ -53,9 +53,9 @@ func Command(app string) ([]string, error) {
 				return []string{found[0]}, nil
 			}
 		}
-		return nil, errors.New(`Vectorworks 2026 was not found under %ProgramFiles%; set VWCLI_APP to Vectorworks2026.exe`)
+		return nil, errors.New(`Vectorworks 2026 was not found under %ProgramFiles%; set VW2026_APP to Vectorworks2026.exe`)
 	default:
-		return nil, errors.New("launching is not supported on this OS; set VWCLI_APP")
+		return nil, errors.New("launching is not supported on this OS; set VW2026_APP")
 	}
 }
 

@@ -51,9 +51,9 @@ jobs:
             ext=""; [ "$os" = windows ] && ext=".exe"
             CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
               go build -trimpath -ldflags "-s -w -X main.version=${version}" \
-              -o "../dist/${os}-${arch}/vwcli${ext}" ./cmd/vwcli
+              -o "../dist/${os}-${arch}/vw2026${ext}" ./cmd/vw2026
           done
       - uses: actions/upload-artifact@v4
         with:
-          name: vwcli
+          name: vw2026
           path: dist/

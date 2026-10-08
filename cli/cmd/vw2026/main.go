@@ -1,4 +1,4 @@
-// vwcli は、Vectorworks で動いているブリッジ（min-nano_cli プラグイン）へ道具の呼び出しを
+// vw2026 は、Vectorworks で動いているブリッジ（cli プラグイン）へ道具の呼び出しを
 // 1 つずつ届けるコマンドである。
 //
 // **指示されたとおりに 1 回だけ動くプリミティブな入口**で、セッションの見分け・占有・
@@ -37,7 +37,7 @@ const (
 	exitFailure  = 6 // そのほか（書き込めない・起動できない等）
 )
 
-const usage = `usage: vwcli <command> [options]
+const usage = `usage: vw2026 <command> [options]
 
 commands:
   status                 ブリッジが動いているかと、生存の印を返す
@@ -48,8 +48,8 @@ commands:
   version                この CLI の版と、受け渡しの版を返す
 
 common options:
-  --plugin <name>        相手のプラグイン名（既定 VWCLI_PLUGIN、無ければ min-nano_cli）
-  --spool <dir>          スプールを直接指定する（既定 VWCLI_SPOOL。探索しない）
+  --plugin <name>        相手のプラグイン名（既定 VW2026_PLUGIN、無ければ cli）
+  --spool <dir>          スプールを直接指定する（既定 VW2026_SPOOL。探索しない）
   --timeout <seconds>    待つ上限
 `
 
@@ -96,7 +96,7 @@ func run(args []string, e env) int {
 		fmt.Fprint(e.stdout, usage)
 		return exitOK
 	default:
-		fmt.Fprintf(e.stderr, "vwcli: unknown command %q\n\n%s", command, usage)
+		fmt.Fprintf(e.stderr, "vw2026: unknown command %q\n\n%s", command, usage)
 		return exitUsage
 	}
 }
@@ -112,9 +112,9 @@ func newFlags(name string, e env, defaultTimeout float64) (*flag.FlagSet, *commo
 	c := &common{}
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(e.stderr)
-	fs.StringVar(&c.plugin, "plugin", e.getenv("VWCLI_PLUGIN"), "plugin name")
-	fs.StringVar(&c.spool, "spool", e.getenv("VWCLI_SPOOL"), "spool directory")
-	fs.Float64Var(&c.timeout, "timeout", envSeconds(e, "VWCLI_TIMEOUT", defaultTimeout), "seconds")
+	fs.StringVar(&c.plugin, "plugin", e.getenv("VW2026_PLUGIN"), "plugin name")
+	fs.StringVar(&c.spool, "spool", e.getenv("VW2026_SPOOL"), "spool directory")
+	fs.Float64Var(&c.timeout, "timeout", envSeconds(e, "VW2026_TIMEOUT", defaultTimeout), "seconds")
 	return fs, c
 }
 
@@ -160,13 +160,13 @@ func cmdStatus(args []string, e env) int {
 	bridge, searched, err := spool.Find(c.candidates(), e.now())
 	if err != nil {
 		_ = emit(e, map[string]any{"live": false, "searched": searched})
-		fmt.Fprintln(e.stderr, "vwcli: the bridge is not running (is Vectorworks started with the plug-in?)")
+		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (is Vectorworks started with the plug-in?)")
 		return exitDown
 	}
 	out := map[string]any{"live": true, "spool": bridge.Dir, "status": bridge.Status.Raw}
 	if err := bridge.CheckProtocol(); err != nil {
 		_ = emit(e, out)
-		fmt.Fprintf(e.stderr, "vwcli: %v\n", err)
+		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
 		return exitProtocol
 	}
 	return emit(e, out)
@@ -182,7 +182,7 @@ func cmdCall(args []string, e env) int {
 		return exitUsage
 	}
 	if len(positional) == 0 || len(positional) > 2 {
-		fmt.Fprint(e.stderr, "usage: vwcli call <tool> [args-json | -]\n")
+		fmt.Fprint(e.stderr, "usage: vw2026 call <tool> [args-json | -]\n")
 		return exitUsage
 	}
 	tool := positional[0]
@@ -192,14 +192,14 @@ func cmdCall(args []string, e env) int {
 		if text == "-" {
 			data, readErr := io.ReadAll(e.stdin)
 			if readErr != nil {
-				fmt.Fprintf(e.stderr, "vwcli: read stdin: %v\n", readErr)
+				fmt.Fprintf(e.stderr, "vw2026: read stdin: %v\n", readErr)
 				return exitFailure
 			}
 			text = string(data)
 		}
 		var probe map[string]any
 		if json.Unmarshal([]byte(text), &probe) != nil || probe == nil {
-			fmt.Fprint(e.stderr, "vwcli: args must be a JSON object\n")
+			fmt.Fprint(e.stderr, "vw2026: args must be a JSON object\n")
 			return exitUsage
 		}
 		payload = json.RawMessage(strings.TrimSpace(text))
@@ -207,12 +207,12 @@ func cmdCall(args []string, e env) int {
 
 	bridge, _, err := spool.Find(c.candidates(), e.now())
 	if err != nil {
-		fmt.Fprintln(e.stderr, "vwcli: the bridge is not running (try `vwcli status`)")
+		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (try `vw2026 status`)")
 		return exitDown
 	}
 	response, err := bridge.Call(tool, payload, seconds(c.timeout))
 	if err != nil {
-		fmt.Fprintf(e.stderr, "vwcli: %v\n", err)
+		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
 		return codeFor(err)
 	}
 	if *raw {
@@ -221,7 +221,7 @@ func cmdCall(args []string, e env) int {
 		_ = emitRaw(e, response.Result)
 	}
 	if !response.OK {
-		fmt.Fprintf(e.stderr, "vwcli: %s: %s\n", tool, response.Error)
+		fmt.Fprintf(e.stderr, "vw2026: %s: %s\n", tool, response.Error)
 		return exitToolErr
 	}
 	return exitOK
@@ -260,7 +260,7 @@ func cmdWait(args []string, e env) int {
 			return emit(e, map[string]any{"live": false})
 		}
 		if e.now().After(deadline) {
-			fmt.Fprintln(e.stderr, "vwcli: timed out waiting")
+			fmt.Fprintln(e.stderr, "vw2026: timed out waiting")
 			return exitTimeout
 		}
 		time.Sleep(250 * time.Millisecond)
@@ -271,7 +271,7 @@ func cmdWait(args []string, e env) int {
 
 func cmdLaunch(args []string, e env) int {
 	fs, c := newFlags("launch", e, 0)
-	app := fs.String("app", e.getenv("VWCLI_APP"), "application or executable to start")
+	app := fs.String("app", e.getenv("VW2026_APP"), "application or executable to start")
 	if _, err := parseInterspersed(fs, args); err != nil {
 		return exitUsage
 	}
@@ -280,15 +280,15 @@ func cmdLaunch(args []string, e env) int {
 	}
 	argv, err := launch.Command(*app)
 	if err != nil {
-		fmt.Fprintf(e.stderr, "vwcli: %v\n", err)
+		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
 		return exitFailure
 	}
 	if err := e.start(argv); err != nil {
 		if errors.Is(err, launch.ErrAlreadyRunning) {
-			fmt.Fprintln(e.stderr, "vwcli: Vectorworks is running but the bridge is not (is the plug-in installed?)")
+			fmt.Fprintln(e.stderr, "vw2026: Vectorworks is running but the bridge is not (is the plug-in installed?)")
 			return exitDown
 		}
-		fmt.Fprintf(e.stderr, "vwcli: launch: %v\n", err)
+		fmt.Fprintf(e.stderr, "vw2026: launch: %v\n", err)
 		return exitFailure
 	}
 	if c.timeout <= 0 {
@@ -303,7 +303,7 @@ func cmdLaunch(args []string, e env) int {
 func emit(e env, value any) int {
 	data, err := json.Marshal(value)
 	if err != nil {
-		fmt.Fprintf(e.stderr, "vwcli: encode output: %v\n", err)
+		fmt.Fprintf(e.stderr, "vw2026: encode output: %v\n", err)
 		return exitFailure
 	}
 	return emitRaw(e, data)

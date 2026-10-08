@@ -9,7 +9,7 @@ import (
 )
 
 // DefaultPlugin はブリッジを持つプラグインの名前（安定版）。スプールの名前に入る。
-const DefaultPlugin = "min-nano_cli"
+const DefaultPlugin = "cli"
 
 // SpoolName はプラグイン名からスプールのディレクトリ名を作る。
 func SpoolName(plugin string) string {
@@ -18,7 +18,7 @@ func SpoolName(plugin string) string {
 
 // Candidates はスプールの候補を確からしい順に返す。
 //
-// override（VWCLI_SPOOL）が空でなければそれだけを返す。そうでなければ、プラグイン側が
+// override（VW2026_SPOOL）が空でなければそれだけを返す。そうでなければ、プラグイン側が
 // 一時ディレクトリを決めるのと同じ仕組みから出した場所だけを並べる——利用者ごとの
 // 一時ディレクトリ（macOS の DARWIN_USER_TEMP_DIR）と、環境変数（TMPDIR / TMP / TEMP）。
 //

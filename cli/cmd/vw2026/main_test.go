@@ -98,14 +98,14 @@ func echoBridge(t *testing.T) string {
 
 func TestStatusLive(t *testing.T) {
 	dir := echoBridge(t)
-	r := invoke(t, map[string]string{"VWCLI_SPOOL": dir}, "", nil, "status")
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"live":true`) || !strings.Contains(r.stdout, `"plugin":"p"`) {
 		t.Fatalf("%+v", r)
 	}
 }
 
 func TestStatusDown(t *testing.T) {
-	r := invoke(t, map[string]string{"VWCLI_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "status")
+	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "status")
 	if r.code != exitDown || !strings.Contains(r.stdout, `"live":false`) {
 		t.Fatalf("%+v", r)
 	}
@@ -121,7 +121,7 @@ func TestCallPrintsResult(t *testing.T) {
 
 func TestCallArgsFromStdin(t *testing.T) {
 	dir := echoBridge(t)
-	r := invoke(t, map[string]string{"VWCLI_SPOOL": dir}, `{"b":2}`, nil, "call", "x", "-")
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, `{"b":2}`, nil, "call", "x", "-")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"b":2`) {
 		t.Fatalf("%+v", r)
 	}
@@ -129,11 +129,11 @@ func TestCallArgsFromStdin(t *testing.T) {
 
 func TestCallToolError(t *testing.T) {
 	dir := echoBridge(t)
-	r := invoke(t, map[string]string{"VWCLI_SPOOL": dir}, "", nil, "call", "fail")
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "fail")
 	if r.code != exitToolErr || r.stdout != "" || !strings.Contains(r.stderr, "boom") {
 		t.Fatalf("%+v", r)
 	}
-	raw := invoke(t, map[string]string{"VWCLI_SPOOL": dir}, "", nil, "call", "--raw", "fail")
+	raw := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "--raw", "fail")
 	if raw.code != exitToolErr || !strings.Contains(raw.stdout, `"ok":false`) {
 		t.Fatalf("%+v", raw)
 	}
@@ -141,7 +141,7 @@ func TestCallToolError(t *testing.T) {
 
 func TestToolsIsCallOfTools(t *testing.T) {
 	dir := echoBridge(t)
-	r := invoke(t, map[string]string{"VWCLI_SPOOL": dir}, "", nil, "tools")
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "tools")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"tool":"tools"`) {
 		t.Fatalf("%+v", r)
 	}
@@ -157,7 +157,7 @@ func TestCallUsageErrors(t *testing.T) {
 }
 
 func TestCallWhenDown(t *testing.T) {
-	r := invoke(t, map[string]string{"VWCLI_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "call", "ping")
+	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "call", "ping")
 	if r.code != exitDown {
 		t.Fatalf("%+v", r)
 	}
@@ -166,7 +166,7 @@ func TestCallWhenDown(t *testing.T) {
 func TestLaunchSkipsWhenLive(t *testing.T) {
 	dir := echoBridge(t)
 	var started []string
-	r := invoke(t, map[string]string{"VWCLI_SPOOL": dir}, "", &started, "launch")
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", &started, "launch")
 	if r.code != exitOK || started != nil || !strings.Contains(r.stdout, `"launched":false`) {
 		t.Fatalf("%+v %v", r, started)
 	}
@@ -178,18 +178,18 @@ func TestLaunchStartsApp(t *testing.T) {
 		t.Fatal(err)
 	}
 	var started []string
-	r := invoke(t, map[string]string{"VWCLI_SPOOL": filepath.Join(t.TempDir(), "none"), "VWCLI_APP": app}, "", &started, "launch")
+	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none"), "VW2026_APP": app}, "", &started, "launch")
 	if r.code != exitOK || len(started) != 1 || started[0] != app {
 		t.Fatalf("%+v %v", r, started)
 	}
 }
 
 func TestWaitTimesOut(t *testing.T) {
-	r := invoke(t, map[string]string{"VWCLI_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "wait", "--timeout", "0.3")
+	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "wait", "--timeout", "0.3")
 	if r.code != exitTimeout {
 		t.Fatalf("%+v", r)
 	}
-	down := invoke(t, map[string]string{"VWCLI_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "wait", "--down")
+	down := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "wait", "--down")
 	if down.code != exitOK || !strings.Contains(down.stdout, `"live":false`) {
 		t.Fatalf("%+v", down)
 	}
