@@ -23,4 +23,6 @@
 | メニュー | 持たない（拡張機能を登録しない）。表示名も不要 | [構成](architecture.md#拡張機能を登録しない) |
 | 更新 | CLI の `vw2026 update`。殻が変わる更新は Vectorworks の終了を待って入れ替える | [更新](install-and-update.md#更新vw2026-update) |
 | CLI の置き場所 | プラグインのフォルダの外（`<CLI>/bin/`）。殻の ID が同じ更新は殻以外のファイルの上書き、違う更新はフォルダの付け替え（Windows で開いているファイルを含むフォルダの名前を変えられないため） | [インストールと更新](install-and-update.md#置き場所) |
+| 殻から本体へ伝えること | `vw_payload_serve` の引数 `VwServeInput`（`shellReport`・`restartRequired`）。見え方は本体から殻への出力だけ | [ABI](abi.md#受け付け-1-回ごとに殻が渡すもの) |
+| 殻の側の失敗の伝え方 | 殻が本体を動かせない間だけ、スプールに `shell.json` を書く。`vw2026 status` が `shell` に載せる | [ABI](abi.md#殻の診断shelljson)・[作法](../protocol.md#殻の診断shelljson) |
 | main の保護 | 必要になったら設定する。それまでは main へ直接 push | `CLAUDE.md`「進め方」 |

@@ -27,6 +27,7 @@ const (
 	RequestSuffix  = ".req.json"
 	ResponseSuffix = ".res.json"
 	StatusFile     = "bridge.json"
+	ShellFile      = "shell.json"
 	TempSuffix     = ".tmp"
 
 	// ProtocolVersion は受け渡しの版。要求／応答／生存の印の形を変えたら上げる。
@@ -182,7 +183,7 @@ func Find(candidates []string, now time.Time) (*Bridge, []Searched, error) {
 			}
 			reason = "unresponsive"
 		}
-		searched = append(searched, Searched{Dir: dir, Reason: reason})
+		searched = append(searched, Searched{Dir: dir, Reason: reason, Shell: ReadShell(dir, now)})
 	}
 	if fallback != nil {
 		// 返す場所は「使わなかった場所」から外す。
@@ -191,10 +192,38 @@ func Find(candidates []string, now time.Time) (*Bridge, []Searched, error) {
 	return nil, searched, ErrNotRunning
 }
 
-// Searched は調べた場所 1 つと、使わなかった理由。
+// Searched は調べた場所 1 つと、使わなかった理由。Shell は、その場所に新しい殻の診断
+// （shell.json）があればその中身。
 type Searched struct {
-	Dir    string `json:"dir"`
-	Reason string `json:"reason"`
+	Dir    string          `json:"dir"`
+	Reason string          `json:"reason"`
+	Shell  json.RawMessage `json:"shell,omitempty"`
+}
+
+// ReadShell はその場所の殻の診断（shell.json）を読む。無い・読めない・古いなら nil。
+//
+// 殻は本体を動かせない間だけこれを書き直す。生存の印が無いときに、呼ぶ側が「プラグインは
+// 読み込まれたが本体が動かない」を「Vectorworks が動いていない」と区別できるようにする
+// ためで、中身の解釈（入れ直しを勧めるか等）は呼ぶ側に任せ、ここでは渡すだけにする。
+// 古さの判定は生存の印と同じにする（Vectorworks が終われば書き直されなくなる）。
+func ReadShell(dir string, now time.Time) json.RawMessage {
+	if checkSafe(dir) != "" {
+		return nil
+	}
+	text, err := os.ReadFile(filepath.Join(dir, ShellFile))
+	if err != nil {
+		return nil
+	}
+	var shell struct {
+		Beat float64 `json:"beat"`
+	}
+	if err := json.Unmarshal(text, &shell); err != nil || shell.Beat <= 0 {
+		return nil
+	}
+	if float64(now.UnixNano())/1e9-shell.Beat > StaleSeconds {
+		return nil
+	}
+	return append(json.RawMessage(nil), text...)
 }
 
 // CheckProtocol は版が一致するか。

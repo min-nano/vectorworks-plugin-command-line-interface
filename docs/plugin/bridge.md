@@ -32,7 +32,7 @@
 
 ## 受け付け 1 回（`core::serve`）
 
-1. `shellReport` があれば、その応答を書く（`payload_version` を添える）。書けたら `reportDone`。
+1. `VwServeInput::shellReport` があれば、その応答を書く（`payload_version` を添える）。書けたら `reportDone`。
 2. 要求を名前の昇順で最大 16 件取り出す（読んだ要求はすぐ消す）。
 3. 読めなかった要求には、ファイル名の id が正しければ失敗で応える。
 4. 要求ごとに:
@@ -59,7 +59,7 @@
 | `beat` | 今（epoch 秒） |
 | `pid` | Vectorworks のプロセス ID（`getpid` / `GetCurrentProcessId`） |
 | `busy` / `busy_id` / `busy_until` | 長く走る道具の最中だけ |
-| `restart_required` | 殻の ID の違う版が入っていて、再起動するまで効かないとき（殻が見え方で伝え、本体が載せる） |
+| `restart_required` | 殻の ID の違う版が入っていて、再起動するまで効かないとき。殻が `VwServeInput::restartRequired` で渡し、本体が載せる（[ABI](abi.md#受け付け-1-回ごとに殻が渡すもの)） |
 
 - **本体の入れ替えでは印を消しません**（[ABI](abi.md#vw_payload_shutdown-で生存の印を消さない理由)）。
   Vectorworks が終了すると印は書き直されなくなり、`pid` のプロセスも無くなるので「止まっている」と
@@ -96,3 +96,7 @@ struct Tool {
 殻が読む JSON です。`phase`（`serving` / `paused` / `error`）・`spool`・
 `served`・`failed`・`lastTool`・`secondsSinceRequest`・`message`・`version`・`reportDone`・
 `action`。判断は持たせず、殻は `action` と `reportDone` だけを見ます。
+
+- 見え方は**本体から殻への出力だけ**です。殻から本体へ伝えることは `VwServeInput` で渡します。
+- 本体が動いていないときの失敗は見え方に出せないので、殻が[殻の診断](abi.md#殻の診断shelljson)
+  （`shell.json`）に書きます。本体は `shell.json` を読みも消しもしません（`sweep` の対象外）。

@@ -7,7 +7,7 @@
 | 段 | 中身 | 確かめ方 | 実機 |
 | --- | --- | --- | --- |
 | 1 | **SDK に依らない共通部**: `core/Json`・`core/Bridge`・`core/Serve`（偽の道具の表）・`protocol/fixtures/`・`test.yml`・`lint.yml`・`CLAUDE.md` の追記（PR の進め方・消すコードの規約） | CI（ASan・UBSan）。Go 側のテストも同じ見本を読む | 不要 |
-| 2 | **骨格**: CMake・`BuildConfig`・`ModuleMain`・ABI・`PayloadHost`/`Session`/`HostHolder`・`payload/PayloadMain`・`Clock`・道具 `tools` / `ping`・リソース・`build.yml`（ビルドと開発版のリリースまで）・`ci-debug.yml` | CI。実機で zip を手で置き、`vw2026 --channel dev status` / `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。本体を手で差し替えて再起動なしに `version` が変わる | 要 |
+| 2 | **骨格**: CMake・`BuildConfig`・`ModuleMain`・ABI・`PayloadHost`/`Session`/`HostHolder`・`payload/PayloadMain`・`Clock`・道具 `tools` / `ping`・リソース・`build.yml`（ビルドと開発版のリリースまで）・`ci-debug.yml` | CI。実機で zip を手で置き、`vw2026 --channel dev status` / `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。本体を手で差し替えて再起動なしに `version` が変わる。版の違う本体・壊れた本体を置くと `status` の `searched[].shell` に `abi_mismatch` / `load_failed` が出る | 要 |
 | 3 | **読む道具**: `layers` / `classes` / `layer_objects` / `object_counts` | 実機で、元のプラグインの `vw_*` と同じ図面に対して同じ結果になる | 要 |
 | 4 | **配布**: 梱包（`bin/vw2026`）・`vw-install` / `vw-uninstall`（PATH を含む）・安定版のリリース・`cleanup-dev-release.yml`・スクリプトのテスト | CI（スクリプトのテストで、PATH の歯止めを押さえる）。動いている CLI の入れ替え（Windows）を押さえる。実機でインストール → 新しい端末で `vw2026 status` → アンインストールでリンクだけが消える | 要 |
 | 5 | **更新**: `vw2026 update`（振り分け・待機の場所・終了を待つ係・`--restart`）・道具 `quit` | CI（Go の単体テスト）。実機で、本体だけ変わる更新（再起動なし・生存の印の `version` が変わる）と、殻が変わる更新（終了後に入れ替わる・`--restart` で起動し直す）の両方 | 要 |

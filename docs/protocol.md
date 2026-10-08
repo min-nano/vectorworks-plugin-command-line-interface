@@ -43,7 +43,8 @@
 
 | ファイル | 書く側 | 中身 |
 | --- | --- | --- |
-| `bridge.json` | プラグイン | 生存の印 |
+| `bridge.json` | プラグイン（本体） | 生存の印 |
+| `shell.json` | プラグイン（殻） | 殻の診断。本体を動かせない間だけ（下記） |
 | `<id>.req.json` | 呼ぶ側 | 要求 1 件 |
 | `<id>.res.json` | プラグイン | 応答 1 件 |
 | `*.tmp` | 両方 | 書きかけ（下記） |
@@ -106,6 +107,35 @@
 - `unresponsive` に時間の上限は設けません。ダイアログは利用者が閉じるまで開いています。
 - 候補が複数あるときは `live` のところを優先し、無ければ最初の `unresponsive` のところを使います。
 - 判定は印の形を変えないので、版（`protocol`）は上げていません（`pid` は初めから印にある）。
+
+## 殻の診断（`shell.json`）
+
+プラグインは殻（Vectorworks が起動時に読み込む部分）と本体（受け付けを行う部分）に分かれて
+います。殻は本体を読み込めない・動かせない間だけ、このファイルを書きます。生存の印が無い
+ときに、「Vectorworks が動いていない」と「プラグインは読み込まれたが受け付けられない」を
+呼ぶ側が区別できるようにするためです。
+
+```json
+{"plugin":"cli","channel":"stable","shell_id":"0123abc","protocol":1,"beat":1760000000,"pid":4242,"restart_required":false,"error":{"code":"abi_mismatch","message":"payload abi 2, shell abi 1"}}
+```
+
+| フィールド | 意味 |
+| --- | --- |
+| `plugin` / `channel` / `protocol` / `beat` / `pid` | 生存の印と同じ |
+| `shell_id` | 殻の ID |
+| `restart_required` | 生存の印と同じ（省略＝偽） |
+| `error.code` | `copy_failed` / `load_failed` / `symbol_missing` / `abi_mismatch` / `init_failed` / `serve_failed`（[ABI「殻の診断」](plugin/abi.md#殻の診断shelljson)） |
+| `error.message` | 英語の詳細（OS の理由など） |
+
+- **これは生存の印ではありません。** 要求を置いても誰も受け付けません。呼ぶ側は[状態](#生存の判定)が
+  `live` でないときにだけ読み、要求を置く判断には使いません。`down` なら、Vectorworks は動いて
+  いてプラグインの本体が読み込めていないことを示します。`unresponsive` なら、見送り（ダイアログ等）
+  ではなく本体が動かなくなった（`serve_failed` 等）ことを示します。
+- `beat` が 15 秒より古ければ無視します（Vectorworks が終わると書き直されない）。
+- プラグイン側は、本体が受け付けを 1 回行えたら消します。本体はこのファイルを消しません
+  （前の回の残骸の掃除の対象外）。
+- このファイルの追加は、知らない呼ぶ側が無視しても受け渡しが壊れないので、版（`protocol`）を
+  上げません。
 
 ## 要求（`<id>.req.json`）
 

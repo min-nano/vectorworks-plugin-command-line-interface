@@ -175,6 +175,13 @@ func cmdStatus(args []string, e env) int {
 	bridge, searched, err := spool.Find(c.candidates(), e.now())
 	if err != nil {
 		_ = emit(e, map[string]any{"live": false, "state": spool.StateDown, "searched": searched})
+		for _, s := range searched {
+			if s.Shell != nil {
+				// 殻は読み込まれているので「起動しているか」を問う文言は誤り。理由は shell に渡す。
+				fmt.Fprintf(e.stderr, "vw2026: the plug-in is loaded but its payload is not running (see \"shell\" in %s)\n", s.Dir)
+				return exitDown
+			}
+		}
 		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (is Vectorworks started with the plug-in?)")
 		return exitDown
 	}
@@ -185,6 +192,14 @@ func cmdStatus(args []string, e env) int {
 		return exitProtocol
 	}
 	if bridge.State == spool.StateUnresponsive {
+		// 本体が受け付けの途中で動かなくなった（serve_failed 等）ときも印は古びて pid は残るので、
+		// ダイアログで見送っている場合と区別できるよう、新しい殻の診断があれば載せる。
+		if shell := spool.ReadShell(bridge.Dir, e.now()); shell != nil {
+			out["shell"] = shell
+			_ = emit(e, out)
+			fmt.Fprintln(e.stderr, "vw2026: Vectorworks is running but its payload is not running (see \"shell\")")
+			return exitUnresponsive
+		}
 		_ = emit(e, out)
 		fmt.Fprintln(e.stderr, "vw2026: Vectorworks is running but the bridge is not responding (a dialog may be open)")
 		return exitUnresponsive

@@ -7,7 +7,7 @@
 
 | コマンド | 内容 | 標準出力 |
 | --- | --- | --- |
-| `vw2026 status` | ブリッジの状態（[作法「生存の判定」](protocol.md#生存の判定)） | `{"live":true,"state":"live","spool":…,"status":{…}}`／`{"live":false,"state":"unresponsive","spool":…,"status":{…}}`／`{"live":false,"state":"down","searched":[{"dir":…,"reason":…}]}` |
+| `vw2026 status` | ブリッジの状態（[作法「生存の判定」](protocol.md#生存の判定)） | `{"live":true,"state":"live","spool":…,"status":{…}}`／`{"live":false,"state":"unresponsive","spool":…,"status":{…},"shell"?:{…}}`／`{"live":false,"state":"down","searched":[{"dir":…,"reason":…,"shell"?:{…}}]}`（`shell` は新しい[殻の診断](protocol.md#殻の診断shelljson)があるときだけ） |
 | `vw2026 tools` | 呼べる道具の一覧（`call tools` と同じ） | 道具の一覧 |
 | `vw2026 call <道具> [引数]` | 道具を 1 つ呼ぶ。引数は JSON オブジェクト、`-` なら標準入力から | 成功なら `result`。`--raw` なら応答全体 |
 | `vw2026 wait` | ブリッジが動き出す（`live`）まで待つ。`--down` なら止まる（`down`）まで | `status` と同じ形（`--down` は `{"live":false,"state":"down"}`） |

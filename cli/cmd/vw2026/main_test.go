@@ -111,6 +111,21 @@ func TestStatusDown(t *testing.T) {
 	}
 }
 
+func TestStatusDownReportsShellDiagnostic(t *testing.T) {
+	dir := t.TempDir()
+	shell, _ := json.Marshal(map[string]any{
+		"plugin": "cli", "protocol": spool.ProtocolVersion, "beat": float64(time.Now().Unix()), "pid": 1,
+		"error": map[string]any{"code": "load_failed", "message": "x"},
+	})
+	if err := os.WriteFile(filepath.Join(dir, spool.ShellFile), shell, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
+	if r.code != exitDown || !strings.Contains(r.stdout, `"code":"load_failed"`) || !strings.Contains(r.stderr, "payload is not running") {
+		t.Fatalf("%+v", r)
+	}
+}
+
 func TestCallPrintsResult(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, nil, "", nil, "call", "layers", `{"a":1}`, "--spool", dir)
@@ -235,6 +250,21 @@ func TestStatusUnresponsive(t *testing.T) {
 	dir, _ := unresponsiveSpool(t)
 	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
 	if r.code != exitUnresponsive || !strings.Contains(r.stdout, `"state":"unresponsive"`) || !strings.Contains(r.stdout, `"live":false`) {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestStatusUnresponsiveReportsShellDiagnostic(t *testing.T) {
+	dir, _ := unresponsiveSpool(t)
+	shell, _ := json.Marshal(map[string]any{
+		"plugin": "p", "protocol": spool.ProtocolVersion, "beat": float64(time.Now().Unix()), "pid": 4242,
+		"error": map[string]any{"code": "serve_failed", "message": "x"},
+	})
+	if err := os.WriteFile(filepath.Join(dir, spool.ShellFile), shell, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
+	if r.code != exitUnresponsive || !strings.Contains(r.stdout, `"code":"serve_failed"`) || !strings.Contains(r.stderr, "payload is not running") {
 		t.Fatalf("%+v", r)
 	}
 }

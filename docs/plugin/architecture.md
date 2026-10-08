@@ -11,7 +11,7 @@ Vectorworks ──読み込む──▶ 殻 cli.vwlibrary / cli.vlb          …
 
 | | 入るもの | 入れないもの |
 | --- | --- | --- |
-| **殻** | 本体の読み込み（複製・入れ替えの判定）・**OS タイマー**・**殻に頼む道具の実行**（終了・再起動） | 道具の中身・スプールの読み書き・JSON の組み立て・更新（CLI が行う） |
+| **殻** | 本体の読み込み（複製・入れ替えの判定）・**OS タイマー**・**殻に頼む道具の実行**（終了・再起動）・本体を動かせない間の[殻の診断](abi.md#殻の診断shelljson)（`shell.json`） | 道具の中身・スプールの要求と応答と生存の印・JSON の組み立て（診断の決まった形を除く）・更新（CLI が行う） |
 | **本体** | ブリッジ（スプールの受け付け）・道具の表と中身・生存の印 | 登録の定義。本体は `.vwr` を持たない |
 
 元のプラグインの決めごとをそのまま守ります（元:`CLAUDE.md`「殻と本体」）。
@@ -34,7 +34,7 @@ Vectorworks ──読み込む──▶ 殻 cli.vwlibrary / cli.vlb          …
 6. **殻の ID（`VW_SHELL_ID`）が「再起動が要るか」を決める。** 殻にコンパイルされるもの
    だけを `VW_SHELL_INPUTS` に並べる（[ビルド](build-and-release.md#殻の-id)）。
    **殻は、フォルダの `shell-id` が自分の ID と一致するときだけ本体を読み直す**（一致しなければ
-   今の本体のまま動き、`restart_required` を出す。[更新「別の手段で再起動されたとき」](install-and-update.md#別の手段で再起動されたとき)）。
+   今の本体のまま動き、`VwServeInput::restartRequired` で本体に伝える。本体が生存の印に `restart_required` を出す。[更新「別の手段で再起動されたとき」](install-and-update.md#別の手段で再起動されたとき)）。
 7. 殻は SDK に依らない共通部（`src/core/`）をリンクしない（殻に入れてよいものの境界を保つ）。
 
 ## 入口
@@ -55,7 +55,8 @@ OS タイマー（殻）
   ├─ undo の記録が開いている（IsCurrentlyBuildingAnUndoEvent）→ 見送る
   ├─ 本体が使用中（PayloadInUse）・入れ子（受け付け中にまた呼ばれた）→ 見送る
   └─ PayloadUse（入れ替えの判定・読み込み）
-        └─ vw_payload_serve(shellReport, &out)        … 本体
+        ├─ 読み込めない・ABI が違う・初期化に失敗 → shell.json を書く（2 秒ごと）
+        └─ vw_payload_serve({shellReport, restartRequired}, &out)   … 本体
               ├─ 前の回の殻の結果（shellReport）を応答として書く
               ├─ 要求を名前の昇順で取り出す（1 回 16 件まで）
               ├─ 道具を実行して応答を書く／殻に頼む道具は action として返す
@@ -122,6 +123,8 @@ src/
 ├─ ModuleMain.cpp                          … 殻: 登録・タイマーの開始
 ├─ PayloadAbi.h                            … 境界（殻と本体で共有。SDK を include しない）
 ├─ PayloadHost.{h,cpp} / PayloadSession.{h,cpp}   … 殻: 本体の読み込み・入れ替え
+├─ ShellDiag.{h,cpp}                       … 殻: 殻の診断（shell.json）
+├─ SpoolDir.{h,cpp}                        … スプールの場所と持ち主・権限の確かめ（殻と本体で共有。SDK に依らない）
 ├─ PayloadHostHolder.h                     … 本体: 受け取った VwPayloadHost の複製
 ├─ Clock.{h,cpp}                           … 殻: OS タイマー・殻に頼む道具の実行
 ├─ payload/PayloadMain.cpp                 … 本体: エクスポート関数
