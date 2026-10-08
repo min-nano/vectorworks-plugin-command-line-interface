@@ -195,6 +195,13 @@ func TestWaitTimesOut(t *testing.T) {
 	}
 }
 
+func TestUnknownChannel(t *testing.T) {
+	r := invoke(t, map[string]string{"VW2026_CHANNEL": "nightly"}, "", nil, "status")
+	if r.code != exitUsage || !strings.Contains(r.stderr, "unknown channel") {
+		t.Fatalf("%+v", r)
+	}
+}
+
 func TestVersion(t *testing.T) {
 	r := invoke(t, nil, "", nil, "version")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":1`) {

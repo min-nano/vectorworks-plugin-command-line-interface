@@ -28,7 +28,7 @@
    vw2026 / ほかのプログラム
           │ <id>.req.json を置く／<id>.res.json を待つ
           ▼
-   スプール（<temp>/cli-bridge/。0700）
+   スプール（<temp>/vectorworks-cli-bridge/。0700）
           ▲
           │ 取り出す／応答する
           │

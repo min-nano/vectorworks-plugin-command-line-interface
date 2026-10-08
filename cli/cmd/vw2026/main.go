@@ -48,7 +48,7 @@ commands:
   version                この CLI の版と、受け渡しの版を返す
 
 common options:
-  --plugin <name>        相手のプラグイン名（既定 VW2026_PLUGIN、無ければ cli）
+  --channel <name>       相手のプラグインの系列 stable / dev（既定 VW2026_CHANNEL、無ければ stable）
   --spool <dir>          スプールを直接指定する（既定 VW2026_SPOOL。探索しない）
   --timeout <seconds>    待つ上限
 `
@@ -103,7 +103,7 @@ func run(args []string, e env) int {
 
 // common はどのコマンドにもある指定。
 type common struct {
-	plugin  string
+	channel string
 	spool   string
 	timeout float64
 }
@@ -112,7 +112,7 @@ func newFlags(name string, e env, defaultTimeout float64) (*flag.FlagSet, *commo
 	c := &common{}
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(e.stderr)
-	fs.StringVar(&c.plugin, "plugin", e.getenv("VW2026_PLUGIN"), "plugin name")
+	fs.StringVar(&c.channel, "channel", e.getenv("VW2026_CHANNEL"), "plugin channel (stable / dev)")
 	fs.StringVar(&c.spool, "spool", e.getenv("VW2026_SPOOL"), "spool directory")
 	fs.Float64Var(&c.timeout, "timeout", envSeconds(e, "VW2026_TIMEOUT", defaultTimeout), "seconds")
 	return fs, c
@@ -126,8 +126,17 @@ func envSeconds(e env, name string, fallback float64) float64 {
 	return fallback
 }
 
+// valid は指定が正しいか。誤っていれば標準エラーへ理由を書いて false。
+func (c *common) valid(e env) bool {
+	if c.spool == "" && spool.SpoolName(c.channel) == "" {
+		fmt.Fprintf(e.stderr, "vw2026: unknown channel %q (stable / dev)\n", c.channel)
+		return false
+	}
+	return true
+}
+
 func (c *common) candidates() []string {
-	return spool.Candidates(c.plugin, c.spool)
+	return spool.Candidates(c.channel, c.spool)
 }
 
 func seconds(value float64) time.Duration {
@@ -157,6 +166,9 @@ func cmdStatus(args []string, e env) int {
 	if _, err := parseInterspersed(fs, args); err != nil {
 		return exitUsage
 	}
+	if !c.valid(e) {
+		return exitUsage
+	}
 	bridge, searched, err := spool.Find(c.candidates(), e.now())
 	if err != nil {
 		_ = emit(e, map[string]any{"live": false, "searched": searched})
@@ -178,7 +190,7 @@ func cmdCall(args []string, e env) int {
 	fs, c := newFlags("call", e, 30)
 	raw := fs.Bool("raw", false, "print the whole response (id/ok/result/error)")
 	positional, err := parseInterspersed(fs, args)
-	if err != nil {
+	if err != nil || !c.valid(e) {
 		return exitUsage
 	}
 	if len(positional) == 0 || len(positional) > 2 {
@@ -249,6 +261,9 @@ func cmdWait(args []string, e env) int {
 	if _, err := parseInterspersed(fs, args); err != nil {
 		return exitUsage
 	}
+	if !c.valid(e) {
+		return exitUsage
+	}
 	deadline := e.now().Add(seconds(c.timeout))
 	for {
 		bridge, _, err := spool.Find(c.candidates(), e.now())
@@ -275,6 +290,9 @@ func cmdLaunch(args []string, e env) int {
 	if _, err := parseInterspersed(fs, args); err != nil {
 		return exitUsage
 	}
+	if !c.valid(e) {
+		return exitUsage
+	}
 	if bridge, _, err := spool.Find(c.candidates(), e.now()); err == nil {
 		return emit(e, map[string]any{"launched": false, "live": true, "spool": bridge.Dir})
 	}
@@ -295,7 +313,7 @@ func cmdLaunch(args []string, e env) int {
 		return emit(e, map[string]any{"launched": true, "command": argv})
 	}
 	// 起動を見届ける（--timeout 秒まで）。
-	return cmdWait([]string{"--timeout", fmt.Sprint(c.timeout), "--plugin", c.plugin, "--spool", c.spool}, e)
+	return cmdWait([]string{"--timeout", fmt.Sprint(c.timeout), "--channel", c.channel, "--spool", c.spool}, e)
 }
 
 // --- 出力 -------------------------------------------------------------------

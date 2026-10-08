@@ -8,16 +8,29 @@ import (
 	"strings"
 )
 
-// DefaultPlugin はブリッジを持つプラグインの名前（安定版）。スプールの名前に入る。
-const DefaultPlugin = "cli"
+// スプールのディレクトリ名。安定版と開発版のプラグインが同居しても取り違えないよう、
+// 開発版は別の名前にする（docs/protocol.md「スプールの場所」）。
+const (
+	StableSpoolName = "vectorworks-cli-bridge"
+	DevSpoolName    = "vectorworks-cli-bridge-dev"
+)
 
-// SpoolName はプラグイン名からスプールのディレクトリ名を作る。
-func SpoolName(plugin string) string {
-	return plugin + "-bridge"
+// SpoolName は配布の系列（"stable" / "dev"）からスプールのディレクトリ名を返す。
+// 知らない系列なら空。
+func SpoolName(channel string) string {
+	switch channel {
+	case "", "stable":
+		return StableSpoolName
+	case "dev":
+		return DevSpoolName
+	default:
+		return ""
+	}
 }
 
 // Candidates はスプールの候補を確からしい順に返す。
 //
+// channel は "stable"（既定）か "dev"。知らない系列なら候補は空。
 // override（VW2026_SPOOL）が空でなければそれだけを返す。そうでなければ、プラグイン側が
 // 一時ディレクトリを決めるのと同じ仕組みから出した場所だけを並べる——利用者ごとの
 // 一時ディレクトリ（macOS の DARWIN_USER_TEMP_DIR）と、環境変数（TMPDIR / TMP / TEMP）。
@@ -28,12 +41,13 @@ func SpoolName(plugin string) string {
 // 別のアプリから起動された CLI とで食い違いうる（macOS の $TMPDIR は GUI には渡るが、
 // 渡らない起動経路がある）。探すのは CLI 側の役割で、プラグインは自分の一時ディレクトリへ
 // 素直に置く。
-func Candidates(plugin, override string) []string {
+func Candidates(channel, override string) []string {
 	if override != "" {
 		return []string{override}
 	}
-	if plugin == "" {
-		plugin = DefaultPlugin
+	name := SpoolName(channel)
+	if name == "" {
+		return nil
 	}
 	var roots []string
 	add := func(root string) {
@@ -69,7 +83,7 @@ func Candidates(plugin, override string) []string {
 
 	out := make([]string, 0, len(roots))
 	for _, root := range roots {
-		out = append(out, filepath.Join(root, SpoolName(plugin)))
+		out = append(out, filepath.Join(root, name))
 	}
 	return out
 }

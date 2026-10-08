@@ -221,7 +221,7 @@ func TestValidID(t *testing.T) {
 }
 
 func TestCandidatesOverride(t *testing.T) {
-	got := Candidates("x", "/somewhere")
+	got := Candidates("stable", "/somewhere")
 	if len(got) != 1 || got[0] != "/somewhere" {
 		t.Fatalf("override should be the only candidate: %v", got)
 	}
@@ -232,13 +232,18 @@ func TestCandidatesUsesTempDirAndPluginName(t *testing.T) {
 	t.Setenv("TMPDIR", root)
 	t.Setenv("TMP", root)
 	t.Setenv("TEMP", root)
-	got := Candidates("plug", "")
 	if runtime.GOOS == "darwin" {
 		return // 利用者ごとの一時ディレクトリが先頭に来る
 	}
-	want := filepath.Join(root, "plug-bridge")
-	if len(got) != 1 || got[0] != want {
-		t.Fatalf("got %v, want [%s]", got, want)
+	for channel, name := range map[string]string{"": StableSpoolName, "stable": StableSpoolName, "dev": DevSpoolName} {
+		got := Candidates(channel, "")
+		want := filepath.Join(root, name)
+		if len(got) != 1 || got[0] != want {
+			t.Fatalf("%q: got %v, want [%s]", channel, got, want)
+		}
+	}
+	if got := Candidates("nightly", ""); len(got) != 0 {
+		t.Fatalf("unknown channel should have no candidates: %v", got)
 	}
 }
 

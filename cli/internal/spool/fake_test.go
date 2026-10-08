@@ -22,7 +22,7 @@ type fakePlugin struct {
 
 func newSpoolDir(t *testing.T) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), SpoolName("test"))
+	dir := filepath.Join(t.TempDir(), SpoolName("stable"))
 	if err := os.Mkdir(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}

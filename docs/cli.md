@@ -25,7 +25,7 @@ vw2026 launch --timeout 120
 
 | 指定 | 環境変数 | 既定 |
 | --- | --- | --- |
-| `--plugin <名前>` | `VW2026_PLUGIN` | `cli` |
+| `--channel <系列>` | `VW2026_CHANNEL` | `stable`（`dev` なら開発版のプラグイン） |
 | `--spool <dir>` | `VW2026_SPOOL` | 探索する（[作法「スプールの場所」](protocol.md#スプールの場所)） |
 | `--timeout <秒>` | `VW2026_TIMEOUT` | `call` 30・`wait` 120・`launch` 0（待たない） |
 | `--app <名前／パス>`（`launch`） | `VW2026_APP` | macOS `Vectorworks 2026`（`open -a`）・Windows `%ProgramFiles%\Vectorworks 2026\Vectorworks2026.exe` |
