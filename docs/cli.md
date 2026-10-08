@@ -13,6 +13,7 @@
 | `vw2026 wait` | ブリッジが動き出すまで待つ。`--down` なら止まるまで | `status` と同じ形 |
 | `vw2026 launch` | Vectorworks を起動する（既に動いていれば何もしない）。`--timeout` を付けると動き出すまで待つ | `{"launched":…}` |
 | `vw2026 version` | CLI の版と作法の版 | `{"version":…,"protocol":1}` |
+| `vw2026 update`（**未実装**。段 5） | プラグインを更新する。殻が変わるときは Vectorworks の終了を待って入れ替える。`--check` / `--restart` / `--branch` | `{"outcome":…,"restart_required":…}`（[設計](plugin/install-and-update.md#更新vw2026-update)） |
 
 ```sh
 vw2026 status

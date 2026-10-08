@@ -26,8 +26,7 @@
 ```
 CMakeLists.txt  src/PluginPrefix.h  src/BuildConfig.h  src/Module-Info.plist.in
 src/ModuleMain.cpp  src/PayloadAbi.h  src/PayloadHost.{h,cpp}  src/PayloadSession.{h,cpp}
-src/Clock.{h,cpp}  src/Updater.{h,cpp}  src/UpdaterFlow.cpp  src/UpdaterHost.h  src/UpdaterParse.h
-src/Extensions/*
+src/Clock.{h,cpp}
 ```
 
 `src/core/`・`src/tools/`・`src/payload/`・同梱スクリプト・`cli/` は**入れません**（入れると
@@ -63,23 +62,25 @@ cli.vwlibrary.zip                       cli.vlb.zip
 └─ （zip の直下）                       └─ （zip の直下）
    ├─ cli.vwlibrary/                       ├─ cli.vlb ・ cli.vwr
    ├─ cli.vwpayload                        ├─ cli.commit ・ cli.branch ・ cli.shell-id
-   ├─ bin/vw2026          （universal）    ├─ cli.vwpayload
+   ├─ build.json                           ├─ cli.vwpayload
+   ├─ bin/vw2026          （universal）    ├─ build.json
    ├─ vw-install.sh                        ├─ bin\vw2026.exe
-   └─ vw-uninstall.sh                      ├─ vw-update.ps1 ・ vw-token.ps1
-                                           ├─ vw-install.ps1
+   └─ vw-uninstall.sh                      ├─ vw-install.ps1
                                            └─ vw-uninstall.ps1
 ```
 
-（mac の `vw-update.sh` / `vw-token.sh` はバンドルの `Contents/Resources/` に入る。）
+`build.json`（`{"plugin","channel","version","branch","shell_id"}`）は CI が書きます。
+`vw2026 update` が「何が入っているか」と「殻が変わるか」を判定するのに使います
+（[更新](install-and-update.md#流れ)）。
 
 ## リリースの形
 
-元と同じ形に保ちます（自動アップデートが読む）。
+元と同じ形に保ちます（`vw2026 update` が読む）。
 
 - 安定版: main への push で転がりタグ `stable` を作り直す。タイトル `Stable (<sha>)`・`--latest`。
 - 開発版: 同じリポジトリの PR で `dev-<slug>`（ブランチ名の `/:@ ` を `-` にし、ほかの文字を
   落とす）。タイトル **`Dev: <branch> (<sha>)`**・`--prerelease`。
-- 本文に `channel=` / `branch=` / `commit=` / `built=` を載せる（更新側が `branch=` を読む）。
+- 本文に `channel=` / `branch=` / `commit=` / `built=` を載せる（`vw2026 update --branch` が `branch=` を読む）。
 - 資産: `cli.vwlibrary.zip` / `cli.vlb.zip` / `vw-install.{sh,ps1}` / `vw-uninstall.{sh,ps1}`
   （開発版は `cli_dev.*`）。
 - **CLI 単体の資産**（`vw2026-darwin-universal` / `vw2026-windows-amd64.exe`）も添えます。

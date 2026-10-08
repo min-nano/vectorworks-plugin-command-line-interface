@@ -11,7 +11,7 @@ Vectorworks ──読み込む──▶ 殻 cli.vwlibrary / cli.vlb          …
 
 | | 入るもの | 入れないもの |
 | --- | --- | --- |
-| **殻** | Vectorworks にアドレスを保持されるものの登録（メニューの `SMenuDef`・UUID）・本体の読み込み（複製・入れ替えの判定）・**OS タイマー**・**殻に頼む道具の実行**（更新・再起動）・自動アップデート | 道具の中身・スプールの読み書き・JSON の組み立て |
+| **殻** | 本体の読み込み（複製・入れ替えの判定）・**OS タイマー**・**殻に頼む道具の実行**（終了・再起動） | 道具の中身・スプールの読み書き・JSON の組み立て・更新（CLI が行う） |
 | **本体** | ブリッジ（スプールの受け付け）・道具の表と中身・生存の印 | 登録の定義。本体は `.vwr` を持たない |
 
 元のプラグインの決めごとをそのまま守ります（元:`CLAUDE.md`「殻と本体」）。
@@ -30,13 +30,11 @@ Vectorworks ──読み込む──▶ 殻 cli.vwlibrary / cli.vlb          …
 
 | 入口 | 殻の処理 | 本体へ |
 | --- | --- | --- |
-| `plugin_module_main`（起動時） | VCOM の初期化・SDK のコールバックを記憶・拡張機能の登録・**OS タイマーの開始** | なし（本体は最初の受け付けで読み込む） |
+| `plugin_module_main`（起動時） | VCOM の初期化・SDK のコールバックを記憶・**OS タイマーの開始**（拡張機能は登録しない） | なし（本体は最初の受け付けで読み込む） |
 | OS タイマー（250 ms ごと） | 見送りの判定 → `PayloadUse` で本体を確保 → `vw_payload_serve` → 殻に頼む道具を実行 | `vw_payload_serve` |
-| メニュー「アップデートを確認 (CLI)」 | 自動アップデートの流れ（`UpdaterFlow`） | なし |
 
-**起動時に更新を確認しません。** 元のプラグインと同じく、確認はメニューと `update` 道具の
-ときだけです（再起動を SDK に頼めるのは Vectorworks が完全に動いている最中だけ）。
-OS タイマーの開始は確認ではないので起動時に行います（最初の 10 秒は受け付けない）。
+**プラグインは更新を確認しません。** 更新は CLI の `vw2026 update` だけが行います。
+OS タイマーは起動時に開始します（最初の 10 秒は受け付けない）。
 
 ## 受け付けの流れ
 
@@ -53,10 +51,10 @@ OS タイマー（殻）
               ├─ 生存の印を 2 秒ごとに書き直す
               └─ 見え方（view）の JSON を out へ
      action があれば（1 回のタイマーで 3 件まで）
-        ├─ 殻が実行する（update / restart）
+        ├─ 殻が実行する（quit）
         └─ 結果を shellReport にして、すぐ vw_payload_serve をもう一度呼ぶ
            （入れ替わったなら新しい本体が応答を書く）
-     restart が頼まれていたら、応答を書かせてから CloseAllFilesAndQuitVectorworks
+     quit が頼まれていたら、応答を書かせてから CloseAllFilesAndQuitVectorworks
 ```
 
 - **SDK 呼び出しはメインスレッドからだけ**行います。受け付け用のスレッドは持ちません。
@@ -89,16 +87,18 @@ Vectorworks の処理の妨げにならないよう、次のときはその回�
 - 見送った要求は消さずに残るので、次に受け付けたときに処理されます（呼ぶ側の待ち時間の内なら
   応答が届く。過ぎれば呼ぶ側が取り下げる）。
 
-## メニューを持つ理由
+## 拡張機能を登録しない
 
-メニューは「アップデートを確認」の 1 つだけを持ちます。
+**メニューもパレットも PIO も登録しません。** 操作はすべて CLI から行い、更新も CLI が行う
+（[更新](install-and-update.md#更新vw2026-update)）ので、殻に利用者の入口は要りません。
 
-- **本体が読み込めないときの復旧の経路**になるため。殻まで変わる更新のあと、新しい本体を古い殻が
-  読めない（ABI の版が違う）と、ブリッジは動かず `vw2026 call update` が届きません。殻だけで
-  動くメニューなら、そこから入れ直せます。
-- **拡張機能を 1 つも登録しないプラグインが読み込まれ、`plugin_module_main` が呼ばれるかは
-  確かめていません**（Findings に無い）。タイマーの開始は元のプラグインと同じく
-  `plugin_module_main` で行うので、実機で通った形（メニューを登録する）に揃えます。
+- プラグインの読み込みと `plugin_module_main` の呼び出しは、拡張機能の有無に関わらず起きる
+  見込みです（PIO だけのプラグインもあるように、読み込みは登録の種類に依らない）。ただし
+  **拡張機能を 1 つも登録しない形は実機で確かめていません**（SDK リファレンスにも記載が無い）。
+  段 2（骨格）の実機確認で、起動後に `vw2026 status` が `live:true` になることで確かめます。
+- **確かめられなかったときの代わり**: 拡張機能を 1 つだけ登録します。メニューコマンドは
+  ワークスペースに加えない限り利用者の画面に出ないので、登録しても目に触れません。
+  そのときは UUID とユニバーサル名を [識別子](identifiers.md) に足します。
 
 ## ソースの配置
 
@@ -110,16 +110,14 @@ src/
 ├─ PayloadHost.{h,cpp} / PayloadSession.{h,cpp}   … 殻: 本体の読み込み・入れ替え
 ├─ PayloadHostHolder.h                     … 本体: 受け取った VwPayloadHost の複製
 ├─ Clock.{h,cpp}                           … 殻: OS タイマー・殻に頼む道具の実行
-├─ Updater.{h,cpp} / UpdaterFlow.cpp / UpdaterHost.h / UpdaterParse.h   … 殻: 自動アップデート
-├─ Extensions/                             … 殻: メニューの拡張機能
 ├─ payload/PayloadMain.cpp                 … 本体: エクスポート関数
 ├─ core/                                   … SDK に依らない（Json・Bridge）。本体とテストがリンク
 └─ tools/                                  … 本体: 道具の表（ToolTable.cpp）と中身（SDK 依存）
-scripts/                                   … vw-install / vw-uninstall / vw-update / vw-token（.sh / .ps1）
-resources/                                 … cli.vwr / cli_dev.vwr（文字列）
+scripts/                                   … vw-install / vw-uninstall（.sh / .ps1）
+resources/                                 … cli.vwr / cli_dev.vwr（拡張機能を登録しないので最小限）
 tests/                                     … 無 SDK の単体テスト・スクリプトのテスト
 protocol/fixtures/                         … 作法の見本（C++ と Go の両方のテストが読む）
-cli/                                       … vw2026（Go）
+cli/                                       … vw2026（Go）。更新（update）もここ
 ```
 
 - 名前空間は `VwCli`（`VwCli::core` / `VwCli::tools` / `VwCli::payload`）。図面にも配布物にも

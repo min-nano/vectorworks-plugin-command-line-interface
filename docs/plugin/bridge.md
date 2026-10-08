@@ -83,7 +83,7 @@ struct Tool {
   `kind` は `read` / `write` / `long` / `shell` を小文字で載せます（呼ぶ側が「図面を変えるか」を
   判定できるように。MCP のラッパーが確認を挟む手掛かりになる）。
 - 引数の検査は道具の中で行います（JSON Schema の検証器は持たない）。知らない引数は失敗で返します。
-- **種類 `write` の道具は、undo の作法を通すまで表に載せません**（[未決 2](open-questions.md)）。
+- **種類 `write` の道具は、undo の作法を通すまで表に載せません**（[未決 1](open-questions.md)）。
 
 ## 見え方（view）
 
