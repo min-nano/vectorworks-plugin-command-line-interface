@@ -10,6 +10,9 @@ import (
 	"time"
 )
 
+// workSuffix は確保した要求の名前。プラグイン側だけが使うので、CLI の定数には置かない。
+const workSuffix = ".work"
+
 // fakePlugin はプラグイン側の受け付けを真似る（docs/protocol.md の「プラグイン側の義務」）。
 type fakePlugin struct {
 	t        *testing.T
@@ -80,10 +83,15 @@ func (f *fakePlugin) loop() {
 		}
 		sort.Strings(names)
 		for _, name := range names {
-			path := filepath.Join(f.dir, name)
+			id := strings.TrimSuffix(name, RequestSuffix)
+			// rename で確保してから読む。失敗したら別の橋が先に確保したか、呼ぶ側が取り下げた
+			// ので、黙って飛ばす（「読めなかった要求」として偽の失敗を返さない）。
+			path := filepath.Join(f.dir, id+workSuffix)
+			if os.Rename(filepath.Join(f.dir, name), path) != nil {
+				continue
+			}
 			data, err := os.ReadFile(path)
 			_ = os.Remove(path)
-			id := strings.TrimSuffix(name, RequestSuffix)
 			var request struct {
 				ID   string         `json:"id"`
 				Tool string         `json:"tool"`

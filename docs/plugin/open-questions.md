@@ -25,4 +25,5 @@
 | CLI の置き場所 | プラグインのフォルダの外（`<CLI>/bin/`）。殻の ID が同じ更新は殻以外のファイルの上書き、違う更新はフォルダの付け替え（Windows で開いているファイルを含むフォルダの名前を変えられないため） | [インストールと更新](install-and-update.md#置き場所) |
 | 殻から本体へ伝えること | `vw_payload_serve` の引数 `VwServeInput`（`shellReport`・`restartRequired`）。見え方は本体から殻への出力だけ | [ABI](abi.md#受け付け-1-回ごとに殻が渡すもの) |
 | 殻の側の失敗の伝え方 | 殻が本体を動かせない間だけ、スプールに `shell.json` を書く。`vw2026 status` が `shell` に載せる | [ABI](abi.md#殻の診断shelljson)・[作法](../protocol.md#殻の診断shelljson) |
+| 同じスプールを見る 2 つの Vectorworks（Windows） | 要求は `<id>.work` への rename で確保し、失敗は飛ばす。別の `pid` の印が `down` でなければ待機する | [作法](../protocol.md#1-つのスプールに橋は-1-つ)・[ブリッジ](bridge.md#1-つのスプールに橋は-1-つ) |
 | main の保護 | 必要になったら設定する。それまでは main へ直接 push | `CLAUDE.md`「進め方」 |

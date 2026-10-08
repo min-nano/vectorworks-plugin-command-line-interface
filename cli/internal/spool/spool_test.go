@@ -45,6 +45,27 @@ func TestCallRoundTrip(t *testing.T) {
 	assertNoFiles(t, dir, ResponseSuffix)
 }
 
+// 2 つの橋が同じスプールを見ても（Windows で Vectorworks を 2 つ起動したとき）、要求は
+// どちらか一方だけが確保して応え、偽の失敗が先に届かないことを確かめる。
+func TestTwoBridgesDoNotAnswerWithFalseFailure(t *testing.T) {
+	dir := newSpoolDir(t)
+	startFake(t, dir, echo)
+	startFake(t, dir, echo)
+	bridge, _, err := Find([]string{dir}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 50; i++ {
+		response, err := bridge.Call("ping", nil, 5*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !response.OK {
+			t.Fatalf("call %d: false failure: %s", i, response.Error)
+		}
+	}
+}
+
 func TestCallEmptyArgsBecomesObject(t *testing.T) {
 	dir := newSpoolDir(t)
 	startFake(t, dir, echo)
