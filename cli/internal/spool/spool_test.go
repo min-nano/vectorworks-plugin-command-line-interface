@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -152,11 +153,99 @@ func TestProtocolMismatch(t *testing.T) {
 	assertNoFiles(t, dir, RequestSuffix)
 }
 
-func TestStaleStatusIsNotLive(t *testing.T) {
+// fakeProcess は印の pid のプロセスが動いているかを差し替える。
+func fakeProcess(t *testing.T, running bool) {
+	t.Helper()
+	saved := ProcessRunning
+	ProcessRunning = func(int) bool { return running }
+	t.Cleanup(func() { ProcessRunning = saved })
+}
+
+func staleStatus() map[string]any {
+	return liveStatus(map[string]any{"beat": float64(time.Now().Unix() - StaleSeconds - 5)})
+}
+
+func TestStaleStatusWithoutProcessIsDown(t *testing.T) {
+	fakeProcess(t, false)
 	dir := newSpoolDir(t)
-	writeStatus(t, dir, liveStatus(map[string]any{"beat": float64(time.Now().Unix() - StaleSeconds - 5)}))
+	writeStatus(t, dir, staleStatus())
 	if _, _, err := Find([]string{dir}, time.Now()); !errors.Is(err, ErrNotRunning) {
-		t.Fatalf("stale status should not be live: %v", err)
+		t.Fatalf("stale status without the process should be down: %v", err)
+	}
+}
+
+func TestStaleStatusWithProcessIsUnresponsive(t *testing.T) {
+	fakeProcess(t, true)
+	dir := newSpoolDir(t)
+	writeStatus(t, dir, staleStatus())
+	bridge, _, err := Find([]string{dir}, time.Now())
+	if err != nil || bridge.State != StateUnresponsive {
+		t.Fatalf("want unresponsive, got %+v %v", bridge, err)
+	}
+}
+
+func TestFindPrefersLiveOverUnresponsive(t *testing.T) {
+	fakeProcess(t, true)
+	stale := newSpoolDir(t)
+	writeStatus(t, stale, staleStatus())
+	live := newSpoolDir(t)
+	writeStatus(t, live, liveStatus(nil))
+	bridge, searched, err := Find([]string{stale, live}, time.Now())
+	if err != nil || bridge.Dir != live || bridge.State != StateLive {
+		t.Fatalf("want live, got %+v %v", bridge, err)
+	}
+	if len(searched) != 1 || searched[0].Reason != "unresponsive" {
+		t.Fatalf("unexpected searched: %+v", searched)
+	}
+}
+
+func TestCallWhileUnresponsiveIsServedWhenItRecovers(t *testing.T) {
+	fakeProcess(t, true)
+	dir := newSpoolDir(t)
+	writeStatus(t, dir, staleStatus())
+	bridge, _, _ := Find([]string{dir}, time.Now())
+	// ダイアログが閉じて受け付けが戻るのを真似る: しばらくしてから応える。
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		startFake(t, dir, func(id, tool string, args map[string]any) Response {
+			return Response{OK: true, Result: json.RawMessage(`{}`)}
+		})
+	}()
+	response, err := bridge.Call("ping", nil, 5*time.Second)
+	if err != nil || !response.OK {
+		t.Fatalf("%+v %v", response, err)
+	}
+}
+
+func TestCallTimeoutWhileUnresponsive(t *testing.T) {
+	fakeProcess(t, true)
+	dir := newSpoolDir(t)
+	writeStatus(t, dir, staleStatus())
+	bridge, _, _ := Find([]string{dir}, time.Now())
+	_, err := bridge.Call("ping", nil, 200*time.Millisecond)
+	if !errors.Is(err, ErrUnresponsive) {
+		t.Fatalf("want ErrUnresponsive, got %v", err)
+	}
+	assertNoFiles(t, dir, RequestSuffix)
+}
+
+func TestProcessRunning(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("relies on ps")
+	}
+	if _, exists := processImage(os.Getpid()); !exists {
+		t.Fatal("own process should exist")
+	}
+	// テストの実行ファイルは Vectorworks ではない（pid の再利用を見分ける）。
+	if vectorworksRunning(os.Getpid()) {
+		t.Fatal("test binary should not be taken for Vectorworks")
+	}
+	cmd := exec.Command("true")
+	if err := cmd.Run(); err != nil {
+		t.Skip(err)
+	}
+	if _, exists := processImage(cmd.Process.Pid); exists {
+		t.Fatal("finished process should not exist")
 	}
 }
 
