@@ -62,14 +62,15 @@ cli.vwlibrary.zip                       cli.vlb.zip
 └─ （zip の直下）                       └─ （zip の直下）
    ├─ cli.vwlibrary/                       ├─ cli.vlb ・ cli.vwr
    ├─ cli.vwpayload                        ├─ cli.commit ・ cli.branch ・ cli.shell-id
-   ├─ build.json                           ├─ cli.vwpayload
-   ├─ bin/vw2026          （universal）    ├─ build.json
+   ├─ build.json ・ shell-id               ├─ cli.vwpayload
+   ├─ bin/vw2026          （universal）    ├─ build.json ・ shell-id
    ├─ vw-install.sh                        ├─ bin\vw2026.exe
    └─ vw-uninstall.sh                      ├─ vw-install.ps1
                                            └─ vw-uninstall.ps1
 ```
 
-`build.json`（`{"plugin","channel","version","branch","shell_id"}`）は CI が書きます。
+`build.json`（`{"plugin","channel","version","branch","shell_id"}`）と `shell-id`（殻の ID だけの
+1 行。殻が JSON を読まずに済むように分けてある）は CI が書きます。
 `vw2026 update` が「何が入っているか」と「殻が変わるか」を判定するのに使います
 （[更新](install-and-update.md#流れ)）。
 

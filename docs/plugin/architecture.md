@@ -24,6 +24,8 @@ Vectorworks ──読み込む──▶ 殻 cli.vwlibrary / cli.vlb          …
 5. **本体をバンドルの中に置かない**（mac の署名の対象がリソースにまで及ぶ）。殻の隣に置く。
 6. **殻の ID（`VW_SHELL_ID`）が「再起動が要るか」を決める。** 殻にコンパイルされるもの
    だけを `VW_SHELL_INPUTS` に並べる（[ビルド](build-and-release.md#殻の-id)）。
+   **殻は、フォルダの `shell-id` が自分の ID と一致するときだけ本体を読み直す**（一致しなければ
+   今の本体のまま動き、`restart_required` を出す。[更新「別の手段で再起動されたとき」](install-and-update.md#別の手段で再起動されたとき)）。
 7. 殻は SDK に依らない共通部（`src/core/`）をリンクしない（殻に入れてよいものの境界を保つ）。
 
 ## 入口

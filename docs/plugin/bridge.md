@@ -59,6 +59,7 @@
 | `beat` | 今（epoch 秒） |
 | `pid` | Vectorworks のプロセス ID（`getpid` / `GetCurrentProcessId`） |
 | `busy` / `busy_id` / `busy_until` | 長く走る道具の最中だけ |
+| `restart_required` | 殻の ID の違う版が入っていて、再起動するまで効かないとき（殻が見え方で伝え、本体が載せる） |
 
 - **本体の入れ替えでは印を消しません**（[ABI](abi.md#vw_payload_shutdown-で生存の印を消さない理由)）。
   Vectorworks が終了すると印は書き直されなくなり、15 秒で古びて「動いていない」と判定されます。
