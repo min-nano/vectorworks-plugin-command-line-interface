@@ -15,6 +15,11 @@
 | CMake のターゲット | `VwCli` / `VwCliPayload` | `VwCliDev` / `VwCliDevPayload` |
 | リリースのタグ | `stable` | `dev-<ブランチの slug>` |
 | インストール先 | `<Plug-Ins>/cli/` | `<Plug-Ins>/cli_dev/` |
+| CLI の置き場所 | `<CLI>/bin/`（PATH に載せる） | `<CLI>/bin-dev/`（PATH に載せない） |
+| 待機の場所 | `<CLI>/pending/cli/` | `<CLI>/pending/cli_dev/` |
+
+`<CLI>` は mac `~/Library/Application Support/vectorworks2026-cli/`、Windows
+`%LOCALAPPDATA%\vectorworks2026-cli\`（[インストールと更新「置き場所」](install-and-update.md#置き場所)）。
 
 ## 拡張機能
 

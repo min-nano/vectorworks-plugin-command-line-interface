@@ -119,12 +119,18 @@
 ## 配布と PATH
 
 - 配布 zip の直下に、殻・本体・インストーラ・アンインストーラ・`bin/vw2026`（Windows は
-  `bin\vw2026.exe`）を置きます。インストーラは「zip の直下にあるものをそのまま置く」。
+  `bin\vw2026.exe`）を置きます。インストーラは「zip の直下の `bin/` は CLI の場所へ、それ以外は
+  そのままプラグインのフォルダへ置く」。
+- **CLI はプラグインのフォルダの外に置きます**（mac `~/Library/Application Support/vectorworks2026-cli/bin/`、
+  Windows `%LOCALAPPDATA%\vectorworks2026-cli\bin\`）。Windows では開いているファイルを含む
+  フォルダの名前を変えられないので、CLI がプラグインのフォルダの中で動いていると、更新で
+  プラグインのフォルダを付け替えられなくなるためです
+  （[インストールと更新「置き場所」](plugin/install-and-update.md#置き場所)）。
 - **PATH はインストーラが通します**（プラグインの起動時には何もしない）。
-  - macOS: `~/.local/bin/vw2026` → `<プラグインのフォルダ>/bin/vw2026` のシンボリックリンク
+  - macOS: `~/.local/bin/vw2026` → `<CLI の場所>/bin/vw2026` のシンボリックリンク
     （sudo 不要）。`~/.local/bin` が PATH に無ければ、追加の方法を表示するだけでシェルの
     設定ファイルは書き換えない。
-  - Windows: 利用者の PATH に `<プラグインのフォルダ>\bin` を追加する。
+  - Windows: 利用者の PATH に `<CLI の場所>\bin` を追加する。
 - アンインストーラは**自分のフォルダを指すリンク・PATH の項目だけ**を取り除きます。
 - macOS では、インストーラが隔離属性の解除とアドホック署名を `bin/` にもかけます。
 
