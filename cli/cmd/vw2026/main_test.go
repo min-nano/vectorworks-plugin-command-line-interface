@@ -21,12 +21,15 @@ type result struct {
 
 func invoke(t *testing.T, vars map[string]string, stdin string, started *[]string, args ...string) result {
 	t.Helper()
+	// kong は環境変数を os から直接読むので、テストごとに置き直す（並行には走らせない）。
+	for _, name := range []string{"VW2026_SPOOL", "VW2026_APP"} {
+		t.Setenv(name, vars[name])
+	}
 	var stdout, stderr bytes.Buffer
 	code := run(args, env{
 		stdin:  strings.NewReader(stdin),
 		stdout: &stdout,
 		stderr: &stderr,
-		getenv: func(name string) string { return vars[name] },
 		start: func(argv []string) error {
 			if started != nil {
 				*started = argv
@@ -208,40 +211,30 @@ func TestDoc(t *testing.T) {
 	}
 }
 
-func TestCommandDefinitions(t *testing.T) {
-	for _, list := range [][]*command{commands, topics} {
-		for _, c := range list {
-			if c.Short == "" || strings.TrimSpace(c.Long) == "" {
-				t.Errorf("%s: Short and Long are required", c.Name())
-			}
-			if c.Run != nil && !strings.HasPrefix(c.UsageLine, "vw2026 "+c.Name()) {
-				t.Errorf("%s: UsageLine must start with \"vw2026 %s\"", c.Name(), c.Name())
-			}
-			if lookup(c.Name()) != c {
-				t.Errorf("%s: duplicate name", c.Name())
-			}
+func TestHelp(t *testing.T) {
+	for _, args := range [][]string{{"help"}, {"--help"}, {"-h"}} {
+		r := invoke(t, nil, "", nil, args...)
+		if r.code != exitOK || !strings.Contains(r.stdout, "call") || !strings.Contains(r.stdout, "exit with") {
+			t.Fatalf("%v: %+v", args, r)
 		}
 	}
-}
-
-func TestHelp(t *testing.T) {
-	r := invoke(t, nil, "", nil, "help")
-	if r.code != exitOK || !strings.Contains(r.stdout, "call ") || !strings.Contains(r.stdout, "exit-status") {
-		t.Fatalf("%+v", r)
+	for _, args := range [][]string{{"help", "call"}, {"call", "--help"}, {"call", "x", "-h"}} {
+		r := invoke(t, nil, "", nil, args...)
+		if r.code != exitOK || !strings.Contains(r.stdout, "--timeout") || !strings.Contains(r.stdout, "withdraws the request") {
+			t.Fatalf("%v: %+v", args, r)
+		}
 	}
-	r = invoke(t, nil, "", nil, "help", "call")
-	if r.code != exitOK || !strings.HasPrefix(r.stdout, "usage: vw2026 call ") {
-		t.Fatalf("%+v", r)
-	}
-	r = invoke(t, nil, "", nil, "call", "-h")
-	if r.code != exitUsage || !strings.Contains(r.stderr, "-timeout") {
+	// 引数なしは使い方の誤りで、ヘルプは標準エラーへ。
+	if r := invoke(t, nil, "", nil); r.code != exitUsage || r.stdout != "" || !strings.Contains(r.stderr, "Usage:") {
 		t.Fatalf("%+v", r)
 	}
 	if r := invoke(t, nil, "", nil, "help", "nope"); r.code != exitUsage {
 		t.Fatalf("%+v", r)
 	}
-	// トピックはコマンドとして走らない。
-	if r := invoke(t, nil, "", nil, "spool"); r.code != exitUsage {
+}
+
+func TestVersionFlag(t *testing.T) {
+	if r := invoke(t, nil, "", nil, "--version"); r.code != exitOK || !strings.Contains(r.stdout, `"protocol":3`) {
 		t.Fatalf("%+v", r)
 	}
 }
