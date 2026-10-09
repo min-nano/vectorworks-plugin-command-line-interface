@@ -208,3 +208,63 @@ func TestVersion(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+// unresponsiveSpool は、印が古いが pid の Vectorworks は動いているスプールを作る
+// （保存の確認のダイアログを開いている間など）。running を偽にすると終了を真似る。
+func unresponsiveSpool(t *testing.T) (string, *bool) {
+	t.Helper()
+	running := true
+	saved := spool.ProcessRunning
+	spool.ProcessRunning = func(int) bool { return running }
+	t.Cleanup(func() { spool.ProcessRunning = saved })
+	dir := filepath.Join(t.TempDir(), "p-bridge")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	status, _ := json.Marshal(map[string]any{
+		"plugin": "p", "version": "0", "protocol": spool.ProtocolVersion,
+		"beat": time.Now().Unix() - spool.StaleSeconds - 5, "pid": 4242,
+	})
+	if err := os.WriteFile(filepath.Join(dir, spool.StatusFile), status, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return dir, &running
+}
+
+func TestStatusUnresponsive(t *testing.T) {
+	dir, _ := unresponsiveSpool(t)
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
+	if r.code != exitUnresponsive || !strings.Contains(r.stdout, `"state":"unresponsive"`) || !strings.Contains(r.stdout, `"live":false`) {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestCallWhileUnresponsiveTimesOutAsUnresponsive(t *testing.T) {
+	dir, _ := unresponsiveSpool(t)
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "ping", "--timeout", "0.3")
+	if r.code != exitUnresponsive {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestWaitDownWaitsForTheProcess(t *testing.T) {
+	dir, running := unresponsiveSpool(t)
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "wait", "--down", "--timeout", "0.3")
+	if r.code != exitTimeout {
+		t.Fatalf("unresponsive must not count as down: %+v", r)
+	}
+	*running = false
+	r = invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "wait", "--down", "--timeout", "0.3")
+	if r.code != exitOK || !strings.Contains(r.stdout, `"state":"down"`) {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestLaunchSkipsWhenUnresponsive(t *testing.T) {
+	dir, _ := unresponsiveSpool(t)
+	var started []string
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", &started, "launch")
+	if r.code != exitUnresponsive || started != nil || !strings.Contains(r.stdout, `"launched":false`) {
+		t.Fatalf("%+v %v", r, started)
+	}
+}
