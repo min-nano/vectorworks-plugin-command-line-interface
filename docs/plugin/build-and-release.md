@@ -26,11 +26,14 @@
 ```
 CMakeLists.txt  src/PluginPrefix.h  src/BuildConfig.h  src/Module-Info.plist.in
 src/ModuleMain.cpp  src/PayloadAbi.h  src/PayloadHost.{h,cpp}  src/PayloadSession.{h,cpp}
-src/Clock.{h,cpp}
+src/Clock.{h,cpp}  resources/
 ```
 
 `src/core/`・`src/tools/`・`src/payload/`・同梱スクリプト・`cli/` は**入れません**（入れると
-そこを直すたびに再起動を強いる。元の M23 で実際に起きた）。改行を LF に揃えて SHA-256 を取り、
+そこを直すたびに再起動を強いる。元の M23 で実際に起きた）。`resources/`（`.vwr`）は殻の
+側のファイルなので入れます。殻の ID が同じ更新ではインストーラが殻のファイルに触れない
+（[更新「殻の ID が同じとき」](install-and-update.md#殻の-id-が同じときファイルの上書き)）ので、
+入れないと `.vwr` の変更が入らないためです。改行を LF に揃えて SHA-256 を取り、
 12 文字に切ったものが `VW_SHELL_ID` です。
 
 ## CI

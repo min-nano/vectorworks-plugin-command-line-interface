@@ -21,6 +21,15 @@ Vectorworks ──読み込む──▶ 殻 cli.vwlibrary / cli.vlb          …
 3. **本体のコードがスタックに載っている間はアンロードしない。** 入れ替えの判定は入口で、
    入れ子の深さが 0 のときだけ（元:`src/PayloadSession.h` の `PayloadUse`）。
 4. **本体は一時ディレクトリへ複製してから読み込む**（Windows は読み込み中の DLL を置き換えられない）。
+   **本体が変わったかは、本体のファイルの刻印で判定する。** 刻印は更新時刻・大きさ・ファイルの
+   識別子（mac は `stat` の `st_dev` と `st_ino`、Windows は `GetFileInformationByHandle` の
+   volume serial number と file index）の組です。インストーラは本体を名前の変更で置き換え、
+   そのとき更新時刻と大きさは元と同じことがあるので、識別子を含めて変化を見逃さないようにする
+   （[更新「殻の ID が同じとき」](install-and-update.md#殻の-id-が同じときファイルの上書き)）。
+   Windows で刻印を取るときは `CreateFileW` を `FILE_SHARE_READ | FILE_SHARE_WRITE |
+   FILE_SHARE_DELETE` で開き、取ったらすぐ閉じる（OS タイマーのたびに開くので、インストーラの
+   名前の変更と共有違反を起こさないようにする）。本体を一時ディレクトリへ複製するときの読み取りも
+   同じ共有モードで開く。
 5. **本体をバンドルの中に置かない**（mac の署名の対象がリソースにまで及ぶ）。殻の隣に置く。
 6. **殻の ID（`VW_SHELL_ID`）が「再起動が要るか」を決める。** 殻にコンパイルされるもの
    だけを `VW_SHELL_INPUTS` に並べる（[ビルド](build-and-release.md#殻の-id)）。

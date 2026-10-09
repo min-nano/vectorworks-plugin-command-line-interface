@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | `src/PluginPrefix.h` | 同じ | PCH |
 | `src/PayloadHost.{h,cpp}` | 同じ | 解決する関数を 5 つに減らす（[ABI](abi.md)）。`runBundledScript` の実装を除く。L466 の「殻の ID を貸す」という古い注釈は写さない |
-| `src/PayloadSession.{h,cpp}` | 同じ | `PayloadUse` / `ReleaseLoadedPayload` / `PayloadInUse` |
+| `src/PayloadSession.{h,cpp}` | 同じ | `PayloadUse` / `ReleaseLoadedPayload` / `PayloadInUse`。本体の刻印にファイルの識別子が無ければ足す（[構成](architecture.md#殻と本体) の 4） |
 | `src/PayloadHostHolder.h` | 同じ | `canRunScripts` / `runScript` を除く |
 | `src/core/Json.{h,cpp}` | 同じ | |
 | `src/core/Bridge.{h,cpp}` | 同じ | `bridgeSpoolDir` を `PLUGIN_SPOOL` を使う形に。受け付けの手順は `core/Serve` へ（[ブリッジ](bridge.md)） |

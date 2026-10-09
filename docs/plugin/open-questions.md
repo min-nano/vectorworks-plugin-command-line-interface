@@ -22,4 +22,5 @@
 | 自動レビュー | 差し当たり持たない（Secrets 不要） | [ビルド](build-and-release.md#ci) |
 | メニュー | 持たない（拡張機能を登録しない）。表示名も不要 | [構成](architecture.md#拡張機能を登録しない) |
 | 更新 | CLI の `vw2026 update`。殻が変わる更新は Vectorworks の終了を待って入れ替える | [更新](install-and-update.md#更新vw2026-update) |
+| CLI の置き場所 | プラグインのフォルダの外（`<CLI>/bin/`）。殻の ID が同じ更新は殻以外のファイルの上書き、違う更新はフォルダの付け替え（Windows で開いているファイルを含むフォルダの名前を変えられないため） | [インストールと更新](install-and-update.md#置き場所) |
 | main の保護 | 必要になったら設定する。それまでは main へ直接 push | `CLAUDE.md`「進め方」 |
