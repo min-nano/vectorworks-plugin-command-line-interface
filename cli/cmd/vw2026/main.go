@@ -1,11 +1,4 @@
-// vw2026 は、Vectorworks で動いているブリッジ（cli プラグイン）へ道具の呼び出しを
-// 1 つずつ届けるコマンドである。
-//
-// **指示されたとおりに 1 回だけ動くプリミティブな入口**で、セッションの見分け・占有・
-// 再試行は持たない（docs/design.md「CLI はプリミティブに保つ」）。それらは呼ぶ側が担う。
-//
-// 出力は標準出力へ JSON 1 行、失敗の説明は標準エラーへ。成否は終了コードで返す
-// （docs/cli.md）。
+// コマンドの使い方は doc.go（go doc ./cmd/vw2026）に書く。
 package main
 
 import (
@@ -25,7 +18,7 @@ import (
 // version はビルド時に -ldflags "-X main.version=…" で埋め込む。
 var version = "dev"
 
-// 終了コード（docs/cli.md と対）。
+// 終了コード（doc.go「終了コード」と対）。
 const (
 	exitOK      = 0
 	exitToolErr = 1 // 道具が失敗を返した（応答は届いている）
@@ -37,20 +30,26 @@ const (
 	// 5 は使わない（protocol 2 までは「作法の版が違う」だった。呼ぶ側の分岐を変えないよう
 	// 番号を詰めない）。
 	exitFailure = 6 // そのほか（書き込めない・起動できない等）
+	// 7 は install / uninstall（未実装）が「Vectorworks が動いているので行えない」に使う。
 )
 
+// usage は端末に出す要約。文言は英語（CLI の出力は端末の文字コードに依らない）。
+// 詳しい説明は doc.go に書き、ここには増やさない。
 const usage = `usage: vw2026 <command> [options]
 
 commands:
-  status                 ブリッジが動いているかを返す（版は call ping）
-  call <tool> [args]     道具を 1 つ呼ぶ（args は JSON オブジェクト。"-" で標準入力から）
-  wait                   ブリッジが動き出す（--down なら止まる）まで待つ
-  launch                 Vectorworks を起動する（待たない。待つなら続けて wait）
-  version                この CLI の版と、受け渡しの版を返す
+  status                 report whether the bridge is running (version: call ping)
+  call <tool> [args]     call one tool (args: JSON object, or "-" for stdin)
+  wait                   wait until the bridge starts (--down: until it stops)
+  launch                 start Vectorworks (does not wait; follow with wait)
+  version                print the CLI version and the protocol version
 
 common options:
-  --spool <dir>          スプールの場所（既定 VW2026_SPOOL、無ければ <CLI>/spool）
-  --timeout <seconds>    待つ上限（call / wait）
+  --spool <dir>          spool directory (default: VW2026_SPOOL, else <CLI>/spool)
+  --timeout <seconds>    how long to wait (call / wait)
+
+Run "vw2026 <command> -h" for the options of a command.
+Full documentation: go doc ./cmd/vw2026 (in the cli module).
 `
 
 type env struct {
@@ -151,6 +150,7 @@ func parseInterspersed(fs *flag.FlagSet, args []string) ([]string, error) {
 
 // --- status -----------------------------------------------------------------
 
+// cmdStatus は status を行う。ブリッジが動いているかをロックだけで判定して返す。
 func cmdStatus(args []string, e env) int {
 	fs, c := newFlags("status", e, 0)
 	if _, err := parseInterspersed(fs, args); err != nil {
@@ -182,6 +182,8 @@ func bridgeJSON(bridge *spool.Bridge) map[string]any {
 
 // --- call / tools -----------------------------------------------------------
 
+// cmdCall は call を行う。道具を 1 つ呼び、成功なら result（--raw なら応答全体）を出す。
+// 引数の中身は検証しない（道具ごとの解釈はプラグイン側の仕事）。
 func cmdCall(args []string, e env) int {
 	fs, c := newFlags("call", e, 30)
 	raw := fs.Bool("raw", false, "print the whole response (ok/result/error)")
@@ -251,6 +253,7 @@ func codeFor(err error) int {
 
 // --- wait -------------------------------------------------------------------
 
+// cmdWait は wait を行う。ブリッジが動き出す（--down なら止まる）まで待つ。
 func cmdWait(args []string, e env) int {
 	fs, c := newFlags("wait", e, 120)
 	down := fs.Bool("down", false, "wait until Vectorworks stops instead")
@@ -278,7 +281,7 @@ func cmdWait(args []string, e env) int {
 
 // --- launch -----------------------------------------------------------------
 
-// cmdLaunch は起動するだけで待たない。動き出すのを待つなら、呼ぶ側が続けて wait を呼ぶ。
+// cmdLaunch は launch を行う。起動するだけで待たない。動き出すのを待つなら、呼ぶ側が続けて wait を呼ぶ。
 func cmdLaunch(args []string, e env) int {
 	fs, c := newFlags("launch", e, 0)
 	app := fs.String("app", e.getenv("VW2026_APP"), "application or executable to start")
