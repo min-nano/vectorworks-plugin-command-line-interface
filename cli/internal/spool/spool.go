@@ -29,12 +29,8 @@ const (
 	LockFile       = "bridge.lock"
 	TempSuffix     = ".tmp"
 
-	// ProtocolVersion は受け渡しの版。要求／応答／生存の印の形を変えたら上げる。
-	ProtocolVersion = 1
-
-	// StaleSeconds より古い生存の印は「応えていない」と判定する。プラグイン側は数秒ごとに
-	// 書き直す。
-	StaleSeconds = 15
+	// ProtocolVersion は受け渡しの版。要求／応答／印の形を変えたら上げる。
+	ProtocolVersion = 2
 
 	// MaxRequestBytes はプラグイン側が受け付ける要求 1 件の上限。超える要求は置く前に断る
 	// （置いても「読めない要求」として失敗が返るだけなので）。
@@ -50,13 +46,12 @@ func ValidID(id string) bool {
 	return idPattern.MatchString(id)
 }
 
-// Status は生存の印（bridge.json）。未知のフィールドは Raw に残る。
+// Status は印（bridge.json）。未知のフィールドは Raw に残る。
 type Status struct {
-	Version  string  `json:"version"`
-	Branch   string  `json:"branch"`
-	Protocol int     `json:"protocol"`
-	Beat     float64 `json:"beat"`
-	PID      int     `json:"pid"`
+	Version  string `json:"version"`
+	Branch   string `json:"branch"`
+	Protocol int    `json:"protocol"`
+	PID      int    `json:"pid"`
 
 	Raw json.RawMessage `json:"-"`
 }
@@ -72,25 +67,8 @@ type Response struct {
 // 読み込まれていない・場所が食い違っている）。
 var ErrNotRunning = errors.New("bridge is not running")
 
-// ErrUnresponsive は、Vectorworks は動いているがブリッジが応えない（モーダルダイアログ・
-// undo の記録の最中で、プラグインが受け付けを見送っている）。
-var ErrUnresponsive = errors.New("vectorworks is running but the bridge is not responding")
-
-// State はブリッジの状態（docs/protocol.md「生存の判定」）。
-type State string
-
-const (
-	// StateLive はロックが掴まれていて、印が新しい。要求に応える。
-	StateLive State = "live"
-	// StateUnresponsive はロックが掴まれているが、印が古い（または無い）。プラグインが受け付けを
-	// 見送っている間（mac ではモーダルの最中はタイマーも刻まない）は印が書き直されないので、
-	// 古いことだけで「止まった」とはみなさない。置いた要求は、受け付けが戻れば処理される。
-	StateUnresponsive State = "unresponsive"
-	// StateDown はロックが掴まれていない（Vectorworks が終わった・プラグインが居ない）。
-	StateDown State = "down"
-)
-
-// ErrTimeout は締切までに応答が無かった。
+// ErrTimeout は、Vectorworks は動いている（ロックが掴まれている）が締切までに応答が
+// 無かった。受け付けが見送られている（モーダルダイアログ・undo の記録の最中）ことが多い。
 var ErrTimeout = errors.New("timed out waiting for the response")
 
 // ProtocolError はプラグインと CLI の版が食い違っている。
@@ -105,25 +83,24 @@ func (e *ProtocolError) Error() string {
 
 // Bridge はスプール 1 つと、その状態。
 type Bridge struct {
-	Dir    string
-	State  State
-	Status *Status // 印が読めなければ nil
-	Reason string  // StateDown の理由
+	Dir     string
+	Running bool    // プラグインがロックを掴んでいる（Vectorworks が動いている）
+	Status  *Status // 印が読めなければ nil
+	Reason  string  // 動いていない理由
 }
 
 // Open はその場所のブリッジの状態を判定する（docs/protocol.md「生存の判定」）。
 //
-// 持ち主と権限が安全で、プラグインがロックファイルを掴んでいれば Vectorworks は動いている。
-// そのうえで印の beat が now から StaleSeconds 以内なら StateLive、そうでなければ
-// StateUnresponsive。ロックの有無だけで生死を分けるので、印が古いことを「止まった」と誤らない。
-func Open(dir string, now time.Time) *Bridge {
-	if reason := checkSafe(dir); reason != "" {
-		return &Bridge{Dir: dir, State: StateDown, Reason: reason}
+// 生死はロックだけで決まる。印は、ロックを取ったプラグインが 1 度だけ書く版の情報で、
+// 生死の判定には使わない（受け付けが見送られている間も、ロックは掴まれたまま）。
+func Open(dir string) *Bridge {
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return &Bridge{Dir: dir, Reason: "not found"}
 	}
 	if !lockHeld(filepath.Join(dir, LockFile)) {
-		return &Bridge{Dir: dir, State: StateDown, Reason: "not running"}
+		return &Bridge{Dir: dir, Reason: "not running"}
 	}
-	bridge := &Bridge{Dir: dir, State: StateUnresponsive}
+	bridge := &Bridge{Dir: dir, Running: true}
 	text, err := os.ReadFile(filepath.Join(dir, StatusFile))
 	if err != nil {
 		// ロックを取ってから印を書くまでの間。動いてはいる。
@@ -135,9 +112,6 @@ func Open(dir string, now time.Time) *Bridge {
 	}
 	status.Raw = append(json.RawMessage(nil), text...)
 	bridge.Status = &status
-	if float64(now.UnixNano())/1e9-status.Beat <= StaleSeconds {
-		bridge.State = StateLive
-	}
 	return bridge
 }
 
@@ -159,10 +133,9 @@ func NewID(now time.Time) string {
 
 // Call は道具を 1 つ呼び、応答を待つ。
 //
-// ブリッジが StateUnresponsive でも要求を置いて timeout まで待つ（受け付けが戻れば処理
-// される）。待つのを諦めたときは置いた要求を取り下げ、理由をその時点の状態で
-// ErrNotRunning / ErrUnresponsive / ErrTimeout に分ける（呼ぶ側が起動し直すべきか、
-// 待てばよいかを判定できるように）。
+// 受け付けが見送られていても要求を置いて timeout まで待つ（受け付けが戻れば処理される）。
+// 待つのを諦めたときは置いた要求を取り下げ、理由をその時点のロックで ErrNotRunning /
+// ErrTimeout に分ける（呼ぶ側が起動し直すべきか、待てばよいかを判定できるように）。
 func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) (*Response, error) {
 	if err := b.CheckProtocol(); err != nil {
 		return nil, err
@@ -195,17 +168,13 @@ func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) 
 			_ = os.Remove(responsePath)
 			return response, nil
 		}
-		now := time.Now()
-		if now.After(deadline) {
+		if time.Now().After(deadline) {
 			// 置いたままの要求を取り下げる（あとで読み取られて、誰も待たない応答が残らないように）。
 			_ = os.Remove(requestPath)
-			switch Open(b.Dir, now).State {
-			case StateDown:
+			if !Open(b.Dir).Running {
 				return nil, fmt.Errorf("%w (stopped while waiting for %s)", ErrNotRunning, tool)
-			case StateUnresponsive:
-				return nil, fmt.Errorf("%w (%s, %s)", ErrUnresponsive, tool, timeout)
 			}
-			return nil, fmt.Errorf("%w (%s, %s)", ErrTimeout, tool, timeout)
+			return nil, fmt.Errorf("%w (%s, %s; a dialog may be open)", ErrTimeout, tool, timeout)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

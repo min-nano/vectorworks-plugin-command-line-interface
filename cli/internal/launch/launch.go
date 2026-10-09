@@ -1,8 +1,9 @@
 // Package launch は Vectorworks を起動する。
 //
 // 起動は OS の標準の方法にだけ頼る。macOS は `open -a`（既に動いていれば前面に出すだけで、
-// 2 つ目は起動しない）。Windows は既定のインストール先の実行ファイルを探し、既に
+// 2 つ目は起動しない）。Windows は既定のインストール先の実行ファイルを起動し、既に
 // 動いていれば起動しない（実行ファイルを直接起動すると 2 つ目が立ち上がりうる）。
+// 既定の場所を探し回らない（ほかの場所は app で明示する）。
 // app（VW2026_APP）で明示でき、.app で終わらなければ実行ファイルとしてそのまま起動する
 // （テスト用の代替プログラムもこの経路）。
 package launch
@@ -14,7 +15,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 )
 
@@ -22,11 +22,8 @@ import (
 // その版だけを起動する（別の版ではプラグインが読み込まれない）。
 const DefaultMacApp = "Vectorworks 2026"
 
-// defaultWindowsGlobs は Windows で探す実行ファイル。
-var defaultWindowsGlobs = []string{
-	`%ProgramFiles%\Vectorworks 2026\Vectorworks2026.exe`,
-	`%ProgramFiles%\Vectorworks 2026*\Vectorworks*.exe`,
-}
+// defaultWindowsExe は Windows の既定のインストール先の実行ファイル（%ProgramFiles% の下）。
+const defaultWindowsExe = `Vectorworks 2026\Vectorworks2026.exe`
 
 // ErrAlreadyRunning は Windows で同じ実行ファイルが既に動いている。
 var ErrAlreadyRunning = errors.New("vectorworks is already running")
@@ -46,14 +43,11 @@ func Command(app string) ([]string, error) {
 		}
 		return []string{"/usr/bin/open", "-a", app}, nil
 	case "windows":
-		for _, pattern := range defaultWindowsGlobs {
-			found, _ := filepath.Glob(os.ExpandEnv(strings.ReplaceAll(pattern, "%ProgramFiles%", "${ProgramFiles}")))
-			if len(found) > 0 {
-				sort.Strings(found)
-				return []string{found[0]}, nil
-			}
+		exe := filepath.Join(os.Getenv("ProgramFiles"), defaultWindowsExe)
+		if info, err := os.Stat(exe); err == nil && !info.IsDir() {
+			return []string{exe}, nil
 		}
-		return nil, errors.New(`Vectorworks 2026 was not found under %ProgramFiles%; set VW2026_APP to Vectorworks2026.exe`)
+		return nil, fmt.Errorf("Vectorworks 2026 was not found at %s; set VW2026_APP to Vectorworks2026.exe", exe)
 	default:
 		return nil, errors.New("launching is not supported on this OS; set VW2026_APP")
 	}

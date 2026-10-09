@@ -46,14 +46,13 @@ func HoldLock(t *testing.T, dir string) (release func()) {
 	return release
 }
 
-// WriteStatus は生存の印を書く。age は印の古さ。
-func WriteStatus(t *testing.T, dir string, age time.Duration, extra map[string]any) {
+// WriteStatus は印を書く（プラグインはロックを取ったときに 1 度だけ書く）。
+func WriteStatus(t *testing.T, dir string, extra map[string]any) {
 	t.Helper()
 	status := map[string]any{
 		"version":  "0",
 		"branch":   "main",
 		"protocol": spool.ProtocolVersion,
-		"beat":     float64(time.Now().Add(-age).UnixNano()) / 1e9,
 		"pid":      os.Getpid(),
 	}
 	for k, v := range extra {
@@ -65,11 +64,11 @@ func WriteStatus(t *testing.T, dir string, age time.Duration, extra map[string]a
 	}
 }
 
-// Start はロックを掴み、新しい印を書いて、要求に handle で応え続ける。テストの終わりに止める。
+// Start はロックを掴み、印を書いて、要求に handle で応え続ける。テストの終わりに止める。
 func Start(t *testing.T, dir string, handle Handler) {
 	t.Helper()
 	release := HoldLock(t, dir)
-	WriteStatus(t, dir, 0, nil)
+	WriteStatus(t, dir, nil)
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	go func() {

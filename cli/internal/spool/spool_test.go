@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -19,14 +18,12 @@ func echo(tool string, args json.RawMessage) Response {
 	return Response{OK: true, Result: result}
 }
 
-const stale = (StaleSeconds + 5) * time.Second
-
 func TestCallRoundTrip(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.Start(t, dir, echo)
-	bridge := Open(dir, time.Now())
-	if bridge.State != StateLive {
-		t.Fatalf("want live, got %+v", bridge)
+	bridge := Open(dir)
+	if !bridge.Running {
+		t.Fatalf("want running, got %+v", bridge)
 	}
 	response, err := bridge.Call("layers", json.RawMessage(`{"include_sheets":false}`), 5*time.Second)
 	if err != nil {
@@ -52,7 +49,7 @@ func TestCallRoundTrip(t *testing.T) {
 func TestCallEmptyArgsBecomesObject(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.Start(t, dir, echo)
-	response, err := Open(dir, time.Now()).Call("ping", nil, 5*time.Second)
+	response, err := Open(dir).Call("ping", nil, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +63,7 @@ func TestCallToolFailure(t *testing.T) {
 	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) Response {
 		return Response{OK: false, Error: "unknown tool: " + tool}
 	})
-	response, err := Open(dir, time.Now()).Call("nope", nil, 5*time.Second)
+	response, err := Open(dir).Call("nope", nil, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,8 +75,8 @@ func TestCallToolFailure(t *testing.T) {
 func TestCallTimeoutWithdrawsRequest(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, 0, nil) // 印は新しいが誰も応えない
-	_, err := Open(dir, time.Now()).Call("ping", nil, 200*time.Millisecond)
+	fakeplugin.WriteStatus(t, dir, nil) // 動いているが応えない（ダイアログの最中など）
+	_, err := Open(dir).Call("ping", nil, 200*time.Millisecond)
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("want ErrTimeout, got %v", err)
 	}
@@ -89,8 +86,8 @@ func TestCallTimeoutWithdrawsRequest(t *testing.T) {
 func TestProtocolMismatch(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, 0, map[string]any{"protocol": ProtocolVersion + 1})
-	_, err := Open(dir, time.Now()).Call("ping", nil, time.Second)
+	fakeplugin.WriteStatus(t, dir, map[string]any{"protocol": ProtocolVersion + 1})
+	_, err := Open(dir).Call("ping", nil, time.Second)
 	var protocol *ProtocolError
 	if !errors.As(err, &protocol) {
 		t.Fatalf("want ProtocolError, got %v", err)
@@ -98,11 +95,11 @@ func TestProtocolMismatch(t *testing.T) {
 	assertNoFiles(t, dir, RequestSuffix)
 }
 
-// 印が新しくても、ロックが掴まれていなければ（異常終了で残った印）止まっている。
+// 印があっても、ロックが掴まれていなければ（異常終了で残った印）止まっている。
 func TestStatusWithoutLockIsDown(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
-	fakeplugin.WriteStatus(t, dir, 0, nil)
-	if bridge := Open(dir, time.Now()); bridge.State != StateDown || bridge.Reason != "not running" {
+	fakeplugin.WriteStatus(t, dir, nil)
+	if bridge := Open(dir); bridge.Running || bridge.Reason != "not running" {
 		t.Fatalf("want down, got %+v", bridge)
 	}
 }
@@ -110,43 +107,34 @@ func TestStatusWithoutLockIsDown(t *testing.T) {
 func TestReleasedLockIsDown(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	release := fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, 0, nil)
-	if state := Open(dir, time.Now()).State; state != StateLive {
-		t.Fatalf("want live, got %s", state)
+	fakeplugin.WriteStatus(t, dir, nil)
+	if !Open(dir).Running {
+		t.Fatal("want running")
 	}
 	release()
-	if state := Open(dir, time.Now()).State; state != StateDown {
-		t.Fatalf("want down after release, got %s", state)
-	}
-}
-
-func TestStaleStatusWithLockIsUnresponsive(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, stale, nil)
-	if state := Open(dir, time.Now()).State; state != StateUnresponsive {
-		t.Fatalf("want unresponsive, got %s", state)
+	if Open(dir).Running {
+		t.Fatal("want down after release")
 	}
 }
 
 // ロックを取ってから印を書くまでの間も、動いている（止まったと誤らない）。
-func TestLockWithoutStatusIsUnresponsive(t *testing.T) {
+func TestLockWithoutStatusIsRunning(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.HoldLock(t, dir)
-	bridge := Open(dir, time.Now())
-	if bridge.State != StateUnresponsive || bridge.Status != nil {
-		t.Fatalf("want unresponsive without status, got %+v", bridge)
+	bridge := Open(dir)
+	if !bridge.Running || bridge.Status != nil {
+		t.Fatalf("want running without status, got %+v", bridge)
 	}
 	if err := bridge.CheckProtocol(); err != nil {
 		t.Fatalf("unknown protocol should pass: %v", err)
 	}
 }
 
-func TestCallWhileUnresponsiveIsServedWhenItRecovers(t *testing.T) {
+func TestCallIsServedWhenServingResumes(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	release := fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, stale, nil)
-	bridge := Open(dir, time.Now())
+	fakeplugin.WriteStatus(t, dir, nil)
+	bridge := Open(dir)
 	// ダイアログが閉じて受け付けが戻るのを真似る: 要求を置いたあとで応え始める。
 	go func() {
 		time.Sleep(300 * time.Millisecond)
@@ -159,22 +147,11 @@ func TestCallWhileUnresponsiveIsServedWhenItRecovers(t *testing.T) {
 	}
 }
 
-func TestCallTimeoutWhileUnresponsive(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, stale, nil)
-	_, err := Open(dir, time.Now()).Call("ping", nil, 200*time.Millisecond)
-	if !errors.Is(err, ErrUnresponsive) {
-		t.Fatalf("want ErrUnresponsive, got %v", err)
-	}
-	assertNoFiles(t, dir, RequestSuffix)
-}
-
 func TestCallTimeoutWhenStopped(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	release := fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, 0, nil)
-	bridge := Open(dir, time.Now())
+	fakeplugin.WriteStatus(t, dir, nil)
+	bridge := Open(dir)
 	release()
 	_, err := bridge.Call("ping", nil, 200*time.Millisecond)
 	if !errors.Is(err, ErrNotRunning) {
@@ -182,20 +159,8 @@ func TestCallTimeoutWhenStopped(t *testing.T) {
 	}
 }
 
-func TestUnsafeDirIsDown(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("permission bits are not checked on Windows")
-	}
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, 0, nil)
-	if err := os.Chmod(dir, 0o777); err != nil {
-		t.Fatal(err)
-	}
-	if bridge := Open(dir, time.Now()); bridge.State != StateDown || bridge.Reason != "writable by others" {
-		t.Fatalf("want down, got %+v", bridge)
-	}
-	if bridge := Open(filepath.Join(t.TempDir(), "missing"), time.Now()); bridge.Reason != "not found" {
+func TestMissingDirIsDown(t *testing.T) {
+	if bridge := Open(filepath.Join(t.TempDir(), "missing")); bridge.Running || bridge.Reason != "not found" {
 		t.Fatalf("want not found, got %+v", bridge)
 	}
 }

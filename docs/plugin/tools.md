@@ -18,7 +18,7 @@
 ## `ping`
 
 ```json
-{"version":"abc1234","branch":"main","protocol":1,"document_open":true,"current_layer":"1F"}
+{"version":"abc1234","branch":"main","protocol":2,"document_open":true,"current_layer":"1F"}
 ```
 
 `document_open` は `gSDK->GetCurrentLayer()` が取れるかで判定します（元と同じ）。
@@ -34,10 +34,10 @@
   `vw2026 call quit && vw2026 wait --down && vw2026 launch && vw2026 wait` と組み合わせます。
   更新もこの間に `vw2026 update` を挟むだけです（[更新](install-and-update.md#流れ)）。
 - 終了を見届けるのは呼ぶ側の役割です（`vw2026 wait --down`）。
-  保存の確認を開いている間は受け付けが見送られ、ブリッジは `unresponsive` になりますが、
+  保存の確認を開いている間は受け付けが見送られますが、ロックは掴まれたままなので、
   `wait --down` は Vectorworks が終わってロックが放されるまで「止まった」と判定しません
   （[作法「生存の判定」](../protocol.md#生存の判定)）。利用者が取り消せば `wait --down` は
-  `--timeout` を過ぎて終了コード 4 で終わり、ブリッジは `live` に戻ります。
+  `--timeout` を過ぎて終了コード 4 で終わり、ブリッジはまた応えます。
 
 ## 他のプラグインの機能
 

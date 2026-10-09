@@ -27,25 +27,24 @@ var version = "dev"
 
 // 終了コード（docs/cli.md と対）。
 const (
-	exitOK       = 0
-	exitToolErr  = 1 // 道具が失敗を返した（応答は届いている）
-	exitUsage    = 2 // 使い方の誤り
-	exitDown     = 3 // ブリッジが見つからない
-	exitTimeout  = 4 // 応答を待ちきれなかった
+	exitOK      = 0
+	exitToolErr = 1 // 道具が失敗を返した（応答は届いている）
+	exitUsage   = 2 // 使い方の誤り
+	exitDown    = 3 // ブリッジが見つからない
+	// 待ちきれなかった。Vectorworks は動いている（モーダル・undo の記録の最中など）。
+	// exitDown と分けるのは、呼ぶ側が起動し直さずに待てばよいと判定できるように。
+	exitTimeout  = 4
 	exitProtocol = 5 // プラグインと CLI の版が違う
 	exitFailure  = 6 // そのほか（書き込めない・起動できない等）
-	// Vectorworks は動いているがブリッジが応えない（モーダル・undo の記録・長い処理の最中）。
-	// exitDown と分けるのは、呼ぶ側が起動し直さずに待てばよいと判定できるように。
-	exitUnresponsive = 7
 )
 
 const usage = `usage: vw2026 <command> [options]
 
 commands:
-  status                 ブリッジが動いているかと、生存の印を返す
+  status                 ブリッジが動いているかと、プラグインの版を返す
   tools                  呼べる道具の一覧を返す
   call <tool> [args]     道具を 1 つ呼ぶ（args は JSON オブジェクト。"-" で標準入力から）
-  wait                   ブリッジが動き出す（--down なら Vectorworks が止まる）まで待つ
+  wait                   ブリッジが動き出す（--down なら止まる）まで待つ
   launch                 Vectorworks を起動する（待たない。待つなら続けて wait）
   version                この CLI の版と、受け渡しの版を返す
 
@@ -139,7 +138,7 @@ func (c *common) open(e env) *spool.Bridge {
 			return nil
 		}
 	}
-	return spool.Open(dir, e.now())
+	return spool.Open(dir)
 }
 
 func seconds(value float64) time.Duration {
@@ -173,33 +172,25 @@ func cmdStatus(args []string, e env) int {
 	if bridge == nil {
 		return exitFailure
 	}
-	out := bridgeJSON(bridge)
-	protocolErr := bridge.CheckProtocol()
-	switch {
-	case bridge.State == spool.StateDown:
-		_ = emit(e, out)
+	code := emit(e, bridgeJSON(bridge))
+	if !bridge.Running {
 		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (is Vectorworks started with the plug-in?)")
 		return exitDown
-	case protocolErr != nil:
-		_ = emit(e, out)
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", protocolErr)
-		return exitProtocol
-	case bridge.State == spool.StateUnresponsive:
-		_ = emit(e, out)
-		fmt.Fprintln(e.stderr, "vw2026: Vectorworks is running but the bridge is not responding (a dialog may be open)")
-		return exitUnresponsive
 	}
-	return emit(e, out)
+	if err := bridge.CheckProtocol(); err != nil {
+		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+		return exitProtocol
+	}
+	return code
 }
 
 // bridgeJSON はブリッジの状態の出力（status / wait / launch で同じ形）。
 func bridgeJSON(bridge *spool.Bridge) map[string]any {
 	out := map[string]any{
-		"live":  bridge.State == spool.StateLive,
-		"state": bridge.State,
-		"spool": bridge.Dir,
+		"running": bridge.Running,
+		"spool":   bridge.Dir,
 	}
-	if bridge.State == spool.StateDown {
+	if !bridge.Running {
 		out["reason"] = bridge.Reason
 	} else if bridge.Status != nil {
 		out["status"] = bridge.Status.Raw
@@ -244,7 +235,7 @@ func cmdCall(args []string, e env) int {
 	if bridge == nil {
 		return exitFailure
 	}
-	if bridge.State == spool.StateDown {
+	if !bridge.Running {
 		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (try `vw2026 status`)")
 		return exitDown
 	}
@@ -272,8 +263,6 @@ func codeFor(err error) int {
 		return exitProtocol
 	case errors.Is(err, spool.ErrNotRunning):
 		return exitDown
-	case errors.Is(err, spool.ErrUnresponsive):
-		return exitUnresponsive
 	case errors.Is(err, spool.ErrTimeout):
 		return exitTimeout
 	default:
@@ -291,25 +280,17 @@ func cmdWait(args []string, e env) int {
 	}
 	deadline := e.now().Add(seconds(c.timeout))
 	for {
-		// 動き出すのは StateLive になったとき、止まるのは StateDown になったとき（ロックが
-		// 放されたとき）。StateUnresponsive はどちらでもない（保存の確認のダイアログを
-		// 開いている間に「止まった」と誤らないように）。
+		// 動き出す・止まるはロックだけで決まる。保存の確認のダイアログを開いている間も
+		// ロックは掴まれたままなので、--down がそれを「止まった」と誤らない。
 		bridge := c.open(e)
 		if bridge == nil {
 			return exitFailure
 		}
-		if *down && bridge.State == spool.StateDown {
-			return emit(e, bridgeJSON(bridge))
-		}
-		if !*down && bridge.State == spool.StateLive {
+		if bridge.Running != *down {
 			return emit(e, bridgeJSON(bridge))
 		}
 		if e.now().After(deadline) {
-			if bridge.State == spool.StateUnresponsive {
-				fmt.Fprintln(e.stderr, "vw2026: timed out waiting (Vectorworks is running but the bridge is not responding)")
-			} else {
-				fmt.Fprintln(e.stderr, "vw2026: timed out waiting")
-			}
+			fmt.Fprintln(e.stderr, "vw2026: timed out waiting")
 			return exitTimeout
 		}
 		time.Sleep(250 * time.Millisecond)
@@ -329,15 +310,9 @@ func cmdLaunch(args []string, e env) int {
 	if bridge == nil {
 		return exitFailure
 	}
-	if bridge.State != spool.StateDown {
+	if bridge.Running {
 		out := bridgeJSON(bridge)
 		out["launched"] = false
-		if bridge.State == spool.StateUnresponsive {
-			// 動いている Vectorworks を起動し直す理由は無い（ダイアログを閉じれば応える）。
-			_ = emit(e, out)
-			fmt.Fprintln(e.stderr, "vw2026: Vectorworks is running but the bridge is not responding (a dialog may be open)")
-			return exitUnresponsive
-		}
 		return emit(e, out)
 	}
 	argv, err := launch.Command(*app)

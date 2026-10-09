@@ -53,14 +53,14 @@ func echoBridge(t *testing.T) string {
 func TestStatusLive(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"live":true`) || !strings.Contains(r.stdout, `"branch":"main"`) {
+	if r.code != exitOK || !strings.Contains(r.stdout, `"running":true`) || !strings.Contains(r.stdout, `"branch":"main"`) {
 		t.Fatalf("%+v", r)
 	}
 }
 
 func TestStatusDown(t *testing.T) {
 	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "status")
-	if r.code != exitDown || !strings.Contains(r.stdout, `"live":false`) || !strings.Contains(r.stdout, `"reason":"not found"`) {
+	if r.code != exitDown || !strings.Contains(r.stdout, `"running":false`) || !strings.Contains(r.stdout, `"reason":"not found"`) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -144,63 +144,56 @@ func TestWaitTimesOut(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 	down := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "wait", "--down")
-	if down.code != exitOK || !strings.Contains(down.stdout, `"live":false`) {
+	if down.code != exitOK || !strings.Contains(down.stdout, `"running":false`) {
 		t.Fatalf("%+v", down)
 	}
 }
 
 func TestVersion(t *testing.T) {
 	r := invoke(t, nil, "", nil, "version")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":1`) {
+	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":2`) {
 		t.Fatalf("%+v", r)
 	}
 }
 
-// unresponsiveSpool は、Vectorworks は動いている（ロックが掴まれている）が印が古いスプールを
-// 作る（保存の確認のダイアログを開いている間など）。返す関数で終了を真似る。
-func unresponsiveSpool(t *testing.T) (string, func()) {
+// busySpool は、Vectorworks は動いている（ロックが掴まれている）が応えないスプールを作る
+// （保存の確認のダイアログを開いている間など）。返す関数で終了を真似る。
+func busySpool(t *testing.T) (string, func()) {
 	t.Helper()
 	dir := fakeplugin.NewDir(t)
 	release := fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, (spool.StaleSeconds+5)*time.Second, nil)
+	fakeplugin.WriteStatus(t, dir, nil)
 	return dir, release
 }
 
-func TestStatusUnresponsive(t *testing.T) {
-	dir, _ := unresponsiveSpool(t)
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
-	if r.code != exitUnresponsive || !strings.Contains(r.stdout, `"state":"unresponsive"`) || !strings.Contains(r.stdout, `"live":false`) {
-		t.Fatalf("%+v", r)
-	}
-}
-
-func TestCallWhileUnresponsiveTimesOutAsUnresponsive(t *testing.T) {
-	dir, _ := unresponsiveSpool(t)
+func TestCallWhileBusyTimesOut(t *testing.T) {
+	dir, _ := busySpool(t)
 	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "ping", "--timeout", "0.3")
-	if r.code != exitUnresponsive {
+	if r.code != exitTimeout {
 		t.Fatalf("%+v", r)
 	}
 }
 
 func TestWaitDownWaitsForTheProcess(t *testing.T) {
-	dir, quit := unresponsiveSpool(t)
+	dir, quit := busySpool(t)
 	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "wait", "--down", "--timeout", "0.3")
 	if r.code != exitTimeout {
-		t.Fatalf("unresponsive must not count as down: %+v", r)
+		t.Fatalf("a held lock must not count as down: %+v", r)
 	}
 	quit()
 	r = invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "wait", "--down", "--timeout", "0.3")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"state":"down"`) {
+	if r.code != exitOK || !strings.Contains(r.stdout, `"running":false`) {
 		t.Fatalf("%+v", r)
 	}
 }
 
-func TestLaunchSkipsWhenUnresponsive(t *testing.T) {
-	dir, _ := unresponsiveSpool(t)
-	var started []string
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", &started, "launch")
-	if r.code != exitUnresponsive || started != nil || !strings.Contains(r.stdout, `"launched":false`) {
-		t.Fatalf("%+v %v", r, started)
+func TestStatusProtocolMismatch(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	fakeplugin.WriteStatus(t, dir, map[string]any{"protocol": spool.ProtocolVersion + 1})
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
+	if r.code != exitProtocol {
+		t.Fatalf("%+v", r)
 	}
 }
 
