@@ -61,7 +61,7 @@ cli.vwlibrary.zip                       cli.vlb.zip
 
 ## リリースの形
 
-`vw2026 install` と初回の配置のスクリプトはタグと資産名から URL を組み立てて資産を直接
+`vw2026 install` と初回のスクリプトはタグと資産名から URL を組み立てて資産を直接
 取るので、**タグと資産名を変えません**。
 
 - main: main への push で転がりタグ `stable` を作り直す。タイトル `Stable (<sha>)`・`--latest`。
@@ -69,7 +69,7 @@ cli.vwlibrary.zip                       cli.vlb.zip
   [名前と識別子](identifiers.md)）にプレリリースする。タイトル **`Dev: <branch> (<sha>)`**・
   `--prerelease`。中身は main のものと**同じ名前のプラグイン**で、入れると入れ替わる
   （`vw2026 install --tag dev-<slug>`）。戻すときは `vw2026 install`（main の最新）。
-- 資産: `cli.vwlibrary.zip` / `cli.vlb.zip` / `get-vw2026.{sh,ps1}`（初回の配置のスクリプト。
+- 資産: `cli.vwlibrary.zip` / `cli.vlb.zip` / `get-vw2026.{sh,ps1}`（初回のスクリプト。
   利用者は `stable` のものを使う）。本文に機械が読む情報は載せません（版は zip の中の
-  `build.json` が持つ）。CLI 単体の資産は持ちません（zip の `bin/` にあり、初回の配置の
+  `build.json` が持つ）。CLI 単体の資産は持ちません（zip の `bin/` にあり、初回の
   スクリプトもそこから取り出す）。

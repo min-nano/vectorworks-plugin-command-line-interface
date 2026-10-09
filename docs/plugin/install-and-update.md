@@ -1,24 +1,25 @@
-# 初回の配置・インストール・更新・アンインストール
+# インストール・更新・アンインストール
 
-**利用者はまず CLI を入れ、CLI がプラグインを置きます。** インストーラとアンインストーラの
-スクリプトは持ちません。
+**配置はすべて CLI（`vw2026 install` / `uninstall`）が行います。** インストーラとアンインストーラの
+スクリプトは持ちません。最初の 1 回だけは CLI がまだ無いので、取ってきて `install` を走らせる
+だけの短いスクリプト（`get-vw2026.sh` / `.ps1`）を使います。
 
 | 段 | 手段 | すること |
 | --- | --- | --- |
-| 初回の配置 | `get-vw2026.sh` / `.ps1`（curl などで取ってパイプで実行） | CLI を `<CLI>/bin/` に置き、PATH を通す。最後に `vw2026 install` を案内する |
-| インストール・更新 | `vw2026 install` | プラグインを `<Plug-Ins>/cli/` に置く（入っている版と同じなら何もしない）。CLI 自身も同じビルドに入れ替える |
+| 初回 | `get-vw2026.sh` / `.ps1`（curl などで取ってパイプで実行） | 一時フォルダに CLI を取り出し、`vw2026 install` を走らせる（引数はそのまま渡す） |
+| インストール・更新 | `vw2026 install` | プラグインを `<Plug-Ins>/cli/` に、CLI を `<CLI>/bin/` に置き、PATH を通す。入っている版と同じなら何もしない |
 | アンインストール | `vw2026 uninstall` | プラグイン・CLI・スプール・PATH の項目を取り除く |
 
 ```sh
 # macOS
 curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/stable/get-vw2026.sh | sh
-vw2026 install
+curl -fsSL …/get-vw2026.sh | sh -s -- --plugins-dir <Plug-Ins>   # 既定以外の場所へ
 ```
 
 ```powershell
 # Windows
 irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/stable/get-vw2026.ps1 | iex
-vw2026 install
+& ([scriptblock]::Create((irm …/get-vw2026.ps1))) --plugins-dir <Plug-Ins>   # 既定以外の場所へ
 ```
 
 ## 前提
@@ -37,37 +38,22 @@ vw2026 install
 
 場所は[名前と識別子「置き場所」](identifiers.md#置き場所)にあります。
 
-## 初回の配置（`get-vw2026.sh` / `.ps1`）
+## 初回のスクリプト（`get-vw2026.sh` / `.ps1`）
 
-**CLI を既定の場所へ置き、PATH を通すだけ**のスクリプトです。プラグインには触れません
-（したがって Vectorworks が動いていても走らせてよい）。引数を持ちません。
+**CLI を取ってきて `install` を走らせるだけ**です。配置の手順・PATH・判断はすべて `install` が
+持ち、スクリプトは持ちません（配置の知識を Go の 1 か所に置き、単体テストで確かめるため）。
 
 1. `stable` の zip（mac は `cli.vwlibrary.zip`、Windows は `cli.vlb.zip`）を一時フォルダへ
    取ってきて、中の `bin/vw2026`（Windows は `bin\vw2026.exe`）だけを取り出す。
-2. `<CLI>/bin/` の中へ一時的な名前で置き、名前の変更で入れ替える（下記「CLI の入れ替え」と
-   同じ手順。走らせ直しても壊れない）。
-3. PATH を通す（下記「PATH」）。
-4. `vw2026 install` を走らせるよう表示して終わる。新しい端末で効くことも添える（Windows）。
+2. 取り出した CLI で `install` を走らせる（スクリプトの引数をそのまま渡す）。
+3. 一時フォルダを消し、`install` の終了コードで終わる。終了コード 7 なら「Vectorworks を
+   終了してからもう一度走らせる」と表示する。
 
 - CLI だけの資産は持ちません。zip から取り出すので、CLI と同じビルドのものしか配らずに済みます。
-- PR のプレリリースを試すときも、まず `stable` で CLI を置き、`vw2026 install --tag dev-<slug>`
-  で入れ替えます（`install` は CLI も入れ替える）。
-- 置き場所は `vw2026` と同じ規則で決めます（mac `~/Library/Application Support/vectorworks2026-cli/`、
-  Windows `%LOCALAPPDATA%\vectorworks2026-cli\`）。
-
-### PATH
-
-| OS | すること | 既にあるとき |
-| --- | --- | --- |
-| mac | `~/.local/bin/vw2026` → `<CLI>/bin/vw2026` のシンボリックリンク（`~/.local/bin` が無ければ作る） | **このプラグインの CLI を指すリンクなら張り直す。** それ以外（利用者のファイル・別の場所を指すリンク）なら触らず、その旨を表示する |
-| Windows | 利用者の環境変数 `Path`（`HKCU\Environment`）に `<CLI>\bin` を追加 | 同じ項目が既にあれば何もしない |
-
-- 行き先がプラグインのフォルダの外で版によらず同じなので、**更新でリンクと PATH を張り直す
-  必要はありません**（`install` は PATH に触れない）。
-- **シェルの設定ファイル（`.zshrc` 等）は書き換えません。** `~/.local/bin` が PATH に無ければ、
-  追加の方法を表示するだけです。
-- Windows は `[Environment]::SetEnvironmentVariable('Path', …, 'User')` で書きます（`setx` は
-  1024 文字で切り詰めるので使わない）。新しい値は**新しく開いた端末から**効きます。
+- 一時フォルダの CLI は、`install` の中で zip をもう一度取り、その `bin/` を `<CLI>/bin/` に
+  置きます（スクリプトが取った zip は渡さない。指定を増やさないため。zip は小さい）。
+- PR のプレリリースを試すときも同じスクリプトに `--tag dev-<slug>` を渡します（`install` へ
+  そのまま渡る）。CLI もそのビルドのものになります。
 
 ## インストールと更新（`vw2026 install`）
 
@@ -88,13 +74,14 @@ vw2026 install
   2. zip を取ってきて展開する         https://github.com/<repo>/releases/download/<tag>/<zip>
                                      （<tag> は stable、--tag があればそれ）→ <CLI>/staging/cli/
   3. 版を比べる                       zip の中の build.json と <Plug-Ins>/cli/build.json の version
-                                     同じなら終わり {"outcome":"up_to_date"}
+                                     同じで <CLI>/bin/vw2026 もあれば、PATH を確かめて終わり {"outcome":"up_to_date"}
                                      --check なら入れずに {"outcome":"available"}
   4. Vectorworks が動いていないか     ロックが掴まれていれば終わり {"outcome":"vectorworks_running"}（終了コード 7）
   5. プラグインのフォルダを付け替える  下記「入れ替えの手順」
   6. CLI を入れ替える                 下記「CLI の入れ替え」
-  7. 後始末                           <CLI>/staging/・<CLI>/old/ を消す
-                                     {"outcome":"installed","version":…,"plugins_dir":…}
+  7. PATH を通す                      下記「PATH」
+  8. 後始末                           <CLI>/staging/・<CLI>/old/ を消す
+                                     {"outcome":"installed","version":…,"plugins_dir":…,"path":…}
 ```
 
 - **GitHub の API を使いません。** リリースの資産は、決まったタグと資産名から URL が決まるので、
@@ -107,6 +94,9 @@ vw2026 install
   シンボリックリンクを含む zip は失敗として扱います（ビルドが作らない）。
 - **新しいかは `build.json` の `version`（短い sha）だけで比べます**（sha が同じならコードも同じ。
   `branch` は表示のため）。入っている `build.json` が読めないときは「入っていない」とみなして入れます。
+  版が同じでも `<CLI>/bin/vw2026` が無ければ（初回のスクリプトで、プラグインだけが入っているとき）
+  入れます。
+- 初回でも Vectorworks が動いていれば終了コード 7 で終わり、CLI も置きません（何も変えない）。
 - **Vectorworks が動いているかはロックで判定します**（[作法「生存の判定」](../protocol.md#生存の判定)）。
   プロセス名は見ません。ロックを掴んでいない Vectorworks（プラグインが入っていない・起動直後の
   10 秒・2 つ目の起動）が居るときは、Windows では読み込み中のフォルダの名前を変えられないので
@@ -157,7 +147,26 @@ vw2026 install
 
 - 名前を変えられた古い CLI は、動いている間はそのまま動き続けます。次に呼ばれたときから
   新しい CLI です。
-- 初回の配置のスクリプトも同じ手順で CLI を置きます。
+- 初回のスクリプトから走らせたときは、動いている CLI は一時フォルダにあるので、`<CLI>/bin/` の
+  入れ替えは動いているファイルに当たりません。
+
+### PATH
+
+**`install` のたびに確かめ、足りなければ通します**（何度走らせても同じ結果になる）。結果は出力の
+`path`（`linked` / `exists` / `added` / `not_in_path` / `conflict`）に載せます。PATH の失敗で
+`install` を失敗にはしません（プラグインは動く）。
+
+| OS | すること | 既にあるとき |
+| --- | --- | --- |
+| mac | `~/.local/bin/vw2026` → `<CLI>/bin/vw2026` のシンボリックリンク（`~/.local/bin` が無ければ作る） | **このプラグインの CLI を指すリンクなら何もしない。** それ以外（利用者のファイル・別の場所を指すリンク）なら触らず `conflict` |
+| Windows | 利用者の環境変数 `Path`（`HKCU\Environment`）に `<CLI>\bin` を追加 | 同じ項目が既にあれば何もしない（`exists`） |
+
+- 行き先がプラグインのフォルダの外で版によらず同じなので、更新で張り直す必要はありません。
+- **シェルの設定ファイル（`.zshrc` 等）は書き換えません。** `~/.local/bin` が PATH に無ければ
+  `not_in_path` とし、追加の方法を標準エラーに表示するだけです。
+- Windows は Go から PowerShell の `[Environment]::SetEnvironmentVariable('Path', …, 'User')` を
+  呼びます（外部の依存を足さないため。`setx` は 1024 文字で切り詰めるので使わない）。新しい値は
+  **新しく開いた端末から**効きます。
 
 ## アンインストール（`vw2026 uninstall`）
 
@@ -178,8 +187,8 @@ vw2026 uninstall --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> から
   （アンインストールは失敗にしない）。
 - **PATH の後始末**:
   - mac: `~/.local/bin/vw2026` が**シンボリックリンクで、`<CLI>/bin/` の中を指すときだけ**消す。
-  - Windows: 利用者の `Path` から、`<CLI>\bin` と**完全に一致する項目だけ**を除く（Go から
-    PowerShell の `[Environment]::SetEnvironmentVariable` を呼ぶ。外部の依存を足さないため）。
+  - Windows: 利用者の `Path` から、`<CLI>\bin` と**完全に一致する項目だけ**を除く（`install` と
+    同じく PowerShell を呼ぶ）。
 - 出力: `{"outcome":"uninstalled","left":[…]}`。
 
 ## 消すコードの歯止め
@@ -190,7 +199,7 @@ vw2026 uninstall --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> から
 | 消すコード | 消してよいもの |
 | --- | --- |
 | `install`（組み立て・後始末） | `<CLI>/staging/`・`<CLI>/old/`（退避した版は、名前が `cli` でモジュールがあるときだけ） |
-| `install`・初回の配置（CLI の入れ替え） | `<CLI>/bin/` の中の `vw2026.exe.old-*`・`vw2026.new` / `vw2026.exe.new` |
+| `install`（CLI の入れ替え） | `<CLI>/bin/` の中の `vw2026.exe.old-*`・`vw2026.new` / `vw2026.exe.new` |
 | `uninstall` | 上に挙げたフォルダ・リンク・PATH の項目 |
 
 ## テスト
@@ -198,11 +207,12 @@ vw2026 uninstall --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> から
 - **`install` / `uninstall`**: Go の単体テスト。場所（`<Plug-Ins>`・`<CLI>`）と資産の URL は
   関数の引数で渡し、偽の HTTP サーバー（`httptest`）と一時ディレクトリで確かめます
   （環境変数は増やさない）。押さえること:
-  - 新しいビルドの判定（同じ版で何も変えない・`--check` で何も変えない）
+  - 新しいビルドの判定（同じ版で何も変えない・`--check` で何も変えない・版が同じでも CLI が無ければ入れる）
+  - PATH（何度走らせても同じ結果・利用者のファイルや別の場所を指すリンクに触れない）
   - ロックが掴まれているときに何も変えない
   - 付け替えの途中の失敗で元に戻る
   - 消すコードの歯止め（名前が違う・モジュールが無いフォルダを消さない、別の場所を指すリンクと
     似た名前の PATH 項目を消さない）
   - **動いている exe の名前を変えられること**（Windows の CI。`vw2026 wait` を動かしたまま入れ替える）
-- **初回の配置のスクリプト**: shellcheck・PSScriptAnalyzer。中身は短く、CLI を置くことと
-  PATH だけなので、実機の確認（段 4）で押さえます。
+- **初回のスクリプト**: shellcheck・PSScriptAnalyzer。取ってきて `install` を走らせるだけなので、
+  実機の確認（段 5）で押さえます。

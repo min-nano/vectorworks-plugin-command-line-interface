@@ -12,7 +12,7 @@
 | `vw2026 wait` | ブリッジが動き出す（ロックが掴まれる）まで待つ。`--down` なら止まる（ロックが放される）まで | `status` と同じ形 |
 | `vw2026 launch` | Vectorworks を起動する（動いていれば起動しない）。**待たない**（待つなら続けて `wait`） | `{"launched":…}` |
 | `vw2026 version` | CLI の版と作法の版 | `{"version":…,"protocol":3}` |
-| `vw2026 install`（**未実装**。段 5） | プラグインを入れる・更新する（CLI 自身も同じビルドに入れ替える）。入っている版と同じなら何もしない。**Vectorworks が動いていれば何もせず終了コード 7**。`--check` / `--tag` / `--plugins-dir` | `{"outcome":"installed"\|"up_to_date"\|"available"\|"vectorworks_running",…}`（[インストール](plugin/install-and-update.md#インストールと更新vw2026-install)） |
+| `vw2026 install`（**未実装**。段 5） | プラグインを入れる・更新する（CLI も同じビルドを `<CLI>/bin/` に置き、PATH を通す）。入っている版と同じなら何もしない。**Vectorworks が動いていれば何もせず終了コード 7**。`--check` / `--tag` / `--plugins-dir` | `{"outcome":"installed"\|"up_to_date"\|"available"\|"vectorworks_running","path":…,…}`（[インストール](plugin/install-and-update.md#インストールと更新vw2026-install)） |
 | `vw2026 uninstall`（**未実装**。段 5） | プラグイン・CLI・スプール・PATH の項目を取り除く。**Vectorworks が動いていれば何もせず終了コード 7**。`--plugins-dir` | `{"outcome":"uninstalled"\|"vectorworks_running","left":[…]}`（[アンインストール](plugin/install-and-update.md#アンインストールvw2026-uninstall)） |
 
 ```sh

@@ -85,7 +85,7 @@ src/
 ├─ Clock.{h,cpp}                           … OS タイマー・見送りの判定・終了の依頼
 ├─ core/                                   … SDK に依らない（Json・Bridge・Serve）。プラグインとテストがリンク
 └─ tools/                                  … 道具の表（ToolTable.cpp）と中身（SDK 依存）
-scripts/                                   … get-vw2026（.sh / .ps1。初回の配置）
+scripts/                                   … get-vw2026（.sh / .ps1。CLI を取って install を走らせるだけ）
 resources/                                 … cli.vwr（拡張機能を登録しないので最小限）
 tests/                                     … 無 SDK の単体テスト・スクリプトのテスト
 protocol/fixtures/                         … 作法の見本（C++ と Go の両方のテストが読む）

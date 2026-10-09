@@ -9,8 +9,8 @@
 | 1 | **SDK に依らない共通部**: `core/Json`・`core/Bridge`・`core/Serve`（偽の道具の表）・`protocol/fixtures/`・`test.yml`・`lint.yml`・`CLAUDE.md` の追記（PR の進め方） | CI（ASan・UBSan）。Go 側のテストも同じ見本を読む | 不要 |
 | 2 | **骨格**: CMake・`BuildConfig`・`ModuleMain`・`Clock`・道具 `tools` / `ping` / `quit`・リソース・`build.yml`（ビルドと PR のプレリリースまで） | CI。実機で zip を手で置き、`vw2026 status` が `running:true` になり `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。`call quit` で保存の確認が出て、取り消すと `call ping` がまた応え、保存すると `wait --down` が終わる | 要 |
 | 3 | **読む道具**: `layers` / `classes` / `layer_objects` / `object_counts` | 実機で、元のプラグインの `vw_*` と同じ図面に対して同じ結果になる | 要 |
-| 4 | **配布**: 梱包（`bin/vw2026`）・main のリリース・`cleanup-dev-release.yml`・初回の配置のスクリプト（`get-vw2026.sh` / `.ps1`。PATH を含む） | CI（shellcheck・PSScriptAnalyzer）。実機でスクリプトを curl からパイプで実行 → 新しい端末で `vw2026 version` が動く。走らせ直しても壊れない | 要 |
-| 5 | **インストールと更新・アンインストール**: `vw2026 install` / `uninstall`（資産の取得・新しいビルドの判定・付け替え・CLI の入れ替え・PATH の後始末）・`CLAUDE.md` に消すコードの歯止めを写す | CI（Go の単体テスト。偽の HTTP サーバー。動いている CLI の入れ替えを Windows で押さえる）。実機で、`install` → 起動して `call ping` が応える。動いている間は終了コード 7 で何も変わらず、`call quit` → `wait --down` → `install` → `launch` → `wait` で `call ping` の `version` が変わる。`--tag dev-<slug>` で PR のプレリリースに入れ替わり、`install` で main に戻る。`--plugins-dir` で既定以外へ入れられる。`uninstall` でリンクと PATH の項目だけが消える | 要 |
+| 4 | **配布**: 梱包（`bin/vw2026`）・main のリリース・`cleanup-dev-release.yml` | CI。リリースの資産を取ってきて、zip の形（直下に `build.json` と `bin/`）と `bin/vw2026 version` が動くことを確かめる | 不要 |
+| 5 | **インストールと更新・アンインストール**: `vw2026 install` / `uninstall`（資産の取得・新しいビルドの判定・付け替え・CLI の入れ替え・PATH）・初回のスクリプト（`get-vw2026.sh` / `.ps1`）・`CLAUDE.md` に消すコードの歯止めを写す | CI（Go の単体テスト。偽の HTTP サーバー。動いている CLI の入れ替えを Windows で押さえる。shellcheck・PSScriptAnalyzer）。実機で、初回のスクリプトを curl からパイプで実行 → 新しい端末で `vw2026 status` が動き、起動して `call ping` が応える。動いている間は終了コード 7 で何も変わらず、`call quit` → `wait --down` → `install` → `launch` → `wait` で `call ping` の `version` が変わる。`--tag dev-<slug>` で PR のプレリリースに入れ替わり、`install` で main に戻る。`--plugins-dir` で既定以外へ入れられる。`uninstall` でリンクと PATH の項目だけが消える | 要 |
 
 その先（順序は未定）:
 
