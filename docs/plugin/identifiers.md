@@ -28,14 +28,11 @@
 | スプール（プラグインが作る） | `<CLI>/spool/` | `<CLI>\spool\` |
 | 組み立ての場所 | `<CLI>/staging/cli/` | `<CLI>\staging\cli\` |
 | 退避の場所 | `<CLI>/old/cli/` | `<CLI>\old\cli\` |
-| 入れた場所の記録 | `<CLI>/cli.plugins-dir` | `<CLI>\cli.plugins-dir` |
 | PATH | `~/.local/bin/vw2026`（`<CLI>/bin/vw2026` へのリンク） | 利用者の `Path` に `<CLI>\bin` |
 
 - `<Plug-Ins>` は Vectorworks の利用者フォルダの中です。Vectorworks の設定で利用者フォルダを
-  移せるので、標準以外の場所も、`<CLI>` と同じドライブにあれば扱えます（入れた場所の記録。
-  [インストールと更新](install-and-update.md#インストーラvw-installsh--ps1)）。
-- 組み立てと退避の場所を `<CLI>` に置くのは、`Plug-Ins` の外（Vectorworks に読まれない）で、
-  前提により `<Plug-Ins>` と同じドライブにあるためです。
+  移せるので、標準以外の場所も、`<CLI>` と同じドライブにあれば扱えます（`install` / `uninstall`
+  に毎回 `--plugins-dir` で渡す。入れた場所は記録しない。[インストール](install-and-update.md#前提)）。
 
 ## 拡張機能
 

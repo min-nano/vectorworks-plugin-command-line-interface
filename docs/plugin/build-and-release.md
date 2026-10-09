@@ -26,7 +26,7 @@ plist の `VWBuildBranch` / `VWBuildCommit`）を除いて使います。版の�
 | ワークフロー | 起動 | 中身 |
 | --- | --- | --- |
 | `cli.yml`（既存） | push / PR（`cli/**`） | Go のテスト（3 OS）とビルド |
-| `test.yml` | push / PR | 無 SDK の単体テスト（ASan・UBSan）・スクリプトのテスト（bash・pwsh）・作法の見本の照合 |
+| `test.yml` | push / PR | 無 SDK の単体テスト（ASan・UBSan）・作法の見本の照合 |
 | `lint.yml` | push / PR | clang-format・clang-tidy（無 SDK）・actionlint・shellcheck・PSScriptAnalyzer |
 | `build.yml` | push（main）/ PR / 手動 | mac と Windows のビルド・梱包・リリース |
 | `cleanup-dev-release.yml` | PR が閉じたとき | `dev-<slug>` を消す |
@@ -53,24 +53,23 @@ cli.vwlibrary.zip                       cli.vlb.zip
 └─ （zip の直下）                       └─ （zip の直下）
    ├─ cli.vwlibrary/                       ├─ cli.vlb ・ cli.vwr
    ├─ build.json                           ├─ build.json
-   ├─ bin/vw2026          （universal）    ├─ bin\vw2026.exe
-   ├─ vw-install.sh                        ├─ vw-install.ps1
-   └─ vw-uninstall.sh                      └─ vw-uninstall.ps1
+   └─ bin/vw2026          （universal）    └─ bin\vw2026.exe
 ```
 
 `build.json`（`{"version","branch"}`）は CI が書きます。版の情報を持つファイルはこれだけで、
-`vw2026 update` が zip の中のものと入っているものを比べます（[更新](install-and-update.md#流れ)）。
+`vw2026 install` が zip の中のものと入っているものを比べます（[インストール](install-and-update.md#流れ)）。
 
 ## リリースの形
 
-`vw2026 update` はタグと資産名から URL を組み立てて資産を直接取るので、**タグと資産名を
-変えません**。
+`vw2026 install` と初回のスクリプトはタグと資産名から URL を組み立てて資産を直接
+取るので、**タグと資産名を変えません**。
 
 - main: main への push で転がりタグ `stable` を作り直す。タイトル `Stable (<sha>)`・`--latest`。
 - PR: 同じリポジトリの PR で、**変更後のコードでビルドしたもの**を `dev-<slug>`（slug は
   [名前と識別子](identifiers.md)）にプレリリースする。タイトル **`Dev: <branch> (<sha>)`**・
   `--prerelease`。中身は main のものと**同じ名前のプラグイン**で、入れると入れ替わる
-  （`vw2026 update --tag dev-<slug>`）。戻すときは `vw2026 update`（main の最新）。
-- 資産: `cli.vwlibrary.zip` / `cli.vlb.zip` / `vw-install.{sh,ps1}` / `vw-uninstall.{sh,ps1}`。
-  本文に機械が読む情報は載せません（版は zip の中の `build.json` が持つ）。CLI 単体の資産は
-  持ちません（zip の `bin/` にある）。
+  （`vw2026 install --tag dev-<slug>`）。戻すときは `vw2026 install`（main の最新）。
+- 資産: `cli.vwlibrary.zip` / `cli.vlb.zip` / `get-vw2026.{sh,ps1}`（初回のスクリプト。
+  利用者は `stable` のものを使う）。本文に機械が読む情報は載せません（版は zip の中の
+  `build.json` が持つ）。CLI 単体の資産は持ちません（zip の `bin/` にあり、初回の
+  スクリプトもそこから取り出す）。

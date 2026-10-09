@@ -12,7 +12,8 @@
 | `vw2026 wait` | ブリッジが動き出す（ロックが掴まれる）まで待つ。`--down` なら止まる（ロックが放される）まで | `status` と同じ形 |
 | `vw2026 launch` | Vectorworks を起動する（動いていれば起動しない）。**待たない**（待つなら続けて `wait`） | `{"launched":…}` |
 | `vw2026 version` | CLI の版と作法の版 | `{"version":…,"protocol":3}` |
-| `vw2026 update`（**未実装**。段 5） | プラグインを更新する。**Vectorworks が動いていれば何もせず終了コード 7**。`--check` / `--tag` / `--plugins-dir` | `{"outcome":"updated"\|"no_new_build"\|"available"\|"vectorworks_running",…}`（[設計](plugin/install-and-update.md#更新vw2026-update)） |
+| `vw2026 install`（**未実装**。段 5） | プラグインを入れる・更新する（CLI も同じビルドを `<CLI>/bin/` に置き、PATH を通す）。入っている版と同じなら何もしない。**Vectorworks が動いていれば何もせず終了コード 7**。`--check` / `--tag` / `--plugins-dir` | `{"outcome":"installed"\|"up_to_date"\|"available"\|"vectorworks_running","path":…,…}`（[インストール](plugin/install-and-update.md#インストールと更新vw2026-install)） |
+| `vw2026 uninstall`（**未実装**。段 5） | プラグイン・CLI・スプール・PATH の項目を取り除く。**Vectorworks が動いていれば何もせず終了コード 7**。`--plugins-dir` | `{"outcome":"uninstalled"\|"vectorworks_running","left":[…]}`（[アンインストール](plugin/install-and-update.md#アンインストールvw2026-uninstall)） |
 
 ```sh
 vw2026 status
@@ -20,7 +21,7 @@ vw2026 call tools
 vw2026 call layers '{"include_sheets":false}'
 echo '{"layer":"1F"}' | vw2026 call layer_objects -
 vw2026 launch && vw2026 wait
-vw2026 call quit && vw2026 wait --down && vw2026 update && vw2026 launch && vw2026 wait   # 更新
+vw2026 call quit && vw2026 wait --down && vw2026 install && vw2026 launch && vw2026 wait   # 更新
 ```
 
 ## 指定
@@ -52,7 +53,7 @@ Vectorworks は動いている（ロックが掴まれている）が、プラ�
 | 4 | 待ちきれなかった（`call` は置いた要求を取り下げた。Vectorworks は動いている） |
 | 5 | 使わない（protocol 2 までは「作法の版が違う」。番号は詰めない。[作法「版」](protocol.md#版)） |
 | 6 | そのほか（書き込めない・起動できない・スプールの場所が決まらない等） |
-| 7 | Vectorworks が動いているので行えない（`update`。終了させてから呼び直す） |
+| 7 | Vectorworks が動いているので行えない（`install` / `uninstall`。終了させてから呼び直す） |
 
 ## ビルドとテスト
 
