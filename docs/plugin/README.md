@@ -10,13 +10,12 @@ Vectorworks の中で動くプラグイン（`cli`）の設計です。全体の
 
 | ページ | 中身 |
 | --- | --- |
-| [architecture.md](architecture.md) | 殻と本体・入口・受け付けの流れ・ソースの配置 |
-| [abi.md](abi.md) | 殻と本体の境界（C の ABI） |
-| [bridge.md](bridge.md) | 本体の受け付け（スプール・道具の表・生存の印・殻に頼む道具） |
+| [architecture.md](architecture.md) | モジュール・入口・受け付けの流れ・ソースの配置 |
+| [bridge.md](bridge.md) | 受け付け（スプール・道具の表・生存の印・終了の依頼） |
 | [tools.md](tools.md) | 最初に提供する道具の仕様 |
 | [identifiers.md](identifiers.md) | 名前・ユニバーサル名・UUID・バンドル ID |
 | [build-and-release.md](build-and-release.md) | CMake・CI・リリースの形 |
-| [install-and-update.md](install-and-update.md) | インストーラ・PATH・アンインストーラ・自動アップデート |
+| [install-and-update.md](install-and-update.md) | インストーラ・PATH・アンインストーラ・更新（`vw2026 update`） |
 | [porting.md](porting.md) | 元のプラグインから移すもの・捨てるもの・名前を変えるもの |
 | [plan.md](plan.md) | 実装の順序（1 段 1 PR）と、各段の終わりの確かめ方 |
 | [open-questions.md](open-questions.md) | 決まっていないこと |

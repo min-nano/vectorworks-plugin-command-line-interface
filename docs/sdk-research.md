@@ -3,7 +3,7 @@
 **SDK の挙動が分からないまま実装に入らない**のがこのリポジトリの決めごとです。調べるのは
 [SDK リファレンス](https://github.com/min-nano/vectorworks-developer-sdk-reference)の側で、
 issue を立てて `Findings/` に反映されてから、それを根拠に実装します。待つ間は SDK に依らない
-作業（作法・CLI・殻と本体の移植）を進めます。
+作業（作法・CLI・共通部の移植）を進めます。
 
 ## 0. 拡張機能を 1 つも登録しないプラグインの読み込み
 

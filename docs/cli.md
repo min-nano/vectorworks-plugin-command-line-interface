@@ -7,19 +7,20 @@
 
 | コマンド | 内容 | 標準出力 |
 | --- | --- | --- |
-| `vw2026 status` | ブリッジの状態（[作法「生存の判定」](protocol.md#生存の判定)） | `{"live":true,"state":"live","spool":…,"status":{…}}`／`{"live":false,"state":"unresponsive","spool":…,"status":{…},"shell"?:{…}}`／`{"live":false,"state":"down","searched":[{"dir":…,"reason":…,"shell"?:{…}}]}`（`shell` は新しい[殻の診断](protocol.md#殻の診断shelljson)があるときだけ） |
+| `vw2026 status` | ブリッジの状態（[作法「生存の判定」](protocol.md#生存の判定)） | `{"live":true,"state":"live","spool":…,"status":{…}}`／`{"live":false,"state":"unresponsive","spool":…,"status":{…}}`／`{"live":false,"state":"down","searched":[{"dir":…,"reason":…}]}` |
 | `vw2026 tools` | 呼べる道具の一覧（`call tools` と同じ） | 道具の一覧 |
 | `vw2026 call <道具> [引数]` | 道具を 1 つ呼ぶ。引数は JSON オブジェクト、`-` なら標準入力から | 成功なら `result`。`--raw` なら応答全体 |
 | `vw2026 wait` | ブリッジが動き出す（`live`）まで待つ。`--down` なら止まる（`down`）まで | `status` と同じ形（`--down` は `{"live":false,"state":"down"}`） |
 | `vw2026 launch` | Vectorworks を起動する（`live`・`unresponsive` なら起動しない）。`--timeout` を付けると動き出すまで待つ | `{"launched":…}` |
 | `vw2026 version` | CLI の版と作法の版 | `{"version":…,"protocol":1}` |
-| `vw2026 update`（**未実装**。段 5） | プラグインを更新する。殻が変わるときは Vectorworks の終了を待って入れ替える。`--check` / `--restart` / `--branch` | `{"outcome":…,"restart_required":…}`（[設計](plugin/install-and-update.md#更新vw2026-update)） |
+| `vw2026 update`（**未実装**。段 5） | プラグインを更新する。**Vectorworks が動いていれば何もせず終了コード 8**。`--check` / `--branch` / `--plugins-dir` | `{"outcome":"updated"\|"no_new_build"\|"available"\|"vectorworks_running",…}`（[設計](plugin/install-and-update.md#更新vw2026-update)） |
 
 ```sh
 vw2026 status
 vw2026 call layers '{"include_sheets":false}'
 echo '{"layer":"1F"}' | vw2026 call layer_objects -
 vw2026 launch --timeout 120
+vw2026 call quit && vw2026 wait --down && vw2026 update && vw2026 launch --timeout 120   # 更新
 ```
 
 ## 指定
@@ -59,6 +60,7 @@ undo の記録・長く走る道具の最中）。印が古いだけで「止ま
 | 5 | プラグインと CLI の作法の版が違う |
 | 6 | そのほか（書き込めない・起動できない等） |
 | 7 | Vectorworks は動いているがブリッジが応えない（`status`・`launch`、`call` で待ちきれなかったとき） |
+| 8 | Vectorworks が動いているので行えない（`update`。終了させてから呼び直す） |
 
 ## ビルドとテスト
 

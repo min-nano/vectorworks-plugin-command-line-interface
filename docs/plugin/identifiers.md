@@ -6,17 +6,16 @@
 | 項目 | 安定版 | 開発版 |
 | --- | --- | --- |
 | プラグイン名（ファイル名・フォルダ名・`PLUGIN_VWR_ID`） | `cli` | `cli_dev` |
-| 殻 | `cli.vwlibrary` / `cli.vlb` | `cli_dev.vwlibrary` / `cli_dev.vlb` |
-| 本体 | `cli.vwpayload` | `cli_dev.vwpayload` |
+| モジュール | `cli.vwlibrary` / `cli.vlb` | `cli_dev.vwlibrary` / `cli_dev.vlb` |
 | リソース | `cli.vwr` | `cli_dev.vwr` |
 | バンドル ID（mac） | `io.github.min-nano.cli` | `io.github.min-nano.cli-dev`（バンドル ID に `_` は使えない） |
 | スプール | `<temp>/vectorworks2026-cli-bridge` | `<temp>/vectorworks2026-cli-bridge-dev` |
 | コマンド | `vw2026` | `vw2026`（`--channel dev` で開発版の橋へ） |
-| CMake のターゲット | `VwCli` / `VwCliPayload` | `VwCliDev` / `VwCliDevPayload` |
+| CMake のターゲット | `VwCli` | `VwCliDev` |
 | リリースのタグ | `stable` | `dev-<ブランチの slug>` |
 | インストール先 | `<Plug-Ins>/cli/` | `<Plug-Ins>/cli_dev/` |
 | CLI の置き場所 | `<CLI>/bin/`（PATH に載せる。`--channel dev` もこの CLI が受け持つ） | `<CLI>/bin-dev/`（PATH に載せない。開発版の CLI を試すときにフルパスで呼ぶ） |
-| 待機の場所 | `<CLI>/pending/cli/` | `<CLI>/pending/cli_dev/` |
+| 組み立て・退避の場所 | `<CLI>/staging/cli/`・`<CLI>/old/cli/` | `<CLI>/staging/cli_dev/`・`<CLI>/old/cli_dev/` |
 | 入れた場所の記録 | `<CLI>/cli.plugins-dir` | `<CLI>/cli_dev.plugins-dir` |
 
 `<CLI>` は mac `~/Library/Application Support/vectorworks2026-cli/`、Windows
@@ -42,7 +41,7 @@
 #  define PLUGIN_CHANNEL  "stable"
 #  define PLUGIN_SPOOL    "vectorworks2026-cli-bridge"
 #endif
-// VW_BUILD_VERSION / VW_BUILD_BRANCH / VW_SHELL_ID は CMake が渡す（無ければ "local"）
+// VW_BUILD_VERSION / VW_BUILD_BRANCH は CMake が渡す（無ければ "local"）
 ```
 
 スプールの名前は CLI 側の `cli/internal/spool` の `StableSpoolName` / `DevSpoolName` と対です

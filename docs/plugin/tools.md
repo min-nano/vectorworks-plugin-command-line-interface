@@ -1,6 +1,6 @@
 # 最初に提供する道具
 
-図面を**読むだけ**の道具と、殻に頼む 1 つ（終了）から始めます。更新は道具ではなく CLI の
+図面を**読むだけ**の道具と、Vectorworks を終わらせる 1 つ（`quit`）から始めます。更新は道具ではなく CLI の
 `vw2026 update` です（[更新](install-and-update.md#更新vw2026-update)）。どれも元のプラグインの
 `vw_*` で実機で通った SDK 呼び出しだけを使います（元:`src/draw/McpBridge.cpp`）。**新しい SDK
 呼び出しを使う道具は、SDK リファレンスで確かめてから足します。**
@@ -13,7 +13,7 @@
 | `classes` | read | `vw_classes` | なし | `{"classes":[名前…],"count"}` |
 | `layer_objects` | read | `vw_layer_objects` | `layer`（必須）・`limit`（既定 50）・`offset`・`type` | `{"layer","objects":[{"index","type","type_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}` |
 | `object_counts` | read | `vw_object_counts` | `layer`（省略＝図面全体） | `{"layer"?,"types":[{"type","type_name","count"}],"total"}`（種別番号の昇順） |
-| `quit` | shell | `vw_restart` | `restart`（既定 false） | `{"quitting":true,"restart":…}` |
+| `quit` | app | `vw_restart` | `restart`（既定 false） | `{"quitting":true,"restart":…}` |
 
 ## `ping`
 
@@ -26,13 +26,14 @@
 
 ## `quit`
 
-応答を書かせてから `gSDK->CloseAllFilesAndQuitVectorworks(true, restart)` を頼みます。
+応答を書いてから、受け付けの外で `gSDK->CloseAllFilesAndQuitVectorworks(true, restart)` を頼みます
+（[構成「受け付けの流れ」](architecture.md#受け付けの流れ)）。
 
 - **保存の確認は必ず出します**（第 1 引数は常に真。**利用者の図面を保存せずに閉じる手段は持たない**）。
   利用者が取り消せば Vectorworks は終わりません。
-- `restart` が真なら Vectorworks 自身が起動し直します。**殻が変わる更新では使いません**
-  （入れ替えより先に起動してしまう）。`vw2026 update --restart` は `restart` を偽にして呼び、
-  入れ替えてから CLI が起動します。
+- `restart` が真なら Vectorworks 自身が起動し直します。**更新の前の終了には使いません**
+  （更新は Vectorworks が動いていない間にしか入らない）。更新するときは `restart` を偽にして
+  終了させ、`vw2026 update` のあとで `vw2026 launch` を呼びます（[更新](install-and-update.md#流れ)）。
 - 終了・再起動を見届けるのは呼ぶ側の役割です（`vw2026 wait --down` → `vw2026 wait`）。
   保存の確認を開いている間は受け付けが見送られ、ブリッジは `unresponsive` になりますが、
   `wait --down` は `pid` のプロセスが無くなるまで「止まった」と判定しません

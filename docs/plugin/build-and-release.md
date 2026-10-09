@@ -9,32 +9,15 @@
 | プロジェクト | `project(VwCli CXX)`（Apple では OBJCXX も） |
 | 選択肢 | `VW_BUILD_PLUGIN`（ON）・`VW_BUILD_TESTS`（OFF）・`VW_ENABLE_SANITIZERS`・`VW_ENABLE_COVERAGE`・`VW_ENABLE_PCH`（ON）・`VW_BUILD_CHANNEL`（`stable` / `dev` / `both`。既定 `both`） |
 | SDK | `VW_SDK_DIR`（`SDKLib` を含む）。mac は `libVWSDK.a`＋VWMM・`BuildVWR`、Windows は x64 だけ（`VWSDK.lib`・`VWMM.lib`・`buildvwr.exe`） |
-| 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。本体とテストだけがリンク） |
-| 殻 | `add_library(<target> MODULE)`。`VW_SHELL_SOURCES` |
-| 本体 | `<target>Payload`（MODULE・`PREFIX ""`・`SUFFIX ".vwpayload"`・`BUNDLE FALSE`・`ARCHIVE_OUTPUT_NAME <name>Payload`）。`VW_PAYLOAD_SOURCES` |
-| 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH`・`VW_SHELL_ID` を両方のモジュールへ |
-| mac | `Module-Info.plist.in`（`VWBuildChannel` / `VWBuildBranch` / `VWBuildCommit` / `VWShellId`）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr`・同梱スクリプトは `Contents/Resources/` |
-| Windows | `.vlb`・隣に `<name>.commit` / `.branch` / `.shell-id` と `.vwr`・同梱スクリプト |
+| 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。プラグインとテストがリンク） |
+| プラグイン | `add_library(<target> MODULE)`。`VW_PLUGIN_SOURCES`（`src/*.cpp`・`src/tools/*`） |
+| 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH` |
+| mac | `Module-Info.plist.in`（`VWBuildChannel` / `VWBuildBranch` / `VWBuildCommit`）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr` |
+| Windows | `.vlb`・隣に `<name>.commit` / `.branch` と `.vwr` |
 | 系列 | `add_vw_plugin(VwCli "cli" io.github.min-nano.cli stable)` / `add_vw_plugin(VwCliDev "cli_dev" io.github.min-nano.cli-dev dev DEV)` |
 
-`add_vw_plugin` は元の関数（元:`CMakeLists.txt` L565-756）をそのまま使えます。
-
-### 殻の ID
-
-`VW_SHELL_INPUTS` には**殻にコンパイルされるものだけ**を並べます。
-
-```
-CMakeLists.txt  src/PluginPrefix.h  src/BuildConfig.h  src/Module-Info.plist.in
-src/ModuleMain.cpp  src/PayloadAbi.h  src/PayloadHost.{h,cpp}  src/PayloadSession.{h,cpp}
-src/Clock.{h,cpp}  resources/
-```
-
-`src/core/`・`src/tools/`・`src/payload/`・同梱スクリプト・`cli/` は**入れません**（入れると
-そこを直すたびに再起動を強いる。元の M23 で実際に起きた）。`resources/`（`.vwr`）は殻の
-側のファイルなので入れます。殻の ID が同じ更新ではインストーラが殻のファイルに触れない
-（[更新「殻の ID が同じとき」](install-and-update.md#殻の-id-が同じときファイルの上書き)）ので、
-入れないと `.vwr` の変更が入らないためです。改行を LF に揃えて SHA-256 を取り、
-12 文字に切ったものが `VW_SHELL_ID` です。
+`add_vw_plugin` は元の関数（元:`CMakeLists.txt` L565-756）から、本体のターゲット・殻の ID・
+同梱スクリプトを除いて使います。
 
 ## CI
 
@@ -64,17 +47,15 @@ src/Clock.{h,cpp}  resources/
 cli.vwlibrary.zip                       cli.vlb.zip
 └─ （zip の直下）                       └─ （zip の直下）
    ├─ cli.vwlibrary/                       ├─ cli.vlb ・ cli.vwr
-   ├─ cli.vwpayload                        ├─ cli.commit ・ cli.branch ・ cli.shell-id
-   ├─ build.json ・ shell-id               ├─ cli.vwpayload
-   ├─ bin/vw2026          （universal）    ├─ build.json ・ shell-id
+   ├─ build.json                           ├─ cli.commit ・ cli.branch
+   ├─ bin/vw2026          （universal）    ├─ build.json
    ├─ vw-install.sh                        ├─ bin\vw2026.exe
    └─ vw-uninstall.sh                      ├─ vw-install.ps1
                                            └─ vw-uninstall.ps1
 ```
 
-`build.json`（`{"plugin","channel","version","branch","shell_id"}`）と `shell-id`（殻の ID だけの
-1 行。殻が JSON を読まずに済むように分けてある）は CI が書きます。
-`vw2026 update` が「何が入っているか」と「殻が変わるか」を判定するのに使います
+`build.json`（`{"plugin","channel","version","branch"}`）は CI が書きます。
+`vw2026 update` が「何が入っているか」を判定するのに使います
 （[更新](install-and-update.md#流れ)）。
 
 ## リリースの形
