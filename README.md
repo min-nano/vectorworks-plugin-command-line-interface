@@ -24,5 +24,3 @@ vw2026 call layers '{"include_sheets":false}'
 | [docs/protocol.md](docs/protocol.md) | 受け渡しの作法（プラグインと呼ぶ側の約束。真実はここ） |
 | [docs/cli.md](docs/cli.md) | `vw2026` のコマンド・指定・終了コード・ビルド |
 | [docs/sdk-research.md](docs/sdk-research.md) | SDK リファレンスでの調査を待っているもの |
-
-MCP（Claude などから安全に使うためのラッパー）は別のプロジェクトです。

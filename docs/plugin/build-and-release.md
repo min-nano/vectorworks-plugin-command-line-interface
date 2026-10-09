@@ -69,5 +69,5 @@ cli.vwlibrary.zip                       cli.vlb.zip
 - 資産: `cli.vwlibrary.zip` / `cli.vlb.zip` / `vw-install.{sh,ps1}` / `vw-uninstall.{sh,ps1}`
   （開発版は `cli_dev.*`）。
 - **CLI 単体の資産**（`vw2026-darwin-universal` / `vw2026-windows-amd64.exe`）も添えます。
-  ラッパー（MCP など）の開発やテストで CLI だけを取りたいときのためです（CLI はスプールが
+  呼ぶ側のプログラムの開発やテストで CLI だけを取りたいときのためです（CLI はスプールが
   ローカルにあるときだけ働くので、プラグインの代わりにはならない）。

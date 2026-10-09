@@ -29,18 +29,8 @@
 | `resources/min-nano_structure{,Dev}.vwr` | `resources/cli{,_dev}.vwr` | `.vwstrings` は UTF-16LE（BOM 付き）・CRLF のまま。拡張機能を登録しないので鍵は最小限 |
 | `CMakeLists.txt` | 同じ | IFC の部分・本体のターゲット・殻の ID（`VW_SHELL_INPUTS`）を除く。`VwCliCore` は `src/core/*` だけ |
 
-## 移さない
+## 移さないもの
 
-- IFC の解析・描画・PIO（`src/parse/` / `src/draw/` の描画 / `Extensions/ExtColumnMark` /
-  `ExtShearWall` / `ExtMenu` / `ExtTestMenu`）と、そのテスト・フィクスチャ。
-- 実機テスト（`draw/Feedback` / `core/FeedbackSession` / `core/FeedbackScratch`）。
-- パレット（`resources/common.vwr/html/mcp.html`・`CExtMcpPalette`・`ExtMcpMenu`）。
-- MCP サーバ（`scripts/mcp/`・`.mcp.json`）。このリポジトリには含めない。
-- 自動レビュー（`pr-review.yml`）。差し当たり持たない。
-- 殻と本体の分割（`src/PayloadAbi.h` / `PayloadHost.*` / `PayloadSession.*` / `PayloadHostHolder.h`・
-  殻の ID・本体のターゲット）と、そのテスト（`PayloadPathTests` / `PayloadHostHolderTests`）。
-  ホットリロードをしないので要らない（[構成](architecture.md#モジュールは-1-つ)）。
-- アップデータ（`src/Updater*`・`Extensions/ExtMenuCheckUpdate`・`scripts/vw-update.*`・`vw-token.*`）と
-  そのテスト（`UpdaterParseTests` / `UpdaterFlowTests` / `UpdaterRobustnessTests` / `vw-update.test.sh`）。
-  更新は CLI が行う。リリースの探し方（`q-stable` / `q-dev` の問い合わせ・`dev-*` の並べ方・
-  `branch=` の読み方）は Go で書き直すときの参考にする。
+上の表に無いものは移しません。元のアップデータ（`src/Updater*`）のリリースの探し方
+（`q-stable` / `q-dev` の問い合わせ・`dev-*` の並べ方・`branch=` の読み方）は、`vw2026 update` を
+Go で書くときの参考にします。

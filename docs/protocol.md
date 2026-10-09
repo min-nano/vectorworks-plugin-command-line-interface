@@ -4,8 +4,6 @@
 ディレクトリ 1 つ（スプール）に置くファイル**でやり取りします。この文書が作法の真実で、
 プラグイン側（C++）と CLI 側（`cli/internal/spool`）はその対になる実装です。**どちらかを
 変えたら、この文書と両方を直してください。** 形を変えたら版（`protocol`）を上げます。
-プラグインをまだ配布していないので、それまでの変更（殻の診断 `shell.json` と印の
-`restart_required` を除いたこと、道具の種類 `shell` を `app` にしたこと）は版 1 に含めています。
 
 作法は、構造設計支援プラグイン（`vectorworks-plugin-import-ifc-homeskz`）の開発版の MCP
 ブリッジ（M24〜M42）で実機で確かめた作り（`src/core/Bridge.h`）を引き継いでいます。違いは
@@ -192,7 +190,7 @@ Windows では Vectorworks 2026 を 2 つ起動できます。どちらのプラ
 
 | 項目 | 元 | ここ |
 | --- | --- | --- |
-| スプールの名前 | `<プラグイン名>-mcp` | `vectorworks2026-cli-bridge`（`-dev`）（MCP 専用ではない） |
+| スプールの名前 | `<プラグイン名>-mcp` | `vectorworks2026-cli-bridge`（`-dev`） |
 | 場所の明示 | `VW_MCP_SPOOL` | `VW2026_SPOOL` |
 | 道具の一覧 | `vw_tools` | `tools` |
 | 道具の名前 | `vw_` 接頭辞 | 接頭辞なし・提供者は `.` で区切る |

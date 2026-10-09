@@ -102,7 +102,7 @@ enum class ToolKind { Read, Write, Long, App };
 
 struct Tool {
     const char* name;            // [a-z0-9_]+(\.[a-z0-9_]+)*
-    const char* description;     // 日本語。呼ぶ側（人・MCP）がそのまま読む
+    const char* description;     // 日本語。呼ぶ側がそのまま読む
     const char* inputSchema;     // JSON Schema（文字列）。tools の結果にそのまま載る
     ToolKind    kind;
     int         timeoutSeconds;  // 既定より長くかかりうるときだけ（0 = 既定）
@@ -113,7 +113,7 @@ struct Tool {
 - **道具を足すときに触るのは表の 1 行と中身 1 つだけ**です。CLI は道具を知らないので直しません。
 - `tools` の結果は `{"protocol":1,"tools":[{"name","description","inputSchema","kind","timeoutSeconds"?}]}`。
   `kind` は `read` / `write` / `long` / `app` を小文字で載せます（呼ぶ側が「図面を変えるか」を
-  判定できるように。MCP のラッパーが確認を挟む手掛かりになる）。
+  判定できるように）。
 - 引数の検査は道具の中で行います（JSON Schema の検証器は持たない）。知らない引数は失敗で返します。
 - **種類 `write` の道具は、undo の作法を通すまで表に載せません**（[未決 1](open-questions.md)）。
 
@@ -122,5 +122,3 @@ struct Tool {
 `core::serve` がタイマーへ返す値です。`phase`（`serving` / `standby` / `error`）・`message`
 （`standby` なら相手の `pid`、`error` なら理由）・`quit`（終了の依頼。`restart` の値を添える）。
 タイマーが見るのは `quit` だけで、ほかは単体テストで手順を確かめるためにあります。
-元の見え方（view）の JSON・`action`・`reportDone` は、殻と本体の境界を越えるためのものだったので
-持ちません。

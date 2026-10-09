@@ -21,7 +21,6 @@
 | 版の違うプラグインの同居 | スプールに版を入れる（`vectorworks2026-cli-bridge`） | [作法](../protocol.md#スプールの場所)・[識別子](identifiers.md) |
 | 自動レビュー | 差し当たり持たない（Secrets 不要） | [ビルド](build-and-release.md#ci) |
 | メニュー | 持たない（拡張機能を登録しない）。表示名も不要 | [構成](architecture.md#拡張機能を登録しない) |
-| ホットリロード | しない。殻と本体に分けず、モジュールは 1 つ（境界の ABI・殻の ID・殻の診断を持たない） | [構成](architecture.md#モジュールは-1-つ) |
 | 更新 | CLI の `vw2026 update`。Vectorworks が動いていれば何もせず終了コード 8。終了させるのは呼ぶ側 | [更新](install-and-update.md#更新vw2026-update) |
 | CLI の置き場所 | プラグインのフォルダの外（`<CLI>/bin/`）。入れ替えはフォルダの付け替え（Windows で開いているファイルを含むフォルダの名前を変えられないため） | [インストールと更新](install-and-update.md#置き場所) |
 | プラグインのフォルダの場所 | CLI の場所と同じドライブにある前提。ボリュームをまたぐ場合の扱いを持たない | [インストールと更新](install-and-update.md#前提) |
