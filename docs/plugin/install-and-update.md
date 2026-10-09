@@ -20,8 +20,12 @@
 | 待機の場所 | `<CLI>/pending/<name>/` | `<CLI>\pending\<name>\` |
 | 入れた場所の記録 | `<CLI>/<name>.plugins-dir` | `<CLI>\<name>.plugins-dir` |
 
-- `<VW>` は Vectorworks の利用者フォルダ（mac `~/Library/Application Support/Vectorworks/2026`、
-  Windows `%APPDATA%\Nemetschek\Vectorworks\2026`）で、`<Plug-Ins>` はその中にあります。
+- `<Plug-Ins>` の既定は Vectorworks の利用者フォルダの中です（mac
+  `~/Library/Application Support/Vectorworks/2026/Plug-Ins`、Windows
+  `%APPDATA%\Nemetschek\Vectorworks\2026\Plug-Ins`）。標準以外の場所も扱えます（下記の記録）。
+- `<VW>` は **`<Plug-Ins>` の親フォルダ**です（既定なら Vectorworks の利用者フォルダ）。組み立ての
+  場所と退避先をここに置くのは、どの `<Plug-Ins>` に入れても、プラグインのフォルダと同じ
+  ボリュームになるようにするためです。
 - **`--channel dev` を受け持つのは PATH 上の安定版の CLI です。** 開発版のプラグインへの
   呼び出し・`vw2026 update --channel dev`・その終了を待つ係は、どれも安定版の CLI が行います。
 - 開発版の CLI（`bin-dev/`）は PATH に載せず、**開発版で CLI そのものを変えたときに、フルパスで
@@ -31,8 +35,8 @@
   安定版の CLI は終了コード 5 を返します。そのあいだは `bin-dev/` の CLI をフルパスで呼びます。
 - **配布 zip の形は変えません**（`bin/` は zip の直下にある）。インストーラが `bin/` だけを
   CLI の場所へ置きます。
-- **入れた場所の記録**: インストーラは、プラグインを入れたフォルダの絶対パスを 1 行で
-  `<CLI>/<name>.plugins-dir` に書きます。標準以外の `<Plug-Ins>` に入れた場合も、`update` と
+- **入れた場所の記録**: インストーラは、プラグインを入れた `<Plug-Ins>` の絶対パスを 1 行で
+  `<CLI>/<name>.plugins-dir` に書きます（プラグインのフォルダはその下の `<name>/`）。標準以外の `<Plug-Ins>` に入れた場合も、`update` と
   アンインストーラがそこを見つけられるようにするためです。CLI はプラグインのフォルダの外に
   あるので、自分の場所からは求められません。
 
@@ -48,7 +52,16 @@
     Vectorworks 2026 のプロセスが 1 つも無いときだけ行う。
 - **CLI の入れ替えは、プラグインを入れ終えてから**行う（プラグインの入れ替えが失敗したときに、
   CLI だけが新しくならないように）。下記「CLI の入れ替え」。
-- 取り除く古い版は、その版自身のアンインストーラで消す（歯止めは元のまま）。
+- **入れる `<Plug-Ins>` は「`--plugins-dir` → 記録（`<CLI>/<name>.plugins-dir`）→ 既定」の順で
+  決める**（`update` と同じ順。[流れ](#流れ)）。`update` と終了を待つ係は、自分が決めた場所を
+  `vw-install --plugins-dir <…>` で明示して渡す。インストーラだけを手で走らせた場合も、記録が
+  あればそこへ入るので、標準以外に入れた利用者の更新が標準の場所へ入ることはない。
+- 取り除く古い版は、**入れる先の `<Plug-Ins>/<name>/` にある版**で、その版自身のアンインストーラで
+  消す（歯止めは元のまま）。
+- **記録と違う場所へ入れたとき**（`--plugins-dir` で別の場所を明示したとき）は、記録を新しい
+  場所に書き換え、記録にあった古い場所の版は**消さずに残し**、`old-plugins-dir=<パス>` と出す。
+  消すかどうかは利用者が決める（その版のアンインストーラを `--folder-only` で走らせる）。
+  インストーラが消すものを増やさないためです。
 - mac: 置いたものの隔離属性を外し（`xattr -dr com.apple.quarantine`）、アドホック署名をかけ直す
   （`bin/vw2026` も対象）。Windows: `Unblock-File`。どちらも組み立ての場所で済ませてから置く。
 - 機械可読の出力: `installed-shell=<VW_SHELL_ID>`・`mode=files|swap` → `ok` / `error=`。
@@ -57,8 +70,13 @@
 
 1. **組み立て**: 新しい版を `<VW>/vectorworks2026-cli-staging/<name>/` に丸ごと置く（`bin/` を
    除く。隔離属性の解除・署名・`Unblock-File` もここで済ませる）。`Plug-Ins` の外なので、
-   組み立て中に Vectorworks が起動しても読まれない。`<Plug-Ins>` と同じボリュームなので、
-   次の段はどれも名前の変更だけで済む。
+   組み立て中に Vectorworks が起動しても読まれない。`<VW>` は `<Plug-Ins>` の親なので同じ
+   ボリュームにあり、次の段はどれも名前の変更だけで済む。
+   - `<Plug-Ins>` そのものが別のボリュームのマウントポイントであるときなど、名前の変更が
+     ボリュームをまたぐと分かったら（Windows `ERROR_NOT_SAME_DEVICE`、mac `EXDEV`）、
+     **コピーに切り替えずに** `error=cross-volume` で終わる（コピーは一瞬で終わらず、半端な
+     状態が見えるため）。mac の `mv` は自動でコピーに切り替わるので使わず、ボリュームを
+     またがない名前の変更（`mv` の前に `stat -f %d` で同じデバイスかを確かめる）で行う。
 2. **殻の ID を比べる**: `<Plug-Ins>/<name>/shell-id` と組み立てた `shell-id` を比べ、どちらの
    方式で入れるかを決める（読めなければ「違う」とみなす）。
 
@@ -238,11 +256,14 @@ vw2026 update
   **読めないときは「殻が変わる」とみなします**（判定できないなら再起動が要る側に倒す。元の
   `NeedsRestartAfterInstall` と同じ）。
 - プラグインのフォルダは、次の順で決めます。
-  1. `--plugins-dir` で明示されていれば、その場所。
+  1. `--plugins-dir <Plug-Ins>` で明示されていれば、その下の `<name>/`。
   2. インストーラが書いた記録（`<CLI>/<name>.plugins-dir`。`<name>` は `--channel stable` なら
-     `cli`、`dev` なら `cli_dev`）があれば、その場所。標準以外の `<Plug-Ins>` に入れた場合も
-     これで見つかります。
+     `cli`、`dev` なら `cli_dev`）があれば、そこに書かれた `<Plug-Ins>` の下の `<name>/`。
+     標準以外の `<Plug-Ins>` に入れた場合もこれで見つかります。
   3. どちらも無ければ、既定の `<Plug-Ins>/<name>`。
+
+  決めた `<Plug-Ins>` は、インストーラへ `vw-install --plugins-dir <…>` で明示して渡します
+  （終了を待つ係も同じ。待機の場所に一緒に書いておく）。
 
   CLI はプラグインのフォルダの外にある（[置き場所](#置き場所)）ので、自分の場所からは求めません。
 - 振り分けは「すぐ入れるか、終了を待つか」だけを決めます。どちらの方式で入れ替えるかは
