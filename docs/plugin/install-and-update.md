@@ -75,8 +75,15 @@
    - `<Plug-Ins>` そのものが別のボリュームのマウントポイントであるときなど、名前の変更が
      ボリュームをまたぐと分かったら（Windows `ERROR_NOT_SAME_DEVICE`、mac `EXDEV`）、
      **コピーに切り替えずに** `error=cross-volume` で終わる（コピーは一瞬で終わらず、半端な
-     状態が見えるため）。mac の `mv` は自動でコピーに切り替わるので使わず、ボリュームを
-     またがない名前の変更（`mv` の前に `stat -f %d` で同じデバイスかを確かめる）で行う。
+     状態が見えるため）。
+   - **どちらの OS も、黙ってコピーに切り替わる手段を使わない。**
+     - mac: `mv` はボリュームをまたぐと自動でコピーに切り替わる。`mv` の前に `stat -f %d` で
+       同じデバイスかを確かめる。
+     - Windows: `Move-Item`（.NET の `File.Move`）は `MOVEFILE_COPY_ALLOWED` を付けて呼ぶので、
+       ボリュームをまたいでもコピーと削除になる。ファイルの上書きには `Move-Item` を使わず、
+       `MoveFileEx` を `MOVEFILE_REPLACE_EXISTING` だけで P/Invoke で呼ぶ（またぐと
+       `ERROR_NOT_SAME_DEVICE` で失敗する）。フォルダの付け替え（`Directory.Move`）は、
+       またぐと例外になるのでそのまま使える。
 2. **殻の ID を比べる**: `<Plug-Ins>/<name>/shell-id` と組み立てた `shell-id` を比べ、どちらの
    方式で入れるかを決める（読めなければ「違う」とみなす）。
 
@@ -91,7 +98,8 @@
 3. **殻のファイルの一覧はインストーラが持つ**（新しいビルドの側の知識。上の配置の規則の例外は
    この一覧だけ）。組み立てた版のうち、殻のファイル以外のものを 1 つずつ置き換える。
    置き換えは、組み立ての場所から名前の変更で上書きする（同じボリュームなので一瞬で終わる。
-   mac `mv -f`、Windows `Move-Item -Force`。中身は `MoveFileEx` の `MOVEFILE_REPLACE_EXISTING`）。
+   mac `mv -f`（デバイスを確かめてから）、Windows `MoveFileEx` の `MOVEFILE_REPLACE_EXISTING`
+   だけ。上記の理由で `Move-Item` は使わない）。
    **順序は「ほかのファイル → 本体（`<name>.vwpayload`）→ `build.json`」に固定する。**
    - 本体を後ろに置くのは、殻が本体のファイルの変化で読み直すため、そのときにはほかのファイルが
      揃っているようにするためです。
@@ -177,7 +185,7 @@ inode を使い続ける）、Windows では上書きも削除もできません
 
 | 使い方 | 消すもの | 使う場面 |
 | --- | --- | --- |
-| `vw-uninstall` | プラグインのフォルダ（`<CLI>/<name>.plugins-dir` の記録があればその場所）・その系列の CLI（`<CLI>/bin/` または `bin-dev/`）・その系列の待機の場所（`<CLI>/pending/<name>/`）・入れた場所の記録・リンクと PATH の項目 | 利用者がアンインストールする |
+| `vw-uninstall` | プラグインのフォルダ（`<CLI>/<name>.plugins-dir` の記録があれば、記録にある `<Plug-Ins>` の下の `<name>/`。無ければ既定の `<Plug-Ins>/<name>/`）・その系列の CLI（`<CLI>/bin/` または `bin-dev/`）・その系列の待機の場所（`<CLI>/pending/<name>/`）・入れた場所の記録・リンクと PATH の項目 | 利用者がアンインストールする |
 | `vw-uninstall --folder-only <フォルダ>` | 渡されたプラグインのフォルダだけ | インストーラの付け替えの後始末 |
 
 - **安全弁**: プラグインのフォルダは、フォルダ名が `<name>` と一致し、中に殻
