@@ -1,7 +1,7 @@
 # 元のプラグインから移すもの
 
 パスは元のリポジトリ（HEAD 6ffd221）のものです。**移したら名前空間を `VwCli` に、プラグイン名を
-`cli` / `cli_dev` に置き換えます。** 経緯の説明は写さず、決めごとだけを持ってきます（経緯は
+`cli` に置き換えます。** 経緯の説明は写さず、決めごとだけを持ってきます（経緯は
 元の `docs/` を指す）。
 
 ## そのまま移す（名前の置き換えだけ）
@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | `src/PluginPrefix.h` | 同じ | PCH |
 | `src/core/Json.{h,cpp}` | 同じ | |
-| `src/core/Bridge.{h,cpp}` | 同じ | `bridgeSpoolDir` を `PLUGIN_SPOOL` を使う形に。受け付けの手順は `core/Serve` へ（[ブリッジ](bridge.md)） |
+| `src/core/Bridge.{h,cpp}` | 同じ | `bridgeSpoolDir` を `<CLI>/spool` を求める形に。ロック（`lock`）を足す。受け付けの手順は `core/Serve` へ（[ブリッジ](bridge.md)） |
 | `src/Module-Info.plist.in` | 同じ | |
 | `scripts/vw-install.*` / `vw-uninstall.*` | 同じ | プラグイン名。PATH の扱い・Vectorworks が動いているときに止める確かめを足す（[インストール](install-and-update.md)） |
 | `scripts/fetch-vw-sdk.sh` / `clang-tidy-sdk.sh` / `tidy-cache-key.py` / `ci-common.sh` / `ci-wait.sh` / `ci-debug*.sh` / `lint.sh` | 同じ | `VW_REPO` |
@@ -22,11 +22,11 @@
 
 | 元 | 先 | 作り替え |
 | --- | --- | --- |
-| `src/Extensions/ExtMcpPalette.cpp` のタイマー部（`StartMcpBridgeClock` / `ClockTick` / `ServeOnce` / `RunShellAction`） | `src/Clock.{h,cpp}` | パレットを除く。本体の読み込みを除き、`core::serve` を直接呼ぶ。終了の依頼は `quit` だけで、`serve` から戻ってから行う（`SettleReport` の受け渡しは要らない）。**開発版だけでなく両方で**開始する |
+| `src/Extensions/ExtMcpPalette.cpp` のタイマー部（`StartMcpBridgeClock` / `ClockTick` / `ServeOnce` / `RunShellAction`） | `src/Clock.{h,cpp}` | パレットを除く。本体の読み込みを除き、`core::serve` を直接呼ぶ。終了の依頼は `quit` だけで、`serve` から戻ってから行う（`SettleReport` の受け渡しは要らない）。**常に**開始する（開発版の区別は無い） |
 | `src/draw/McpBridge.cpp` | `src/core/Serve.{h,cpp}`＋`src/tools/*` | 手順（SDK に依らない）と道具（SDK 依存）を分ける。道具の名前から `vw_` を外す。印の形を作法に合わせる |
 | `src/ModuleMain.cpp` | 同じ | 拡張機能を登録しない（[構成](architecture.md#拡張機能を登録しない)）。`StartClock()` を `#ifdef` なしで呼ぶ |
 | `src/BuildConfig.h` | 同じ | [識別子](identifiers.md) |
-| `resources/min-nano_structure{,Dev}.vwr` | `resources/cli{,_dev}.vwr` | `.vwstrings` は UTF-16LE（BOM 付き）・CRLF のまま。拡張機能を登録しないので鍵は最小限 |
+| `resources/min-nano_structure.vwr` | `resources/cli.vwr` | `.vwstrings` は UTF-16LE（BOM 付き）・CRLF のまま。拡張機能を登録しないので鍵は最小限 |
 | `CMakeLists.txt` | 同じ | IFC の部分・本体のターゲット・殻の ID（`VW_SHELL_INPUTS`）を除く。`VwCliCore` は `src/core/*` だけ |
 
 ## 移さないもの

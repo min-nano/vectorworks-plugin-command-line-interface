@@ -46,13 +46,12 @@ commands:
   tools                  呼べる道具の一覧を返す
   call <tool> [args]     道具を 1 つ呼ぶ（args は JSON オブジェクト。"-" で標準入力から）
   wait                   ブリッジが動き出す（--down なら Vectorworks が止まる）まで待つ
-  launch                 Vectorworks を起動する
+  launch                 Vectorworks を起動する（待たない。待つなら続けて wait）
   version                この CLI の版と、受け渡しの版を返す
 
 common options:
-  --channel <name>       相手のプラグインの系列 stable / dev（既定 VW2026_CHANNEL、無ければ stable）
-  --spool <dir>          スプールを直接指定する（既定 VW2026_SPOOL。探索しない）
-  --timeout <seconds>    待つ上限
+  --spool <dir>          スプールの場所（既定 VW2026_SPOOL、無ければ <CLI>/spool）
+  --timeout <seconds>    待つ上限（call / wait）
 `
 
 type env struct {
@@ -105,18 +104,19 @@ func run(args []string, e env) int {
 
 // common はどのコマンドにもある指定。
 type common struct {
-	channel string
 	spool   string
 	timeout float64
 }
 
+// newFlags は指定を用意する。defaultTimeout が 0 なら --timeout を持たない（launch・status）。
 func newFlags(name string, e env, defaultTimeout float64) (*flag.FlagSet, *common) {
 	c := &common{}
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(e.stderr)
-	fs.StringVar(&c.channel, "channel", e.getenv("VW2026_CHANNEL"), "plugin channel (stable / dev)")
 	fs.StringVar(&c.spool, "spool", e.getenv("VW2026_SPOOL"), "spool directory")
-	fs.Float64Var(&c.timeout, "timeout", envSeconds(e, "VW2026_TIMEOUT", defaultTimeout), "seconds")
+	if defaultTimeout > 0 {
+		fs.Float64Var(&c.timeout, "timeout", envSeconds(e, "VW2026_TIMEOUT", defaultTimeout), "seconds")
+	}
 	return fs, c
 }
 
@@ -128,17 +128,18 @@ func envSeconds(e env, name string, fallback float64) float64 {
 	return fallback
 }
 
-// valid は指定が正しいか。誤っていれば標準エラーへ理由を書いて false。
-func (c *common) valid(e env) bool {
-	if c.spool == "" && spool.SpoolName(c.channel) == "" {
-		fmt.Fprintf(e.stderr, "vw2026: unknown channel %q (stable / dev)\n", c.channel)
-		return false
+// open はスプールを決めて、ブリッジの状態を判定する。場所が決まらなければ標準エラーへ
+// 理由を書いて nil。
+func (c *common) open(e env) *spool.Bridge {
+	dir := c.spool
+	if dir == "" {
+		var err error
+		if dir, err = spool.DefaultDir(); err != nil {
+			fmt.Fprintf(e.stderr, "vw2026: %v (set VW2026_SPOOL)\n", err)
+			return nil
+		}
 	}
-	return true
-}
-
-func (c *common) candidates() []string {
-	return spool.Candidates(c.channel, c.spool)
+	return spool.Open(dir, e.now())
 }
 
 func seconds(value float64) time.Duration {
@@ -168,22 +169,22 @@ func cmdStatus(args []string, e env) int {
 	if _, err := parseInterspersed(fs, args); err != nil {
 		return exitUsage
 	}
-	if !c.valid(e) {
-		return exitUsage
-	}
-	bridge, searched, err := spool.Find(c.candidates(), e.now())
-	if err != nil {
-		_ = emit(e, map[string]any{"live": false, "state": spool.StateDown, "searched": searched})
-		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (is Vectorworks started with the plug-in?)")
-		return exitDown
+	bridge := c.open(e)
+	if bridge == nil {
+		return exitFailure
 	}
 	out := bridgeJSON(bridge)
-	if err := bridge.CheckProtocol(); err != nil {
+	protocolErr := bridge.CheckProtocol()
+	switch {
+	case bridge.State == spool.StateDown:
 		_ = emit(e, out)
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (is Vectorworks started with the plug-in?)")
+		return exitDown
+	case protocolErr != nil:
+		_ = emit(e, out)
+		fmt.Fprintf(e.stderr, "vw2026: %v\n", protocolErr)
 		return exitProtocol
-	}
-	if bridge.State == spool.StateUnresponsive {
+	case bridge.State == spool.StateUnresponsive:
 		_ = emit(e, out)
 		fmt.Fprintln(e.stderr, "vw2026: Vectorworks is running but the bridge is not responding (a dialog may be open)")
 		return exitUnresponsive
@@ -191,23 +192,28 @@ func cmdStatus(args []string, e env) int {
 	return emit(e, out)
 }
 
-// bridgeJSON は見つけたブリッジの出力（status / wait / launch で同じ形）。
+// bridgeJSON はブリッジの状態の出力（status / wait / launch で同じ形）。
 func bridgeJSON(bridge *spool.Bridge) map[string]any {
-	return map[string]any{
-		"live":   bridge.State == spool.StateLive,
-		"state":  bridge.State,
-		"spool":  bridge.Dir,
-		"status": bridge.Status.Raw,
+	out := map[string]any{
+		"live":  bridge.State == spool.StateLive,
+		"state": bridge.State,
+		"spool": bridge.Dir,
 	}
+	if bridge.State == spool.StateDown {
+		out["reason"] = bridge.Reason
+	} else if bridge.Status != nil {
+		out["status"] = bridge.Status.Raw
+	}
+	return out
 }
 
 // --- call / tools -----------------------------------------------------------
 
 func cmdCall(args []string, e env) int {
 	fs, c := newFlags("call", e, 30)
-	raw := fs.Bool("raw", false, "print the whole response (id/ok/result/error)")
+	raw := fs.Bool("raw", false, "print the whole response (ok/result/error)")
 	positional, err := parseInterspersed(fs, args)
-	if err != nil || !c.valid(e) {
+	if err != nil {
 		return exitUsage
 	}
 	if len(positional) == 0 || len(positional) > 2 {
@@ -234,8 +240,11 @@ func cmdCall(args []string, e env) int {
 		payload = json.RawMessage(strings.TrimSpace(text))
 	}
 
-	bridge, _, err := spool.Find(c.candidates(), e.now())
-	if err != nil {
+	bridge := c.open(e)
+	if bridge == nil {
+		return exitFailure
+	}
+	if bridge.State == spool.StateDown {
 		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (try `vw2026 status`)")
 		return exitDown
 	}
@@ -280,23 +289,23 @@ func cmdWait(args []string, e env) int {
 	if _, err := parseInterspersed(fs, args); err != nil {
 		return exitUsage
 	}
-	if !c.valid(e) {
-		return exitUsage
-	}
 	deadline := e.now().Add(seconds(c.timeout))
 	for {
-		// 動き出すのは StateLive になったとき、止まるのは StateDown になったとき（pid の
-		// プロセスが無くなったとき）。StateUnresponsive はどちらでもない（保存の確認の
-		// ダイアログを開いている間に「止まった」と誤らないように）。
-		bridge, _, err := spool.Find(c.candidates(), e.now())
-		if *down && err != nil {
-			return emit(e, map[string]any{"live": false, "state": spool.StateDown})
+		// 動き出すのは StateLive になったとき、止まるのは StateDown になったとき（ロックが
+		// 放されたとき）。StateUnresponsive はどちらでもない（保存の確認のダイアログを
+		// 開いている間に「止まった」と誤らないように）。
+		bridge := c.open(e)
+		if bridge == nil {
+			return exitFailure
 		}
-		if !*down && err == nil && bridge.State == spool.StateLive {
+		if *down && bridge.State == spool.StateDown {
+			return emit(e, bridgeJSON(bridge))
+		}
+		if !*down && bridge.State == spool.StateLive {
 			return emit(e, bridgeJSON(bridge))
 		}
 		if e.now().After(deadline) {
-			if err == nil && bridge.State == spool.StateUnresponsive {
+			if bridge.State == spool.StateUnresponsive {
 				fmt.Fprintln(e.stderr, "vw2026: timed out waiting (Vectorworks is running but the bridge is not responding)")
 			} else {
 				fmt.Fprintln(e.stderr, "vw2026: timed out waiting")
@@ -309,16 +318,18 @@ func cmdWait(args []string, e env) int {
 
 // --- launch -----------------------------------------------------------------
 
+// cmdLaunch は起動するだけで待たない。動き出すのを待つなら、呼ぶ側が続けて wait を呼ぶ。
 func cmdLaunch(args []string, e env) int {
 	fs, c := newFlags("launch", e, 0)
 	app := fs.String("app", e.getenv("VW2026_APP"), "application or executable to start")
 	if _, err := parseInterspersed(fs, args); err != nil {
 		return exitUsage
 	}
-	if !c.valid(e) {
-		return exitUsage
+	bridge := c.open(e)
+	if bridge == nil {
+		return exitFailure
 	}
-	if bridge, _, err := spool.Find(c.candidates(), e.now()); err == nil {
+	if bridge.State != spool.StateDown {
 		out := bridgeJSON(bridge)
 		out["launched"] = false
 		if bridge.State == spool.StateUnresponsive {
@@ -342,11 +353,7 @@ func cmdLaunch(args []string, e env) int {
 		fmt.Fprintf(e.stderr, "vw2026: launch: %v\n", err)
 		return exitFailure
 	}
-	if c.timeout <= 0 {
-		return emit(e, map[string]any{"launched": true, "command": argv})
-	}
-	// 起動を見届ける（--timeout 秒まで）。
-	return cmdWait([]string{"--timeout", fmt.Sprint(c.timeout), "--channel", c.channel, "--spool", c.spool}, e)
+	return emit(e, map[string]any{"launched": true, "command": argv})
 }
 
 // --- 出力 -------------------------------------------------------------------

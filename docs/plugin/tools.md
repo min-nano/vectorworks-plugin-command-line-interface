@@ -13,30 +13,29 @@
 | `classes` | read | `vw_classes` | なし | `{"classes":[名前…],"count"}` |
 | `layer_objects` | read | `vw_layer_objects` | `layer`（必須）・`limit`（既定 50）・`offset`・`type` | `{"layer","objects":[{"index","type","type_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}` |
 | `object_counts` | read | `vw_object_counts` | `layer`（省略＝図面全体） | `{"layer"?,"types":[{"type","type_name","count"}],"total"}`（種別番号の昇順） |
-| `quit` | app | `vw_restart` | `restart`（既定 false） | `{"quitting":true,"restart":…}` |
+| `quit` | app | `vw_restart` | なし | `{"quitting":true}` |
 
 ## `ping`
 
 ```json
-{"plugin":"cli","channel":"stable","version":"abc1234","branch":"main","protocol":1,
- "document_open":true,"current_layer":"1F"}
+{"version":"abc1234","branch":"main","protocol":1,"document_open":true,"current_layer":"1F"}
 ```
 
 `document_open` は `gSDK->GetCurrentLayer()` が取れるかで判定します（元と同じ）。
 
 ## `quit`
 
-応答を書いてから、受け付けの外で `gSDK->CloseAllFilesAndQuitVectorworks(true, restart)` を頼みます
+応答を書いてから、受け付けの外で `gSDK->CloseAllFilesAndQuitVectorworks(true, false)` を頼みます
 （[構成「受け付けの流れ」](architecture.md#受け付けの流れ)）。
 
 - **保存の確認は必ず出します**（第 1 引数は常に真。**利用者の図面を保存せずに閉じる手段は持たない**）。
   利用者が取り消せば Vectorworks は終わりません。
-- `restart` が真なら Vectorworks 自身が起動し直します。**更新の前の終了には使いません**
-  （更新は Vectorworks が動いていない間にしか入らない）。更新するときは `restart` を偽にして
-  終了させ、`vw2026 update` のあとで `vw2026 launch` を呼びます（[更新](install-and-update.md#流れ)）。
-- 終了・再起動を見届けるのは呼ぶ側の役割です（`vw2026 wait --down` → `vw2026 wait`）。
+- **再起動の手段は持ちません**（第 2 引数は常に偽）。起動し直すのは呼ぶ側で、
+  `vw2026 call quit && vw2026 wait --down && vw2026 launch && vw2026 wait` と組み合わせます。
+  更新もこの間に `vw2026 update` を挟むだけです（[更新](install-and-update.md#流れ)）。
+- 終了を見届けるのは呼ぶ側の役割です（`vw2026 wait --down`）。
   保存の確認を開いている間は受け付けが見送られ、ブリッジは `unresponsive` になりますが、
-  `wait --down` は `pid` のプロセスが無くなるまで「止まった」と判定しません
+  `wait --down` は Vectorworks が終わってロックが放されるまで「止まった」と判定しません
   （[作法「生存の判定」](../protocol.md#生存の判定)）。利用者が取り消せば `wait --down` は
   `--timeout` を過ぎて終了コード 4 で終わり、ブリッジは `live` に戻ります。
 

@@ -26,16 +26,17 @@ OS タイマー
   ├─ undo の記録が開いている（IsCurrentlyBuildingAnUndoEvent）→ 見送る
   ├─ 受け付けの入れ子（受け付け中にまた呼ばれた）→ 見送る
   └─ core::serve（受け付け 1 回）
-        ├─ 別の pid の印が down でない → 待機（取り出さない・印を書かない）
-        ├─ 要求を名前の昇順で rename で確保して取り出す（1 回 16 件まで。失敗は飛ばす）
+        ├─ ロックを掴んでいない → 取ってみる。取れなければ何もしない（次の回に取り直す）
+        │                         取れたら前の回の残骸を消す
+        ├─ 要求を名前の昇順で読んで消す（1 回 16 件まで。読めない・消せないものは飛ばす）
         ├─ 道具を実行して応答を書く（quit も応答を書いてから、終了の依頼を返す）
         └─ 生存の印を 2 秒ごとに書き直す
      quit が頼まれていたら CloseAllFilesAndQuitVectorworks
 ```
 
 - **SDK 呼び出しはメインスレッドからだけ**行います。受け付け用のスレッドは持ちません。
-- **受け付けの中にループを書きません**（図面が操作できなくなる）。長く走る道具は、走る前に
-  生存の印へ `busy` / `busy_id` / `busy_until` を書きます。
+- **受け付けの中にループを書きません**（図面が操作できなくなる）。長く走る道具は持ちません
+  （[作法「予約された道具」](../protocol.md#予約された道具)）。
 - **終了の依頼は受け付けの外で行います。** `CloseAllFilesAndQuitVectorworks` は保存の確認を
   出すので、応答を書き終え、受け付けから戻ってからタイマーが呼びます（[道具「quit」](tools.md#quit)）。
 - タイマーの実装は元:`src/Extensions/ExtMcpPalette.cpp` の `StartMcpBridgeClock` / `ClockTick` /
@@ -52,7 +53,7 @@ Vectorworks の処理の妨げにならないよう、次のときはその回�
 | 見送る条件 | 理由 |
 | --- | --- |
 | undo の記録が開いている（`gSDK->IsCurrentlyBuildingAnUndoEvent()`） | その間の書き込みは開いている記録へ混ざる。VW のモーダルダイアログの最中はここに当たる（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 6・7） |
-| 受け付けの入れ子 | 受け付けのコードがスタックに載っている（長く走る道具の最中など） |
+| 受け付けの入れ子 | 受け付けのコードがスタックに載っている（道具の中から Vectorworks がイベントを回したときなど） |
 | 開始から 10 秒以内 | Vectorworks の起動処理と重ねない |
 
 - 何も要求が無いときの 1 回の費用は、スプールの一覧を読むことと、2 秒に 1 回の生存の印の
@@ -62,8 +63,8 @@ Vectorworks の処理の妨げにならないよう、次のときはその回�
   **Windows の `SetTimer` はモーダルの最中も刻む**ので、上の undo の条件が見送りを担います。
 - 見送った要求は消さずに残るので、次に受け付けたときに処理されます（呼ぶ側の待ち時間の内なら
   応答が届く。過ぎれば呼ぶ側が取り下げる）。
-- 見送りの間は生存の印も書き直されません。15 秒を超えると印は古びますが、呼ぶ側は `pid` の
-  プロセスが動いていれば「応えない（`unresponsive`）」と判定し、「止まっている」とは誤りません
+- 見送りの間は生存の印も書き直されません。15 秒を超えると印は古びますが、ロックは掴んだままなので、
+  呼ぶ側は「応えない（`unresponsive`）」と判定し、「止まっている」とは誤りません
   （[作法「生存の判定」](../protocol.md#生存の判定)）。
 
 ## 拡張機能を登録しない
@@ -89,7 +90,7 @@ src/
 ├─ core/                                   … SDK に依らない（Json・Bridge・Serve）。プラグインとテストがリンク
 └─ tools/                                  … 道具の表（ToolTable.cpp）と中身（SDK 依存）
 scripts/                                   … vw-install / vw-uninstall（.sh / .ps1）
-resources/                                 … cli.vwr / cli_dev.vwr（拡張機能を登録しないので最小限）
+resources/                                 … cli.vwr（拡張機能を登録しないので最小限）
 tests/                                     … 無 SDK の単体テスト・スクリプトのテスト
 protocol/fixtures/                         … 作法の見本（C++ と Go の両方のテストが読む）
 cli/                                       … vw2026（Go）。更新（update）もここ
@@ -98,4 +99,5 @@ cli/                                       … vw2026（Go）。更新（update�
 - 名前空間は `VwCli`（`VwCli::core` / `VwCli::tools`）。図面にも配布物にも現れない内部の綴りで、
   改名しても据え置きます。
 - 元の `draw/` に当たるものは `tools/` にします（このプラグインは描画しない）。
-- スプールの場所と持ち主・権限の確かめは `core/Bridge` が持ちます。
+- スプールの場所・持ち主と権限の確かめ・ロックは `core/Bridge` が持ちます（ロックは OS の
+  呼び出しだけで SDK に依らない）。

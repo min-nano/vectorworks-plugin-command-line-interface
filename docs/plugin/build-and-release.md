@@ -7,17 +7,17 @@
 | 項目 | 内容 |
 | --- | --- |
 | プロジェクト | `project(VwCli CXX)`（Apple では OBJCXX も） |
-| 選択肢 | `VW_BUILD_PLUGIN`（ON）・`VW_BUILD_TESTS`（OFF）・`VW_ENABLE_SANITIZERS`・`VW_ENABLE_COVERAGE`・`VW_ENABLE_PCH`（ON）・`VW_BUILD_CHANNEL`（`stable` / `dev` / `both`。既定 `both`） |
+| 選択肢 | `VW_BUILD_PLUGIN`（ON）・`VW_BUILD_TESTS`（OFF）・`VW_ENABLE_SANITIZERS`・`VW_ENABLE_COVERAGE`・`VW_ENABLE_PCH`（ON） |
 | SDK | `VW_SDK_DIR`（`SDKLib` を含む）。mac は `libVWSDK.a`＋VWMM・`BuildVWR`、Windows は x64 だけ（`VWSDK.lib`・`VWMM.lib`・`buildvwr.exe`） |
 | 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。プラグインとテストがリンク） |
 | プラグイン | `add_library(<target> MODULE)`。`VW_PLUGIN_SOURCES`（`src/*.cpp`・`src/tools/*`） |
 | 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH` |
-| mac | `Module-Info.plist.in`（`VWBuildChannel` / `VWBuildBranch` / `VWBuildCommit`）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr` |
+| mac | `Module-Info.plist.in`（`VWBuildBranch` / `VWBuildCommit`）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr` |
 | Windows | `.vlb`・隣に `<name>.commit` / `.branch` と `.vwr` |
-| 系列 | `add_vw_plugin(VwCli "cli" io.github.min-nano.cli stable)` / `add_vw_plugin(VwCliDev "cli_dev" io.github.min-nano.cli-dev dev DEV)` |
+| ターゲット | `add_vw_plugin(VwCli "cli" io.github.min-nano.cli)` の 1 つだけ（安定版と開発版を区別しない） |
 
 `add_vw_plugin` は元の関数（元:`CMakeLists.txt` L565-756）から、本体のターゲット・殻の ID・
-同梱スクリプトを除いて使います。
+同梱スクリプト・系列（`VW_DEV_BUILD`）の切り替えを除いて使います。
 
 ## CI
 
@@ -54,7 +54,7 @@ cli.vwlibrary.zip                       cli.vlb.zip
                                            └─ vw-uninstall.ps1
 ```
 
-`build.json`（`{"plugin","channel","version","branch"}`）は CI が書きます。
+`build.json`（`{"version","branch"}`）は CI が書きます。
 `vw2026 update` が「何が入っているか」を判定するのに使います
 （[更新](install-and-update.md#流れ)）。
 
@@ -62,12 +62,13 @@ cli.vwlibrary.zip                       cli.vlb.zip
 
 元と同じ形に保ちます（`vw2026 update` が読む）。
 
-- 安定版: main への push で転がりタグ `stable` を作り直す。タイトル `Stable (<sha>)`・`--latest`。
-- 開発版: 同じリポジトリの PR で `dev-<slug>`（ブランチ名の `/:@ ` を `-` にし、ほかの文字を
-  落とす）。タイトル **`Dev: <branch> (<sha>)`**・`--prerelease`。
-- 本文に `channel=` / `branch=` / `commit=` / `built=` を載せる（`vw2026 update --branch` が `branch=` を読む）。
-- 資産: `cli.vwlibrary.zip` / `cli.vlb.zip` / `vw-install.{sh,ps1}` / `vw-uninstall.{sh,ps1}`
-  （開発版は `cli_dev.*`）。
+- main: main への push で転がりタグ `stable` を作り直す。タイトル `Stable (<sha>)`・`--latest`。
+- PR: 同じリポジトリの PR で、**変更後のコードでビルドしたもの**を `dev-<slug>`（ブランチ名の
+  `/:@ ` を `-` にし、ほかの文字を落とす）にプレリリースする。タイトル **`Dev: <branch> (<sha>)`**・
+  `--prerelease`。中身は main のものと**同じ名前のプラグイン**で、入れると入れ替わる
+  （`vw2026 update --branch <branch>`）。戻すときは `vw2026 update`（main の最新）。
+- 本文に `branch=` / `commit=` / `built=` を載せる（`vw2026 update --branch` が `branch=` を読む）。
+- 資産: `cli.vwlibrary.zip` / `cli.vlb.zip` / `vw-install.{sh,ps1}` / `vw-uninstall.{sh,ps1}`。
 - **CLI 単体の資産**（`vw2026-darwin-universal` / `vw2026-windows-amd64.exe`）も添えます。
   呼ぶ側のプログラムの開発やテストで CLI だけを取りたいときのためです（CLI はスプールが
   ローカルにあるときだけ働くので、プラグインの代わりにはならない）。

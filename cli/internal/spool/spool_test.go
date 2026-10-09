@@ -1,28 +1,32 @@
-package spool
+package spool_test
 
 import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
+	. "github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-func echo(id, tool string, args map[string]any) Response {
+func echo(tool string, args json.RawMessage) Response {
 	result, _ := json.Marshal(map[string]any{"tool": tool, "args": args})
 	return Response{OK: true, Result: result}
 }
 
+const stale = (StaleSeconds + 5) * time.Second
+
 func TestCallRoundTrip(t *testing.T) {
-	dir := newSpoolDir(t)
-	startFake(t, dir, echo)
-	bridge, _, err := Find([]string{dir}, time.Now())
-	if err != nil {
-		t.Fatal(err)
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.Start(t, dir, echo)
+	bridge := Open(dir, time.Now())
+	if bridge.State != StateLive {
+		t.Fatalf("want live, got %+v", bridge)
 	}
 	response, err := bridge.Call("layers", json.RawMessage(`{"include_sheets":false}`), 5*time.Second)
 	if err != nil {
@@ -45,32 +49,10 @@ func TestCallRoundTrip(t *testing.T) {
 	assertNoFiles(t, dir, ResponseSuffix)
 }
 
-// 2 つの橋が同じスプールを見ても（Windows で Vectorworks を 2 つ起動したとき）、要求は
-// どちらか一方だけが確保して応え、偽の失敗が先に届かないことを確かめる。
-func TestTwoBridgesDoNotAnswerWithFalseFailure(t *testing.T) {
-	dir := newSpoolDir(t)
-	startFake(t, dir, echo)
-	startFake(t, dir, echo)
-	bridge, _, err := Find([]string{dir}, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 50; i++ {
-		response, err := bridge.Call("ping", nil, 5*time.Second)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !response.OK {
-			t.Fatalf("call %d: false failure: %s", i, response.Error)
-		}
-	}
-}
-
 func TestCallEmptyArgsBecomesObject(t *testing.T) {
-	dir := newSpoolDir(t)
-	startFake(t, dir, echo)
-	bridge, _, _ := Find([]string{dir}, time.Now())
-	response, err := bridge.Call("ping", nil, 5*time.Second)
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.Start(t, dir, echo)
+	response, err := Open(dir, time.Now()).Call("ping", nil, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,12 +62,11 @@ func TestCallEmptyArgsBecomesObject(t *testing.T) {
 }
 
 func TestCallToolFailure(t *testing.T) {
-	dir := newSpoolDir(t)
-	startFake(t, dir, func(id, tool string, args map[string]any) Response {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) Response {
 		return Response{OK: false, Error: "unknown tool: " + tool}
 	})
-	bridge, _, _ := Find([]string{dir}, time.Now())
-	response, err := bridge.Call("nope", nil, 5*time.Second)
+	response, err := Open(dir, time.Now()).Call("nope", nil, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,78 +76,21 @@ func TestCallToolFailure(t *testing.T) {
 }
 
 func TestCallTimeoutWithdrawsRequest(t *testing.T) {
-	dir := newSpoolDir(t)
-	writeStatus(t, dir, liveStatus(nil)) // 印はあるが誰も応えない
-	bridge, _, err := Find([]string{dir}, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = bridge.Call("ping", nil, 200*time.Millisecond)
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	fakeplugin.WriteStatus(t, dir, 0, nil) // 印は新しいが誰も応えない
+	_, err := Open(dir, time.Now()).Call("ping", nil, 200*time.Millisecond)
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("want ErrTimeout, got %v", err)
 	}
 	assertNoFiles(t, dir, RequestSuffix)
 }
 
-func TestCallWaitsWhileBusyWithThisRequest(t *testing.T) {
-	dir := newSpoolDir(t)
-	writeStatus(t, dir, liveStatus(nil))
-	bridge, _, _ := Find([]string{dir}, time.Now())
-
-	// 長く走る道具を真似る: 要求を取り出したら busy_id を書き、締切を過ぎてから応答する。
-	go func() {
-		var id string
-		for id == "" {
-			entries, _ := os.ReadDir(dir)
-			for _, entry := range entries {
-				if strings.HasSuffix(entry.Name(), RequestSuffix) {
-					id = strings.TrimSuffix(entry.Name(), RequestSuffix)
-					_ = os.Remove(filepath.Join(dir, entry.Name()))
-				}
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
-		writeStatus(t, dir, liveStatus(map[string]any{
-			"busy": "long", "busy_id": id, "busy_until": float64(time.Now().Add(5 * time.Second).Unix()),
-		}))
-		time.Sleep(600 * time.Millisecond)
-		out, _ := json.Marshal(Response{ID: id, OK: true, Result: json.RawMessage(`{"done":true}`)})
-		_ = os.WriteFile(filepath.Join(dir, id+ResponseSuffix), out, 0o600)
-	}()
-
-	response, err := bridge.Call("long", nil, 200*time.Millisecond)
-	if err != nil {
-		t.Fatalf("should keep waiting while busy with this request: %v", err)
-	}
-	if string(response.Result) != `{"done":true}` {
-		t.Fatalf("unexpected result: %s", response.Result)
-	}
-}
-
-func TestCallBusyWithAnotherRequestDoesNotExtend(t *testing.T) {
-	dir := newSpoolDir(t)
-	writeStatus(t, dir, liveStatus(map[string]any{
-		"busy": "long", "busy_id": "someone-else", "busy_until": float64(time.Now().Add(5 * time.Second).Unix()),
-	}))
-	bridge, _, _ := Find([]string{dir}, time.Now())
-	start := time.Now()
-	_, err := bridge.Call("ping", nil, 200*time.Millisecond)
-	if !errors.Is(err, ErrTimeout) {
-		t.Fatalf("want ErrTimeout, got %v", err)
-	}
-	if time.Since(start) > 2*time.Second {
-		t.Fatal("waited for another request's busy_until")
-	}
-}
-
 func TestProtocolMismatch(t *testing.T) {
-	dir := newSpoolDir(t)
-	writeStatus(t, dir, liveStatus(map[string]any{"protocol": ProtocolVersion + 1}))
-	bridge, _, err := Find([]string{dir}, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = bridge.Call("ping", nil, time.Second)
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	fakeplugin.WriteStatus(t, dir, 0, map[string]any{"protocol": ProtocolVersion + 1})
+	_, err := Open(dir, time.Now()).Call("ping", nil, time.Second)
 	var protocol *ProtocolError
 	if !errors.As(err, &protocol) {
 		t.Fatalf("want ProtocolError, got %v", err)
@@ -174,63 +98,60 @@ func TestProtocolMismatch(t *testing.T) {
 	assertNoFiles(t, dir, RequestSuffix)
 }
 
-// fakeProcess は印の pid のプロセスが動いているかを差し替える。
-func fakeProcess(t *testing.T, running bool) {
-	t.Helper()
-	saved := ProcessRunning
-	ProcessRunning = func(int) bool { return running }
-	t.Cleanup(func() { ProcessRunning = saved })
-}
-
-func staleStatus() map[string]any {
-	return liveStatus(map[string]any{"beat": float64(time.Now().Unix() - StaleSeconds - 5)})
-}
-
-func TestStaleStatusWithoutProcessIsDown(t *testing.T) {
-	fakeProcess(t, false)
-	dir := newSpoolDir(t)
-	writeStatus(t, dir, staleStatus())
-	if _, _, err := Find([]string{dir}, time.Now()); !errors.Is(err, ErrNotRunning) {
-		t.Fatalf("stale status without the process should be down: %v", err)
+// 印が新しくても、ロックが掴まれていなければ（異常終了で残った印）止まっている。
+func TestStatusWithoutLockIsDown(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.WriteStatus(t, dir, 0, nil)
+	if bridge := Open(dir, time.Now()); bridge.State != StateDown || bridge.Reason != "not running" {
+		t.Fatalf("want down, got %+v", bridge)
 	}
 }
 
-func TestStaleStatusWithProcessIsUnresponsive(t *testing.T) {
-	fakeProcess(t, true)
-	dir := newSpoolDir(t)
-	writeStatus(t, dir, staleStatus())
-	bridge, _, err := Find([]string{dir}, time.Now())
-	if err != nil || bridge.State != StateUnresponsive {
-		t.Fatalf("want unresponsive, got %+v %v", bridge, err)
+func TestReleasedLockIsDown(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	release := fakeplugin.HoldLock(t, dir)
+	fakeplugin.WriteStatus(t, dir, 0, nil)
+	if state := Open(dir, time.Now()).State; state != StateLive {
+		t.Fatalf("want live, got %s", state)
+	}
+	release()
+	if state := Open(dir, time.Now()).State; state != StateDown {
+		t.Fatalf("want down after release, got %s", state)
 	}
 }
 
-func TestFindPrefersLiveOverUnresponsive(t *testing.T) {
-	fakeProcess(t, true)
-	stale := newSpoolDir(t)
-	writeStatus(t, stale, staleStatus())
-	live := newSpoolDir(t)
-	writeStatus(t, live, liveStatus(nil))
-	bridge, searched, err := Find([]string{stale, live}, time.Now())
-	if err != nil || bridge.Dir != live || bridge.State != StateLive {
-		t.Fatalf("want live, got %+v %v", bridge, err)
+func TestStaleStatusWithLockIsUnresponsive(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	fakeplugin.WriteStatus(t, dir, stale, nil)
+	if state := Open(dir, time.Now()).State; state != StateUnresponsive {
+		t.Fatalf("want unresponsive, got %s", state)
 	}
-	if len(searched) != 1 || searched[0].Reason != "unresponsive" {
-		t.Fatalf("unexpected searched: %+v", searched)
+}
+
+// ロックを取ってから印を書くまでの間も、動いている（止まったと誤らない）。
+func TestLockWithoutStatusIsUnresponsive(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	bridge := Open(dir, time.Now())
+	if bridge.State != StateUnresponsive || bridge.Status != nil {
+		t.Fatalf("want unresponsive without status, got %+v", bridge)
+	}
+	if err := bridge.CheckProtocol(); err != nil {
+		t.Fatalf("unknown protocol should pass: %v", err)
 	}
 }
 
 func TestCallWhileUnresponsiveIsServedWhenItRecovers(t *testing.T) {
-	fakeProcess(t, true)
-	dir := newSpoolDir(t)
-	writeStatus(t, dir, staleStatus())
-	bridge, _, _ := Find([]string{dir}, time.Now())
-	// ダイアログが閉じて受け付けが戻るのを真似る: しばらくしてから応える。
+	dir := fakeplugin.NewDir(t)
+	release := fakeplugin.HoldLock(t, dir)
+	fakeplugin.WriteStatus(t, dir, stale, nil)
+	bridge := Open(dir, time.Now())
+	// ダイアログが閉じて受け付けが戻るのを真似る: 要求を置いたあとで応え始める。
 	go func() {
 		time.Sleep(300 * time.Millisecond)
-		startFake(t, dir, func(id, tool string, args map[string]any) Response {
-			return Response{OK: true, Result: json.RawMessage(`{}`)}
-		})
+		release()
+		fakeplugin.Start(t, dir, echo)
 	}()
 	response, err := bridge.Call("ping", nil, 5*time.Second)
 	if err != nil || !response.OK {
@@ -239,71 +160,53 @@ func TestCallWhileUnresponsiveIsServedWhenItRecovers(t *testing.T) {
 }
 
 func TestCallTimeoutWhileUnresponsive(t *testing.T) {
-	fakeProcess(t, true)
-	dir := newSpoolDir(t)
-	writeStatus(t, dir, staleStatus())
-	bridge, _, _ := Find([]string{dir}, time.Now())
-	_, err := bridge.Call("ping", nil, 200*time.Millisecond)
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	fakeplugin.WriteStatus(t, dir, stale, nil)
+	_, err := Open(dir, time.Now()).Call("ping", nil, 200*time.Millisecond)
 	if !errors.Is(err, ErrUnresponsive) {
 		t.Fatalf("want ErrUnresponsive, got %v", err)
 	}
 	assertNoFiles(t, dir, RequestSuffix)
 }
 
-func TestProcessRunning(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("relies on ps")
-	}
-	if _, exists := processImage(os.Getpid()); !exists {
-		t.Fatal("own process should exist")
-	}
-	// テストの実行ファイルは Vectorworks ではない（pid の再利用を見分ける）。
-	if vectorworksRunning(os.Getpid()) {
-		t.Fatal("test binary should not be taken for Vectorworks")
-	}
-	cmd := exec.Command("true")
-	if err := cmd.Run(); err != nil {
-		t.Skip(err)
-	}
-	if _, exists := processImage(cmd.Process.Pid); exists {
-		t.Fatal("finished process should not exist")
+func TestCallTimeoutWhenStopped(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	release := fakeplugin.HoldLock(t, dir)
+	fakeplugin.WriteStatus(t, dir, 0, nil)
+	bridge := Open(dir, time.Now())
+	release()
+	_, err := bridge.Call("ping", nil, 200*time.Millisecond)
+	if !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("want ErrNotRunning, got %v", err)
 	}
 }
 
-func TestStaleButBusyIsLive(t *testing.T) {
-	dir := newSpoolDir(t)
-	writeStatus(t, dir, liveStatus(map[string]any{
-		"beat":       float64(time.Now().Unix() - 120),
-		"busy":       "long",
-		"busy_until": float64(time.Now().Unix() + 60),
-	}))
-	if _, _, err := Find([]string{dir}, time.Now()); err != nil {
-		t.Fatalf("busy status should be live: %v", err)
-	}
-}
-
-func TestFindSkipsUnsafeAndPicksFirstLive(t *testing.T) {
+func TestUnsafeDirIsDown(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permission bits are not checked on Windows")
 	}
-	unsafe := newSpoolDir(t)
-	writeStatus(t, unsafe, liveStatus(nil))
-	if err := os.Chmod(unsafe, 0o777); err != nil {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	fakeplugin.WriteStatus(t, dir, 0, nil)
+	if err := os.Chmod(dir, 0o777); err != nil {
 		t.Fatal(err)
 	}
-	missing := filepath.Join(t.TempDir(), "missing")
-	good := newSpoolDir(t)
-	writeStatus(t, good, liveStatus(nil))
+	if bridge := Open(dir, time.Now()); bridge.State != StateDown || bridge.Reason != "writable by others" {
+		t.Fatalf("want down, got %+v", bridge)
+	}
+	if bridge := Open(filepath.Join(t.TempDir(), "missing"), time.Now()); bridge.Reason != "not found" {
+		t.Fatalf("want not found, got %+v", bridge)
+	}
+}
 
-	bridge, searched, err := Find([]string{missing, unsafe, good}, time.Now())
+func TestDefaultDir(t *testing.T) {
+	dir, err := DefaultDir()
 	if err != nil {
-		t.Fatal(err)
+		t.Skip(err)
 	}
-	if bridge.Dir != good {
-		t.Fatalf("picked %s", bridge.Dir)
-	}
-	if len(searched) != 2 || searched[0].Reason != "not found" || searched[1].Reason != "writable by others" {
-		t.Fatalf("unexpected searched: %+v", searched)
+	if filepath.Base(dir) != SpoolDirName || filepath.Base(filepath.Dir(dir)) != AppDirName {
+		t.Fatalf("unexpected spool dir: %s", dir)
 	}
 }
 
@@ -327,33 +230,6 @@ func TestValidID(t *testing.T) {
 	}
 	if !ValidID("0001-abc_DEF") {
 		t.Error("expected valid")
-	}
-}
-
-func TestCandidatesOverride(t *testing.T) {
-	got := Candidates("stable", "/somewhere")
-	if len(got) != 1 || got[0] != "/somewhere" {
-		t.Fatalf("override should be the only candidate: %v", got)
-	}
-}
-
-func TestCandidatesUsesTempDirAndPluginName(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("TMPDIR", root)
-	t.Setenv("TMP", root)
-	t.Setenv("TEMP", root)
-	if runtime.GOOS == "darwin" {
-		return // 利用者ごとの一時ディレクトリが先頭に来る
-	}
-	for channel, name := range map[string]string{"": StableSpoolName, "stable": StableSpoolName, "dev": DevSpoolName} {
-		got := Candidates(channel, "")
-		want := filepath.Join(root, name)
-		if len(got) != 1 || got[0] != want {
-			t.Fatalf("%q: got %v, want [%s]", channel, got, want)
-		}
-	}
-	if got := Candidates("nightly", ""); len(got) != 0 {
-		t.Fatalf("unknown channel should have no candidates: %v", got)
 	}
 }
 

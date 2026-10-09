@@ -9,57 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
-
-// startBridge はスプールを用意し、要求に handle で応える偽のプラグインを走らせる。
-func startBridge(t *testing.T, handle func(tool string, args json.RawMessage) spool.Response) string {
-	t.Helper()
-	dir := filepath.Join(t.TempDir(), "p-bridge")
-	if err := os.Mkdir(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	status, _ := json.Marshal(map[string]any{
-		"plugin": "p", "version": "0", "protocol": spool.ProtocolVersion,
-		"beat": time.Now().Unix(), "pid": 1,
-	})
-	if err := os.WriteFile(filepath.Join(dir, spool.StatusFile), status, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	stop := make(chan struct{})
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for {
-			select {
-			case <-stop:
-				return
-			case <-time.After(10 * time.Millisecond):
-			}
-			entries, _ := os.ReadDir(dir)
-			for _, entry := range entries {
-				name := entry.Name()
-				if !strings.HasSuffix(name, spool.RequestSuffix) {
-					continue
-				}
-				data, _ := os.ReadFile(filepath.Join(dir, name))
-				_ = os.Remove(filepath.Join(dir, name))
-				var request struct {
-					ID   string          `json:"id"`
-					Tool string          `json:"tool"`
-					Args json.RawMessage `json:"args"`
-				}
-				_ = json.Unmarshal(data, &request)
-				response := handle(request.Tool, request.Args)
-				response.ID = request.ID
-				out, _ := json.Marshal(response)
-				_ = os.WriteFile(filepath.Join(dir, request.ID+spool.ResponseSuffix), out, 0o600)
-			}
-		}
-	}()
-	t.Cleanup(func() { close(stop); <-done })
-	return dir
-}
 
 type result struct {
 	code   int
@@ -87,26 +39,28 @@ func invoke(t *testing.T, vars map[string]string, stdin string, started *[]strin
 }
 
 func echoBridge(t *testing.T) string {
-	return startBridge(t, func(tool string, args json.RawMessage) spool.Response {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) spool.Response {
 		if tool == "fail" {
 			return spool.Response{OK: false, Error: "boom"}
 		}
 		out, _ := json.Marshal(map[string]any{"tool": tool, "args": args})
 		return spool.Response{OK: true, Result: out}
 	})
+	return dir
 }
 
 func TestStatusLive(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"live":true`) || !strings.Contains(r.stdout, `"plugin":"p"`) {
+	if r.code != exitOK || !strings.Contains(r.stdout, `"live":true`) || !strings.Contains(r.stdout, `"branch":"main"`) {
 		t.Fatalf("%+v", r)
 	}
 }
 
 func TestStatusDown(t *testing.T) {
 	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "status")
-	if r.code != exitDown || !strings.Contains(r.stdout, `"live":false`) {
+	if r.code != exitDown || !strings.Contains(r.stdout, `"live":false`) || !strings.Contains(r.stdout, `"reason":"not found"`) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -195,13 +149,6 @@ func TestWaitTimesOut(t *testing.T) {
 	}
 }
 
-func TestUnknownChannel(t *testing.T) {
-	r := invoke(t, map[string]string{"VW2026_CHANNEL": "nightly"}, "", nil, "status")
-	if r.code != exitUsage || !strings.Contains(r.stderr, "unknown channel") {
-		t.Fatalf("%+v", r)
-	}
-}
-
 func TestVersion(t *testing.T) {
 	r := invoke(t, nil, "", nil, "version")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":1`) {
@@ -209,26 +156,14 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-// unresponsiveSpool は、印が古いが pid の Vectorworks は動いているスプールを作る
-// （保存の確認のダイアログを開いている間など）。running を偽にすると終了を真似る。
-func unresponsiveSpool(t *testing.T) (string, *bool) {
+// unresponsiveSpool は、Vectorworks は動いている（ロックが掴まれている）が印が古いスプールを
+// 作る（保存の確認のダイアログを開いている間など）。返す関数で終了を真似る。
+func unresponsiveSpool(t *testing.T) (string, func()) {
 	t.Helper()
-	running := true
-	saved := spool.ProcessRunning
-	spool.ProcessRunning = func(int) bool { return running }
-	t.Cleanup(func() { spool.ProcessRunning = saved })
-	dir := filepath.Join(t.TempDir(), "p-bridge")
-	if err := os.Mkdir(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	status, _ := json.Marshal(map[string]any{
-		"plugin": "p", "version": "0", "protocol": spool.ProtocolVersion,
-		"beat": time.Now().Unix() - spool.StaleSeconds - 5, "pid": 4242,
-	})
-	if err := os.WriteFile(filepath.Join(dir, spool.StatusFile), status, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return dir, &running
+	dir := fakeplugin.NewDir(t)
+	release := fakeplugin.HoldLock(t, dir)
+	fakeplugin.WriteStatus(t, dir, (spool.StaleSeconds+5)*time.Second, nil)
+	return dir, release
 }
 
 func TestStatusUnresponsive(t *testing.T) {
@@ -248,12 +183,12 @@ func TestCallWhileUnresponsiveTimesOutAsUnresponsive(t *testing.T) {
 }
 
 func TestWaitDownWaitsForTheProcess(t *testing.T) {
-	dir, running := unresponsiveSpool(t)
+	dir, quit := unresponsiveSpool(t)
 	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "wait", "--down", "--timeout", "0.3")
 	if r.code != exitTimeout {
 		t.Fatalf("unresponsive must not count as down: %+v", r)
 	}
-	*running = false
+	quit()
 	r = invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "wait", "--down", "--timeout", "0.3")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"state":"down"`) {
 		t.Fatalf("%+v", r)
@@ -266,5 +201,12 @@ func TestLaunchSkipsWhenUnresponsive(t *testing.T) {
 	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", &started, "launch")
 	if r.code != exitUnresponsive || started != nil || !strings.Contains(r.stdout, `"launched":false`) {
 		t.Fatalf("%+v %v", r, started)
+	}
+}
+
+func TestLaunchDoesNotTakeTimeout(t *testing.T) {
+	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "launch", "--timeout", "5")
+	if r.code != exitUsage {
+		t.Fatalf("%+v", r)
 	}
 }

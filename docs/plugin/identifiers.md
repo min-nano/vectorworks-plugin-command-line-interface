@@ -1,22 +1,26 @@
 # 名前と識別子
 
-**スプールの名前・コマンド名・リンクの名前・インストール先は、最初の配布のあとは変えません**
+**スプールの場所・コマンド名・リンクの名前・インストール先は、最初の配布のあとは変えません**
 （変えると呼ぶ側や更新が見つけられなくなる）。
 
-| 項目 | 安定版 | 開発版 |
-| --- | --- | --- |
-| プラグイン名（ファイル名・フォルダ名・`PLUGIN_VWR_ID`） | `cli` | `cli_dev` |
-| モジュール | `cli.vwlibrary` / `cli.vlb` | `cli_dev.vwlibrary` / `cli_dev.vlb` |
-| リソース | `cli.vwr` | `cli_dev.vwr` |
-| バンドル ID（mac） | `io.github.min-nano.cli` | `io.github.min-nano.cli-dev`（バンドル ID に `_` は使えない） |
-| スプール | `<temp>/vectorworks2026-cli-bridge` | `<temp>/vectorworks2026-cli-bridge-dev` |
-| コマンド | `vw2026` | `vw2026`（`--channel dev` で開発版の橋へ） |
-| CMake のターゲット | `VwCli` | `VwCliDev` |
-| リリースのタグ | `stable` | `dev-<ブランチの slug>` |
-| インストール先 | `<Plug-Ins>/cli/` | `<Plug-Ins>/cli_dev/` |
-| CLI の置き場所 | `<CLI>/bin/`（PATH に載せる。`--channel dev` もこの CLI が受け持つ） | `<CLI>/bin-dev/`（PATH に載せない。開発版の CLI を試すときにフルパスで呼ぶ） |
-| 組み立て・退避の場所 | `<CLI>/staging/cli/`・`<CLI>/old/cli/` | `<CLI>/staging/cli_dev/`・`<CLI>/old/cli_dev/` |
-| 入れた場所の記録 | `<CLI>/cli.plugins-dir` | `<CLI>/cli_dev.plugins-dir` |
+**安定版と開発版を区別しません。** PR では変更後のコードでビルドしたものをプレリリースし、
+同じ名前のプラグインとして入れ替えます（[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
+いま何が入っているかは、生存の印の `version` / `branch` で分かります。
+
+| 項目 | 値 |
+| --- | --- |
+| プラグイン名（ファイル名・フォルダ名・`PLUGIN_VWR_ID`） | `cli` |
+| モジュール | `cli.vwlibrary` / `cli.vlb` |
+| リソース | `cli.vwr` |
+| バンドル ID（mac） | `io.github.min-nano.cli` |
+| スプール | `<CLI>/spool/` |
+| コマンド | `vw2026` |
+| CMake のターゲット | `VwCli` |
+| リリースのタグ | `stable`（main）・`dev-<ブランチの slug>`（PR のプレリリース） |
+| インストール先 | `<Plug-Ins>/cli/` |
+| CLI の置き場所 | `<CLI>/bin/`（PATH に載せる） |
+| 組み立て・退避の場所 | `<CLI>/staging/cli/`・`<CLI>/old/cli/` |
+| 入れた場所の記録 | `<CLI>/cli.plugins-dir` |
 
 `<CLI>` は mac `~/Library/Application Support/vectorworks2026-cli/`、Windows
 `%LOCALAPPDATA%\vectorworks2026-cli\`（[インストールと更新「置き場所」](install-and-update.md#置き場所)）。
@@ -25,24 +29,15 @@
 
 **登録しません**（[構成](architecture.md#拡張機能を登録しない)）。拡張機能なしで読み込まれない
 ことが実機で分かったときだけ、メニューコマンドを 1 つ登録し、そのユニバーサル名と UUID を
-ここに足します（安定版と開発版で別々にする）。
+ここに足します。
 
 ## `src/BuildConfig.h`
 
-元:`src/BuildConfig.h` と同じ形で、`VW_DEV_BUILD` の有無で切り替えます。
-
 ```cpp
-#ifdef VW_DEV_BUILD
-#  define PLUGIN_VWR_ID   "cli_dev"
-#  define PLUGIN_CHANNEL  "dev"
-#  define PLUGIN_SPOOL    "vectorworks2026-cli-bridge-dev"
-#else
-#  define PLUGIN_VWR_ID   "cli"
-#  define PLUGIN_CHANNEL  "stable"
-#  define PLUGIN_SPOOL    "vectorworks2026-cli-bridge"
-#endif
+#define PLUGIN_VWR_ID   "cli"
+#define PLUGIN_APP_DIR  "vectorworks2026-cli"   // <CLI> のディレクトリ名。スプールはその下の spool
 // VW_BUILD_VERSION / VW_BUILD_BRANCH は CMake が渡す（無ければ "local"）
 ```
 
-スプールの名前は CLI 側の `cli/internal/spool` の `StableSpoolName` / `DevSpoolName` と対です
+`PLUGIN_APP_DIR` は CLI 側の `cli/internal/spool` の `AppDirName` / `SpoolDirName` と対です
 （[作法](../protocol.md#スプールの場所)）。
