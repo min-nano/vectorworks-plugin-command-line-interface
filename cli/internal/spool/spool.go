@@ -25,12 +25,13 @@ import (
 const (
 	RequestSuffix  = ".req.json"
 	ResponseSuffix = ".res.json"
-	StatusFile     = "bridge.json"
 	LockFile       = "bridge.lock"
 	TempSuffix     = ".tmp"
 
-	// ProtocolVersion は受け渡しの版。要求／応答／印の形を変えたら上げる。
-	ProtocolVersion = 2
+	// ProtocolVersion は受け渡しの版。スプールに置くものの形を変えたら上げる。表示のためだけで、
+	// 実行時に照合はしない（CLI とプラグインは同じ zip から同時に入り、更新は Vectorworks の
+	// 終了後にしか行わないので、両側は常に同じビルドである。docs/protocol.md「版」）。
+	ProtocolVersion = 3
 
 	// MaxRequestBytes はプラグイン側が受け付ける要求 1 件の上限。超える要求は置く前に断る
 	// （置いても「読めない要求」として失敗が返るだけなので）。
@@ -44,16 +45,6 @@ var idPattern = regexp.MustCompile(`^[0-9A-Za-z_-]{1,64}$`)
 // ValidID は id の綴りが正しいか。
 func ValidID(id string) bool {
 	return idPattern.MatchString(id)
-}
-
-// Status は印（bridge.json）。未知のフィールドは Raw に残る。
-type Status struct {
-	Version  string `json:"version"`
-	Branch   string `json:"branch"`
-	Protocol int    `json:"protocol"`
-	PID      int    `json:"pid"`
-
-	Raw json.RawMessage `json:"-"`
 }
 
 // Response は応答 1 件。OK が false のときだけ Error に理由が入る。id はファイル名が持つ。
@@ -71,28 +62,16 @@ var ErrNotRunning = errors.New("bridge is not running")
 // 無かった。受け付けが見送られている（モーダルダイアログ・undo の記録の最中）ことが多い。
 var ErrTimeout = errors.New("timed out waiting for the response")
 
-// ProtocolError はプラグインと CLI の版が食い違っている。
-type ProtocolError struct {
-	Plugin int
-	CLI    int
-}
-
-func (e *ProtocolError) Error() string {
-	return fmt.Sprintf("protocol mismatch (plugin %d / cli %d)", e.Plugin, e.CLI)
-}
-
 // Bridge はスプール 1 つと、その状態。
 type Bridge struct {
 	Dir     string
-	Running bool    // プラグインがロックを掴んでいる（Vectorworks が動いている）
-	Status  *Status // 印が読めなければ nil
-	Reason  string  // 動いていない理由
+	Running bool   // プラグインがロックを掴んでいる（Vectorworks が動いている）
+	Reason  string // 動いていない理由
 }
 
 // Open はその場所のブリッジの状態を判定する（docs/protocol.md「生存の判定」）。
 //
-// 生死はロックだけで決まる。印は、ロックを取ったプラグインが 1 度だけ書く版の情報で、
-// 生死の判定には使わない（受け付けが見送られている間も、ロックは掴まれたまま）。
+// 生死はロックだけで決まる。受け付けが見送られている間も、ロックは掴まれたまま。
 func Open(dir string) *Bridge {
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 		return &Bridge{Dir: dir, Reason: "not found"}
@@ -100,27 +79,7 @@ func Open(dir string) *Bridge {
 	if !lockHeld(filepath.Join(dir, LockFile)) {
 		return &Bridge{Dir: dir, Reason: "not running"}
 	}
-	bridge := &Bridge{Dir: dir, Running: true}
-	text, err := os.ReadFile(filepath.Join(dir, StatusFile))
-	if err != nil {
-		// ロックを取ってから印を書くまでの間。動いてはいる。
-		return bridge
-	}
-	var status Status
-	if json.Unmarshal(text, &status) != nil {
-		return bridge
-	}
-	status.Raw = append(json.RawMessage(nil), text...)
-	bridge.Status = &status
-	return bridge
-}
-
-// CheckProtocol は版が一致するか。印が読めないうちは判定できないので通す。
-func (b *Bridge) CheckProtocol() error {
-	if b.Status != nil && b.Status.Protocol != ProtocolVersion {
-		return &ProtocolError{Plugin: b.Status.Protocol, CLI: ProtocolVersion}
-	}
-	return nil
+	return &Bridge{Dir: dir, Running: true}
 }
 
 // NewID は要求の id を作る。**名前の昇順が送った順になる**ように時刻を先頭へ置く
@@ -137,9 +96,6 @@ func NewID(now time.Time) string {
 // 待つのを諦めたときは置いた要求を取り下げ、理由をその時点のロックで ErrNotRunning /
 // ErrTimeout に分ける（呼ぶ側が起動し直すべきか、待てばよいかを判定できるように）。
 func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) (*Response, error) {
-	if err := b.CheckProtocol(); err != nil {
-		return nil, err
-	}
 	if len(args) == 0 {
 		args = json.RawMessage("{}")
 	}

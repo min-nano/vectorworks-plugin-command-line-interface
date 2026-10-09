@@ -8,7 +8,7 @@
 
 ```sh
 vw2026 status
-vw2026 tools
+vw2026 call tools
 vw2026 call layers '{"include_sheets":false}'
 ```
 

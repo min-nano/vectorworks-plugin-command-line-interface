@@ -11,7 +11,7 @@
 | SDK | `VW_SDK_DIR`（`SDKLib` を含む）。mac は `libVWSDK.a`＋VWMM・`BuildVWR`、Windows は x64 だけ（`VWSDK.lib`・`VWMM.lib`・`buildvwr.exe`） |
 | 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。プラグインとテストがリンク） |
 | プラグイン | `add_library(<target> MODULE)`。`VW_PLUGIN_SOURCES`（`src/*.cpp`・`src/tools/*`） |
-| 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH`。コンパイル時の定義だけで、印（`bridge.json`）に載る。ファイルとしての版の情報は `build.json` だけ（下記） |
+| 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH`。コンパイル時の定義だけで、`ping` の結果に載る。ファイルとしての版の情報は `build.json` だけ（下記） |
 | mac | `Module-Info.plist.in`（版の鍵は持たない）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr` |
 | Windows | `.vlb`・隣に `.vwr` |
 | ターゲット | `add_vw_plugin(VwCli "cli" io.github.min-nano.cli)` の 1 つだけ（安定版と開発版を区別しない） |

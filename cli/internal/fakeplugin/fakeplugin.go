@@ -46,29 +46,10 @@ func HoldLock(t *testing.T, dir string) (release func()) {
 	return release
 }
 
-// WriteStatus は印を書く（プラグインはロックを取ったときに 1 度だけ書く）。
-func WriteStatus(t *testing.T, dir string, extra map[string]any) {
-	t.Helper()
-	status := map[string]any{
-		"version":  "0",
-		"branch":   "main",
-		"protocol": spool.ProtocolVersion,
-		"pid":      os.Getpid(),
-	}
-	for k, v := range extra {
-		status[k] = v
-	}
-	data, _ := json.Marshal(status)
-	if err := os.WriteFile(filepath.Join(dir, spool.StatusFile), data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// Start はロックを掴み、印を書いて、要求に handle で応え続ける。テストの終わりに止める。
+// Start はロックを掴み、要求に handle で応え続ける。テストの終わりに止める。
 func Start(t *testing.T, dir string, handle Handler) {
 	t.Helper()
 	release := HoldLock(t, dir)
-	WriteStatus(t, dir, nil)
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	go func() {

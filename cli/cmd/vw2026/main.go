@@ -33,16 +33,16 @@ const (
 	exitDown    = 3 // ブリッジが見つからない
 	// 待ちきれなかった。Vectorworks は動いている（モーダル・undo の記録の最中など）。
 	// exitDown と分けるのは、呼ぶ側が起動し直さずに待てばよいと判定できるように。
-	exitTimeout  = 4
-	exitProtocol = 5 // プラグインと CLI の版が違う
-	exitFailure  = 6 // そのほか（書き込めない・起動できない等）
+	exitTimeout = 4
+	// 5 は使わない（protocol 2 までは「作法の版が違う」だった。呼ぶ側の分岐を変えないよう
+	// 番号を詰めない）。
+	exitFailure = 6 // そのほか（書き込めない・起動できない等）
 )
 
 const usage = `usage: vw2026 <command> [options]
 
 commands:
-  status                 ブリッジが動いているかと、プラグインの版を返す
-  tools                  呼べる道具の一覧を返す
+  status                 ブリッジが動いているかを返す（版は call ping）
   call <tool> [args]     道具を 1 つ呼ぶ（args は JSON オブジェクト。"-" で標準入力から）
   wait                   ブリッジが動き出す（--down なら止まる）まで待つ
   launch                 Vectorworks を起動する（待たない。待つなら続けて wait）
@@ -58,7 +58,6 @@ type env struct {
 	stdout io.Writer
 	stderr io.Writer
 	getenv func(string) string
-	now    func() time.Time
 	start  func(argv []string) error
 }
 
@@ -68,7 +67,6 @@ func main() {
 		stdout: os.Stdout,
 		stderr: os.Stderr,
 		getenv: os.Getenv,
-		now:    time.Now,
 		start:  launch.Start,
 	}))
 }
@@ -82,8 +80,6 @@ func run(args []string, e env) int {
 	switch command {
 	case "status":
 		return cmdStatus(rest, e)
-	case "tools":
-		return cmdCall(append([]string{"tools"}, rest...), e)
 	case "call":
 		return cmdCall(rest, e)
 	case "wait":
@@ -114,17 +110,9 @@ func newFlags(name string, e env, defaultTimeout float64) (*flag.FlagSet, *commo
 	fs.SetOutput(e.stderr)
 	fs.StringVar(&c.spool, "spool", e.getenv("VW2026_SPOOL"), "spool directory")
 	if defaultTimeout > 0 {
-		fs.Float64Var(&c.timeout, "timeout", envSeconds(e, "VW2026_TIMEOUT", defaultTimeout), "seconds")
+		fs.Float64Var(&c.timeout, "timeout", defaultTimeout, "seconds")
 	}
 	return fs, c
-}
-
-func envSeconds(e env, name string, fallback float64) float64 {
-	var value float64
-	if _, err := fmt.Sscanf(e.getenv(name), "%g", &value); err == nil && value > 0 {
-		return value
-	}
-	return fallback
 }
 
 // open はスプールを決めて、ブリッジの状態を判定する。場所が決まらなければ標準エラーへ
@@ -177,10 +165,6 @@ func cmdStatus(args []string, e env) int {
 		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (is Vectorworks started with the plug-in?)")
 		return exitDown
 	}
-	if err := bridge.CheckProtocol(); err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
-		return exitProtocol
-	}
 	return code
 }
 
@@ -192,8 +176,6 @@ func bridgeJSON(bridge *spool.Bridge) map[string]any {
 	}
 	if !bridge.Running {
 		out["reason"] = bridge.Reason
-	} else if bridge.Status != nil {
-		out["status"] = bridge.Status.Raw
 	}
 	return out
 }
@@ -257,10 +239,7 @@ func cmdCall(args []string, e env) int {
 }
 
 func codeFor(err error) int {
-	var protocol *spool.ProtocolError
 	switch {
-	case errors.As(err, &protocol):
-		return exitProtocol
 	case errors.Is(err, spool.ErrNotRunning):
 		return exitDown
 	case errors.Is(err, spool.ErrTimeout):
@@ -278,7 +257,7 @@ func cmdWait(args []string, e env) int {
 	if _, err := parseInterspersed(fs, args); err != nil {
 		return exitUsage
 	}
-	deadline := e.now().Add(seconds(c.timeout))
+	deadline := time.Now().Add(seconds(c.timeout))
 	for {
 		// 動き出す・止まるはロックだけで決まる。保存の確認のダイアログを開いている間も
 		// ロックは掴まれたままなので、--down がそれを「止まった」と誤らない。
@@ -289,7 +268,7 @@ func cmdWait(args []string, e env) int {
 		if bridge.Running != *down {
 			return emit(e, bridgeJSON(bridge))
 		}
-		if e.now().After(deadline) {
+		if time.Now().After(deadline) {
 			fmt.Fprintln(e.stderr, "vw2026: timed out waiting")
 			return exitTimeout
 		}

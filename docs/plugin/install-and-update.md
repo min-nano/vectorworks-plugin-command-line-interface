@@ -159,7 +159,7 @@ vw2026 update
   1. zip を取ってくる                https://github.com/<repo>/releases/download/<tag>/<zip>
                                      （<tag> は stable、--tag があればそれ）
   2. 一時フォルダへ展開し、zip の中の build.json と、入っている build.json を比べる
-  3. 版とブランチが同じなら終わり      {"outcome":"no_new_build"}（--check なら違っても入れずに
+  3. 版が同じなら終わり                {"outcome":"no_new_build"}（--check なら違っても入れずに
                                      {"outcome":"available"}）
   4. zip の中の vw-install を走らせる  {"outcome":"updated","version":…}
                                      error=running なら {"outcome":"vectorworks_running"}（終了コード 7）
@@ -173,7 +173,8 @@ vw2026 update
   同じ判定を持たず、`error=running` を終了コード 7 に読み替えるだけです。
 - **終了させるのは呼ぶ側です。** `update` は終了を頼まず、待ちもしません（[設計「CLI は
   プリミティブに保つ」](../design.md#cli-はプリミティブに保つ)）。終了から起動し直すまでを 1 度に
-  行いたい呼ぶ側は、次のように組み合わせます（`quit` は保存の確認を出す。[道具](tools.md#quit)）。
+  行いたい呼ぶ側は、次のように組み合わせます（`quit` は保存の確認を出す。[道具](tools.md#quit)。
+  この組み合わせの真実はここで、ほかのページはここを参照します）。
 
   ```sh
   vw2026 call quit && vw2026 wait --down && vw2026 update && vw2026 launch && vw2026 wait
@@ -182,7 +183,8 @@ vw2026 update
 - **入れるのは常に zip の中のインストーラ**です（配置の知識は新しいビルドの側にある。元の
   M21・M22 の教訓）。CLI はダウンロード・展開・インストーラの呼び出しだけを持ちます。
 - `build.json` はビルドが zip の直下に置くファイルで、配置の規則どおりプラグインのフォルダへ
-  入ります。`{"version","branch"}`。読めないときは「入っていない」とみなして入れます。
+  入ります。`{"version","branch"}`。**新しいかは `version`（短い sha）だけで比べます**（sha が
+  同じならコードも同じ。`branch` は表示のため）。読めないときは「入っていない」とみなして入れます。
 - `--tag` はタグをそのまま受け取ります（ブランチ名から slug を作らない。slug の規則は
   [名前と識別子](identifiers.md)）。
 - プラグインのフォルダは、次の順で決めます。
