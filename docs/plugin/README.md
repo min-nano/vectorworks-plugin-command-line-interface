@@ -15,6 +15,6 @@ Vectorworks の中で動くプラグイン（`cli`）の設計です。全体の
 | [tools.md](tools.md) | 最初に提供する道具の仕様 |
 | [identifiers.md](identifiers.md) | 名前・置き場所・リリースのタグ |
 | [build-and-release.md](build-and-release.md) | CMake・CI・リリースの形 |
-| [install-and-update.md](install-and-update.md) | インストーラ・PATH・アンインストーラ・更新（`vw2026 update`） |
+| [install-and-update.md](install-and-update.md) | 初回の配置（スクリプト）・PATH・インストールと更新（`vw2026 install`）・アンインストール（`vw2026 uninstall`） |
 | [plan.md](plan.md) | 実装の順序（1 段 1 PR）・各段の終わりの確かめ方・元のプラグインから移すもの |
 | [open-questions.md](open-questions.md) | 決まっていないこと |

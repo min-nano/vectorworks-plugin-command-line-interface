@@ -6,7 +6,7 @@
 Vectorworks ──読み込む──▶ cli.vwlibrary / cli.vlb     … 起動時に 1 度だけ。終了まで降ろさない
 ```
 
-- **更新は Vectorworks を終了してから行います**（[更新](install-and-update.md#更新vw2026-update)）。
+- **更新は Vectorworks を終了してから行います**（[インストール](install-and-update.md#インストールと更新vw2026-install)）。
 - 新しい版は次の起動から効きます。版を確かめるには `vw2026 call ping` の `version` を見ます。
 
 ## 入口
@@ -66,7 +66,7 @@ Vectorworks の処理の妨げにならないよう、次のときはその回�
 ## 拡張機能を登録しない
 
 **メニューもパレットも PIO も登録しません。** 操作はすべて CLI から行い、更新も CLI が行う
-（[更新](install-and-update.md#更新vw2026-update)）ので、利用者の入口は要りません。
+（[インストール](install-and-update.md#インストールと更新vw2026-install)）ので、利用者の入口は要りません。
 
 - プラグインの読み込みと `plugin_module_main` の呼び出しは、拡張機能の有無に関わらず起きる
   見込みです（PIO だけのプラグインもあるように、読み込みは登録の種類に依らない）。ただし
@@ -85,11 +85,11 @@ src/
 ├─ Clock.{h,cpp}                           … OS タイマー・見送りの判定・終了の依頼
 ├─ core/                                   … SDK に依らない（Json・Bridge・Serve）。プラグインとテストがリンク
 └─ tools/                                  … 道具の表（ToolTable.cpp）と中身（SDK 依存）
-scripts/                                   … vw-install / vw-uninstall（.sh / .ps1）
+scripts/                                   … get-vw2026（.sh / .ps1。初回の配置）
 resources/                                 … cli.vwr（拡張機能を登録しないので最小限）
 tests/                                     … 無 SDK の単体テスト・スクリプトのテスト
 protocol/fixtures/                         … 作法の見本（C++ と Go の両方のテストが読む）
-cli/                                       … vw2026（Go）。更新（update）もここ
+cli/                                       … vw2026（Go）。インストールと更新（install）・アンインストール（uninstall）もここ
 ```
 
 - 名前空間は `VwCli`（`VwCli::core` / `VwCli::tools`）。図面にも配布物にも現れない内部の綴りで、

@@ -145,9 +145,9 @@
 **作法の版は実行時に照合しません。** 版はこの文書と `tools` / `ping` の結果に載る表示だけです。
 
 - CLI とプラグインは同じ zip から同時に入り、更新は Vectorworks の終了後にしか行わない
-  （[更新](plugin/install-and-update.md#更新vw2026-update)）ので、動いているプラグインと
+  （[インストール](plugin/install-and-update.md#インストールと更新vw2026-install)）ので、動いているプラグインと
   入っている CLI は同じビルドです。
-- 食い違うのは、手でビルドした CLI を使ったとき・インストーラが CLI の入れ替えだけに
+- 食い違うのは、手でビルドした CLI を使ったとき・`install` が CLI の入れ替えだけに
   失敗したときなどに限られます。気づく手掛かりは `vw2026 version` と `call ping` の
   `protocol` で、照合のための印や終了コードは持ちません。
 - 作法を守る任意のプログラムも、合わせたい版があれば `tools` か `ping` の `protocol` を見ます。

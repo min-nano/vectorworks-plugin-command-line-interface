@@ -6,11 +6,11 @@
 
 | 段 | 中身 | 確かめ方 | 実機 |
 | --- | --- | --- | --- |
-| 1 | **SDK に依らない共通部**: `core/Json`・`core/Bridge`・`core/Serve`（偽の道具の表）・`protocol/fixtures/`・`test.yml`・`lint.yml`・`CLAUDE.md` の追記（PR の進め方・消すコードの規約） | CI（ASan・UBSan）。Go 側のテストも同じ見本を読む | 不要 |
+| 1 | **SDK に依らない共通部**: `core/Json`・`core/Bridge`・`core/Serve`（偽の道具の表）・`protocol/fixtures/`・`test.yml`・`lint.yml`・`CLAUDE.md` の追記（PR の進め方） | CI（ASan・UBSan）。Go 側のテストも同じ見本を読む | 不要 |
 | 2 | **骨格**: CMake・`BuildConfig`・`ModuleMain`・`Clock`・道具 `tools` / `ping` / `quit`・リソース・`build.yml`（ビルドと PR のプレリリースまで） | CI。実機で zip を手で置き、`vw2026 status` が `running:true` になり `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。`call quit` で保存の確認が出て、取り消すと `call ping` がまた応え、保存すると `wait --down` が終わる | 要 |
 | 3 | **読む道具**: `layers` / `classes` / `layer_objects` / `object_counts` | 実機で、元のプラグインの `vw_*` と同じ図面に対して同じ結果になる | 要 |
-| 4 | **配布**: 梱包（`bin/vw2026`）・`vw-install` / `vw-uninstall`（PATH・動いているときに止める確かめを含む）・main のリリース・`cleanup-dev-release.yml`・スクリプトのテスト | CI（スクリプトのテストで、PATH の歯止めと、Vectorworks が動いているときに何も変えないことを押さえる）。動いている CLI の入れ替え（Windows）を押さえる。実機でインストール → 新しい端末で `vw2026 status` → アンインストールでリンクだけが消える | 要 |
-| 5 | **更新**: `vw2026 update`（資産の取得・新しいビルドの判定・インストーラの呼び出しと結果の読み替え） | CI（Go の単体テスト）。実機で、動いている間は終了コード 7 で何も変わらず、`call quit` → `wait --down` → `update` → `launch` → `wait` で `call ping` の `version` が変わる。`--tag dev-<slug>` で PR のプレリリースに入れ替わり、`update` で main に戻る | 要 |
+| 4 | **配布**: 梱包（`bin/vw2026`）・main のリリース・`cleanup-dev-release.yml`・初回の配置のスクリプト（`get-vw2026.sh` / `.ps1`。PATH を含む） | CI（shellcheck・PSScriptAnalyzer）。実機でスクリプトを curl からパイプで実行 → 新しい端末で `vw2026 version` が動く。走らせ直しても壊れない | 要 |
+| 5 | **インストールと更新・アンインストール**: `vw2026 install` / `uninstall`（資産の取得・新しいビルドの判定・付け替え・CLI の入れ替え・PATH の後始末）・`CLAUDE.md` に消すコードの歯止めを写す | CI（Go の単体テスト。偽の HTTP サーバー。動いている CLI の入れ替えを Windows で押さえる）。実機で、`install` → 起動して `call ping` が応える。動いている間は終了コード 7 で何も変わらず、`call quit` → `wait --down` → `install` → `launch` → `wait` で `call ping` の `version` が変わる。`--tag dev-<slug>` で PR のプレリリースに入れ替わり、`install` で main に戻る。`--plugins-dir` で既定以外へ入れられる。`uninstall` でリンクと PATH の項目だけが消える | 要 |
 
 その先（順序は未定）:
 
@@ -32,9 +32,8 @@
 | `src/core/Json.{h,cpp}` | 同じ | |
 | `src/core/Bridge.{h,cpp}` | 同じ | `bridgeSpoolDir` を `<CLI>/spool` を求める形に（環境変数を読まない）。ロック（`lock`）を足す。持ち主と権限の確かめ・印（状態のファイル）を除く。受け付けの手順は `core/Serve` へ（[ブリッジ](bridge.md)） |
 | `src/Module-Info.plist.in` | 同じ | 版の鍵（`VWBuildBranch` / `VWBuildCommit`）を除く |
-| `scripts/vw-install.*` / `vw-uninstall.*` | 同じ | プラグイン名。PATH の扱い・Vectorworks が動いているときに止める確かめを足す。`--folder-only` は持たない（[インストール](install-and-update.md)） |
 | `scripts/fetch-vw-sdk.sh` / `ci-common.sh` / `ci-wait.sh` / `lint.sh` | 同じ | `VW_REPO` |
-| `tests/TestFramework.h` と `CoreJsonTests` / `CoreBridgeTests` / インストーラとアンインストーラのテスト | 同じ | インストーラのテストから、殻の ID が同じときの手順を除く |
+| `tests/TestFramework.h` と `CoreJsonTests` / `CoreBridgeTests` | 同じ | |
 | `.clang-format` / `.clang-tidy` / `.cmake-format.yaml` / `.editorconfig` / `PSScriptAnalyzerSettings.psd1` | 同じ | 先頭の注釈 |
 | `.github/workflows/build.yml` / `test.yml` / `lint.yml` / `cleanup-dev-release.yml` | 同じ | 名前・資産名・`bin/` の梱包。SDK に依存する clang-tidy を除く（[ビルド](build-and-release.md)） |
 
@@ -51,8 +50,10 @@
 
 ### 移さないもの
 
-上の表に無いものは移しません。元のアップデータ（`src/Updater*`）も移しません
-（`vw2026 update` は API を使わず、決まった URL から資産を取る。[更新](install-and-update.md#更新vw2026-update)）。
+上の表に無いものは移しません。元のインストーラとアンインストーラ（`scripts/vw-install.*` /
+`vw-uninstall.*`）とそのテストは、`vw2026 install` / `uninstall` が代わるので移しません。
+元のアップデータ（`src/Updater*`）も移しません（`vw2026 install` は API を使わず、決まった URL
+から資産を取る。[インストール](install-and-update.md#インストールと更新vw2026-install)）。
 
 ## 実機の確かめ方
 
