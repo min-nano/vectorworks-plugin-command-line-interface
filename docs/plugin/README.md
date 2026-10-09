@@ -11,7 +11,7 @@ Vectorworks の中で動くプラグイン（`cli`）の設計です。全体の
 | ページ | 中身 |
 | --- | --- |
 | [architecture.md](architecture.md) | モジュール・入口・受け付けの流れ・ソースの配置 |
-| [bridge.md](bridge.md) | 受け付け（スプール・道具の表・印・終了の依頼） |
+| [bridge.md](bridge.md) | 受け付け（スプール・道具の表・終了の依頼） |
 | [tools.md](tools.md) | 最初に提供する道具の仕様 |
 | [identifiers.md](identifiers.md) | 名前・置き場所・リリースのタグ |
 | [build-and-release.md](build-and-release.md) | CMake・CI・リリースの形 |

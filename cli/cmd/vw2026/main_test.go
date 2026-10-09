@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
@@ -27,7 +26,6 @@ func invoke(t *testing.T, vars map[string]string, stdin string, started *[]strin
 		stdout: &stdout,
 		stderr: &stderr,
 		getenv: func(name string) string { return vars[name] },
-		now:    time.Now,
 		start: func(argv []string) error {
 			if started != nil {
 				*started = argv
@@ -53,7 +51,7 @@ func echoBridge(t *testing.T) string {
 func TestStatusLive(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"running":true`) || !strings.Contains(r.stdout, `"branch":"main"`) {
+	if r.code != exitOK || !strings.Contains(r.stdout, `"running":true`) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -93,16 +91,8 @@ func TestCallToolError(t *testing.T) {
 	}
 }
 
-func TestToolsIsCallOfTools(t *testing.T) {
-	dir := echoBridge(t)
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "tools")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"tool":"tools"`) {
-		t.Fatalf("%+v", r)
-	}
-}
-
 func TestCallUsageErrors(t *testing.T) {
-	for _, args := range [][]string{{"call"}, {"call", "x", "[1]"}, {"call", "x", "not json"}, {"nope"}, {}} {
+	for _, args := range [][]string{{"call"}, {"call", "x", "[1]"}, {"call", "x", "not json"}, {"tools"}, {"nope"}, {}} {
 		r := invoke(t, nil, "", nil, args...)
 		if r.code != exitUsage {
 			t.Errorf("%v: code %d", args, r.code)
@@ -151,7 +141,7 @@ func TestWaitTimesOut(t *testing.T) {
 
 func TestVersion(t *testing.T) {
 	r := invoke(t, nil, "", nil, "version")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":2`) {
+	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":3`) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -162,7 +152,6 @@ func busySpool(t *testing.T) (string, func()) {
 	t.Helper()
 	dir := fakeplugin.NewDir(t)
 	release := fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, nil)
 	return dir, release
 }
 
@@ -183,16 +172,6 @@ func TestWaitDownWaitsForTheProcess(t *testing.T) {
 	quit()
 	r = invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "wait", "--down", "--timeout", "0.3")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"running":false`) {
-		t.Fatalf("%+v", r)
-	}
-}
-
-func TestStatusProtocolMismatch(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, map[string]any{"protocol": spool.ProtocolVersion + 1})
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
-	if r.code != exitProtocol {
 		t.Fatalf("%+v", r)
 	}
 }

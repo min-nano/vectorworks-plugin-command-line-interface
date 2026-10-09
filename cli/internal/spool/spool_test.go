@@ -75,7 +75,7 @@ func TestCallToolFailure(t *testing.T) {
 func TestCallTimeoutWithdrawsRequest(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, nil) // 動いているが応えない（ダイアログの最中など）
+	// 動いているが応えない（ダイアログの最中など）
 	_, err := Open(dir).Call("ping", nil, 200*time.Millisecond)
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("want ErrTimeout, got %v", err)
@@ -83,22 +83,12 @@ func TestCallTimeoutWithdrawsRequest(t *testing.T) {
 	assertNoFiles(t, dir, RequestSuffix)
 }
 
-func TestProtocolMismatch(t *testing.T) {
+// ロックファイルがあっても、掴まれていなければ（異常終了のあと）止まっている。
+func TestLockFileWithoutHolderIsDown(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, map[string]any{"protocol": ProtocolVersion + 1})
-	_, err := Open(dir).Call("ping", nil, time.Second)
-	var protocol *ProtocolError
-	if !errors.As(err, &protocol) {
-		t.Fatalf("want ProtocolError, got %v", err)
+	if err := os.WriteFile(filepath.Join(dir, LockFile), nil, 0o600); err != nil {
+		t.Fatal(err)
 	}
-	assertNoFiles(t, dir, RequestSuffix)
-}
-
-// 印があっても、ロックが掴まれていなければ（異常終了で残った印）止まっている。
-func TestStatusWithoutLockIsDown(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.WriteStatus(t, dir, nil)
 	if bridge := Open(dir); bridge.Running || bridge.Reason != "not running" {
 		t.Fatalf("want down, got %+v", bridge)
 	}
@@ -107,7 +97,6 @@ func TestStatusWithoutLockIsDown(t *testing.T) {
 func TestReleasedLockIsDown(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	release := fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, nil)
 	if !Open(dir).Running {
 		t.Fatal("want running")
 	}
@@ -117,23 +106,9 @@ func TestReleasedLockIsDown(t *testing.T) {
 	}
 }
 
-// ロックを取ってから印を書くまでの間も、動いている（止まったと誤らない）。
-func TestLockWithoutStatusIsRunning(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
-	bridge := Open(dir)
-	if !bridge.Running || bridge.Status != nil {
-		t.Fatalf("want running without status, got %+v", bridge)
-	}
-	if err := bridge.CheckProtocol(); err != nil {
-		t.Fatalf("unknown protocol should pass: %v", err)
-	}
-}
-
 func TestCallIsServedWhenServingResumes(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	release := fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, nil)
 	bridge := Open(dir)
 	// ダイアログが閉じて受け付けが戻るのを真似る: 要求を置いたあとで応え始める。
 	go func() {
@@ -150,7 +125,6 @@ func TestCallIsServedWhenServingResumes(t *testing.T) {
 func TestCallTimeoutWhenStopped(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	release := fakeplugin.HoldLock(t, dir)
-	fakeplugin.WriteStatus(t, dir, nil)
 	bridge := Open(dir)
 	release()
 	_, err := bridge.Call("ping", nil, 200*time.Millisecond)
