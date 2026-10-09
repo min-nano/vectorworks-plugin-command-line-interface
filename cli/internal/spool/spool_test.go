@@ -286,6 +286,33 @@ func TestFindSkipsUnsafeAndPicksFirstLive(t *testing.T) {
 	}
 }
 
+func TestFindReportsFreshShellDiagnostic(t *testing.T) {
+	fresh := newSpoolDir(t)
+	stale := newSpoolDir(t)
+	write := func(dir string, beat int64) {
+		text, _ := json.Marshal(map[string]any{
+			"plugin": "cli", "protocol": ProtocolVersion, "beat": float64(beat), "pid": 4242,
+			"error": map[string]any{"code": "abi_mismatch", "message": "payload abi 2, shell abi 1"},
+		})
+		if err := os.WriteFile(filepath.Join(dir, ShellFile), text, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(fresh, time.Now().Unix())
+	write(stale, time.Now().Unix()-StaleSeconds-5)
+
+	_, searched, err := Find([]string{stale, fresh}, time.Now())
+	if !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("a shell diagnostic is not a live bridge: %v", err)
+	}
+	if len(searched) != 2 || searched[0].Shell != nil || searched[1].Shell == nil {
+		t.Fatalf("unexpected searched: %+v", searched)
+	}
+	if !strings.Contains(string(searched[1].Shell), "abi_mismatch") {
+		t.Fatalf("shell diagnostic not passed through: %s", searched[1].Shell)
+	}
+}
+
 func TestNewIDIsValidAndOrdered(t *testing.T) {
 	base := time.Unix(1_700_000_000, 0)
 	first := NewID(base)
