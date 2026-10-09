@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"os"
 	"path/filepath"
 	"strings"
@@ -179,6 +180,68 @@ func TestWaitDownWaitsForTheProcess(t *testing.T) {
 func TestLaunchDoesNotTakeTimeout(t *testing.T) {
 	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "launch", "--timeout", "5")
 	if r.code != exitUsage {
+		t.Fatalf("%+v", r)
+	}
+}
+
+var update = flag.Bool("update", false, "rewrite doc.go from the command definitions")
+
+// TestDoc keeps doc.go in step with the command definitions. "go generate"
+// runs it with -update.
+func TestDoc(t *testing.T) {
+	want, err := renderDoc()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *update {
+		if err := os.WriteFile("doc.go", want, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	got, err := os.ReadFile("doc.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(bytes.ReplaceAll(got, []byte("\r\n"), []byte("\n")), want) {
+		t.Fatal(`doc.go is out of date; run "go generate ./cmd/vw2026"`)
+	}
+}
+
+func TestCommandDefinitions(t *testing.T) {
+	for _, list := range [][]*command{commands, topics} {
+		for _, c := range list {
+			if c.Short == "" || strings.TrimSpace(c.Long) == "" {
+				t.Errorf("%s: Short and Long are required", c.Name())
+			}
+			if c.Run != nil && !strings.HasPrefix(c.UsageLine, "vw2026 "+c.Name()) {
+				t.Errorf("%s: UsageLine must start with \"vw2026 %s\"", c.Name(), c.Name())
+			}
+			if lookup(c.Name()) != c {
+				t.Errorf("%s: duplicate name", c.Name())
+			}
+		}
+	}
+}
+
+func TestHelp(t *testing.T) {
+	r := invoke(t, nil, "", nil, "help")
+	if r.code != exitOK || !strings.Contains(r.stdout, "call ") || !strings.Contains(r.stdout, "exit-status") {
+		t.Fatalf("%+v", r)
+	}
+	r = invoke(t, nil, "", nil, "help", "call")
+	if r.code != exitOK || !strings.HasPrefix(r.stdout, "usage: vw2026 call ") {
+		t.Fatalf("%+v", r)
+	}
+	r = invoke(t, nil, "", nil, "call", "-h")
+	if r.code != exitUsage || !strings.Contains(r.stderr, "-timeout") {
+		t.Fatalf("%+v", r)
+	}
+	if r := invoke(t, nil, "", nil, "help", "nope"); r.code != exitUsage {
+		t.Fatalf("%+v", r)
+	}
+	// トピックはコマンドとして走らない。
+	if r := invoke(t, nil, "", nil, "spool"); r.code != exitUsage {
 		t.Fatalf("%+v", r)
 	}
 }
