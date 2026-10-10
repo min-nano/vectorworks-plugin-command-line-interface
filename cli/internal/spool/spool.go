@@ -4,8 +4,8 @@
 // 作法の真実は docs/protocol.md で、プラグイン側（C++）とこのパッケージはその対になる。
 // どちらかを変えたら仕様書と両方を直す。ProtocolVersion を上げるかは docs/protocol.md「互換性」に従う。
 //
-// このパッケージは**排他を持たない**。同時に複数のプロセスが要求を置いても受け渡しは
-// 壊れないが、図面に対する操作の順序や占有は呼ぶ側の責任である
+// 排他は占有（HoldSession。docs/protocol.md「占有」）だけが持つ。占有しない呼ぶ側どうしが
+// 同時に要求を置いても受け渡しは壊れないが、図面に対する操作の順序は呼ぶ側の責任である
 // （docs/design.md「CLI はプリミティブに保つ」）。
 package spool
 
@@ -32,7 +32,7 @@ const (
 	// ProtocolVersion は受け渡しの版（上げる場合は docs/protocol.md「互換性」）。表示のためだけで、
 	// 実行時に照合はしない（CLI とプラグインは同じ zip から同時に入り、更新は Vectorworks の
 	// 終了後にしか行わないので、両側は常に同じビルドである。docs/protocol.md「版」）。
-	ProtocolVersion = 4
+	ProtocolVersion = 5
 
 	// MaxRequestBytes はプラグイン側が受け付ける要求 1 件の上限。超える要求は置く前に断る
 	// （置いても「読めない要求」として失敗が返るだけなので）。
@@ -70,6 +70,8 @@ const (
 	CodeInvalidArgs    = "invalid_args"    // 道具の引数が誤っている
 	CodeInternal       = "internal"        // そのほか（道具の中の例外など）
 	CodeNoWait         = "no_wait"         // 待つ印（<id>.wait）が無いので実行しなかった
+	CodeBusy           = "busy"            // ほかの呼ぶ側が占有しているので実行しなかった
+	CodeNoSession      = "no_session"      // 載せた占有の印がいまの占有のものではないので実行しなかった
 )
 
 // ErrNotRunning はブリッジが見つからない（Vectorworks が起動していない・プラグインが
@@ -104,6 +106,7 @@ type Bridge struct {
 	Dir     string
 	Running bool   // プラグインがロックを掴んでいる（Vectorworks が動いている）
 	Reason  string // 動いていない理由
+	Session bool   // いずれかの呼ぶ側が占有している（Vectorworks が動いていなくても）
 }
 
 // Open はその場所のブリッジの状態を判定する（docs/protocol.md「生存の判定」）。
@@ -113,10 +116,11 @@ func Open(dir string) *Bridge {
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 		return &Bridge{Dir: dir, Reason: "not found"}
 	}
+	session := SessionHeld(dir)
 	if !lockHeld(filepath.Join(dir, LockFile)) {
-		return &Bridge{Dir: dir, Reason: "not running"}
+		return &Bridge{Dir: dir, Reason: "not running", Session: session}
 	}
-	return &Bridge{Dir: dir, Running: true}
+	return &Bridge{Dir: dir, Running: true, Session: session}
 }
 
 // NewID は要求の id を作る。**名前の昇順が送った順になる**ように時刻を先頭へ置く
@@ -127,7 +131,8 @@ func NewID(now time.Time) string {
 	return fmt.Sprintf("%019d-%s", now.UnixNano(), hex.EncodeToString(suffix[:]))
 }
 
-// Call は道具を 1 つ呼び、応答を待つ。
+// Call は道具を 1 つ呼び、応答を待つ。session は占有の印（HoldSession。占有しないなら空）で、
+// 要求に載せる（docs/protocol.md「占有」）。
 //
 // 受け付けが見送られていても要求を置いて timeout まで待つ（受け付けが戻れば処理される）。
 // 待つ間は <id>.wait を掴み、プラグインに呼ぶ側が待っていることを示す（docs/protocol.md
@@ -144,15 +149,17 @@ func NewID(now time.Time) string {
 //
 // no_wait の応答は作法の種別で「実行しなかった」を意味するので、道具の失敗ではなく
 // ErrNotRunning / ErrTimeout として返す（やめたあとにプラグインが受け取ったときや、.wait が
-// 想定外に消えたときに届く）。
-func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) (*Response, error) {
+// 想定外に消えたときに届く）。busy / no_session も「実行しなかった」なので、ErrBusy /
+// ErrNoSession として返す。
+func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout time.Duration) (*Response, error) {
 	if len(args) == 0 {
 		args = json.RawMessage("{}")
 	}
 	payload, err := json.Marshal(struct {
-		Tool string          `json:"tool"`
-		Args json.RawMessage `json:"args"`
-	}{tool, args})
+		Tool    string          `json:"tool"`
+		Args    json.RawMessage `json:"args"`
+		Session string          `json:"session,omitempty"`
+	}{tool, args, session})
 	if err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
 	}
@@ -202,6 +209,10 @@ func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) 
 		switch response.Code {
 		case CodeNoWait:
 			return nil, notRun("the bridge did not run it")
+		case CodeBusy:
+			return nil, fmt.Errorf("%w (%s did not run)", ErrBusy, tool)
+		case CodeNoSession:
+			return nil, fmt.Errorf("%w (%s did not run)", ErrNoSession, tool)
 		case CodeInvalidRequest, CodeUnknownTool, CodeInvalidArgs, CodeInternal:
 			return response, nil
 		default:
@@ -298,14 +309,25 @@ func NestingDepth(data []byte) int {
 }
 
 // writeAtomically は同じディレクトリへ書いてから rename する（読み手に書きかけを見せない）。
+//
+// Windows では、置き換える先（前の占有の残した session.json）を読み手がちょうど開いていると
+// rename が失敗するので、少しの間やり直す。
 func writeAtomically(path string, data []byte) error {
 	temp := path + TempSuffix
+	name := filepath.Base(path)
 	if err := os.WriteFile(temp, data, 0o600); err != nil {
-		return fmt.Errorf("write request: %w", err)
+		return fmt.Errorf("write %s: %w", name, err)
 	}
-	if err := os.Rename(temp, path); err != nil {
-		_ = os.Remove(temp)
-		return fmt.Errorf("publish request: %w", err)
+	deadline := time.Now().Add(time.Second)
+	for {
+		err := os.Rename(temp, path)
+		if err == nil {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			_ = os.Remove(temp)
+			return fmt.Errorf("publish %s: %w", name, err)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	return nil
 }

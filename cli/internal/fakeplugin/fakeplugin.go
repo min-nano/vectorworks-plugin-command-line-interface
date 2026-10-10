@@ -2,7 +2,7 @@
 // docs/plugin/bridge.md「受け付け 1 回」）。spool と vw2026 の単体テストだけが使う。
 //
 // 作法より緩く真似ると、CLI がプラグインの断る要求を送っても単体テストが気づかないので、
-// 関門（id の綴り・回の始めに並べた要求だけの処理・大きさと入れ子の深さの上限・ロックを取ったときの掃除）は
+// 関門（id の綴り・回の始めに並べた要求だけの処理・大きさと入れ子の深さの上限・占有・ロックを取ったときの掃除）は
 // プラグインと同じに持つ。道具の種類（quit で残りを取り出さない）は道具の表を持たないので真似ない。
 package fakeplugin
 
@@ -87,10 +87,14 @@ func Start(t *testing.T, dir string, handle Handler) {
 
 // sweep はロックを取った直後の掃除（docs/protocol.md「ロック」）。待つ印を掴める・無い id の
 // 要求・応答・待つ印・書きかけを消し、待っている呼ぶ側のものは残す。id は最初の . より前。
+// 占有のファイル（session.*）は呼ぶ側のものなので触らない。
 func sweep(dir string) {
 	entries, _ := os.ReadDir(dir)
 	for _, entry := range entries {
 		name := entry.Name()
+		if strings.HasPrefix(name, "session.") {
+			continue
+		}
 		if !(strings.HasSuffix(name, spool.RequestSuffix) || strings.HasSuffix(name, spool.ResponseSuffix) ||
 			strings.HasSuffix(name, spool.WaitSuffix) || strings.HasSuffix(name, spool.TempSuffix)) {
 			continue
@@ -139,8 +143,10 @@ func serveOnce(dir string, handle Handler) {
 		var response spool.Response
 		if state == waitMissing {
 			response = spool.Response{OK: false, Code: spool.CodeNoWait, Error: "no wait file"}
-		} else if tool, args, ok := parseRequest(data); !ok {
+		} else if tool, args, session, ok := parseRequest(data); !ok {
 			response = spool.Response{OK: false, Code: spool.CodeInvalidRequest, Error: "unreadable request"}
+		} else if code := sessionCheck(dir, tool, session); code != "" {
+			response = spool.Response{OK: false, Code: code, Error: "not for this session"}
 		} else {
 			response = handle(tool, args)
 		}
@@ -154,20 +160,47 @@ func serveOnce(dir string, handle Handler) {
 // parseRequest は要求を読む（docs/protocol.md「要求」）。大きすぎる・入れ子が深すぎる・JSON と
 // して壊れている・tool が無い要求は読めない（プラグインは深さを解析の中で数えるが、
 // encoding/json は上限が違うので、解析の前に数える）。args が無い・オブジェクトでなければ {} とする。
-func parseRequest(data []byte) (tool string, args json.RawMessage, ok bool) {
+func parseRequest(data []byte) (tool string, args json.RawMessage, session string, ok bool) {
 	if len(data) > spool.MaxRequestBytes || spool.NestingDepth(data) > spool.MaxNestingDepth {
-		return "", nil, false
+		return "", nil, "", false
 	}
 	var request struct {
-		Tool string          `json:"tool"`
-		Args json.RawMessage `json:"args"`
+		Tool    string          `json:"tool"`
+		Args    json.RawMessage `json:"args"`
+		Session string          `json:"session"`
 	}
 	if json.Unmarshal(data, &request) != nil || request.Tool == "" {
-		return "", nil, false
+		return "", nil, "", false
 	}
 	var object map[string]json.RawMessage
 	if json.Unmarshal(request.Args, &object) != nil || object == nil {
 		request.Args = json.RawMessage("{}")
 	}
-	return request.Tool, request.Args, true
+	return request.Tool, request.Args, request.Session, true
+}
+
+// sessionCheck は要求を占有に照らす（docs/protocol.md「占有」）。実行してよければ空、断るなら
+// その code。tools と ping は占有によらず答える（調べものと診断のため）。
+//
+//   - 占有されていない: 印の無い要求は実行する。印のある要求は、その占有が終わっているので断る。
+//   - 占有されている: 印が session.json と同じ要求だけを実行する。session.json が読めない
+//     （占有した直後で、まだ書かれていない）間は、どの要求も断る。
+func sessionCheck(dir, tool, session string) string {
+	if tool == "tools" || tool == "ping" {
+		return ""
+	}
+	if waitStateOf(filepath.Join(dir, spool.SessionLock)) != waitHeld {
+		if session != "" {
+			return spool.CodeNoSession
+		}
+		return ""
+	}
+	var current struct {
+		Session string `json:"session"`
+	}
+	text, err := os.ReadFile(filepath.Join(dir, spool.SessionFile))
+	if err != nil || json.Unmarshal(text, &current) != nil || current.Session == "" || current.Session != session {
+		return spool.CodeBusy
+	}
+	return ""
 }

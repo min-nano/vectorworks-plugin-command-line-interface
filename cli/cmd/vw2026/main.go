@@ -44,6 +44,8 @@ const (
 	// 待つのをやめたときに要求をプラグインが既に受け取っていて、応答が届かなかった。exitTimeout
 	// （実行されない）と分けるのは、書く道具を呼んだ側が二重に操作しないように。
 	exitNoResponse = 8
+	// ほかの呼ぶ側が占有している・載せた占有が終わっている。要求は実行されていない。
+	exitBusy = 9
 )
 
 // env は外の世界との接点。テストが差し替える。
@@ -71,6 +73,7 @@ type cli struct {
 	Call    callCmd    `cmd:"" help:"Call one tool."`
 	Wait    waitCmd    `cmd:"" help:"Wait until the bridge starts or stops."`
 	Launch  launchCmd  `cmd:"" help:"Start Vectorworks."`
+	Session sessionCmd `cmd:"" help:"Occupy the bridge while a command runs."`
 	Version versionCmd `cmd:"" help:"Print the versions of the CLI and the protocol."`
 }
 
@@ -114,6 +117,7 @@ The commands exit with
 	6  any other failure (cannot write, cannot start, cannot locate the spool)
 	7  Vectorworks is running, so install or uninstall did nothing (planned)
 	8  the plug-in took the request but no response came (the tool may have run)
+	9  another session occupies the bridge, or this session has ended (the tool did not run)
 
 Vectorworks can be running, holding the lock, while the plug-in defers the
 requests, for example during a modal dialog or while undo is being recorded
@@ -177,16 +181,24 @@ func run(args []string, e env) int {
 	return cmd.run(&grammar.globals, &e)
 }
 
-// open はスプールを決めて、ブリッジの状態を判定する。場所が決まらなければ標準エラーへ
-// 理由を書いて nil。
+// dir はスプールの場所を決める。決まらなければ標準エラーへ理由を書いて空。
+func (g *globals) dir(e *env) string {
+	if g.Spool != "" {
+		return g.Spool
+	}
+	dir, err := spool.DefaultDir()
+	if err != nil {
+		fmt.Fprintf(e.stderr, "vw2026: %v (set VW2026_SPOOL)\n", err)
+		return ""
+	}
+	return dir
+}
+
+// open はスプールを決めて、ブリッジの状態を判定する。場所が決まらなければ nil。
 func (g *globals) open(e *env) *spool.Bridge {
-	dir := g.Spool
+	dir := g.dir(e)
 	if dir == "" {
-		var err error
-		if dir, err = spool.DefaultDir(); err != nil {
-			fmt.Fprintf(e.stderr, "vw2026: %v (set VW2026_SPOOL)\n", err)
-			return nil
-		}
+		return nil
 	}
 	return spool.Open(dir)
 }

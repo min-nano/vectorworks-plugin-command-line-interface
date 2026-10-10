@@ -17,8 +17,10 @@ one. Use "vw2026 call ping" for the version of the plug-in.
 
 It prints one of
 
-	{"running":true,"spool":"..."}
-	{"running":false,"spool":"...","reason":"..."}
+	{"running":true,"session":false,"spool":"..."}
+	{"running":false,"session":false,"spool":"...","reason":"..."}
+
+"session" tells whether a caller occupies the bridge ("vw2026 help session").
 
 and exits with 3 when the bridge is not running.
 `
@@ -41,6 +43,7 @@ func (statusCmd) run(g *globals, e *env) int {
 func bridgeJSON(bridge *spool.Bridge) map[string]any {
 	out := map[string]any{
 		"running": bridge.Running,
+		"session": bridge.Session,
 		"spool":   bridge.Dir,
 	}
 	if !bridge.Running {

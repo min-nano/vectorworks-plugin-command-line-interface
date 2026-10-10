@@ -15,6 +15,7 @@ type callCmd struct {
 	Args    string  `arg:"" optional:"" name:"args" help:"Arguments as a JSON object, or - to read them from the standard input."`
 	Raw     bool    `help:"Print the whole response (ok, result, and error)."`
 	Timeout float64 `default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
+	Session string  `env:"VW2026_SESSION" placeholder:"ID" help:"Session to call in. \"vw2026 session\" sets it for its command."`
 }
 
 func (callCmd) Help() string {
@@ -44,6 +45,10 @@ request, call waits a few more seconds for the response, and exits with 8 if
 none comes: the tool may have run. A no_wait response also means that the
 tool did not run, so call exits with 4 for it, not with 1. A call that is
 killed while waiting leaves a request that will not run either.
+
+While another session occupies the bridge (see "vw2026 help session"), call
+exits with 9: the tool did not run. So it does when the session it calls in
+has ended.
 `
 }
 
@@ -76,7 +81,7 @@ func (c *callCmd) run(g *globals, e *env) int {
 		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (try `vw2026 status`)")
 		return exitDown
 	}
-	response, err := bridge.Call(c.Tool, payload, seconds(c.Timeout))
+	response, err := bridge.Call(c.Tool, payload, c.Session, seconds(c.Timeout))
 	if err != nil {
 		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
 		return codeFor(err)
@@ -101,6 +106,8 @@ func codeFor(err error) int {
 		return exitTimeout
 	case errors.Is(err, spool.ErrNoResponse):
 		return exitNoResponse
+	case errors.Is(err, spool.ErrBusy), errors.Is(err, spool.ErrNoSession):
+		return exitBusy
 	default:
 		return exitFailure
 	}

@@ -24,7 +24,7 @@ type result struct {
 func invoke(t *testing.T, vars map[string]string, stdin string, started *[]string, args ...string) result {
 	t.Helper()
 	// kong は環境変数を os から直接読むので、テストごとに置き直す（並行には走らせない）。
-	for _, name := range []string{"VW2026_SPOOL", "VW2026_APP"} {
+	for _, name := range []string{"VW2026_SPOOL", "VW2026_APP", "VW2026_SESSION"} {
 		t.Setenv(name, vars[name])
 	}
 	var stdout, stderr bytes.Buffer
@@ -147,7 +147,7 @@ func TestWaitTimesOut(t *testing.T) {
 
 func TestVersion(t *testing.T) {
 	r := invoke(t, nil, "", nil, "version")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":4`) {
+	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":5`) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -212,7 +212,7 @@ func TestHelp(t *testing.T) {
 }
 
 func TestVersionFlag(t *testing.T) {
-	if r := invoke(t, nil, "", nil, "--version"); r.code != exitOK || !strings.Contains(r.stdout, `"protocol":4`) {
+	if r := invoke(t, nil, "", nil, "--version"); r.code != exitOK || !strings.Contains(r.stdout, `"protocol":5`) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -236,5 +236,66 @@ func TestCodeFor(t *testing.T) {
 		if got := codeFor(fmt.Errorf("%w (detail)", err)); got != want {
 			t.Errorf("%v: got %d, want %d", err, got, want)
 		}
+	}
+}
+
+// TestMain は、VW2026_TEST_CHILD が立っていれば vw2026 そのものとして動く（session が包む
+// コマンドに、このテストの実行ファイルを使う）。
+func TestMain(m *testing.M) {
+	if os.Getenv("VW2026_TEST_CHILD") != "" {
+		os.Exit(run(os.Args[1:], env{stdin: os.Stdin, stdout: os.Stdout, stderr: os.Stderr}))
+	}
+	os.Exit(m.Run())
+}
+
+// session が包むコマンドの call は、占有の中で実行される。外の call は 9 で断られる。
+func TestSessionRunsCommandInSession(t *testing.T) {
+	dir := echoBridge(t)
+	t.Setenv("VW2026_TEST_CHILD", "1")
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "session", "--", os.Args[0], "call", "layers")
+	if r.code != exitOK || strings.TrimSpace(r.stdout) != `{"args":{},"tool":"layers"}` {
+		t.Fatalf("%+v", r)
+	}
+	// 終わったら占有は解ける。
+	if spool.Open(dir).Session {
+		t.Fatal("the session should end with the command")
+	}
+}
+
+func TestSessionPassesExitCode(t *testing.T) {
+	dir := echoBridge(t)
+	t.Setenv("VW2026_TEST_CHILD", "1")
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "session", "--", os.Args[0], "call", "fail")
+	if r.code != exitToolErr {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestCallOutsideSessionIsBusy(t *testing.T) {
+	dir := echoBridge(t)
+	session, err := spool.HoldSession(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Release()
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "layers")
+	if r.code != exitBusy {
+		t.Fatalf("%+v", r)
+	}
+	r = invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
+	if r.code != exitOK || !strings.Contains(r.stdout, `"session":true`) {
+		t.Fatalf("%+v", r)
+	}
+	r = invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "session", "--", os.Args[0], "version")
+	if r.code != exitBusy {
+		t.Fatalf("a second session should be refused: %+v", r)
+	}
+}
+
+func TestSessionInsideSessionIsUsageError(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir, "VW2026_SESSION": "x"}, "", nil, "session", "--", os.Args[0], "version")
+	if r.code != exitUsage {
+		t.Fatalf("%+v", r)
 	}
 }

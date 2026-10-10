@@ -18,3 +18,10 @@ func SetMalformedGrace(t *testing.T, d time.Duration) {
 	malformedGrace = d
 	t.Cleanup(func() { malformedGrace = old })
 }
+
+// SetSessionGrace はテストの間だけ sessionGrace を縮める。
+func SetSessionGrace(t *testing.T, d time.Duration) {
+	old := sessionGrace
+	sessionGrace = d
+	t.Cleanup(func() { sessionGrace = old })
+}

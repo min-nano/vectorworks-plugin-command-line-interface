@@ -163,3 +163,36 @@ func TestStartSweepsOnlyFilesWithoutWaiter(t *testing.T) {
 		}
 	}
 }
+
+// ロックを取ったときの掃除は、占有のファイルに触らない。
+func TestStartKeepsSessionFiles(t *testing.T) {
+	dir := NewDir(t)
+	for _, name := range []string{spool.SessionLock, spool.SessionFile, spool.SessionFile + spool.TempSuffix} {
+		write(t, dir, name, "")
+	}
+	Start(t, dir, ok)
+	for _, name := range []string{spool.SessionLock, spool.SessionFile, spool.SessionFile + spool.TempSuffix} {
+		if !exists(dir, name) {
+			t.Errorf("%s should be kept", name)
+		}
+	}
+}
+
+// 占有した直後で session.json がまだ無い間は、どの要求も断る。
+func TestServeRefusesWhileSessionFileIsMissing(t *testing.T) {
+	dir := NewDir(t)
+	unlock, err := lock(filepath.Join(dir, spool.SessionLock))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(unlock)
+	put(t, dir, "a", `{"tool":"layers","session":"x"}`)
+	put(t, dir, "b", `{"tool":"ping"}`)
+	serveOnce(dir, ok)
+	if response := responseOf(t, dir, "a"); response.Code != spool.CodeBusy {
+		t.Fatalf("want busy, got %+v", response)
+	}
+	if response := responseOf(t, dir, "b"); !response.OK {
+		t.Fatalf("ping should be answered: %+v", response)
+	}
+}

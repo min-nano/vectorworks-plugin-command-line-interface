@@ -21,7 +21,7 @@
 - **`core/Json` のファジング。** ASan・UBSan を有効にしたビルドで、libFuzzer（clang の
   `-fsanitize=fuzzer`）の入口を `core/Json` の解析に設け、`test.yml` で決まった時間だけ回す。
   種は `protocol/fixtures/` の要求の見本と、深い入れ子・長い文字列・不正な UTF-8 を使う。
-- **`protocol/fixtures/` の中身。** 作法の定数（スプールの名前・ファイルの綴り・1 MiB・深さ 64・
+- **`protocol/fixtures/` の中身。** 作法の定数（スプールの名前・ファイルの綴り（占有のファイルを含む）・1 MiB・深さ 64・
   `code` の綴り）と、受け付け 1 回の入出力の見本（置いたファイル →
   残るファイルと応答）を置く。C++ のテストと Go の `cli/internal/fakeplugin` の両方がそれを読み、
   定数を二重に書かない（いまは `cli/internal/spool` と `fakeplugin` が持ち、作法と揃えてある）。
