@@ -2,7 +2,7 @@
 // docs/plugin/bridge.md「受け付け 1 回」）。spool と vw2026 の単体テストだけが使う。
 //
 // 作法より緩く真似ると、CLI がプラグインの断る要求を送っても単体テストが気づかないので、
-// 関門（id の綴り・件数と時間の上限・大きさと入れ子の深さの上限・ロックを取ったときの掃除）は
+// 関門（id の綴り・回の始めに並べた要求だけの処理・大きさと入れ子の深さの上限・ロックを取ったときの掃除）は
 // プラグインと同じに持つ。道具の種類（quit で残りを取り出さない）は道具の表を持たないので真似ない。
 package fakeplugin
 
@@ -26,13 +26,6 @@ const (
 	waitReleased                  // 呼ぶ側が放した・死んだ
 	waitMissing                   // 無い（作法に反する）
 )
-
-// 受け付け 1 回の上限（docs/plugin/bridge.md「受け付け 1 回」）。プラグインと対。
-const maxPerServe = 16 // 取り出す件数
-
-// serveBudget は、経過がこれを超えたら新しい要求を取り出さない時間。件数の上限を確かめる
-// テストが、遅い CI で時間の上限に先に当たらないように延ばす。
-var serveBudget = 100 * time.Millisecond
 
 // Handler は道具 1 つの呼び出しに応える。
 type Handler func(tool string, args json.RawMessage) spool.Response
@@ -110,10 +103,9 @@ func sweep(dir string) {
 }
 
 // serveOnce は受け付け 1 回。要求を名前の昇順で読み、消し、呼ぶ側が待っていれば実行する。
-// 取り出すのは maxPerServe 件までで、経過が serveBudget を超えたら新しい要求を取り出さない
-// （1 件目は必ず取り出す）。取り出した要求には同じ回の中で応える。
+// 処理するのは回の始めに並べた要求だけで（件数と時間の上限は無い）、取り出した要求には同じ回の
+// 中で応える。
 func serveOnce(dir string, handle Handler) {
-	start := time.Now()
 	entries, _ := os.ReadDir(dir)
 	var names []string
 	for _, entry := range entries {
@@ -124,11 +116,7 @@ func serveOnce(dir string, handle Handler) {
 		}
 	}
 	sort.Strings(names)
-	taken := 0
 	for _, name := range names {
-		if taken == maxPerServe || (taken > 0 && time.Since(start) > serveBudget) {
-			return
-		}
 		id := strings.TrimSuffix(name, spool.RequestSuffix)
 		path := filepath.Join(dir, name)
 		data, err := os.ReadFile(path)
@@ -141,7 +129,6 @@ func serveOnce(dir string, handle Handler) {
 			// 呼ぶ側が取り下げた）。
 			continue
 		}
-		taken++
 		// 待つ者の居なくなった要求は実行も応答もしない。.wait の無い要求は実行せずに断る。
 		wait := filepath.Join(dir, id+spool.WaitSuffix)
 		state := waitStateOf(wait)

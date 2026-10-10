@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
@@ -61,39 +60,26 @@ func responseOf(t *testing.T, dir, id string) spool.Response {
 	return response
 }
 
-// 1 回に取り出すのは maxPerServe 件まで。残りは次の回に回る。
-func TestServeLimitsCount(t *testing.T) {
-	old := serveBudget
-	serveBudget = time.Minute
-	t.Cleanup(func() { serveBudget = old })
+// 回の始めに並べた要求はすべて処理し（件数の上限は無い）、その後に置かれた要求は次の回に回す。
+func TestServeTakesOnlyRequestsListedAtStart(t *testing.T) {
 	dir := NewDir(t)
-	for i := range maxPerServe + 4 {
+	const listed = 20
+	for i := range listed {
 		put(t, dir, fmt.Sprintf("%04d", i), `{"tool":"ping"}`)
 	}
-	serveOnce(dir, ok)
-	if got := count(t, dir, spool.ResponseSuffix); got != maxPerServe {
-		t.Fatalf("want %d responses, got %d", maxPerServe, got)
-	}
-	if !exists(dir, fmt.Sprintf("%04d", maxPerServe)+spool.RequestSuffix) {
-		t.Fatal("the rest should wait for the next round")
-	}
-}
-
-// 経過が serveBudget を超えたら新しい要求を取り出さない。1 件目は必ず処理する。
-func TestServeLimitsTime(t *testing.T) {
-	dir := NewDir(t)
-	for _, id := range []string{"a", "b", "c"} {
-		put(t, dir, id, `{"tool":"slow"}`)
-	}
+	added := false
 	serveOnce(dir, func(string, json.RawMessage) spool.Response {
-		time.Sleep(serveBudget + 20*time.Millisecond)
+		if !added {
+			added = true
+			put(t, dir, "9999", `{"tool":"ping"}`)
+		}
 		return spool.Response{OK: true}
 	})
-	if !exists(dir, "a"+spool.ResponseSuffix) {
-		t.Fatal("the first request must be served")
+	if got := count(t, dir, spool.ResponseSuffix); got != listed {
+		t.Fatalf("want %d responses, got %d", listed, got)
 	}
-	if got := count(t, dir, spool.RequestSuffix); got != 2 {
-		t.Fatalf("want 2 requests left, got %d", got)
+	if !exists(dir, "9999"+spool.RequestSuffix) {
+		t.Fatal("a request put during the round should wait for the next one")
 	}
 }
 
