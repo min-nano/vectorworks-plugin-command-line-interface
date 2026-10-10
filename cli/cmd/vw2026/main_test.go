@@ -198,7 +198,7 @@ func TestHelp(t *testing.T) {
 	}
 	for _, args := range [][]string{{"help", "call"}, {"call", "--help"}, {"call", "x", "-h"}} {
 		r := invoke(t, nil, "", nil, args...)
-		if r.code != exitOK || !strings.Contains(r.stdout, "--timeout") || !strings.Contains(r.stdout, "withdraws the request") {
+		if r.code != exitOK || !strings.Contains(r.stdout, "--timeout") || !strings.Contains(r.stdout, "will not run later") {
 			t.Fatalf("%v: %+v", args, r)
 		}
 	}
@@ -232,7 +232,6 @@ func TestCodeFor(t *testing.T) {
 		spool.ErrNotRunning: exitDown,
 		spool.ErrTimeout:    exitTimeout,
 		spool.ErrNoResponse: exitNoResponse,
-		spool.ErrCanceled:   exitFailure,
 	} {
 		if got := codeFor(fmt.Errorf("%w (detail)", err)); got != want {
 			t.Errorf("%v: got %d, want %d", err, got, want)

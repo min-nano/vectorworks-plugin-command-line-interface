@@ -1,15 +1,11 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
@@ -39,11 +35,11 @@ standard error and exits with 1; with --raw the response also carries the
 code (unknown_tool, invalid_args, no_document, invalid_request, or internal;
 docs/protocol.md).
 
-When --timeout runs out, call withdraws the request and exits with 4: the
-tool did not run. If the plug-in has already taken the request, call cannot
-withdraw it; it waits a few more seconds for the response, and exits with 8
-if none comes: the tool may have run. On SIGINT or SIGTERM, call withdraws
-the request the same way and exits with 6, or with 8 if it was taken.
+When --timeout runs out, call stops waiting and exits with 4: the tool did
+not run and will not run later. If the plug-in had already taken the
+request, call waits a few more seconds for the response, and exits with 8 if
+none comes: the tool may have run. A call that is killed while waiting
+leaves a request that will not run either.
 `
 }
 
@@ -76,10 +72,7 @@ func (c *callCmd) run(g *globals, e *env) int {
 		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (try `vw2026 status`)")
 		return exitDown
 	}
-	// 止められたら要求を取り下げる（誰も待たない要求をスプールに残さない）。
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	response, err := bridge.Call(ctx, c.Tool, payload, seconds(c.Timeout))
+	response, err := bridge.Call(c.Tool, payload, seconds(c.Timeout))
 	if err != nil {
 		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
 		return codeFor(err)

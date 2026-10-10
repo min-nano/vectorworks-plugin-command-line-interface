@@ -10,7 +10,6 @@
 package spool
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -76,14 +75,11 @@ var ErrNotRunning = errors.New("bridge is not running")
 // 無かった。受け付けが見送られている（モーダルダイアログ・undo の記録の最中）ことが多い。
 var ErrTimeout = errors.New("timed out waiting for the response")
 
-// ErrNoResponse は、取り下げようとした要求をプラグインが既に受け取っていて、猶予の間にも
-// 応答が届かなかった。要求は実行されたかもしれない（ErrTimeout は実行されていない）。
+// ErrNoResponse は、待つのをやめたときに要求をプラグインが既に受け取っていて、猶予の間にも
+// 応答が届かなかった。要求は実行されたかもしれない（ErrTimeout は実行されない）。
 var ErrNoResponse = errors.New("the bridge took the request but no response came")
 
-// ErrCanceled は、待っている間に呼ぶ側が止められ（SIGINT・SIGTERM）、要求を取り下げた。
-var ErrCanceled = errors.New("canceled while waiting for the response")
-
-// takenGrace は、取り下げに失敗した（プラグインが受け取っていた）あとに応答を待つ猶予。
+// takenGrace は、待つのをやめたときに要求をプラグインが受け取っていたら、応答を待つ猶予。
 // 応答は受け付けの同じ回の中で書かれ、受け付け 1 回の中で数秒を超える道具は持たない
 // （docs/protocol.md「応答」）。テストが縮める。
 var takenGrace = 5 * time.Second
@@ -119,15 +115,17 @@ func NewID(now time.Time) string {
 // Call は道具を 1 つ呼び、応答を待つ。
 //
 // 受け付けが見送られていても要求を置いて timeout まで待つ（受け付けが戻れば処理される）。
-// 待つ間は <id>.wait を掴み、プラグインに呼ぶ側が生きていることを示す（docs/protocol.md
-// 「待つ印」）。待つのを諦めたとき・ctx が終わったときは置いた要求を取り下げる。
+// 待つ間は <id>.wait を掴み、プラグインに呼ぶ側が待っていることを示す（docs/protocol.md
+// 「待つ印」）。待つのを諦めたら .wait を放す。要求は消さない: 以後にプラグインが取り出しても、
+// .wait を掴めるので実行せずに捨てる。呼ぶ側が強制終了されても OS が .wait を放すので同じに
+// なり、シグナルを受けて後始末をする必要も無い。
 //
-//   - 取り下げられた: 要求は実行されない。理由をその時点のロックで ErrNotRunning / ErrTimeout
-//     に分ける（呼ぶ側が起動し直すべきか、待てばよいかを判定できるように）。ctx が終わった
-//     ときは ErrCanceled。
-//   - 取り下げられなかった: プラグインが受け取った。takenGrace だけ応答を待ち、届かなければ
-//     ErrNoResponse（実行されたかは分からない）。ctx が終わったときは待たない。
-func (b *Bridge) Call(ctx context.Context, tool string, args json.RawMessage, timeout time.Duration) (*Response, error) {
+//   - 放したあとも要求が残っている: まだ取り出されていないので、実行されない。理由をその時点の
+//     ロックで ErrNotRunning / ErrTimeout に分ける（呼ぶ側が起動し直すべきか、待てばよいかを
+//     判定できるように）。
+//   - 要求が無い: プラグインが受け取った。放す前に受け取っていれば実行される。takenGrace だけ
+//     応答を待ち、届かなければ ErrNoResponse（実行されたかは分からない）。
+func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) (*Response, error) {
 	if len(args) == 0 {
 		args = json.RawMessage("{}")
 	}
@@ -148,59 +146,48 @@ func (b *Bridge) Call(ctx context.Context, tool string, args json.RawMessage, ti
 	waitPath := filepath.Join(b.Dir, id+WaitSuffix)
 
 	// 要求を公開する前に .wait を掴む（公開した時点で、プラグインが生死を判定できるように）。
-	release, err := holdWait(waitPath)
+	unlock, err := holdWait(waitPath)
 	if err != nil {
 		return nil, fmt.Errorf("hold %s: %w", id+WaitSuffix, err)
 	}
-	// 要求がまだプラグインの手元に届きうる間は .wait を消さずに放すだけにする。プラグインは
-	// あとでそれを掴めるので、誰も待たない要求として実行せずに捨てる（残った .wait は
-	// プラグインかロックを取ったときの掃除が消す）。
-	settled := false
-	defer func() {
-		release()
-		if settled {
-			_ = os.Remove(waitPath)
+	held := true
+	release := func() {
+		if held {
+			held = false
+			unlock()
 		}
-	}()
-	if err := writeAtomically(requestPath, payload); err != nil {
-		settled = true
-		return nil, err
 	}
-
-	receive := func() (*Response, bool) {
-		response, ok := readResponse(responsePath)
-		if ok {
-			settled = true
-			// 消せなくても応答は取得できている。残骸はプラグイン側が開始時に掃除する。
-			_ = os.Remove(responsePath)
-		}
-		return response, ok
+	defer release()
+	// finish は応答を受け取ったときの後始末。要求はもう無いので .wait も消してよい。
+	finish := func(response *Response) (*Response, error) {
+		release()
+		_ = os.Remove(waitPath)
+		// 消せなくても応答は取得できている。残骸はプラグイン側が開始時に掃除する。
+		_ = os.Remove(responsePath)
+		return response, nil
+	}
+	if err := writeAtomically(requestPath, payload); err != nil {
+		release()
+		_ = os.Remove(waitPath)
+		return nil, err
 	}
 
 	deadline := time.Now().Add(timeout)
 	for {
-		if response, ok := receive(); ok {
-			return response, nil
-		}
-		select {
-		case <-ctx.Done():
-			if os.Remove(requestPath) == nil {
-				settled = true
-				return nil, fmt.Errorf("%w (%s; the request was withdrawn)", ErrCanceled, tool)
-			}
-			return nil, fmt.Errorf("%w (%s; canceled)", ErrNoResponse, tool)
-		case <-time.After(50 * time.Millisecond):
+		if response, ok := readResponse(responsePath); ok {
+			return finish(response)
 		}
 		if time.Now().After(deadline) {
 			break
 		}
+		time.Sleep(50 * time.Millisecond)
 	}
 
-	// 置いたままの要求を取り下げる（あとで読み取られて、誰も待たない要求が実行されないように）。
-	// 消せたなら確実に実行されない。消せない（無い・Windows でプラグインが開いている）なら
-	// プラグインが受け取ったものとみなす。
-	if os.Remove(requestPath) == nil {
-		settled = true
+	// 待つのをやめる。.wait は放すだけで消さない（消すと「待つ印を使わない呼ぶ側」とみなされ、
+	// 実行されてしまう）。要求と .wait は、プラグインが取り出したときか、ロックを取ったときの
+	// 掃除で消える。放してから要求を見るので、ここで残っていれば以後に実行されることは無い。
+	release()
+	if _, err := os.Stat(requestPath); err == nil {
 		if !Open(b.Dir).Running {
 			return nil, fmt.Errorf("%w (stopped while waiting for %s)", ErrNotRunning, tool)
 		}
@@ -208,17 +195,13 @@ func (b *Bridge) Call(ctx context.Context, tool string, args json.RawMessage, ti
 	}
 	graceEnd := time.Now().Add(takenGrace)
 	for {
-		if response, ok := receive(); ok {
-			return response, nil
+		if response, ok := readResponse(responsePath); ok {
+			return finish(response)
 		}
 		if time.Now().After(graceEnd) {
 			return nil, fmt.Errorf("%w (%s, %s; it may have run)", ErrNoResponse, tool, timeout)
 		}
-		select {
-		case <-ctx.Done():
-			return nil, fmt.Errorf("%w (%s; canceled)", ErrNoResponse, tool)
-		case <-time.After(50 * time.Millisecond):
-		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
