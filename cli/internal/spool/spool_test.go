@@ -1,6 +1,7 @@
 package spool_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -25,7 +26,7 @@ func TestCallRoundTrip(t *testing.T) {
 	if !bridge.Running {
 		t.Fatalf("want running, got %+v", bridge)
 	}
-	response, err := bridge.Call("layers", json.RawMessage(`{"include_sheets":false}`), 5*time.Second)
+	response, err := bridge.Call(context.Background(), "layers", json.RawMessage(`{"include_sheets":false}`), 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,14 +43,15 @@ func TestCallRoundTrip(t *testing.T) {
 	if got.Tool != "layers" || got.Args["include_sheets"] != false {
 		t.Fatalf("unexpected result: %s", response.Result)
 	}
-	// 応答は読んだあと消す。
+	// 応答と .wait は読んだあと消す。
 	assertNoFiles(t, dir, ResponseSuffix)
+	assertNoFiles(t, dir, WaitSuffix)
 }
 
 func TestCallEmptyArgsBecomesObject(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.Start(t, dir, echo)
-	response, err := Open(dir).Call("ping", nil, 5*time.Second)
+	response, err := Open(dir).Call(context.Background(), "ping", nil, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,13 +63,13 @@ func TestCallEmptyArgsBecomesObject(t *testing.T) {
 func TestCallToolFailure(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) Response {
-		return Response{OK: false, Error: "unknown tool: " + tool}
+		return Response{OK: false, Code: CodeUnknownTool, Error: "unknown tool: " + tool}
 	})
-	response, err := Open(dir).Call("nope", nil, 5*time.Second)
+	response, err := Open(dir).Call(context.Background(), "nope", nil, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.OK || response.Error != "unknown tool: nope" {
+	if response.OK || response.Code != CodeUnknownTool || response.Error != "unknown tool: nope" {
 		t.Fatalf("unexpected response: %+v", response)
 	}
 }
@@ -76,11 +78,12 @@ func TestCallTimeoutWithdrawsRequest(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.HoldLock(t, dir)
 	// 動いているが応えない（ダイアログの最中など）
-	_, err := Open(dir).Call("ping", nil, 200*time.Millisecond)
+	_, err := Open(dir).Call(context.Background(), "ping", nil, 200*time.Millisecond)
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("want ErrTimeout, got %v", err)
 	}
 	assertNoFiles(t, dir, RequestSuffix)
+	assertNoFiles(t, dir, WaitSuffix)
 }
 
 // ロックファイルがあっても、掴まれていなければ（異常終了のあと）止まっている。
@@ -116,7 +119,7 @@ func TestCallIsServedWhenServingResumes(t *testing.T) {
 		release()
 		fakeplugin.Start(t, dir, echo)
 	}()
-	response, err := bridge.Call("ping", nil, 5*time.Second)
+	response, err := bridge.Call(context.Background(), "ping", nil, 5*time.Second)
 	if err != nil || !response.OK {
 		t.Fatalf("%+v %v", response, err)
 	}
@@ -127,7 +130,7 @@ func TestCallTimeoutWhenStopped(t *testing.T) {
 	release := fakeplugin.HoldLock(t, dir)
 	bridge := Open(dir)
 	release()
-	_, err := bridge.Call("ping", nil, 200*time.Millisecond)
+	_, err := bridge.Call(context.Background(), "ping", nil, 200*time.Millisecond)
 	if !errors.Is(err, ErrNotRunning) {
 		t.Fatalf("want ErrNotRunning, got %v", err)
 	}
@@ -202,7 +205,7 @@ func TestCallRereadsTornResponse(t *testing.T) {
 		time.Sleep(300 * time.Millisecond)
 		_ = os.WriteFile(response, []byte(`{"ok":true,"result":{"done":1}}`), 0o600)
 	}()
-	response, err := Open(dir).Call("ping", nil, 5*time.Second)
+	response, err := Open(dir).Call(context.Background(), "ping", nil, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,10 +219,155 @@ func TestCallRejectsOversizedRequest(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.HoldLock(t, dir)
 	big := json.RawMessage(`{"s":"` + strings.Repeat("x", MaxRequestBytes) + `"}`)
-	_, err := Open(dir).Call("ping", big, time.Second)
+	_, err := Open(dir).Call(context.Background(), "ping", big, time.Second)
 	if err == nil || !strings.Contains(err.Error(), "too large") {
 		t.Fatalf("want a size error, got %v", err)
 	}
 	assertNoFiles(t, dir, RequestSuffix)
 	assertNoFiles(t, dir, TempSuffix)
+}
+
+// takeRequest はプラグインが要求を受け取ったこと（読んで消した）を真似る。応答は書かない。
+// 受け取った要求の id を返す。
+func takeRequest(t *testing.T, dir string) <-chan string {
+	t.Helper()
+	taken := make(chan string, 1)
+	go func() {
+		for {
+			matches, _ := filepath.Glob(filepath.Join(dir, "*"+RequestSuffix))
+			if len(matches) > 0 && os.Remove(matches[0]) == nil {
+				taken <- strings.TrimSuffix(filepath.Base(matches[0]), RequestSuffix)
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+	return taken
+}
+
+// 取り下げようとした要求が既に受け取られていて、猶予の間にも応答が無ければ ErrNoResponse
+// （「実行されていない」と区別する）。
+func TestCallTakenWithoutResponse(t *testing.T) {
+	SetTakenGrace(t, 200*time.Millisecond)
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	taken := takeRequest(t, dir)
+	_, err := Open(dir).Call(context.Background(), "ping", nil, 200*time.Millisecond)
+	if !errors.Is(err, ErrNoResponse) || errors.Is(err, ErrTimeout) {
+		t.Fatalf("want ErrNoResponse, got %v", err)
+	}
+	// .wait は放したまま残す（プラグインがあとで掴めば、誰も待たない要求として捨てる）。
+	id := <-taken
+	if _, err := os.Stat(filepath.Join(dir, id+WaitSuffix)); err != nil {
+		t.Fatalf("the .wait should remain: %v", err)
+	}
+}
+
+// 受け取られた要求の応答が締切のあと猶予の内に届けば、それを返す。
+func TestCallTakenThenAnswered(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	taken := takeRequest(t, dir)
+	go func() {
+		id := <-taken
+		time.Sleep(400 * time.Millisecond) // 締切（200 ms）を過ぎてから応える
+		_ = os.WriteFile(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":true,"result":{"late":1}}`), 0o600)
+	}()
+	response, err := Open(dir).Call(context.Background(), "ping", nil, 200*time.Millisecond)
+	if err != nil || !response.OK || string(response.Result) != `{"late":1}` {
+		t.Fatalf("%+v %v", response, err)
+	}
+	assertNoFiles(t, dir, WaitSuffix)
+}
+
+// 呼ぶ側が止められたら要求を取り下げる。
+func TestCallCanceledWithdrawsRequest(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(200*time.Millisecond, cancel)
+	_, err := Open(dir).Call(ctx, "ping", nil, 5*time.Second)
+	if !errors.Is(err, ErrCanceled) {
+		t.Fatalf("want ErrCanceled, got %v", err)
+	}
+	assertNoFiles(t, dir, RequestSuffix)
+	assertNoFiles(t, dir, WaitSuffix)
+}
+
+// 待つ者の居なくなった要求（.wait が放されている）は、実行も応答もされない。
+func TestRequestOfDeadCallerIsDropped(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	called := make(chan string, 1)
+	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) Response {
+		called <- tool
+		return Response{OK: true}
+	})
+	id := NewID(time.Now())
+	// 異常終了した呼ぶ側の残したもの: 掴まれていない .wait と要求。
+	if err := os.WriteFile(filepath.Join(dir, id+WaitSuffix), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, id+RequestSuffix), []byte(`{"tool":"ping"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		_, errReq := os.Stat(filepath.Join(dir, id+RequestSuffix))
+		_, errWait := os.Stat(filepath.Join(dir, id+WaitSuffix))
+		if os.IsNotExist(errReq) && os.IsNotExist(errWait) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the request and the .wait should be removed")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case tool := <-called:
+		t.Fatalf("%s must not run", tool)
+	default:
+	}
+	assertNoFiles(t, dir, ResponseSuffix)
+}
+
+// .wait を置かない呼ぶ側（シェルのスクリプトなど）の要求は、いまどおり実行される。
+func TestRequestWithoutWaitIsServed(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.Start(t, dir, echo)
+	id := NewID(time.Now())
+	if err := os.WriteFile(filepath.Join(dir, id+RequestSuffix), []byte(`{"tool":"ping"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(filepath.Join(dir, id+ResponseSuffix)); err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("no response")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// 応答の知らないフィールドは無視する（docs/protocol.md「互換性」）。
+func TestResponseIgnoresUnknownFields(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	go func() {
+		for {
+			matches, _ := filepath.Glob(filepath.Join(dir, "*"+RequestSuffix))
+			if len(matches) > 0 && os.Remove(matches[0]) == nil {
+				response := strings.TrimSuffix(matches[0], RequestSuffix) + ResponseSuffix
+				_ = os.WriteFile(response, []byte(`{"ok":true,"result":{},"future":[1]}`), 0o600)
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+	response, err := Open(dir).Call(context.Background(), "ping", nil, 5*time.Second)
+	if err != nil || !response.OK {
+		t.Fatalf("%+v %v", response, err)
+	}
 }

@@ -70,7 +70,7 @@ func Start(t *testing.T, dir string, handle Handler) {
 	})
 }
 
-// serveOnce は受け付け 1 回。要求を名前の昇順で読み、消してから実行する。
+// serveOnce は受け付け 1 回。要求を名前の昇順で読み、消し、呼ぶ側が待っていれば実行する。
 func serveOnce(dir string, handle Handler) {
 	entries, _ := os.ReadDir(dir)
 	var names []string
@@ -93,13 +93,19 @@ func serveOnce(dir string, handle Handler) {
 			// 呼ぶ側が取り下げた）。
 			continue
 		}
+		// 待つ者の居なくなった要求は実行も応答もしない。
+		wait := filepath.Join(dir, id+spool.WaitSuffix)
+		if callerGone(wait) {
+			_ = os.Remove(wait)
+			continue
+		}
 		var request struct {
 			Tool string          `json:"tool"`
 			Args json.RawMessage `json:"args"`
 		}
 		var response spool.Response
 		if json.Unmarshal(data, &request) != nil || request.Tool == "" {
-			response = spool.Response{OK: false, Error: "unreadable request"}
+			response = spool.Response{OK: false, Code: spool.CodeInvalidRequest, Error: "unreadable request"}
 		} else {
 			response = handle(request.Tool, request.Args)
 		}

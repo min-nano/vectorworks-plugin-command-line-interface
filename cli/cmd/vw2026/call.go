@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
@@ -30,9 +34,16 @@ arguments against the tool; the plug-in does.
 	echo '{"layer":"1F"}' | vw2026 call layer_objects -
 
 On success, call prints the result of the tool. With --raw it prints the
-whole response. When the tool fails, call writes the reason to the standard
-error and exits with 1. When --timeout runs out, call withdraws the request
-and exits with 4.
+whole response. When the tool fails, call writes its code and reason to the
+standard error and exits with 1; with --raw the response also carries the
+code (unknown_tool, invalid_args, no_document, invalid_request, or internal;
+docs/protocol.md).
+
+When --timeout runs out, call withdraws the request and exits with 4: the
+tool did not run. If the plug-in has already taken the request, call cannot
+withdraw it; it waits a few more seconds for the response, and exits with 8
+if none comes: the tool may have run. On SIGINT or SIGTERM, call withdraws
+the request the same way and exits with 6, or with 8 if it was taken.
 `
 }
 
@@ -65,7 +76,10 @@ func (c *callCmd) run(g *globals, e *env) int {
 		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (try `vw2026 status`)")
 		return exitDown
 	}
-	response, err := bridge.Call(c.Tool, payload, seconds(c.Timeout))
+	// 止められたら要求を取り下げる（誰も待たない要求をスプールに残さない）。
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	response, err := bridge.Call(ctx, c.Tool, payload, seconds(c.Timeout))
 	if err != nil {
 		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
 		return codeFor(err)
@@ -76,7 +90,7 @@ func (c *callCmd) run(g *globals, e *env) int {
 		_ = emitRaw(e, response.Result)
 	}
 	if !response.OK {
-		fmt.Fprintf(e.stderr, "vw2026: %s: %s\n", c.Tool, response.Error)
+		fmt.Fprintf(e.stderr, "vw2026: %s: %s: %s\n", c.Tool, response.Code, response.Error)
 		return exitToolErr
 	}
 	return exitOK
@@ -88,6 +102,8 @@ func codeFor(err error) int {
 		return exitDown
 	case errors.Is(err, spool.ErrTimeout):
 		return exitTimeout
+	case errors.Is(err, spool.ErrNoResponse):
+		return exitNoResponse
 	default:
 		return exitFailure
 	}

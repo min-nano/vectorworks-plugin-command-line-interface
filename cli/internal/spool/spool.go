@@ -2,7 +2,7 @@
 // CLI 側の実装である。
 //
 // 作法の真実は docs/protocol.md で、プラグイン側（C++）とこのパッケージはその対になる。
-// どちらかを変えたら仕様書と両方を直し、形を変えたなら ProtocolVersion を上げる。
+// どちらかを変えたら仕様書と両方を直す。ProtocolVersion を上げるかは docs/protocol.md「互換性」に従う。
 //
 // このパッケージは**排他を持たない**。同時に複数のプロセスが要求を置いても受け渡しは
 // 壊れないが、図面に対する操作の順序や占有は呼ぶ側の責任である
@@ -10,6 +10,7 @@
 package spool
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -25,13 +26,14 @@ import (
 const (
 	RequestSuffix  = ".req.json"
 	ResponseSuffix = ".res.json"
+	WaitSuffix     = ".wait"
 	LockFile       = "bridge.lock"
 	TempSuffix     = ".tmp"
 
-	// ProtocolVersion は受け渡しの版。スプールに置くものの形を変えたら上げる。表示のためだけで、
+	// ProtocolVersion は受け渡しの版（上げる場合は docs/protocol.md「互換性」）。表示のためだけで、
 	// 実行時に照合はしない（CLI とプラグインは同じ zip から同時に入り、更新は Vectorworks の
 	// 終了後にしか行わないので、両側は常に同じビルドである。docs/protocol.md「版」）。
-	ProtocolVersion = 3
+	ProtocolVersion = 4
 
 	// MaxRequestBytes はプラグイン側が受け付ける要求 1 件の上限。超える要求は置く前に断る
 	// （置いても「読めない要求」として失敗が返るだけなので）。
@@ -47,12 +49,24 @@ func ValidID(id string) bool {
 	return idPattern.MatchString(id)
 }
 
-// Response は応答 1 件。OK が false のときだけ Error に理由が入る。id はファイル名が持つ。
+// Response は応答 1 件。OK が false のときだけ Code（機械が読む種別）と Error（人向けの理由）が
+// 入る。id はファイル名が持つ。知らないフィールドは無視する（docs/protocol.md「互換性」）。
 type Response struct {
 	OK     bool            `json:"ok"`
+	Code   string          `json:"code,omitempty"`
 	Error  string          `json:"error,omitempty"`
 	Result json.RawMessage `json:"result,omitempty"`
 }
+
+// 失敗の種別（Response.Code）。綴りは作法で固定する（docs/protocol.md「応答」）。CLI は
+// これを解釈せず、そのまま呼ぶ側へ渡す。
+const (
+	CodeInvalidRequest = "invalid_request" // 要求が読めない（JSON として壊れている・大きすぎる・tool が無い）
+	CodeUnknownTool    = "unknown_tool"    // 知らない道具
+	CodeInvalidArgs    = "invalid_args"    // 道具の引数が誤っている
+	CodeNoDocument     = "no_document"     // 図面が開かれていない
+	CodeInternal       = "internal"        // そのほか（道具の中の例外など）
+)
 
 // ErrNotRunning はブリッジが見つからない（Vectorworks が起動していない・プラグインが
 // 読み込まれていない・場所が食い違っている）。
@@ -61,6 +75,18 @@ var ErrNotRunning = errors.New("bridge is not running")
 // ErrTimeout は、Vectorworks は動いている（ロックが掴まれている）が締切までに応答が
 // 無かった。受け付けが見送られている（モーダルダイアログ・undo の記録の最中）ことが多い。
 var ErrTimeout = errors.New("timed out waiting for the response")
+
+// ErrNoResponse は、取り下げようとした要求をプラグインが既に受け取っていて、猶予の間にも
+// 応答が届かなかった。要求は実行されたかもしれない（ErrTimeout は実行されていない）。
+var ErrNoResponse = errors.New("the bridge took the request but no response came")
+
+// ErrCanceled は、待っている間に呼ぶ側が止められ（SIGINT・SIGTERM）、要求を取り下げた。
+var ErrCanceled = errors.New("canceled while waiting for the response")
+
+// takenGrace は、取り下げに失敗した（プラグインが受け取っていた）あとに応答を待つ猶予。
+// 応答は受け付けの同じ回の中で書かれ、受け付け 1 回の中で数秒を超える道具は持たない
+// （docs/protocol.md「応答」）。テストが縮める。
+var takenGrace = 5 * time.Second
 
 // Bridge はスプール 1 つと、その状態。
 type Bridge struct {
@@ -93,9 +119,15 @@ func NewID(now time.Time) string {
 // Call は道具を 1 つ呼び、応答を待つ。
 //
 // 受け付けが見送られていても要求を置いて timeout まで待つ（受け付けが戻れば処理される）。
-// 待つのを諦めたときは置いた要求を取り下げ、理由をその時点のロックで ErrNotRunning /
-// ErrTimeout に分ける（呼ぶ側が起動し直すべきか、待てばよいかを判定できるように）。
-func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) (*Response, error) {
+// 待つ間は <id>.wait を掴み、プラグインに呼ぶ側が生きていることを示す（docs/protocol.md
+// 「待つ印」）。待つのを諦めたとき・ctx が終わったときは置いた要求を取り下げる。
+//
+//   - 取り下げられた: 要求は実行されない。理由をその時点のロックで ErrNotRunning / ErrTimeout
+//     に分ける（呼ぶ側が起動し直すべきか、待てばよいかを判定できるように）。ctx が終わった
+//     ときは ErrCanceled。
+//   - 取り下げられなかった: プラグインが受け取った。takenGrace だけ応答を待ち、届かなければ
+//     ErrNoResponse（実行されたかは分からない）。ctx が終わったときは待たない。
+func (b *Bridge) Call(ctx context.Context, tool string, args json.RawMessage, timeout time.Duration) (*Response, error) {
 	if len(args) == 0 {
 		args = json.RawMessage("{}")
 	}
@@ -112,27 +144,81 @@ func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) 
 
 	id := NewID(time.Now())
 	requestPath := filepath.Join(b.Dir, id+RequestSuffix)
+	responsePath := filepath.Join(b.Dir, id+ResponseSuffix)
+	waitPath := filepath.Join(b.Dir, id+WaitSuffix)
+
+	// 要求を公開する前に .wait を掴む（公開した時点で、プラグインが生死を判定できるように）。
+	release, err := holdWait(waitPath)
+	if err != nil {
+		return nil, fmt.Errorf("hold %s: %w", id+WaitSuffix, err)
+	}
+	// 要求がまだプラグインの手元に届きうる間は .wait を消さずに放すだけにする。プラグインは
+	// あとでそれを掴めるので、誰も待たない要求として実行せずに捨てる（残った .wait は
+	// プラグインかロックを取ったときの掃除が消す）。
+	settled := false
+	defer func() {
+		release()
+		if settled {
+			_ = os.Remove(waitPath)
+		}
+	}()
 	if err := writeAtomically(requestPath, payload); err != nil {
+		settled = true
 		return nil, err
 	}
 
-	responsePath := filepath.Join(b.Dir, id+ResponseSuffix)
-	deadline := time.Now().Add(timeout)
-	for {
-		if response, ok := readResponse(responsePath); ok {
+	receive := func() (*Response, bool) {
+		response, ok := readResponse(responsePath)
+		if ok {
+			settled = true
 			// 消せなくても応答は取得できている。残骸はプラグイン側が開始時に掃除する。
 			_ = os.Remove(responsePath)
+		}
+		return response, ok
+	}
+
+	deadline := time.Now().Add(timeout)
+	for {
+		if response, ok := receive(); ok {
 			return response, nil
 		}
-		if time.Now().After(deadline) {
-			// 置いたままの要求を取り下げる（あとで読み取られて、誰も待たない応答が残らないように）。
-			_ = os.Remove(requestPath)
-			if !Open(b.Dir).Running {
-				return nil, fmt.Errorf("%w (stopped while waiting for %s)", ErrNotRunning, tool)
+		select {
+		case <-ctx.Done():
+			if os.Remove(requestPath) == nil {
+				settled = true
+				return nil, fmt.Errorf("%w (%s; the request was withdrawn)", ErrCanceled, tool)
 			}
-			return nil, fmt.Errorf("%w (%s, %s; a dialog may be open)", ErrTimeout, tool, timeout)
+			return nil, fmt.Errorf("%w (%s; canceled)", ErrNoResponse, tool)
+		case <-time.After(50 * time.Millisecond):
 		}
-		time.Sleep(50 * time.Millisecond)
+		if time.Now().After(deadline) {
+			break
+		}
+	}
+
+	// 置いたままの要求を取り下げる（あとで読み取られて、誰も待たない要求が実行されないように）。
+	// 消せたなら確実に実行されない。消せない（無い・Windows でプラグインが開いている）なら
+	// プラグインが受け取ったものとみなす。
+	if os.Remove(requestPath) == nil {
+		settled = true
+		if !Open(b.Dir).Running {
+			return nil, fmt.Errorf("%w (stopped while waiting for %s)", ErrNotRunning, tool)
+		}
+		return nil, fmt.Errorf("%w (%s, %s; a dialog may be open)", ErrTimeout, tool, timeout)
+	}
+	graceEnd := time.Now().Add(takenGrace)
+	for {
+		if response, ok := receive(); ok {
+			return response, nil
+		}
+		if time.Now().After(graceEnd) {
+			return nil, fmt.Errorf("%w (%s, %s; it may have run)", ErrNoResponse, tool, timeout)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("%w (%s; canceled)", ErrNoResponse, tool)
+		case <-time.After(50 * time.Millisecond):
+		}
 	}
 }
 
