@@ -94,7 +94,7 @@ struct Tool {
     ToolFn      run;             // Json (const Json& args, ToolError& error)
 };
 
-enum class ErrorCode { InvalidArgs, NoDocument, Internal };   // 道具が返す種別
+enum class ErrorCode { InvalidArgs, Internal };   // 道具が返す種別
 
 struct ToolError {
     ErrorCode   code;
@@ -108,9 +108,10 @@ struct ToolError {
   判定できるように）。
 - 引数の検査は道具の中で行います（JSON Schema の検証器は持たない）。知らない引数は
   `invalid_args` で返します（[作法「互換性」](../protocol.md#互換性)）。
-- 失敗の種別は応答の `code` に小文字の綴り（`invalid_args` / `no_document` / `internal`）で
+- 失敗の種別は応答の `code` に小文字の綴り（`invalid_args` / `internal`）で
   載せます（[作法「応答」](../protocol.md#応答idresjson)）。`invalid_request`・`unknown_tool`・`no_wait` は
-  `core::serve` が付けます。
+  `core::serve` が付けます。図面が開かれていないなど、道具によって失敗になるかが違う理由は
+  `internal` とし、`error` に書きます。
 - **種類 `write` の道具は、undo の作法を通すまで表に載せません**（[未決 1](open-questions.md)）。
 
 ## 受け付けの結果

@@ -139,6 +139,8 @@ Windows で要求を消せない問題も起きなくなった。
 
 - 応答に固定の綴りの `code` を足す。案: `unknown_tool` / `invalid_args` / `no_document` /
   `internal`。2 で実行しなかった要求には応答しないので、そのための綴りは要らない。
+  → `no_document` は、図面を開かずに実行できる道具もあり道具ごとの理由なので、`internal` に
+  含めた。壊れた要求のための `invalid_request` と、待つ印が無いときの `no_wait` を足した。
 - `error` は人向けの文として残す。
 - `vw2026 call` は `--raw` で `code` を出す。終了コードは 1 のまま（道具ごとに解釈しない）。
 

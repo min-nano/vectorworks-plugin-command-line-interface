@@ -63,7 +63,6 @@ const (
 	CodeInvalidRequest = "invalid_request" // 要求が読めない（JSON として壊れている・大きすぎる・tool が無い）
 	CodeUnknownTool    = "unknown_tool"    // 知らない道具
 	CodeInvalidArgs    = "invalid_args"    // 道具の引数が誤っている
-	CodeNoDocument     = "no_document"     // 図面が開かれていない
 	CodeInternal       = "internal"        // そのほか（道具の中の例外など）
 	CodeNoWait         = "no_wait"         // 待つ印（<id>.wait）が無いので実行しなかった
 )
