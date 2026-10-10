@@ -35,11 +35,12 @@ standard error and exits with 1; with --raw the response also carries the
 code (unknown_tool, invalid_args, invalid_request, no_wait, or internal;
 docs/protocol.md).
 
-When --timeout runs out, call stops waiting and exits with 4: the tool did
-not run and will not run later. If the plug-in had already taken the
+When --timeout runs out, call stops waiting, withdraws the request, and
+exits with 4: the tool did not run. If the plug-in had already taken the
 request, call waits a few more seconds for the response, and exits with 8 if
-none comes: the tool may have run. A call that is killed while waiting
-leaves a request that will not run either.
+none comes: the tool may have run. A no_wait response also means that the
+tool did not run, so call exits with 4 for it, not with 1. A call that is
+killed while waiting leaves a request that will not run either.
 `
 }
 

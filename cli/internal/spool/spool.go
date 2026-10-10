@@ -116,15 +116,20 @@ func NewID(now time.Time) string {
 //
 // 受け付けが見送られていても要求を置いて timeout まで待つ（受け付けが戻れば処理される）。
 // 待つ間は <id>.wait を掴み、プラグインに呼ぶ側が待っていることを示す（docs/protocol.md
-// 「待つ印」）。待つのをやめるときは .wait を放して消す。要求は消さない: 以後にプラグインが
-// 取り出しても、.wait を掴める・無いので実行しない。呼ぶ側が強制終了されても OS が .wait を
-// 放すので同じになり、シグナルを受けて後始末をする必要も無い。
+// 「待つ印」）。待つのをやめるときは .wait を放して消してから、要求を消す。先に .wait を
+// やめるので、要求を消す前にプラグインが取り出しても実行されない。呼ぶ側が強制終了されても
+// OS が .wait を放すので、残った要求は実行されず、シグナルを受けて後始末をする必要も無い。
 //
-//   - やめたあとも要求が残っている: まだ取り出されていないので、実行されない。理由をその時点の
-//     ロックで ErrNotRunning / ErrTimeout に分ける（呼ぶ側が起動し直すべきか、待てばよいかを
-//     判定できるように）。
-//   - 要求が無い: プラグインが受け取った。やめる前に受け取っていれば実行される。takenGrace
-//     だけ応答を待ち、届かなければ ErrNoResponse（実行されたかは分からない）。
+//   - 要求を消せた: 取り出されていないので、実行されない。理由をその時点のロックで
+//     ErrNotRunning / ErrTimeout に分ける（呼ぶ側が起動し直すべきか、待てばよいかを判定
+//     できるように）。
+//   - 消せない（無い・Windows でプラグインが開いている）: プラグインが受け取った。やめる前に
+//     受け取っていれば実行される。takenGrace だけ応答を待ち、届かなければ ErrNoResponse
+//     （実行されたかは分からない）。
+//
+// no_wait の応答は作法の種別で「実行しなかった」を意味するので、道具の失敗ではなく
+// ErrNotRunning / ErrTimeout として返す（やめたあとにプラグインが受け取ったときや、.wait が
+// 想定外に消えたときに届く）。
 func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) (*Response, error) {
 	if len(args) == 0 {
 		args = json.RawMessage("{}")
@@ -166,9 +171,22 @@ func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) 
 	}
 
 	deadline := time.Now().Add(timeout)
+	notRun := func(reason string) error {
+		if !Open(b.Dir).Running {
+			return fmt.Errorf("%w (stopped while waiting for %s)", ErrNotRunning, tool)
+		}
+		return fmt.Errorf("%w (%s, %s; %s)", ErrTimeout, tool, timeout, reason)
+	}
+	received := func(response *Response) (*Response, error) {
+		if !response.OK && response.Code == CodeNoWait {
+			return nil, notRun("the bridge did not run it")
+		}
+		return response, nil
+	}
+
 	for {
 		if response, ok := takeResponse(responsePath); ok {
-			return response, nil
+			return received(response)
 		}
 		if time.Now().After(deadline) {
 			break
@@ -176,20 +194,16 @@ func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) 
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	// 待つのをやめてから要求を見る（見てからやめると、その間にプラグインが要求を取り出して
-	// .wait を試し、実行してしまうことがある）。ここで残っていれば、以後に実行されることは無い。
-	// 残った要求は、プラグインが取り出したとき（実行せずに断る）か、ロックを取ったときの掃除で消える。
+	// 待つのをやめてから要求を消す（消してからやめると、その間にプラグインが要求を取り出して
+	// .wait を試し、実行してしまうことがある）。消せれば、誰も待たない応答も残らない。
 	stopWaiting()
-	if _, err := os.Stat(requestPath); err == nil {
-		if !Open(b.Dir).Running {
-			return nil, fmt.Errorf("%w (stopped while waiting for %s)", ErrNotRunning, tool)
-		}
-		return nil, fmt.Errorf("%w (%s, %s; a dialog may be open)", ErrTimeout, tool, timeout)
+	if os.Remove(requestPath) == nil {
+		return nil, notRun("a dialog may be open")
 	}
 	graceEnd := time.Now().Add(takenGrace)
 	for {
 		if response, ok := takeResponse(responsePath); ok {
-			return response, nil
+			return received(response)
 		}
 		if time.Now().After(graceEnd) {
 			return nil, fmt.Errorf("%w (%s, %s; it may have run)", ErrNoResponse, tool, timeout)

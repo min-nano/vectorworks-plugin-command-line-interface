@@ -73,46 +73,34 @@ func TestCallToolFailure(t *testing.T) {
 	}
 }
 
-// 待ちきれなかった要求は、あとで受け付けが戻っても実行されない（.wait を放して消し、
-// 待つ者が居ないことを示す。要求は消さない）。
-func TestCallTimeoutRequestIsNeverRun(t *testing.T) {
+// 待ちきれなかった要求は、.wait をやめてから消す（誰も待たない要求も応答も残さない）。
+func TestCallTimeoutWithdrawsRequest(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
-	release := fakeplugin.HoldLock(t, dir)
+	fakeplugin.HoldLock(t, dir)
 	// 動いているが応えない（ダイアログの最中など）
 	_, err := Open(dir).Call("ping", nil, 200*time.Millisecond)
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("want ErrTimeout, got %v", err)
 	}
+	assertNoFiles(t, dir, RequestSuffix)
 	assertNoFiles(t, dir, WaitSuffix)
-	// 受け付けが戻る。
-	release()
-	called := make(chan string, 1)
-	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) Response {
-		called <- tool
-		return Response{OK: true}
-	})
-	waitUntilGone(t, dir, RequestSuffix)
-	select {
-	case tool := <-called:
-		t.Fatalf("%s must not run", tool)
-	case <-time.After(100 * time.Millisecond):
-	}
 }
 
-// waitUntilGone は suffix のファイルが無くなるまで待つ。
-func waitUntilGone(t *testing.T, dir, suffix string) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		matches, _ := filepath.Glob(filepath.Join(dir, "*"+suffix))
-		if len(matches) == 0 {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("leftover %v", matches)
-		}
-		time.Sleep(20 * time.Millisecond)
+// 猶予の間に届いた no_wait は「実行しなかった」なので、道具の失敗ではなく ErrTimeout。
+func TestCallNoWaitDuringGraceIsTimeout(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	taken := takeRequest(t, dir)
+	go func() {
+		id := <-taken
+		time.Sleep(400 * time.Millisecond) // 締切（200 ms）を過ぎ、.wait が消えてから断る
+		_ = os.WriteFile(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":false,"code":"no_wait","error":"no wait file"}`), 0o600)
+	}()
+	_, err := Open(dir).Call("ping", nil, 200*time.Millisecond)
+	if !errors.Is(err, ErrTimeout) {
+		t.Fatalf("want ErrTimeout, got %v", err)
 	}
+	assertNoFiles(t, dir, ResponseSuffix)
 }
 
 // ロックファイルがあっても、掴まれていなければ（異常終了のあと）止まっている。
