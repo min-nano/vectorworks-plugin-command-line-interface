@@ -41,11 +41,9 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   実行ファイルに入る推移的な依存なし）だけ。
 - 受け渡しは偽のプラグインに対する単体テストで確かめる（`cli/internal/fakeplugin`）。
 - **CLI の使い方（コマンド・指定・出力・終了コード）は、コマンドの定義に英語で書く。**
-  各コマンドは `cli/cmd/vw2026/main.go` の構造体（`callCmd` 等）で、kong のタグ（`help`）と
-  `Help()`（詳しい説明）を `Run` の隣に書く。全体の説明と終了コードは `cli.Help()`。
-  `--help`・`vw2026 help <command>`・`doc.go`（godoc）はそこから作る。Markdown に別に書かない。
-- `doc.go` は生成物で、手で直さない。定義を変えたら `go generate ./cmd/vw2026` で作り直す
-  （古いままなら `TestDoc` が落ちる）。
+  1 コマンド 1 ファイル（`cli/cmd/vw2026/call.go` 等）の構造体で、kong のタグ（`help`）と
+  `Help()`（詳しい説明）を `run` の隣に書く。全体の説明と終了コードは `main.go` の `cli.Help()`。
+  真実は `vw2026 --help`（`vw2026 help <command>`）で、Markdown や godoc に別に書かない。
 - コメントは日本語でも英語でもよく、**なぜ**を書く。CLI の出力・エラーの文言は英語（機械が
   読む・端末の文字コードに依らない）。
 

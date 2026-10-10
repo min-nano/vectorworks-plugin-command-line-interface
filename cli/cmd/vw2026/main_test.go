@@ -3,11 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/alecthomas/kong"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
@@ -187,30 +188,6 @@ func TestLaunchDoesNotTakeTimeout(t *testing.T) {
 	}
 }
 
-var update = flag.Bool("update", false, "rewrite doc.go from the command definitions")
-
-// TestDoc keeps doc.go in step with the command definitions. "go generate"
-// runs it with -update.
-func TestDoc(t *testing.T) {
-	want, err := renderDoc()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if *update {
-		if err := os.WriteFile("doc.go", want, 0o644); err != nil {
-			t.Fatal(err)
-		}
-		return
-	}
-	got, err := os.ReadFile("doc.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(bytes.ReplaceAll(got, []byte("\r\n"), []byte("\n")), want) {
-		t.Fatal(`doc.go is out of date; run "go generate ./cmd/vw2026"`)
-	}
-}
-
 func TestHelp(t *testing.T) {
 	for _, args := range [][]string{{"help"}, {"--help"}, {"-h"}} {
 		r := invoke(t, nil, "", nil, args...)
@@ -236,5 +213,15 @@ func TestHelp(t *testing.T) {
 func TestVersionFlag(t *testing.T) {
 	if r := invoke(t, nil, "", nil, "--version"); r.code != exitOK || !strings.Contains(r.stdout, `"protocol":3`) {
 		t.Fatalf("%+v", r)
+	}
+}
+
+// TestEveryCommandRuns は、kong に並べたコマンドがすべて command を満たすことを確かめる
+// （満たさなければ run の型アサーションが実行時に落ちる）。
+func TestEveryCommandRuns(t *testing.T) {
+	for _, node := range kong.Must(&cli{}).Model.Leaves(true) {
+		if _, ok := node.Target.Addr().Interface().(command); !ok {
+			t.Errorf("%s does not implement command", node.Name)
+		}
 	}
 }

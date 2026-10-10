@@ -1,16 +1,22 @@
+// Vw2026 sends tool calls, one at a time, to the bridge that the cli plug-in
+// runs inside Vectorworks 2026. Run "vw2026 --help" for its usage.
+//
+// Each command lives in its own file (status.go, call.go, ...) as a kong
+// struct: its flags, its help (the help tag and the Help method), and its run
+// method, side by side. kong builds the help output from them.
+//
+// To build and test, in the cli module:
+//
+//	go vet ./...
+//	go test ./...
+//	go build -ldflags "-X main.version=$(git describe --always)" -o vw2026 ./cmd/vw2026
 package main
-
-// The command line is parsed by kong. Each command is a struct whose tags and
-// Help method describe it next to its Run method; kong builds the help output
-// from them, and docgen.go builds doc.go (go generate) from the same model.
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/alecthomas/kong"
@@ -37,20 +43,7 @@ const (
 	// 7 は install / uninstall（未実装）が「Vectorworks が動いているので行えない」に使う。
 )
 
-// exitStatus carries an exit code out of a Run method, which kong lets
-// return only an error.
-type exitStatus int
-
-func (s exitStatus) Error() string { return fmt.Sprintf("exit status %d", int(s)) }
-
-// status turns an exit code into the error a Run method returns.
-func status(code int) error {
-	if code == exitOK {
-		return nil
-	}
-	return exitStatus(code)
-}
-
+// env は外の世界との接点。テストが差し替える。
 type env struct {
 	stdin  io.Reader
 	stdout io.Writer
@@ -67,10 +60,7 @@ func main() {
 	}))
 }
 
-// --- the command line -------------------------------------------------------
-
-// cli is the whole command line. Its Help method opens "vw2026 --help" and
-// doc.go.
+// cli is the whole command line.
 type cli struct {
 	globals
 
@@ -131,26 +121,20 @@ does not help.
 `
 }
 
-// newParser builds the kong parser. Help and parse errors go to the writers of
-// e, and kong's exits unwind to run through exitPanic so tests can observe them.
-func newParser(grammar *cli, e env) (*kong.Kong, error) {
-	return kong.New(grammar,
-		kong.Name("vw2026"),
-		kong.Writers(e.stdout, e.stderr),
-		kong.Exit(func(code int) { panic(exitPanic(code)) }),
-		kong.ConfigureHelp(kong.HelpOptions{WrapUpperBound: 80}),
-		kong.Bind(&e),
-	)
+// command is what every command struct implements. kong's own Run convention
+// returns only an error, so the commands use this instead and return the exit
+// code directly.
+type command interface {
+	run(g *globals, e *env) int
 }
 
-type exitPanic int
-
-func run(args []string, e env) (code int) {
+func run(args []string, e env) int {
+	usageError := false
 	switch {
 	case len(args) == 0:
 		// A bare "vw2026" is a usage error: show the help on the standard error.
+		usageError = true
 		e.stdout = e.stderr
-		defer func() { code = exitUsage }()
 		args = []string{"--help"}
 	case args[0] == "help":
 		// "vw2026 help [<command>]" is "vw2026 [<command>] --help".
@@ -159,38 +143,33 @@ func run(args []string, e env) (code int) {
 		args[0] = "version"
 	}
 
-	defer func() {
-		if r := recover(); r != nil {
-			p, ok := r.(exitPanic)
-			if !ok {
-				panic(r)
-			}
-			code = int(p)
-		}
-	}()
-
 	var grammar cli
-	parser, err := newParser(&grammar, e)
+	exited := -1 // kong asks to exit after printing the help
+	parser, err := kong.New(&grammar,
+		kong.Name("vw2026"),
+		kong.Writers(e.stdout, e.stderr),
+		kong.Exit(func(code int) { exited = code }),
+		kong.ConfigureHelp(kong.HelpOptions{WrapUpperBound: 80}),
+	)
 	if err != nil {
 		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
 		return exitFailure
 	}
 	ctx, err := parser.Parse(args)
-	if err != nil {
+	switch {
+	case exited >= 0:
+		// The help was printed. Parse goes on after it and may report a missing
+		// command, which does not matter here.
+		if usageError {
+			return exitUsage
+		}
+		return exited
+	case err != nil:
 		fmt.Fprintf(e.stderr, "vw2026: %v (run \"vw2026 --help\")\n", err)
 		return exitUsage
 	}
-	err = ctx.Run(&grammar.globals)
-	var s exitStatus
-	switch {
-	case err == nil:
-		return exitOK
-	case errors.As(err, &s):
-		return int(s)
-	default:
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
-		return exitFailure
-	}
+	cmd := ctx.Selected().Target.Addr().Interface().(command)
+	return cmd.run(&grammar.globals, &e)
 }
 
 // open はスプールを決めて、ブリッジの状態を判定する。場所が決まらなければ標準エラーへ
@@ -211,249 +190,7 @@ func seconds(value float64) time.Duration {
 	return time.Duration(value * float64(time.Second))
 }
 
-// --- status -----------------------------------------------------------------
-
-type statusCmd struct{}
-
-func (statusCmd) Help() string {
-	return `
-Status reports whether the bridge is running. The answer depends only on
-whether the plug-in holds the lock file (bridge.lock) in the spool; see
-docs/protocol.md. Status does not tell a busy Vectorworks from a responsive
-one. Use "vw2026 call ping" for the version of the plug-in.
-
-It prints one of
-
-	{"running":true,"spool":"..."}
-	{"running":false,"spool":"...","reason":"..."}
-
-and exits with 3 when the bridge is not running.
-`
-}
-
-func (statusCmd) Run(g *globals, e *env) error {
-	bridge := g.open(e)
-	if bridge == nil {
-		return status(exitFailure)
-	}
-	code := emit(e, bridgeJSON(bridge))
-	if !bridge.Running {
-		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (is Vectorworks started with the plug-in?)")
-		return status(exitDown)
-	}
-	return status(code)
-}
-
-// bridgeJSON はブリッジの状態の出力（status / wait / launch で同じ形）。
-func bridgeJSON(bridge *spool.Bridge) map[string]any {
-	out := map[string]any{
-		"running": bridge.Running,
-		"spool":   bridge.Dir,
-	}
-	if !bridge.Running {
-		out["reason"] = bridge.Reason
-	}
-	return out
-}
-
-// --- call -------------------------------------------------------------------
-
-type callCmd struct {
-	Tool    string  `arg:"" help:"Tool to call (\"vw2026 call tools\" lists them)."`
-	Args    string  `arg:"" optional:"" name:"args" help:"Arguments as a JSON object, or - to read them from the standard input."`
-	Raw     bool    `help:"Print the whole response (ok, result, and error)."`
-	Timeout float64 `default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
-}
-
-func (callCmd) Help() string {
-	return `
-Call calls one tool of the bridge and prints its result. "vw2026 call tools"
-lists the tools; docs/plugin/tools.md describes them.
-
-The arguments are a JSON object. "-" reads them from the standard input.
-Without them, the tool is called with no arguments. Call does not check the
-arguments against the tool; the plug-in does.
-
-	vw2026 call layers '{"include_sheets":false}'
-	echo '{"layer":"1F"}' | vw2026 call layer_objects -
-
-On success, call prints the result of the tool. With --raw it prints the
-whole response. When the tool fails, call writes the reason to the standard
-error and exits with 1. When --timeout runs out, call withdraws the request
-and exits with 4.
-`
-}
-
-func (c *callCmd) Run(g *globals, e *env) error {
-	var payload json.RawMessage
-	if c.Args != "" {
-		text := c.Args
-		if text == "-" {
-			data, err := io.ReadAll(e.stdin)
-			if err != nil {
-				fmt.Fprintf(e.stderr, "vw2026: read stdin: %v\n", err)
-				return status(exitFailure)
-			}
-			text = string(data)
-		}
-		// 中身は道具ごとに解釈しない（プラグイン側の仕事）。オブジェクトであることだけを確かめる。
-		var probe map[string]any
-		if json.Unmarshal([]byte(text), &probe) != nil || probe == nil {
-			fmt.Fprint(e.stderr, "vw2026: args must be a JSON object\n")
-			return status(exitUsage)
-		}
-		payload = json.RawMessage(strings.TrimSpace(text))
-	}
-
-	bridge := g.open(e)
-	if bridge == nil {
-		return status(exitFailure)
-	}
-	if !bridge.Running {
-		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (try `vw2026 status`)")
-		return status(exitDown)
-	}
-	response, err := bridge.Call(c.Tool, payload, seconds(c.Timeout))
-	if err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
-		return status(codeFor(err))
-	}
-	if c.Raw {
-		_ = emit(e, response)
-	} else if response.OK {
-		_ = emitRaw(e, response.Result)
-	}
-	if !response.OK {
-		fmt.Fprintf(e.stderr, "vw2026: %s: %s\n", c.Tool, response.Error)
-		return status(exitToolErr)
-	}
-	return nil
-}
-
-func codeFor(err error) int {
-	switch {
-	case errors.Is(err, spool.ErrNotRunning):
-		return exitDown
-	case errors.Is(err, spool.ErrTimeout):
-		return exitTimeout
-	default:
-		return exitFailure
-	}
-}
-
-// --- wait -------------------------------------------------------------------
-
-type waitCmd struct {
-	Down    bool    `help:"Wait until the bridge stops instead."`
-	Timeout float64 `default:"120" placeholder:"SECONDS" help:"How long to wait (default ${default})."`
-}
-
-func (waitCmd) Help() string {
-	return `
-Wait waits until the bridge starts, that is, until the plug-in takes the lock.
-With --down it waits until the bridge stops (the lock is released). It prints
-the same output as status, or exits with 4 when --timeout runs out.
-
-Vectorworks keeps the lock while it shows the dialog that asks to save the
-drawings, so "wait --down" does not take that dialog for a stop.
-`
-}
-
-func (c *waitCmd) Run(g *globals, e *env) error {
-	deadline := time.Now().Add(seconds(c.Timeout))
-	for {
-		// 動き出す・止まるはロックだけで決まる。保存の確認のダイアログを開いている間も
-		// ロックは掴まれたままなので、--down がそれを「止まった」と誤らない。
-		bridge := g.open(e)
-		if bridge == nil {
-			return status(exitFailure)
-		}
-		if bridge.Running != c.Down {
-			return status(emit(e, bridgeJSON(bridge)))
-		}
-		if time.Now().After(deadline) {
-			fmt.Fprintln(e.stderr, "vw2026: timed out waiting")
-			return status(exitTimeout)
-		}
-		time.Sleep(250 * time.Millisecond)
-	}
-}
-
-// --- launch -----------------------------------------------------------------
-
-type launchCmd struct {
-	App string `env:"VW2026_APP" placeholder:"NAME-OR-PATH" help:"Application or executable to start."`
-}
-
-func (launchCmd) Help() string {
-	return `
-Launch starts Vectorworks unless the bridge is already running. It does not
-wait for the bridge; run "vw2026 wait" next to wait for it.
-
-	vw2026 launch && vw2026 wait
-
-It prints one of
-
-	{"launched":true,"command":[...]}
-	{"running":true,"spool":"...","launched":false}
-
-The default application is "Vectorworks 2026" on macOS, started with
-"open -a", and %ProgramFiles%\Vectorworks 2026\Vectorworks2026.exe on
-Windows. Launch does not search other places; name them with --app. A value
-that does not end in .app is started as an executable.
-
-When Vectorworks is running but the bridge is not (the plug-in is not
-installed), launch exits with 3.
-`
-}
-
-// Run does not wait: waiting is the caller's choice
-// (docs/design.md「CLI はプリミティブに保つ」).
-func (c *launchCmd) Run(g *globals, e *env) error {
-	bridge := g.open(e)
-	if bridge == nil {
-		return status(exitFailure)
-	}
-	if bridge.Running {
-		out := bridgeJSON(bridge)
-		out["launched"] = false
-		return status(emit(e, out))
-	}
-	argv, err := launch.Command(c.App)
-	if err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
-		return status(exitFailure)
-	}
-	if err := e.start(argv); err != nil {
-		if errors.Is(err, launch.ErrAlreadyRunning) {
-			fmt.Fprintln(e.stderr, "vw2026: Vectorworks is running but the bridge is not (is the plug-in installed?)")
-			return status(exitDown)
-		}
-		fmt.Fprintf(e.stderr, "vw2026: launch: %v\n", err)
-		return status(exitFailure)
-	}
-	return status(emit(e, map[string]any{"launched": true, "command": argv}))
-}
-
-// --- version ----------------------------------------------------------------
-
-type versionCmd struct{}
-
-func (versionCmd) Help() string {
-	return `
-Version prints the version of this CLI and the version of the protocol it
-speaks (docs/protocol.md).
-
-	{"version":"abc1234","protocol":3}
-`
-}
-
-func (versionCmd) Run(e *env) error {
-	return status(emit(e, map[string]any{"version": version, "protocol": spool.ProtocolVersion}))
-}
-
-// --- 出力 -------------------------------------------------------------------
-
+// emit は値を JSON 1 行で標準出力へ書く。
 func emit(e *env, value any) int {
 	data, err := json.Marshal(value)
 	if err != nil {

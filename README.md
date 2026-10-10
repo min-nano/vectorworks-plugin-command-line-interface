@@ -22,5 +22,5 @@ vw2026 call layers '{"include_sheets":false}'
 | [docs/design.md](docs/design.md) | 目的・決めたこと・構成・安全の前提・配布・進め方 |
 | [docs/plugin/](docs/plugin/README.md) | プラグインの設計（構成・ブリッジ・道具・識別子・ビルド・配布・移植・実装の順序・未決） |
 | [docs/protocol.md](docs/protocol.md) | 受け渡しの作法（プラグインと呼ぶ側の約束。真実はここ） |
-| [cli/cmd/vw2026/doc.go](cli/cmd/vw2026/doc.go) | `vw2026` のコマンド・指定・終了コード・ビルド（コマンドの定義から生成する godoc。`vw2026 help` か `cd cli && go doc ./cmd/vw2026` で読む） |
+| `vw2026 --help` | `vw2026` のコマンド・指定・終了コード（定義は [cli/cmd/vw2026/](cli/cmd/vw2026/)。`vw2026 help <command>` で各コマンド） |
 | [docs/sdk-research.md](docs/sdk-research.md) | SDK リファレンスでの調査を待っているもの |
