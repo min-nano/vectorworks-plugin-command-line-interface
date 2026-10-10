@@ -32,7 +32,7 @@ arguments against the tool; the plug-in does.
 On success, call prints the result of the tool. With --raw it prints the
 whole response. When the tool fails, call writes its code and reason to the
 standard error and exits with 1; with --raw the response also carries the
-code (unknown_tool, invalid_args, no_document, invalid_request, or internal;
+code (unknown_tool, invalid_args, no_document, invalid_request, no_wait, or internal;
 docs/protocol.md).
 
 When --timeout runs out, call stops waiting and exits with 4: the tool did

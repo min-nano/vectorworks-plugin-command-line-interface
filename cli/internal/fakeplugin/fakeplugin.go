@@ -14,6 +14,15 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
+// waitState は <id>.wait の状態。
+type waitState int
+
+const (
+	waitHeld     waitState = iota // 呼ぶ側が待っている
+	waitReleased                  // 呼ぶ側が放した・死んだ
+	waitMissing                   // 無い（作法に反する）
+)
+
 // Handler は道具 1 つの呼び出しに応える。
 type Handler func(tool string, args json.RawMessage) spool.Response
 
@@ -93,9 +102,10 @@ func serveOnce(dir string, handle Handler) {
 			// 呼ぶ側が取り下げた）。
 			continue
 		}
-		// 待つ者の居なくなった要求は実行も応答もしない。
+		// 待つ者の居なくなった要求は実行も応答もしない。.wait の無い要求は実行せずに断る。
 		wait := filepath.Join(dir, id+spool.WaitSuffix)
-		if callerGone(wait) {
+		state := waitStateOf(wait)
+		if state == waitReleased {
 			_ = os.Remove(wait)
 			continue
 		}
@@ -104,7 +114,9 @@ func serveOnce(dir string, handle Handler) {
 			Args json.RawMessage `json:"args"`
 		}
 		var response spool.Response
-		if json.Unmarshal(data, &request) != nil || request.Tool == "" {
+		if state == waitMissing {
+			response = spool.Response{OK: false, Code: spool.CodeNoWait, Error: "no wait file"}
+		} else if json.Unmarshal(data, &request) != nil || request.Tool == "" {
 			response = spool.Response{OK: false, Code: spool.CodeInvalidRequest, Error: "unreadable request"}
 		} else {
 			response = handle(request.Tool, request.Args)

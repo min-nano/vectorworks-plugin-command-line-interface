@@ -73,8 +73,8 @@ func TestCallToolFailure(t *testing.T) {
 	}
 }
 
-// 待ちきれなかった要求は、あとで受け付けが戻っても実行されない（.wait を放して待つ者が
-// 居ないことを示す。要求は消さない）。
+// 待ちきれなかった要求は、あとで受け付けが戻っても実行されない（.wait を放して消し、
+// 待つ者が居ないことを示す。要求は消さない）。
 func TestCallTimeoutRequestIsNeverRun(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	release := fakeplugin.HoldLock(t, dir)
@@ -83,6 +83,7 @@ func TestCallTimeoutRequestIsNeverRun(t *testing.T) {
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("want ErrTimeout, got %v", err)
 	}
+	assertNoFiles(t, dir, WaitSuffix)
 	// 受け付けが戻る。
 	release()
 	called := make(chan string, 1)
@@ -91,13 +92,11 @@ func TestCallTimeoutRequestIsNeverRun(t *testing.T) {
 		return Response{OK: true}
 	})
 	waitUntilGone(t, dir, RequestSuffix)
-	waitUntilGone(t, dir, WaitSuffix)
 	select {
 	case tool := <-called:
 		t.Fatalf("%s must not run", tool)
 	case <-time.After(100 * time.Millisecond):
 	}
-	assertNoFiles(t, dir, ResponseSuffix)
 }
 
 // waitUntilGone は suffix のファイルが無くなるまで待つ。
@@ -286,11 +285,8 @@ func TestCallTakenWithoutResponse(t *testing.T) {
 	if !errors.Is(err, ErrNoResponse) || errors.Is(err, ErrTimeout) {
 		t.Fatalf("want ErrNoResponse, got %v", err)
 	}
-	// .wait は放したまま残す（プラグインがあとで掴めば、誰も待たない要求として捨てる）。
-	id := <-taken
-	if _, err := os.Stat(filepath.Join(dir, id+WaitSuffix)); err != nil {
-		t.Fatalf("the .wait should remain: %v", err)
-	}
+	<-taken
+	assertNoFiles(t, dir, WaitSuffix)
 }
 
 // 受け取られた要求の応答が締切のあと猶予の内に届けば、それを返す。
@@ -347,23 +343,37 @@ func TestRequestOfDeadCallerIsDropped(t *testing.T) {
 	assertNoFiles(t, dir, ResponseSuffix)
 }
 
-// .wait を置かない呼ぶ側（シェルのスクリプトなど）の要求は、いまどおり実行される。
-func TestRequestWithoutWaitIsServed(t *testing.T) {
+// .wait の無い要求は実行せず、no_wait で断る（置き忘れた呼ぶ側に理由が伝わるように）。
+func TestRequestWithoutWaitIsRefused(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
-	fakeplugin.Start(t, dir, echo)
+	called := make(chan string, 1)
+	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) Response {
+		called <- tool
+		return Response{OK: true}
+	})
 	id := NewID(time.Now())
 	if err := os.WriteFile(filepath.Join(dir, id+RequestSuffix), []byte(`{"tool":"ping"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	responsePath := filepath.Join(dir, id+ResponseSuffix)
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		if _, err := os.Stat(filepath.Join(dir, id+ResponseSuffix)); err == nil {
-			return
+		if text, err := os.ReadFile(responsePath); err == nil {
+			var response Response
+			if err := json.Unmarshal(text, &response); err != nil || response.OK || response.Code != CodeNoWait {
+				t.Fatalf("want no_wait, got %s", text)
+			}
+			break
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("no response")
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+	select {
+	case tool := <-called:
+		t.Fatalf("%s must not run", tool)
+	default:
 	}
 }
 
