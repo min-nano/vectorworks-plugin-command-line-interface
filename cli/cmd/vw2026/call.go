@@ -24,7 +24,8 @@ lists the tools; docs/plugin/tools.md describes them.
 
 The arguments are a JSON object. "-" reads them from the standard input.
 Without them, the tool is called with no arguments. Call does not check the
-arguments against the tool; the plug-in does.
+arguments against the tool; the plug-in does. Call only refuses a request
+that the plug-in would not read (over 1 MiB, or nested deeper than 64).
 
 	vw2026 call layers '{"include_sheets":false}'
 	echo '{"layer":"1F"}' | vw2026 call layer_objects -
@@ -34,7 +35,8 @@ whole response. When the tool fails, call writes its code and reason to the
 standard error and exits with 1; with --raw the response also carries the
 code (unknown_tool, invalid_args, invalid_request, no_wait, or internal;
 docs/protocol.md). A failure with a missing or unknown code is a malformed
-response, so call exits with 6 for it.
+response, so call exits with 6 for it. So does a response file that stays
+broken (not JSON) for a second; call removes it without waiting for --timeout.
 
 When --timeout runs out, call stops waiting, withdraws the request, and
 exits with 4: the tool did not run. If the plug-in had already taken the

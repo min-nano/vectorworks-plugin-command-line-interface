@@ -37,6 +37,11 @@ const (
 	// MaxRequestBytes はプラグイン側が受け付ける要求 1 件の上限。超える要求は置く前に断る
 	// （置いても「読めない要求」として失敗が返るだけなので）。
 	MaxRequestBytes = 1 << 20
+
+	// MaxNestingDepth はプラグイン側が受け付ける要求の入れ子（オブジェクトと配列）の深さの上限。
+	// 要求の外側のオブジェクトを 1 と数える。深すぎる要求で JSON の解析がスタックを溢れさせ、
+	// Vectorworks ごと落ちないための関門（docs/protocol.md「要求」）。超える要求は置く前に断る。
+	MaxNestingDepth = 64
 )
 
 // idPattern は id として使ってよい綴り。プラグイン側はこれを満たさない要求を受け付けない
@@ -75,8 +80,9 @@ var ErrNotRunning = errors.New("bridge is not running")
 // 無かった。受け付けが見送られている（モーダルダイアログ・undo の記録の最中）ことが多い。
 var ErrTimeout = errors.New("timed out waiting for the response")
 
-// ErrMalformedResponse は、失敗の応答の code が無い・知らない値だった（docs/protocol.md
-// 「互換性」: 知っているフィールドの未知の値はエラー）。
+// ErrMalformedResponse は、応答のファイルが JSON として壊れたまま malformedGrace を過ぎた
+// （docs/protocol.md「ファイル」）か、失敗の応答の code が無い・知らない値だった
+// （docs/protocol.md「互換性」: 知っているフィールドの未知の値はエラー）。
 var ErrMalformedResponse = errors.New("malformed response")
 
 // ErrNoResponse は、待つのをやめたときに要求をプラグインが既に受け取っていて、猶予の間にも
@@ -87,6 +93,11 @@ var ErrNoResponse = errors.New("the bridge took the request but no response came
 // 応答は受け付けの同じ回の中で書かれ、受け付け 1 回の中で数秒を超える道具は持たない
 // （docs/protocol.md「応答」）。テストが縮める。
 var takenGrace = 5 * time.Second
+
+// malformedGrace は、応答のファイルが JSON として壊れたままなら、壊れた応答とみなすまでの時間。
+// rename で公開する作法なので、壊れて見えるのは書き手の不具合のときだけで、締切まで待っても
+// 直らない（docs/protocol.md「ファイル」）。テストが縮める。
+var malformedGrace = time.Second
 
 // Bridge はスプール 1 つと、その状態。
 type Bridge struct {
@@ -148,6 +159,9 @@ func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) 
 	if len(payload) > MaxRequestBytes {
 		return nil, fmt.Errorf("request is too large (%d bytes, limit %d)", len(payload), MaxRequestBytes)
 	}
+	if depth := NestingDepth(payload); depth > MaxNestingDepth {
+		return nil, fmt.Errorf("request is nested too deeply (depth %d, limit %d)", depth, MaxNestingDepth)
+	}
 
 	id := NewID(time.Now())
 	requestPath := filepath.Join(b.Dir, id+RequestSuffix)
@@ -195,7 +209,13 @@ func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) 
 		}
 	}
 
-	if response, ok := pollResponse(responsePath, deadline); ok {
+	poll := &poller{path: responsePath}
+	malformed := func() error {
+		return fmt.Errorf("%w (%s; the response file stayed broken for %s)", ErrMalformedResponse, tool, malformedGrace)
+	}
+	if response, err := poll.until(deadline); err != nil {
+		return nil, malformed()
+	} else if response != nil {
 		return received(response)
 	}
 
@@ -205,46 +225,76 @@ func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) 
 	if os.Remove(requestPath) == nil {
 		return nil, notRun("a dialog may be open")
 	}
-	if response, ok := pollResponse(responsePath, time.Now().Add(takenGrace)); ok {
+	if response, err := poll.until(time.Now().Add(takenGrace)); err != nil {
+		return nil, malformed()
+	} else if response != nil {
 		return received(response)
 	}
 	return nil, fmt.Errorf("%w (%s, %s; it may have run)", ErrNoResponse, tool, timeout)
 }
 
-// pollResponse は until まで応答を読み直す。届けば読んで消す。
-func pollResponse(path string, until time.Time) (*Response, bool) {
+// poller は応答のファイルを読み直す。壊れたままの応答を見分けるため、壊れていると最初に
+// 見た時刻を、締切の前と猶予の間を通して持つ。
+type poller struct {
+	path        string
+	brokenSince time.Time
+}
+
+// until は until まで応答を読み直す。届けば読んで消して返す。届かなければ nil。
+//
+// 読めない（まだ無い・Windows で書き手が開いている）・JSON として壊れている応答は「まだ無い」と
+// みなして読み直すが、壊れたまま malformedGrace を過ぎたら、消して ErrMalformedResponse を返す。
+func (p *poller) until(until time.Time) (*Response, error) {
 	for {
-		if response, ok := takeResponse(path); ok {
-			return response, true
+		text, err := os.ReadFile(p.path)
+		if err != nil {
+			p.brokenSince = time.Time{}
+		} else {
+			var response Response
+			if json.Unmarshal(text, &response) == nil {
+				// 消せなくても応答は取得できている。残骸はプラグイン側が開始時に掃除する。
+				_ = os.Remove(p.path)
+				return &response, nil
+			}
+			if p.brokenSince.IsZero() {
+				p.brokenSince = time.Now()
+			} else if time.Since(p.brokenSince) >= malformedGrace {
+				_ = os.Remove(p.path)
+				return nil, ErrMalformedResponse
+			}
 		}
 		if time.Now().After(until) {
-			return nil, false
+			return nil, nil
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 }
 
-// takeResponse は応答を読んで消す。まだ無い・書きかけなら false。
-func takeResponse(path string) (*Response, bool) {
-	response, ok := readResponse(path)
-	if ok {
-		// 消せなくても応答は取得できている。残骸はプラグイン側が開始時に掃除する。
-		_ = os.Remove(path)
+// NestingDepth は JSON の入れ子（オブジェクトと配列）の深さ。外側のオブジェクトを 1 と数える。
+// 文字列の中の括弧は数えない。JSON として正しいかは確かめない（解析する前に深さを見るため）。
+func NestingDepth(data []byte) int {
+	depth, deepest := 0, 0
+	inString, escaped := false, false
+	for _, c := range data {
+		switch {
+		case escaped:
+			escaped = false
+		case inString:
+			if c == '\\' {
+				escaped = true
+			} else if c == '"' {
+				inString = false
+			}
+		case c == '"':
+			inString = true
+		case c == '{' || c == '[':
+			depth++
+			deepest = max(deepest, depth)
+		case c == '}' || c == ']':
+			depth--
+		}
 	}
-	return response, ok
-}
-
-// readResponse は応答を読む。まだ無い・書きかけなら false（もう一度読めばよい）。
-func readResponse(path string) (*Response, bool) {
-	text, err := os.ReadFile(path)
-	if err != nil {
-		return nil, false
-	}
-	var response Response
-	if json.Unmarshal(text, &response) != nil {
-		return nil, false
-	}
-	return &response, true
+	return deepest
 }
 
 // writeAtomically は同じディレクトリへ書いてから rename する（読み手に書きかけを見せない）。

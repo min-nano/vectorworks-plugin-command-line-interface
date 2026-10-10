@@ -406,3 +406,47 @@ func TestCallRejectsUnknownCode(t *testing.T) {
 		}
 	}
 }
+
+// 応答のファイルが壊れたままなら、締切まで待たずに ErrMalformedResponse で終え、ファイルを消す
+// （docs/protocol.md「ファイル」）。
+func TestCallStopsOnMalformedResponse(t *testing.T) {
+	SetMalformedGrace(t, 200*time.Millisecond)
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	answer(t, dir, `{"ok":tr`)
+	start := time.Now()
+	_, err := Open(dir).Call("ping", nil, 5*time.Second)
+	if !errors.Is(err, ErrMalformedResponse) {
+		t.Fatalf("want ErrMalformedResponse, got %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("should not wait for the deadline: %s", elapsed)
+	}
+	assertNoFiles(t, dir, ResponseSuffix)
+	assertNoFiles(t, dir, WaitSuffix)
+}
+
+// 入れ子が深すぎる要求は、スプールに置く前に断る（プラグインが invalid_request で断るので）。
+func TestCallRejectsDeepRequest(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	deep := json.RawMessage(`{"a":` + strings.Repeat("[", MaxNestingDepth) + strings.Repeat("]", MaxNestingDepth) + `}`)
+	_, err := Open(dir).Call("ping", deep, time.Second)
+	if err == nil || !strings.Contains(err.Error(), "nested too deeply") {
+		t.Fatalf("want a depth error, got %v", err)
+	}
+	assertNoFiles(t, dir, RequestSuffix)
+}
+
+func TestNestingDepth(t *testing.T) {
+	for text, want := range map[string]int{
+		`{}`:                 1,
+		`{"a":[1,{"b":[]}]}`: 4,
+		`{"s":"[[[{{\"]"}`:   1,
+		`"x"`:                0,
+	} {
+		if got := NestingDepth([]byte(text)); got != want {
+			t.Errorf("%s: want %d, got %d", text, want, got)
+		}
+	}
+}

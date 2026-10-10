@@ -1,0 +1,179 @@
+package fakeplugin
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
+)
+
+func ok(string, json.RawMessage) spool.Response {
+	return spool.Response{OK: true}
+}
+
+// put は呼ぶ側を真似て、待つ印を掴んでから要求を置く。待つ印はテストの終わりに放す。
+func put(t *testing.T, dir, id, text string) {
+	t.Helper()
+	unlock, err := lock(filepath.Join(dir, id+spool.WaitSuffix))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(unlock)
+	write(t, dir, id+spool.RequestSuffix, text)
+}
+
+func write(t *testing.T, dir, name, text string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func exists(dir, name string) bool {
+	_, err := os.Stat(filepath.Join(dir, name))
+	return err == nil
+}
+
+func count(t *testing.T, dir, suffix string) int {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(dir, "*"+suffix))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(matches)
+}
+
+func responseOf(t *testing.T, dir, id string) spool.Response {
+	t.Helper()
+	text, err := os.ReadFile(filepath.Join(dir, id+spool.ResponseSuffix))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var response spool.Response
+	if err := json.Unmarshal(text, &response); err != nil {
+		t.Fatal(err)
+	}
+	return response
+}
+
+// 1 回に取り出すのは maxPerServe 件まで。残りは次の回に回る。
+func TestServeLimitsCount(t *testing.T) {
+	old := serveBudget
+	serveBudget = time.Minute
+	t.Cleanup(func() { serveBudget = old })
+	dir := NewDir(t)
+	for i := range maxPerServe + 4 {
+		put(t, dir, fmt.Sprintf("%04d", i), `{"tool":"ping"}`)
+	}
+	serveOnce(dir, ok)
+	if got := count(t, dir, spool.ResponseSuffix); got != maxPerServe {
+		t.Fatalf("want %d responses, got %d", maxPerServe, got)
+	}
+	if !exists(dir, fmt.Sprintf("%04d", maxPerServe)+spool.RequestSuffix) {
+		t.Fatal("the rest should wait for the next round")
+	}
+}
+
+// 経過が serveBudget を超えたら新しい要求を取り出さない。1 件目は必ず処理する。
+func TestServeLimitsTime(t *testing.T) {
+	dir := NewDir(t)
+	for _, id := range []string{"a", "b", "c"} {
+		put(t, dir, id, `{"tool":"slow"}`)
+	}
+	serveOnce(dir, func(string, json.RawMessage) spool.Response {
+		time.Sleep(serveBudget + 20*time.Millisecond)
+		return spool.Response{OK: true}
+	})
+	if !exists(dir, "a"+spool.ResponseSuffix) {
+		t.Fatal("the first request must be served")
+	}
+	if got := count(t, dir, spool.RequestSuffix); got != 2 {
+		t.Fatalf("want 2 requests left, got %d", got)
+	}
+}
+
+// 綴りを満たさない id の要求は、読まず・消さず・応えない。
+func TestServeIgnoresInvalidID(t *testing.T) {
+	dir := NewDir(t)
+	put(t, dir, "a.b", `{"tool":"ping"}`)
+	serveOnce(dir, func(tool string, _ json.RawMessage) spool.Response {
+		t.Fatalf("%s must not run", tool)
+		return spool.Response{}
+	})
+	if !exists(dir, "a.b"+spool.RequestSuffix) || count(t, dir, spool.ResponseSuffix) != 0 {
+		t.Fatal("the request should be left as is")
+	}
+}
+
+// 大きすぎる・入れ子が深すぎる・壊れている・tool の無い要求は invalid_request。
+func TestServeRejectsUnreadableRequests(t *testing.T) {
+	dir := NewDir(t)
+	requests := map[string]string{
+		"big":    `{"tool":"ping","args":{"s":"` + strings.Repeat("x", spool.MaxRequestBytes) + `"}}`,
+		"deep":   `{"tool":"ping","args":{"a":` + strings.Repeat("[", spool.MaxNestingDepth) + strings.Repeat("]", spool.MaxNestingDepth) + `}}`,
+		"broken": `{"tool":`,
+		"notool": `{"args":{}}`,
+	}
+	for id, text := range requests {
+		put(t, dir, id, text)
+	}
+	serveOnce(dir, func(tool string, _ json.RawMessage) spool.Response {
+		t.Fatalf("%s must not run", tool)
+		return spool.Response{}
+	})
+	for id := range requests {
+		if response := responseOf(t, dir, id); response.OK || response.Code != spool.CodeInvalidRequest {
+			t.Errorf("%s: want invalid_request, got %+v", id, response)
+		}
+	}
+}
+
+// 上限ちょうどの深さは受け付ける。args がオブジェクトでなければ {} として渡す。
+func TestServeAcceptsLimitDepthAndDefaultsArgs(t *testing.T) {
+	dir := NewDir(t)
+	nested := strings.Repeat("[", spool.MaxNestingDepth-2) + strings.Repeat("]", spool.MaxNestingDepth-2)
+	put(t, dir, "deep", `{"tool":"ping","args":{"a":`+nested+`}}`)
+	put(t, dir, "list", `{"tool":"ping","args":[1]}`)
+	got := map[string]string{}
+	serveOnce(dir, func(_ string, args json.RawMessage) spool.Response {
+		got[string(args)] = ""
+		return spool.Response{OK: true}
+	})
+	if _, ok := got["{}"]; !ok || len(got) != 2 {
+		t.Fatalf("unexpected args: %v", got)
+	}
+	if !responseOf(t, dir, "deep").OK {
+		t.Fatal("a request at the depth limit should run")
+	}
+}
+
+// ロックを取ったら、待つ印を掴める・無い id のファイルだけを消す。
+func TestStartSweepsOnlyFilesWithoutWaiter(t *testing.T) {
+	dir := NewDir(t)
+	write(t, dir, "dead"+spool.WaitSuffix, "")
+	write(t, dir, "dead"+spool.ResponseSuffix, `{"ok":true}`)
+	write(t, dir, "dead"+spool.RequestSuffix+spool.TempSuffix, "")
+	write(t, dir, "gone"+spool.ResponseSuffix, `{"ok":true}`)
+	unlock, err := lock(filepath.Join(dir, "live"+spool.WaitSuffix))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(unlock)
+	write(t, dir, "live"+spool.ResponseSuffix, `{"ok":true}`)
+	Start(t, dir, ok)
+	for _, name := range []string{"dead" + spool.WaitSuffix, "dead" + spool.ResponseSuffix, "dead" + spool.RequestSuffix + spool.TempSuffix, "gone" + spool.ResponseSuffix} {
+		if exists(dir, name) {
+			t.Errorf("%s should be swept", name)
+		}
+	}
+	for _, name := range []string{"live" + spool.WaitSuffix, "live" + spool.ResponseSuffix} {
+		if !exists(dir, name) {
+			t.Errorf("%s should be kept", name)
+		}
+	}
+}
