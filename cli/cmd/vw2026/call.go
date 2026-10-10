@@ -33,7 +33,8 @@ On success, call prints the result of the tool. With --raw it prints the
 whole response. When the tool fails, call writes its code and reason to the
 standard error and exits with 1; with --raw the response also carries the
 code (unknown_tool, invalid_args, invalid_request, no_wait, or internal;
-docs/protocol.md).
+docs/protocol.md). A failure with a missing or unknown code is a malformed
+response, so call exits with 6 for it.
 
 When --timeout runs out, call stops waiting, withdraws the request, and
 exits with 4: the tool did not run. If the plug-in had already taken the

@@ -75,6 +75,10 @@ var ErrNotRunning = errors.New("bridge is not running")
 // 無かった。受け付けが見送られている（モーダルダイアログ・undo の記録の最中）ことが多い。
 var ErrTimeout = errors.New("timed out waiting for the response")
 
+// ErrMalformedResponse は、失敗の応答の code が無い・知らない値だった（docs/protocol.md
+// 「互換性」: 知っているフィールドの未知の値はエラー）。
+var ErrMalformedResponse = errors.New("malformed response")
+
 // ErrNoResponse は、待つのをやめたときに要求をプラグインが既に受け取っていて、猶予の間にも
 // 応答が届かなかった。要求は実行されたかもしれない（ErrTimeout は実行されない）。
 var ErrNoResponse = errors.New("the bridge took the request but no response came")
@@ -178,20 +182,21 @@ func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) 
 		return fmt.Errorf("%w (%s, %s; %s)", ErrTimeout, tool, timeout, reason)
 	}
 	received := func(response *Response) (*Response, error) {
-		if !response.OK && response.Code == CodeNoWait {
-			return nil, notRun("the bridge did not run it")
+		if response.OK {
+			return response, nil
 		}
-		return response, nil
+		switch response.Code {
+		case CodeNoWait:
+			return nil, notRun("the bridge did not run it")
+		case CodeInvalidRequest, CodeUnknownTool, CodeInvalidArgs, CodeInternal:
+			return response, nil
+		default:
+			return nil, fmt.Errorf("%w (%s; unknown code %q: %s)", ErrMalformedResponse, tool, response.Code, response.Error)
+		}
 	}
 
-	for {
-		if response, ok := takeResponse(responsePath); ok {
-			return received(response)
-		}
-		if time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
+	if response, ok := pollResponse(responsePath, deadline); ok {
+		return received(response)
 	}
 
 	// 待つのをやめてから要求を消す（消してからやめると、その間にプラグインが要求を取り出して
@@ -200,13 +205,20 @@ func (b *Bridge) Call(tool string, args json.RawMessage, timeout time.Duration) 
 	if os.Remove(requestPath) == nil {
 		return nil, notRun("a dialog may be open")
 	}
-	graceEnd := time.Now().Add(takenGrace)
+	if response, ok := pollResponse(responsePath, time.Now().Add(takenGrace)); ok {
+		return received(response)
+	}
+	return nil, fmt.Errorf("%w (%s, %s; it may have run)", ErrNoResponse, tool, timeout)
+}
+
+// pollResponse は until まで応答を読み直す。届けば読んで消す。
+func pollResponse(path string, until time.Time) (*Response, bool) {
 	for {
-		if response, ok := takeResponse(responsePath); ok {
-			return received(response)
+		if response, ok := takeResponse(path); ok {
+			return response, true
 		}
-		if time.Now().After(graceEnd) {
-			return nil, fmt.Errorf("%w (%s, %s; it may have run)", ErrNoResponse, tool, timeout)
+		if time.Now().After(until) {
+			return nil, false
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

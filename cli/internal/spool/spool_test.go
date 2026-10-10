@@ -249,6 +249,8 @@ func TestCallRejectsOversizedRequest(t *testing.T) {
 func takeRequest(t *testing.T, dir string) <-chan string {
 	t.Helper()
 	taken := make(chan string, 1)
+	stop := make(chan struct{})
+	t.Cleanup(func() { close(stop) })
 	go func() {
 		for {
 			matches, _ := filepath.Glob(filepath.Join(dir, "*"+RequestSuffix))
@@ -256,10 +258,25 @@ func takeRequest(t *testing.T, dir string) <-chan string {
 				taken <- strings.TrimSuffix(filepath.Base(matches[0]), RequestSuffix)
 				return
 			}
-			time.Sleep(10 * time.Millisecond)
+			select {
+			case <-stop:
+				return
+			case <-time.After(10 * time.Millisecond):
+			}
 		}
 	}()
 	return taken
+}
+
+// answer は要求を受け取り、text を応答として書く（プラグインを真似る）。
+func answer(t *testing.T, dir, text string) {
+	t.Helper()
+	taken := takeRequest(t, dir)
+	go func() {
+		if id, ok := <-taken; ok {
+			_ = os.WriteFile(filepath.Join(dir, id+ResponseSuffix), []byte(text), 0o600)
+		}
+	}()
 }
 
 // 待つのをやめたときに要求が既に受け取られていて、猶予の間にも応答が無ければ ErrNoResponse
@@ -369,19 +386,23 @@ func TestRequestWithoutWaitIsRefused(t *testing.T) {
 func TestResponseIgnoresUnknownFields(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.HoldLock(t, dir)
-	go func() {
-		for {
-			matches, _ := filepath.Glob(filepath.Join(dir, "*"+RequestSuffix))
-			if len(matches) > 0 && os.Remove(matches[0]) == nil {
-				response := strings.TrimSuffix(matches[0], RequestSuffix) + ResponseSuffix
-				_ = os.WriteFile(response, []byte(`{"ok":true,"result":{},"future":[1]}`), 0o600)
-				return
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
-	}()
+	answer(t, dir, `{"ok":true,"result":{},"future":[1]}`)
 	response, err := Open(dir).Call("ping", nil, 5*time.Second)
 	if err != nil || !response.OK {
 		t.Fatalf("%+v %v", response, err)
+	}
+}
+
+// 失敗の応答の code が無い・知らない値なら、道具の失敗ではなく ErrMalformedResponse
+// （知っているフィールドの未知の値はエラー。docs/protocol.md「互換性」）。
+func TestCallRejectsUnknownCode(t *testing.T) {
+	for _, text := range []string{`{"ok":false,"error":"x"}`, `{"ok":false,"code":"later","error":"x"}`} {
+		dir := fakeplugin.NewDir(t)
+		fakeplugin.HoldLock(t, dir)
+		answer(t, dir, text)
+		_, err := Open(dir).Call("ping", nil, 5*time.Second)
+		if !errors.Is(err, ErrMalformedResponse) {
+			t.Fatalf("%s: want ErrMalformedResponse, got %v", text, err)
+		}
 	}
 }
