@@ -18,7 +18,7 @@
 ## `ping`
 
 ```json
-{"version":"abc1234","branch":"main","protocol":3,"pid":4242,"document_open":true,"current_layer":"1F"}
+{"version":"abc1234","branch":"main","protocol":4,"pid":4242,"document_open":true,"current_layer":"1F"}
 ```
 
 | フィールド | 値 |

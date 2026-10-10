@@ -11,7 +11,7 @@ func (versionCmd) Help() string {
 Version prints the version of this CLI and the version of the protocol it
 speaks (docs/protocol.md).
 
-	{"version":"abc1234","protocol":3}
+	{"version":"abc1234","protocol":4}
 `
 }
 

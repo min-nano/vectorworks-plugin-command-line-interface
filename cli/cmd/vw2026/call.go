@@ -30,9 +30,18 @@ arguments against the tool; the plug-in does.
 	echo '{"layer":"1F"}' | vw2026 call layer_objects -
 
 On success, call prints the result of the tool. With --raw it prints the
-whole response. When the tool fails, call writes the reason to the standard
-error and exits with 1. When --timeout runs out, call withdraws the request
-and exits with 4.
+whole response. When the tool fails, call writes its code and reason to the
+standard error and exits with 1; with --raw the response also carries the
+code (unknown_tool, invalid_args, invalid_request, no_wait, or internal;
+docs/protocol.md). A failure with a missing or unknown code is a malformed
+response, so call exits with 6 for it.
+
+When --timeout runs out, call stops waiting, withdraws the request, and
+exits with 4: the tool did not run. If the plug-in had already taken the
+request, call waits a few more seconds for the response, and exits with 8 if
+none comes: the tool may have run. A no_wait response also means that the
+tool did not run, so call exits with 4 for it, not with 1. A call that is
+killed while waiting leaves a request that will not run either.
 `
 }
 
@@ -76,7 +85,7 @@ func (c *callCmd) run(g *globals, e *env) int {
 		_ = emitRaw(e, response.Result)
 	}
 	if !response.OK {
-		fmt.Fprintf(e.stderr, "vw2026: %s: %s\n", c.Tool, response.Error)
+		fmt.Fprintf(e.stderr, "vw2026: %s: %s: %s\n", c.Tool, response.Code, response.Error)
 		return exitToolErr
 	}
 	return exitOK
@@ -88,6 +97,8 @@ func codeFor(err error) int {
 		return exitDown
 	case errors.Is(err, spool.ErrTimeout):
 		return exitTimeout
+	case errors.Is(err, spool.ErrNoResponse):
+		return exitNoResponse
 	default:
 		return exitFailure
 	}

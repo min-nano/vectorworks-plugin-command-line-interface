@@ -42,8 +42,9 @@ func TestCallRoundTrip(t *testing.T) {
 	if got.Tool != "layers" || got.Args["include_sheets"] != false {
 		t.Fatalf("unexpected result: %s", response.Result)
 	}
-	// 応答は読んだあと消す。
+	// 応答と .wait は読んだあと消す。
 	assertNoFiles(t, dir, ResponseSuffix)
+	assertNoFiles(t, dir, WaitSuffix)
 }
 
 func TestCallEmptyArgsBecomesObject(t *testing.T) {
@@ -61,17 +62,18 @@ func TestCallEmptyArgsBecomesObject(t *testing.T) {
 func TestCallToolFailure(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) Response {
-		return Response{OK: false, Error: "unknown tool: " + tool}
+		return Response{OK: false, Code: CodeUnknownTool, Error: "unknown tool: " + tool}
 	})
 	response, err := Open(dir).Call("nope", nil, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.OK || response.Error != "unknown tool: nope" {
+	if response.OK || response.Code != CodeUnknownTool || response.Error != "unknown tool: nope" {
 		t.Fatalf("unexpected response: %+v", response)
 	}
 }
 
+// 待ちきれなかった要求は、.wait をやめてから消す（誰も待たない要求も応答も残さない）。
 func TestCallTimeoutWithdrawsRequest(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.HoldLock(t, dir)
@@ -81,6 +83,24 @@ func TestCallTimeoutWithdrawsRequest(t *testing.T) {
 		t.Fatalf("want ErrTimeout, got %v", err)
 	}
 	assertNoFiles(t, dir, RequestSuffix)
+	assertNoFiles(t, dir, WaitSuffix)
+}
+
+// 猶予の間に届いた no_wait は「実行しなかった」なので、道具の失敗ではなく ErrTimeout。
+func TestCallNoWaitDuringGraceIsTimeout(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	taken := takeRequest(t, dir)
+	go func() {
+		id := <-taken
+		time.Sleep(400 * time.Millisecond) // 締切（200 ms）を過ぎ、.wait が消えてから断る
+		_ = os.WriteFile(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":false,"code":"no_wait","error":"no wait file"}`), 0o600)
+	}()
+	_, err := Open(dir).Call("ping", nil, 200*time.Millisecond)
+	if !errors.Is(err, ErrTimeout) {
+		t.Fatalf("want ErrTimeout, got %v", err)
+	}
+	assertNoFiles(t, dir, ResponseSuffix)
 }
 
 // ロックファイルがあっても、掴まれていなければ（異常終了のあと）止まっている。
@@ -222,4 +242,167 @@ func TestCallRejectsOversizedRequest(t *testing.T) {
 	}
 	assertNoFiles(t, dir, RequestSuffix)
 	assertNoFiles(t, dir, TempSuffix)
+}
+
+// takeRequest はプラグインが要求を受け取ったこと（読んで消した）を真似る。応答は書かない。
+// 受け取った要求の id を返す。
+func takeRequest(t *testing.T, dir string) <-chan string {
+	t.Helper()
+	taken := make(chan string, 1)
+	stop := make(chan struct{})
+	t.Cleanup(func() { close(stop) })
+	go func() {
+		for {
+			matches, _ := filepath.Glob(filepath.Join(dir, "*"+RequestSuffix))
+			if len(matches) > 0 && os.Remove(matches[0]) == nil {
+				taken <- strings.TrimSuffix(filepath.Base(matches[0]), RequestSuffix)
+				return
+			}
+			select {
+			case <-stop:
+				return
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
+	}()
+	return taken
+}
+
+// answer は要求を受け取り、text を応答として書く（プラグインを真似る）。
+func answer(t *testing.T, dir, text string) {
+	t.Helper()
+	taken := takeRequest(t, dir)
+	go func() {
+		if id, ok := <-taken; ok {
+			_ = os.WriteFile(filepath.Join(dir, id+ResponseSuffix), []byte(text), 0o600)
+		}
+	}()
+}
+
+// 待つのをやめたときに要求が既に受け取られていて、猶予の間にも応答が無ければ ErrNoResponse
+// （「実行されていない」と区別する）。
+func TestCallTakenWithoutResponse(t *testing.T) {
+	SetTakenGrace(t, 200*time.Millisecond)
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	taken := takeRequest(t, dir)
+	_, err := Open(dir).Call("ping", nil, 200*time.Millisecond)
+	if !errors.Is(err, ErrNoResponse) || errors.Is(err, ErrTimeout) {
+		t.Fatalf("want ErrNoResponse, got %v", err)
+	}
+	<-taken
+	assertNoFiles(t, dir, WaitSuffix)
+}
+
+// 受け取られた要求の応答が締切のあと猶予の内に届けば、それを返す。
+func TestCallTakenThenAnswered(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	taken := takeRequest(t, dir)
+	go func() {
+		id := <-taken
+		time.Sleep(400 * time.Millisecond) // 締切（200 ms）を過ぎてから応える
+		_ = os.WriteFile(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":true,"result":{"late":1}}`), 0o600)
+	}()
+	response, err := Open(dir).Call("ping", nil, 200*time.Millisecond)
+	if err != nil || !response.OK || string(response.Result) != `{"late":1}` {
+		t.Fatalf("%+v %v", response, err)
+	}
+	assertNoFiles(t, dir, WaitSuffix)
+}
+
+// 待つ者の居なくなった要求（.wait が放されている）は、実行も応答もされない。
+func TestRequestOfDeadCallerIsDropped(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	called := make(chan string, 1)
+	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) Response {
+		called <- tool
+		return Response{OK: true}
+	})
+	id := NewID(time.Now())
+	// 異常終了した呼ぶ側の残したもの: 掴まれていない .wait と要求。
+	if err := os.WriteFile(filepath.Join(dir, id+WaitSuffix), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, id+RequestSuffix), []byte(`{"tool":"ping"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		_, errReq := os.Stat(filepath.Join(dir, id+RequestSuffix))
+		_, errWait := os.Stat(filepath.Join(dir, id+WaitSuffix))
+		if os.IsNotExist(errReq) && os.IsNotExist(errWait) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the request and the .wait should be removed")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case tool := <-called:
+		t.Fatalf("%s must not run", tool)
+	default:
+	}
+	assertNoFiles(t, dir, ResponseSuffix)
+}
+
+// .wait の無い要求は実行せず、no_wait で断る（置き忘れた呼ぶ側に理由が伝わるように）。
+func TestRequestWithoutWaitIsRefused(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	called := make(chan string, 1)
+	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) Response {
+		called <- tool
+		return Response{OK: true}
+	})
+	id := NewID(time.Now())
+	if err := os.WriteFile(filepath.Join(dir, id+RequestSuffix), []byte(`{"tool":"ping"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	responsePath := filepath.Join(dir, id+ResponseSuffix)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if text, err := os.ReadFile(responsePath); err == nil {
+			var response Response
+			if err := json.Unmarshal(text, &response); err != nil || response.OK || response.Code != CodeNoWait {
+				t.Fatalf("want no_wait, got %s", text)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("no response")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	select {
+	case tool := <-called:
+		t.Fatalf("%s must not run", tool)
+	default:
+	}
+}
+
+// 応答の知らないフィールドは無視する（docs/protocol.md「互換性」）。
+func TestResponseIgnoresUnknownFields(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	answer(t, dir, `{"ok":true,"result":{},"future":[1]}`)
+	response, err := Open(dir).Call("ping", nil, 5*time.Second)
+	if err != nil || !response.OK {
+		t.Fatalf("%+v %v", response, err)
+	}
+}
+
+// 失敗の応答の code が無い・知らない値なら、道具の失敗ではなく ErrMalformedResponse
+// （知っているフィールドの未知の値はエラー。docs/protocol.md「互換性」）。
+func TestCallRejectsUnknownCode(t *testing.T) {
+	for _, text := range []string{`{"ok":false,"error":"x"}`, `{"ok":false,"code":"later","error":"x"}`} {
+		dir := fakeplugin.NewDir(t)
+		fakeplugin.HoldLock(t, dir)
+		answer(t, dir, text)
+		_, err := Open(dir).Call("ping", nil, 5*time.Second)
+		if !errors.Is(err, ErrMalformedResponse) {
+			t.Fatalf("%s: want ErrMalformedResponse, got %v", text, err)
+		}
+	}
 }

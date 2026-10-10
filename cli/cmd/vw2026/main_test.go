@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,7 +46,7 @@ func echoBridge(t *testing.T) string {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) spool.Response {
 		if tool == "fail" {
-			return spool.Response{OK: false, Error: "boom"}
+			return spool.Response{OK: false, Code: spool.CodeInternal, Error: "boom"}
 		}
 		out, _ := json.Marshal(map[string]any{"tool": tool, "args": args})
 		return spool.Response{OK: true, Result: out}
@@ -87,11 +88,11 @@ func TestCallArgsFromStdin(t *testing.T) {
 func TestCallToolError(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "fail")
-	if r.code != exitToolErr || r.stdout != "" || !strings.Contains(r.stderr, "boom") {
+	if r.code != exitToolErr || r.stdout != "" || !strings.Contains(r.stderr, "internal: boom") {
 		t.Fatalf("%+v", r)
 	}
 	raw := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "--raw", "fail")
-	if raw.code != exitToolErr || !strings.Contains(raw.stdout, `"ok":false`) {
+	if raw.code != exitToolErr || !strings.Contains(raw.stdout, `"ok":false`) || !strings.Contains(raw.stdout, `"code":"internal"`) {
 		t.Fatalf("%+v", raw)
 	}
 }
@@ -146,7 +147,7 @@ func TestWaitTimesOut(t *testing.T) {
 
 func TestVersion(t *testing.T) {
 	r := invoke(t, nil, "", nil, "version")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":3`) {
+	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":4`) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -211,7 +212,7 @@ func TestHelp(t *testing.T) {
 }
 
 func TestVersionFlag(t *testing.T) {
-	if r := invoke(t, nil, "", nil, "--version"); r.code != exitOK || !strings.Contains(r.stdout, `"protocol":3`) {
+	if r := invoke(t, nil, "", nil, "--version"); r.code != exitOK || !strings.Contains(r.stdout, `"protocol":4`) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -222,6 +223,18 @@ func TestEveryCommandRuns(t *testing.T) {
 	for _, node := range kong.Must(&cli{}).Model.Leaves(true) {
 		if _, ok := node.Target.Addr().Interface().(command); !ok {
 			t.Errorf("%s does not implement command", node.Name)
+		}
+	}
+}
+
+func TestCodeFor(t *testing.T) {
+	for err, want := range map[error]int{
+		spool.ErrNotRunning: exitDown,
+		spool.ErrTimeout:    exitTimeout,
+		spool.ErrNoResponse: exitNoResponse,
+	} {
+		if got := codeFor(fmt.Errorf("%w (detail)", err)); got != want {
+			t.Errorf("%v: got %d, want %d", err, got, want)
 		}
 	}
 }
