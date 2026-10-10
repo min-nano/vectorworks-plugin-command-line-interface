@@ -24,3 +24,4 @@ vw2026 call layers '{"include_sheets":false}'
 | [docs/protocol.md](docs/protocol.md) | 受け渡しの作法（プラグインと呼ぶ側の約束。真実はここ） |
 | `vw2026 --help` | `vw2026` のコマンド・指定・終了コード（定義は [cli/cmd/vw2026/](cli/cmd/vw2026/)。`vw2026 help <command>` で各コマンド） |
 | [docs/sdk-research.md](docs/sdk-research.md) | SDK リファレンスでの調査を待っているもの |
+| [docs/review.md](docs/review.md) | 受け渡しの仕組みの設計レビューと、反映の扱い（反映し終えたら消す） |
