@@ -7,7 +7,7 @@ import (
 
 type waitCmd struct {
 	Down    bool    `env:"VW2026_WAIT_DOWN" help:"Wait until the bridge stops instead."`
-	Timeout float64 `default:"120" placeholder:"SECONDS" help:"How long to wait (default ${default})."`
+	Timeout float64 `env:"VW2026_WAIT_TIMEOUT" default:"120" placeholder:"SECONDS" help:"How long to wait (default ${default})."`
 }
 
 func (waitCmd) Help() string {
