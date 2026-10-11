@@ -14,7 +14,7 @@ func (waitCmd) Help() string {
 	return `
 Wait waits until the bridge starts, that is, until the plug-in takes the lock.
 With --down it waits until the bridge stops (the lock is released). It prints
-the same output as status, or exits with 4 when --timeout runs out.
+the same output as status, or exits with 3 when --timeout runs out.
 
 Vectorworks keeps the lock while it shows the dialog that asks to save the
 drawings, so "wait --down" does not take that dialog for a stop.
