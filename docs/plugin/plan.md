@@ -27,6 +27,9 @@
   見本と、深い入れ子・長い文字列・不正な UTF-8・double の端の数）。最初の実行で、元から引き継いだ
   書き出しの誤り（double の最大値を 15 桁に丸めて、読み戻せない `1.79769313486232e+308` を書く）が
   見つかり、直した。
+- **数の読み方を OS で揃えた。** `std::istringstream` は非正規化数（`4.9e-324`）を libc++（mac）では
+  失敗にし、libstdc++ では読む。`strtod_l`（Windows は `_strtod_l`）を "C" ロケールで使い、長すぎる
+  指数の桁は値を変えない範囲で詰める（C ランタイムによっては指数をあふれさせる）。
 - **`protocol/fixtures/` の中身。** 作法の定数（`constants.json`）と、受け付けの見本（`serve/*.json`。
   置いたファイル → 受け付け 1 回 → 残るファイルと応答）。C++ のテスト（`tests/ProtocolFixturesTests.cpp`）と
   Go のテスト（`cli/internal/spool/fixtures_test.go`・`cli/internal/fakeplugin/fixtures_test.go`）の両方が

@@ -19,6 +19,17 @@
 #include <utility>
 #include <vector>
 
+#if defined(_WIN32)
+#	include <cstdlib>
+#	include <locale.h>
+#elif defined(__APPLE__)
+#	include <cstdlib>
+#	include <xlocale.h>
+#else
+#	include <clocale>
+#	include <cstdlib>
+#endif
+
 namespace VwCli::core
 {
 	namespace
@@ -26,6 +37,44 @@ namespace VwCli::core
 		// 置き換え文字（U+FFFD）。組にならないサロゲートの \u をこれにする（読んだ文字列を
 		// 常に正しい UTF-8 に保つ。Go の encoding/json と同じ扱い）。
 		constexpr unsigned int kReplacementCharacter = 0xFFFDU;
+
+		// 数のテキストを double へ（"C" ロケールで。小数点は常に '.'）。範囲を超えて大きい
+		// ものは false。小さすぎるものは非正規化数か 0 になる。
+		//
+		// std::istringstream は使わない。非正規化数（4.9e-324 など）を libc++（mac。プラグインが
+		// 動く場所）は失敗にし、libstdc++ は読むので、同じ要求の読み方が OS で変わる。strtod_l は
+		// どの OS でも正しく丸めて読む。
+		bool ParseDouble(const std::string& text, double& out)
+		{
+#if defined(_WIN32)
+			static const _locale_t classic = _create_locale(LC_NUMERIC, "C");
+			out = _strtod_l(text.c_str(), nullptr, classic);
+#else
+			static const locale_t classic = newlocale(LC_NUMERIC_MASK, "C", locale_t{});
+			out = strtod_l(text.c_str(), nullptr, classic);
+#endif
+			return std::isfinite(out);
+		}
+
+		// 指数の桁が長すぎる数の指数を、値を変えない範囲で詰める。C ランタイムによっては指数を
+		// int で数えてあふれさせ、1e-99999999999999999999 を無限大と読む（Wine の msvcrt で
+		// 確かめた）。仮数の桁で位がずれるのは要求の上限（1 MiB）の桁数までなので、それを
+		// 十分に超える 16777216 で打ち切っても読む値は変わらない。
+		std::string ClampExponent(std::string_view text)
+		{
+			constexpr long long kLimit = 16777216;
+			const std::size_t mark = text.find_first_of("eE");
+			if (mark == std::string_view::npos)
+				return std::string(text);
+			std::size_t i = mark + 1;
+			std::string sign;
+			if (text[i] == '-' || text[i] == '+')
+				sign = std::string(1, text[i++]);
+			long long exponent = 0;
+			for (; i < text.size(); ++i)
+				exponent = std::min(exponent * 10 + (text[i] - '0'), kLimit);
+			return std::string(text.substr(0, mark)) + "e" + sign + std::to_string(exponent);
+		}
 
 		// at() が「無ければ null」を返すための実体。
 		const Json& NullValue()
@@ -101,8 +150,8 @@ namespace VwCli::core
 			}
 			// 短く書けるなら短く書く。15 → 16 → 17 桁の順に試し、読み戻して同じ値になった
 			// 最初のものを採る（17 桁まで行けば必ず一致するので、値は失われない）。読み戻しの
-			// 失敗は一致と数えない（最大値の近くを丸めると範囲を超え、標準ライブラリによっては
-			// 失敗にしたうえで最大値を入れるので、値だけを比べると読めない数を書いてしまう）。
+			// 失敗は一致と数えない（最大値の近くを 15 桁に丸めると範囲を超える。ファジングで
+			// 見つかった）。
 			for (int digits = 15; digits <= std::numeric_limits<double>::max_digits10; ++digits)
 			{
 				std::ostringstream oss;
@@ -111,11 +160,8 @@ namespace VwCli::core
 				oss << value;
 				const std::string text = oss.str();
 
-				std::istringstream iss(text);
-				iss.imbue(std::locale::classic());
 				double back = 0.0;
-				iss >> back;
-				if ((!iss.fail() && back == value) ||
+				if ((ParseDouble(text, back) && back == value) ||
 					digits == std::numeric_limits<double>::max_digits10)
 				{
 					out += text;
@@ -560,66 +606,13 @@ namespace VwCli::core
 				while (IsDigit(peek()))
 					++fPos;
 			}
-			// 文法は確かめてあるので、読めないのは double の範囲を超えるときだけ。
-			const std::string_view text = fText.substr(start, fPos - start);
-			std::istringstream iss{std::string(text)};
-			iss.imbue(std::locale::classic());
+			// 文法は確かめてあるので、読めないのは double の範囲を超えて大きいときだけ。小さすぎる
+			// 数（1e-400 など）は 0 になる（Go の encoding/json と同じ）。
 			double number = 0.0;
-			iss >> number;
-			if (!iss.fail() && std::isfinite(number))
-			{
-				out = Json::number(number);
-				return true;
-			}
-			// 小さすぎる数（1e-400 など）を 0 にするか失敗にするかは標準ライブラリで違うので、
-			// ここで 0 に揃える（Go の encoding/json と同じ）。大きすぎる数は読めない要求にする。
-			if (!Underflows(text))
+			if (!ParseDouble(ClampExponent(fText.substr(start, fPos - start)), number))
 				return fail("数が表せる範囲を超えています");
-			out = Json::number(text.front() == '-' ? -0.0 : 0.0);
+			out = Json::number(number);
 			return true;
-		}
-
-		// 文法どおりの数が 1 より小さいか（最初の 0 でない桁の位で判定する）。0 に揃えてよい
-		// のは、double で表せないほど小さいときだけなので、1 を境にすれば足りる。
-		static bool Underflows(std::string_view text)
-		{
-			std::size_t i = text.front() == '-' ? 1 : 0;
-			long long magnitude = 0;
-			bool seenNonZero = false;
-			// 整数部。
-			for (; i < text.size() && IsDigit(text[i]); ++i)
-			{
-				if (text[i] != '0')
-					seenNonZero = true;
-				if (seenNonZero)
-					++magnitude;
-			}
-			// 小数部（整数部が 0 なら、最初の 0 でない桁までの 0 の数だけ位が下がる）。
-			if (i < text.size() && text[i] == '.')
-			{
-				for (++i; i < text.size() && IsDigit(text[i]); ++i)
-				{
-					if (seenNonZero)
-						continue;
-					if (text[i] != '0')
-						seenNonZero = true;
-					else
-						--magnitude;
-				}
-			}
-			// 指数（桁あふれしないように打ち切る）。
-			long long exponent = 0;
-			bool negative = false;
-			if (i < text.size() && (text[i] == 'e' || text[i] == 'E'))
-			{
-				++i;
-				if (i < text.size() && (text[i] == '-' || text[i] == '+'))
-					negative = text[i++] == '-';
-				for (; i < text.size() && IsDigit(text[i]); ++i)
-					exponent = std::min<long long>(exponent * 10 + (text[i] - '0'), 1000000);
-			}
-			magnitude += negative ? -exponent : exponent;
-			return magnitude <= 0;
 		}
 	};
 

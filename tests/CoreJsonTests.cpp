@@ -185,6 +185,10 @@ TEST(json_parse_rejects_numbers_out_of_range)
 	}
 	CHECK(Json::parse("4.9e-324", value, error));
 	CHECK(value.asNumber() > 0.0);
+	// 指数の桁が長くても、仮数の位と合わせて読む。
+	CHECK(Json::parse("0." + std::string(400, '0') + "1e000000000000000000403", value, error));
+	CHECK_EQ(value.asNumber(), 100.0);
+	CHECK(!Json::parse("1e+99999999999999999999", value, error));
 }
 
 TEST(json_parse_string_escapes)
