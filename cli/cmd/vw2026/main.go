@@ -34,7 +34,7 @@ var version = "dev"
 // プラグインの答えを待たずに CLI が判定したもの、20 番台はプラグインが失敗を答えたもの。
 const (
 	exitOK      = 0
-	exitFailure = 1 // そのほか（書き込めない・起動できない・Vectorworks が動いていて install できない等）
+	exitFailure = 1 // そのほか（書き込めない・起動できない等）
 	exitUsage   = 2 // 使い方の誤り
 	// 待ちきれなかった（no_wait を含む）。要求は実行されない。Vectorworks は動いている
 	// （モーダル・undo の記録の最中など）。exitDown と分けるのは、呼ぶ側が起動し直さずに
@@ -44,6 +44,7 @@ const (
 	// （実行されない）と分けるのは、書く道具を呼んだ側が二重に操作しないように。
 	exitNoResponse = 4
 	exitDown       = 5 // ブリッジが見つからない
+	// 6 は install / uninstall（未実装）が「Vectorworks が動いているので行えない」に使う。
 
 	// プラグインが失敗を答えた（応答は届いている）。
 	exitToolFailure = 21 // internal
@@ -122,6 +123,7 @@ The commands exit with
 	   Vectorworks is running)
 	4  the plug-in took the request but no response came (the tool may have run)
 	5  the bridge is not running
+	6  Vectorworks is running, so install or uninstall did nothing (planned)
 	21 the tool reported a failure (internal)
 	22 the tool reported wrong usage (invalid_request, unknown_tool, or invalid_args)
 	23 refused by the session: another one occupies the bridge, the given one has ended,
