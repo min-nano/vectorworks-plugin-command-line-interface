@@ -112,7 +112,7 @@ shown in the help of the command ("vw2026 help <command>"), for example
 VW2026_CALL_TIMEOUT for "call --timeout". A flag on the command line takes
 precedence over its variable. A variable that is set but empty is a value too:
 an empty timeout is wrong usage. For a switch such as --raw, the variable takes
-true or false (or 1 or 0), and --raw=false turns it off again.
+true or false (or 1 or 0), and --no-raw turns it off again.
 
 	vw2026 status
 	vw2026 call tools

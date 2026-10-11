@@ -353,8 +353,8 @@ func TestFlagsFromEnv(t *testing.T) {
 	if r := invoke(t, raw, "", nil, "call", "fail"); r.code != exitToolFailure || !strings.Contains(r.stdout, `"code":"internal"`) {
 		t.Fatalf("VW2026_CALL_RAW: %+v", r)
 	}
-	if r := invoke(t, raw, "", nil, "call", "fail", "--raw=false"); r.code != exitToolFailure || r.stdout != "" {
-		t.Fatalf("--raw=false over VW2026_CALL_RAW: %+v", r)
+	if r := invoke(t, raw, "", nil, "call", "fail", "--no-raw"); r.code != exitToolFailure || r.stdout != "" {
+		t.Fatalf("--no-raw over VW2026_CALL_RAW: %+v", r)
 	}
 
 	busy, _ := busySpool(t)
@@ -366,8 +366,8 @@ func TestFlagsFromEnv(t *testing.T) {
 		t.Fatalf("VW2026_WAIT_DOWN and VW2026_WAIT_TIMEOUT: %+v", r)
 	}
 	// 引数が勝つ（ロックが掴まれているので、上がるのを待つなら直ちに終わる）。
-	if r := invoke(t, short, "", nil, "wait", "--down=false"); r.code != exitOK {
-		t.Fatalf("--down=false over VW2026_WAIT_DOWN: %+v", r)
+	if r := invoke(t, short, "", nil, "wait", "--no-down"); r.code != exitOK {
+		t.Fatalf("--no-down over VW2026_WAIT_DOWN: %+v", r)
 	}
 	if r := invoke(t, map[string]string{"VW2026_SPOOL": busy, "VW2026_CALL_TIMEOUT": "60"}, "", nil, "call", "ping", "--timeout", "0.3"); r.code != exitTimeout {
 		t.Fatalf("--timeout over VW2026_CALL_TIMEOUT: %+v", r)
@@ -381,7 +381,7 @@ func TestFlagsFromEnv(t *testing.T) {
 }
 
 // TestEveryFlagHasEnv は、ヘルプを除くすべての指定に環境変数があり、invoke がそれを
-// 置き直すことを確かめる（指定を足して環境変数を付け忘れないように）。
+// 置き直すこと、オン・オフの指定が --no-<flag> を持つことを確かめる（指定を足して環境変数を付け忘れないように）。
 func TestEveryFlagHasEnv(t *testing.T) {
 	known := map[string]bool{}
 	for _, name := range envVars {
@@ -392,6 +392,10 @@ func TestEveryFlagHasEnv(t *testing.T) {
 			for _, flag := range group {
 				if flag.Name == "help" {
 					continue
+				}
+				// オン・オフの指定は --no-<flag> で打ち消せるようにする（環境変数でオンにしたものを戻すため）。
+				if flag.IsBool() && flag.Tag.Negatable == "" {
+					t.Errorf("%s --%s is not negatable (add negatable:\"\")", node.Path(), flag.Name)
 				}
 				if len(flag.Envs) == 0 {
 					t.Errorf("%s --%s has no environment variable", node.Path(), flag.Name)

@@ -13,7 +13,7 @@ import (
 type callCmd struct {
 	Tool    string  `arg:"" help:"Tool to call (\"vw2026 call tools\" lists them)."`
 	Args    string  `arg:"" optional:"" name:"args" help:"Arguments as a JSON object, or - to read them from the standard input."`
-	Raw     bool    `env:"VW2026_CALL_RAW" help:"Print the whole response (ok, result, and error)."`
+	Raw     bool    `env:"VW2026_CALL_RAW" negatable:"" help:"Print the whole response (ok, result, and error)."`
 	Timeout float64 `env:"VW2026_CALL_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
 	Session string  `env:"VW2026_SESSION" placeholder:"ID" help:"Session to call in (\"vw2026 session start\" prints it)."`
 }
