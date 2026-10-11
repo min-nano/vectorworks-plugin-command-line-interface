@@ -1,5 +1,7 @@
 # vectorworks-plugin-command-line-interface
 
+[![codecov](https://codecov.io/gh/min-nano/vectorworks-plugin-command-line-interface/graph/badge.svg)](https://codecov.io/gh/min-nano/vectorworks-plugin-command-line-interface)
+
 **Vectorworks をコマンドラインやほかのプログラムから操作するための、Vectorworks 2026 用
 プラグインと CLI です。**
 

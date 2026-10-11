@@ -1,0 +1,4 @@
+# Go のカバレッジはモジュールパス（github.com/<owner>/<repo>/cli/...）で書かれるため、
+# リポジトリ内のパスへ直す。
+fixes:
+  - "github.com/min-nano/vectorworks-plugin-command-line-interface/::"

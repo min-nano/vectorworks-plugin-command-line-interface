@@ -29,7 +29,15 @@ jobs:
         if: runner.os != 'Windows'
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
-      - run: go test -race ./...
+      # -race と併用するため covermode は atomic にする。
+      - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+      # OS ごとに分岐するコード（launch など）があるため、全 OS の結果をフラグ付きで送る。
+      - uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: cli/coverage.out
+          flags: ${{ runner.os }}
+          fail_ci_if_error: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
 
   build:
     needs: test
