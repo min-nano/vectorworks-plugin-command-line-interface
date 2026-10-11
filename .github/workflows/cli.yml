@@ -3,9 +3,9 @@ name: cli
 on:
   push:
     branches: [main]
-    paths: ["cli/**", ".github/workflows/cli.yml"]
+    paths: ["cli/**", ".github/workflows/cli.yml", "codecov.yml"]
   pull_request:
-    paths: ["cli/**", ".github/workflows/cli.yml"]
+    paths: ["cli/**", ".github/workflows/cli.yml", "codecov.yml"]
 
 permissions:
   contents: read
@@ -29,7 +29,17 @@ jobs:
         if: runner.os != 'Windows'
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
-      - run: go test -race ./...
+      # -race と併用するため covermode は atomic にする。
+      # PowerShell は -coverprofile=coverage.out を「.」で 2 つの引数に分けるため、bash で走らせる。
+      - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+        shell: bash
+      # OS ごとに分岐するコード（launch など）があるため、全 OS の結果をフラグ付きで送る。
+      - uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: cli/coverage.out
+          flags: ${{ runner.os }}
+          fail_ci_if_error: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
 
   build:
     needs: test

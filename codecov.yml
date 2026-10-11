@@ -1,0 +1,8 @@
+# Keep this file ASCII: the Codecov uploader on Windows reads it as cp1252.
+# Go writes coverage with module paths (github.com/<owner>/<repo>/cli/...);
+# map them to paths in the repository.
+fixes:
+  - "github.com/min-nano/vectorworks-plugin-command-line-interface/::"
+# The fake plugin is test code; keep the numbers about production code only.
+ignore:
+  - "cli/internal/fakeplugin"
