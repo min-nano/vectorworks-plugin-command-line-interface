@@ -220,8 +220,9 @@ func refuse(code string) spool.Response {
 }
 
 // parseRequest は要求を読む（docs/protocol.md「要求」）。大きすぎる・入れ子が深すぎる・JSON と
-// して壊れている・tool が無い要求は読めない（プラグインは深さを解析の中で数えるが、
-// encoding/json は上限が違うので、解析の前に数える）。args が無い・オブジェクトでなければ {} とする。
+// して壊れている・tool が無い・知っているフィールドの型が違う要求は読めない（プラグインは深さを
+// 解析の中で数えるが、encoding/json は上限が違うので、解析の前に数える）。args は省略できる
+// フィールドなので、無い・null なら既定値の {} とし、オブジェクト以外は読めない要求とする。
 func parseRequest(data []byte) (tool string, args json.RawMessage, session string, ok bool) {
 	if len(data) > spool.MaxRequestBytes || spool.NestingDepth(data) > spool.MaxNestingDepth {
 		return "", nil, "", false
@@ -230,9 +231,12 @@ func parseRequest(data []byte) (tool string, args json.RawMessage, session strin
 	if json.Unmarshal(data, &request) != nil || request.Tool == "" {
 		return "", nil, "", false
 	}
-	var object map[string]json.RawMessage
-	if json.Unmarshal(request.Args, &object) != nil || object == nil {
+	if len(request.Args) == 0 || string(request.Args) == "null" {
 		request.Args = json.RawMessage("{}")
+	}
+	var object map[string]json.RawMessage
+	if json.Unmarshal(request.Args, &object) != nil {
+		return "", nil, "", false
 	}
 	return request.Tool, request.Args, request.Session, true
 }

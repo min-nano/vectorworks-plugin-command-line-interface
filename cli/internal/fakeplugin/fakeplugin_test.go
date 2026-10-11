@@ -96,7 +96,8 @@ func TestServeIgnoresInvalidID(t *testing.T) {
 	}
 }
 
-// 大きすぎる・入れ子が深すぎる・壊れている・tool の無い要求は invalid_request。
+// 大きすぎる・入れ子が深すぎる・壊れている・tool の無い・知っているフィールドの型が違う要求は
+// invalid_request（docs/protocol.md「互換性」の未知の値）。
 func TestServeRejectsUnreadableRequests(t *testing.T) {
 	dir := NewDir(t)
 	requests := map[string]string{
@@ -104,6 +105,10 @@ func TestServeRejectsUnreadableRequests(t *testing.T) {
 		"deep":   `{"tool":"ping","args":{"a":` + strings.Repeat("[", spool.MaxNestingDepth) + strings.Repeat("]", spool.MaxNestingDepth) + `}}`,
 		"broken": `{"tool":`,
 		"notool": `{"args":{}}`,
+		"list":   `{"tool":"ping","args":[1]}`,
+		"string": `{"tool":"ping","args":"x"}`,
+		"number": `{"tool":1}`,
+		"badses": `{"tool":"ping","session":1}`,
 	}
 	for id, text := range requests {
 		put(t, dir, id, text)
@@ -119,18 +124,19 @@ func TestServeRejectsUnreadableRequests(t *testing.T) {
 	}
 }
 
-// 上限ちょうどの深さは受け付ける。args がオブジェクトでなければ {} として渡す。
+// 上限ちょうどの深さは受け付ける。args が無い・null なら既定値の {} として渡す。
 func TestServeAcceptsLimitDepthAndDefaultsArgs(t *testing.T) {
 	dir := NewDir(t)
 	nested := strings.Repeat("[", spool.MaxNestingDepth-2) + strings.Repeat("]", spool.MaxNestingDepth-2)
 	put(t, dir, "deep", `{"tool":"ping","args":{"a":`+nested+`}}`)
-	put(t, dir, "list", `{"tool":"ping","args":[1]}`)
+	put(t, dir, "none", `{"tool":"ping"}`)
+	put(t, dir, "null", `{"tool":"ping","args":null}`)
 	got := map[string]string{}
 	(&server{dir: dir, handle: func(_ string, args json.RawMessage) spool.Response {
 		got[string(args)] = ""
 		return spool.Response{OK: true}
 	}}).serveOnce()
-	if _, ok := got["{}"]; !ok || len(got) != 2 {
+	if _, ok := got["{}"]; !ok || len(got) != 2 || !responseOf(t, dir, "null").OK {
 		t.Fatalf("unexpected args: %v", got)
 	}
 	if !responseOf(t, dir, "deep").OK {

@@ -5,13 +5,16 @@
 `vw_*` で実機で通った SDK 呼び出しだけを使います（元:`src/draw/McpBridge.cpp`）。**新しい SDK
 呼び出しを使う道具は、SDK リファレンスで確かめてから足します。**
 
+引数は、省略できるものに既定値を設けます（表の「既定」）。知らない引数と、知っている引数の
+未知の値（型の違い・決まった綴り以外の値）は `invalid_args` で返します（[作法「互換性」](../protocol.md#互換性)）。
+
 | 道具 | 種類 | 元 | 引数 | 結果 |
 | --- | --- | --- | --- | --- |
 | `tools` | （予約） | `vw_tools` | なし | [ブリッジ「道具の表」](bridge.md#道具の表) |
 | `ping` | read | `vw_ping` | なし | 下記 |
 | `layers` | read | `vw_layers` | `include_sheets`（既定 true） | `{"layers":[{"name","kind":"design"\|"sheet","scale","objects","current"}],"count"}` |
 | `classes` | read | `vw_classes` | なし | `{"classes":[名前…],"count"}` |
-| `layer_objects` | read | `vw_layer_objects` | `layer`（必須）・`limit`（既定 50）・`offset`・`type` | `{"layer","objects":[{"index","type","type_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}` |
+| `layer_objects` | read | `vw_layer_objects` | `layer`（必須）・`limit`（既定 50）・`offset`（既定 0）・`type`（省略＝すべての種別） | `{"layer","objects":[{"index","type","type_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}` |
 | `object_counts` | read | `vw_object_counts` | `layer`（省略＝図面全体） | `{"layer"?,"types":[{"type","type_name","count"}],"total"}`（種別番号の昇順） |
 | `quit` | app | `vw_restart` | なし | `{"quitting":true}` |
 

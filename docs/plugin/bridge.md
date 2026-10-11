@@ -50,7 +50,8 @@
      掴めたら呼ぶ側は居ないので、`<id>.wait` を消し、**実行も応答もしない**。無ければ実行せずに
      `no_wait` で応える。掴めない（呼ぶ側が待っている）なら次へ進む。
 3. 読めたが壊れている要求には `invalid_request` で応える（id は 2 で確かめてある）。壊れている
-   とは、1 MiB を超える・入れ子の深さが 64 を超える・JSON として読めない・`tool` が無いこと
+   とは、1 MiB を超える・入れ子の深さが 64 を超える・JSON として読めない・`tool` が無い・
+   `tool`・`args`・`session` の型が違うこと。`args` が無い・`null` なら既定値の `{}` を道具へ渡す
    （[作法「要求」](../protocol.md#要求idreqjson)）。**深さは `core/Json` が解析の中で数え、上限を
    超えたら再帰を降りずに失敗する**（解析の前に別に数える必要はない。スタックを溢れさせない
    ことが目的）。
@@ -118,7 +119,8 @@ struct ToolError {
 - `tools` の結果は `{"protocol":5,"tools":[{"name","description","inputSchema","kind"}]}`。
   `kind` は `read` / `write` / `app` を小文字で載せます（呼ぶ側が「図面を変えるか」を
   判定できるように）。
-- 引数の検査は道具の中で行います（JSON Schema の検証器は持たない）。知らない引数は
+- 引数の検査は道具の中で行います（JSON Schema の検証器は持たない）。省略できる引数には
+  既定値を設け（`inputSchema` の `default` にも書く）、知らない引数・知っている引数の未知の値は
   `invalid_args` で返します（[作法「互換性」](../protocol.md#互換性)）。
 - 失敗の種別は応答の `code` に小文字の綴り（`invalid_args` / `internal`）で
   載せます（[作法「応答」](../protocol.md#応答idresjson)）。`invalid_request`・`unknown_tool`・`no_wait`・`busy`・`no_session` は

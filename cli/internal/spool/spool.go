@@ -135,7 +135,9 @@ func Open(dir string) *Bridge {
 }
 
 // NewID は要求の id を作る。**名前の昇順が送った順になる**ように時刻を先頭へ置く
-// （プラグイン側は名前の昇順で取り出す。別々のプロセスからの要求もこれで送った順に並ぶ）。
+// （プラグイン側は名前の昇順で取り出す）。順序が保たれるのは同じ呼ぶ側が続けて送った要求
+// だけで、別々のプロセスからの要求の順序は保証しない（時計の調整で時刻が前後し、公開も
+// 遅れうる。docs/protocol.md「id」）。
 func NewID(now time.Time) string {
 	var suffix [4]byte
 	_, _ = rand.Read(suffix[:])
