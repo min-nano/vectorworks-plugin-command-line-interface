@@ -30,8 +30,9 @@ func appRoot() (string, error) {
 	var path *uint16
 	hr, _, _ := procSHGetKnownFolderPath.Call(
 		uintptr(unsafe.Pointer(&folderIDLocalAppData)), 0, 0, uintptr(unsafe.Pointer(&path)))
-	// 失敗しても返された領域は解放する（SHGetKnownFolderPath の約束）。
-	defer procCoTaskMemFree.Call(uintptr(unsafe.Pointer(path)))
+	// 失敗しても返された領域は解放する（SHGetKnownFolderPath の約束）。defer の引数は defer の
+	// 時点で評価されるので、Call の後の path を渡すために関数で包む。
+	defer func() { procCoTaskMemFree.Call(uintptr(unsafe.Pointer(path))) }()
 	if int32(hr) < 0 || path == nil {
 		return "", fmt.Errorf("SHGetKnownFolderPath(FOLDERID_LocalAppData) failed: 0x%08x", uint32(hr))
 	}
