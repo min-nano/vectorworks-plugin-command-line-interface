@@ -55,7 +55,11 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           pipx install gcovr
-          gcovr --root . --filter 'src/.*' build --cobertura coverage.xml --txt --print-summary
+          # Leave out the branches GCC adds for exception unwinding and the ones it
+          # proves unreachable: they are not decisions in the source, and Codecov
+          # would count every such line as partially covered.
+          gcovr --root . --filter 'src/.*' build --exclude-throw-branches --exclude-unreachable-branches \
+            --cobertura coverage.xml --txt --print-summary
       # Pinned to a commit (third-party action that receives the upload token).
       - uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
         if: runner.os == 'Linux'
