@@ -109,6 +109,8 @@ func TestServeRejectsUnreadableRequests(t *testing.T) {
 		"string": `{"tool":"ping","args":"x"}`,
 		"number": `{"tool":1}`,
 		"badses": `{"tool":"ping","session":1}`,
+		"empty":  `{"tool":""}`,
+		"null":   `{"tool":null}`,
 	}
 	for id, text := range requests {
 		put(t, dir, id, text)
@@ -124,19 +126,21 @@ func TestServeRejectsUnreadableRequests(t *testing.T) {
 	}
 }
 
-// 上限ちょうどの深さは受け付ける。args が無い・null なら既定値の {} として渡す。
+// 上限ちょうどの深さは受け付ける。args が無い・null なら既定値の {} として渡す。キーは大文字と小文字を
+// 区別するので、ARGS・Session は知らないキーとして無視する。
 func TestServeAcceptsLimitDepthAndDefaultsArgs(t *testing.T) {
 	dir := NewDir(t)
 	nested := strings.Repeat("[", spool.MaxNestingDepth-2) + strings.Repeat("]", spool.MaxNestingDepth-2)
 	put(t, dir, "deep", `{"tool":"ping","args":{"a":`+nested+`}}`)
 	put(t, dir, "none", `{"tool":"ping"}`)
-	put(t, dir, "null", `{"tool":"ping","args":null}`)
+	put(t, dir, "null", `{"tool":"ping","args":null,"session":null}`)
+	put(t, dir, "case", `{"tool":"ping","ARGS":[1],"Session":5}`)
 	got := map[string]string{}
 	(&server{dir: dir, handle: func(_ string, args json.RawMessage) spool.Response {
 		got[string(args)] = ""
 		return spool.Response{OK: true}
 	}}).serveOnce()
-	if _, ok := got["{}"]; !ok || len(got) != 2 || !responseOf(t, dir, "none").OK || !responseOf(t, dir, "null").OK {
+	if _, ok := got["{}"]; !ok || len(got) != 2 || !responseOf(t, dir, "none").OK || !responseOf(t, dir, "null").OK || !responseOf(t, dir, "case").OK {
 		t.Fatalf("unexpected args: %v", got)
 	}
 	if !responseOf(t, dir, "deep").OK {

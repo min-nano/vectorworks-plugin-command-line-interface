@@ -44,7 +44,7 @@
 | --- | --- | --- |
 | `src/PluginPrefix.h` | 同じ | PCH |
 | `src/core/Json.{h,cpp}` | 同じ | |
-| `src/core/Bridge.{h,cpp}` | 同じ | `bridgeSpoolDir` を `<CLI>/spool` を求める形に（環境変数を読まない）。ロック（`lock`）を足す。持ち主と権限の確かめ・印（状態のファイル）を除く。受け付けの手順は `core/Serve` へ（[ブリッジ](bridge.md)） |
+| `src/core/Bridge.{h,cpp}` | 同じ | `bridgeSpoolDir` を `<CLI>/spool` を求める形に（環境変数を読まない。mac は `getpwuid_r`、Windows は `SHGetKnownFolderPath`）。ロック（`lock`）を足す。持ち主と権限の確かめ・印（状態のファイル）を除く。受け付けの手順は `core/Serve` へ（[ブリッジ](bridge.md)） |
 | `src/Module-Info.plist.in` | 同じ | 版の鍵（`VWBuildBranch` / `VWBuildCommit`）を除く |
 | `scripts/fetch-vw-sdk.sh` / `ci-common.sh` / `ci-wait.sh` / `lint.sh` | 同じ | `VW_REPO` |
 | `tests/TestFramework.h` と `CoreJsonTests` / `CoreBridgeTests` | 同じ | |

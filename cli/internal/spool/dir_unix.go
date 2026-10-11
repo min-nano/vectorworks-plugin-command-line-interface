@@ -3,20 +3,21 @@
 package spool
 
 import (
-	"os"
+	"os/user"
 	"path/filepath"
 )
 
 // appRoot は <CLI> の親（~/Library/Application Support）を返す。対象は macOS だけで、ほかの
-// POSIX でも同じ形にする（テストのため。os.UserConfigDir は Linux では XDG_CONFIG_HOME を
-// 読み、環境で場所が変わるので使わない）。
+// POSIX でも同じ形にする（テストのため）。
 //
-// ホームは HOME から求める。HOME は ssh でも GUI アプリでも利用者のホームを指すので、
-// プラグインと同じ値になる（docs/protocol.md「スプールの場所」）。
+// ホームは環境変数 HOME ではなく利用者の passwd の項目（getpwuid）から求める。HOME は
+// launchd のジョブで無い・ツールの実行環境で上書きされることがあり、プラグインと食い違うと
+// 要求が届かなくなるため（docs/protocol.md「スプールの場所」）。darwin の os/user は cgo なしでも
+// libSystem の getpwuid_r を呼ぶ。
 func appRoot() (string, error) {
-	home, err := os.UserHomeDir()
+	current, err := user.Current()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, "Library", "Application Support"), nil
+	return filepath.Join(current.HomeDir, "Library", "Application Support"), nil
 }
