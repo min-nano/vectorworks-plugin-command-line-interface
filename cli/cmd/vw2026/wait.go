@@ -6,7 +6,7 @@ import (
 )
 
 type waitCmd struct {
-	Down    bool    `help:"Wait until the bridge stops instead."`
+	Down    bool    `env:"VW2026_WAIT_DOWN" help:"Wait until the bridge stops instead."`
 	Timeout float64 `default:"120" placeholder:"SECONDS" help:"How long to wait (default ${default})."`
 }
 

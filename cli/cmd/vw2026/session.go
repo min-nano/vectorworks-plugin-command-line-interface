@@ -32,7 +32,7 @@ one; calls with the old one exit with 23.
 }
 
 type sessionStartCmd struct {
-	Timeout float64 `default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
+	Timeout float64 `env:"VW2026_SESSION_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
 }
 
 func (sessionStartCmd) Help() string {
@@ -50,7 +50,7 @@ func (c *sessionStartCmd) run(g *globals, e *env) int {
 
 type sessionEndCmd struct {
 	Session string  `env:"VW2026_SESSION" placeholder:"ID" help:"Session to end (required)."`
-	Timeout float64 `default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
+	Timeout float64 `env:"VW2026_SESSION_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
 }
 
 func (sessionEndCmd) Help() string {

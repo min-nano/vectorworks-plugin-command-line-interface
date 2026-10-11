@@ -21,11 +21,23 @@ type result struct {
 	stderr string
 }
 
+// envVars は、コマンドが読む環境変数のすべて。
+var envVars = []string{
+	"VW2026_SPOOL", "VW2026_APP", "VW2026_SESSION",
+	"VW2026_CALL_RAW", "VW2026_CALL_TIMEOUT", "VW2026_SESSION_TIMEOUT",
+	"VW2026_WAIT_DOWN", "VW2026_WAIT_TIMEOUT",
+}
+
 func invoke(t *testing.T, vars map[string]string, stdin string, started *[]string, args ...string) result {
 	t.Helper()
 	// kong は環境変数を os から直接読むので、テストごとに置き直す（並行には走らせない）。
-	for _, name := range []string{"VW2026_SPOOL", "VW2026_APP", "VW2026_SESSION"} {
-		t.Setenv(name, vars[name])
+	for _, name := range envVars {
+		value, ok := vars[name]
+		t.Setenv(name, value) // 終わったら元に戻させる
+		if !ok {
+			// 空の値も値になる（空のタイムアウトは使い方の誤り）ので、渡さないものは消す。
+			os.Unsetenv(name)
+		}
 	}
 	var stdout, stderr bytes.Buffer
 	code := run(args, env{
@@ -330,6 +342,66 @@ func TestToolCodeFor(t *testing.T) {
 	} {
 		if got := toolCodeFor(code); got != want {
 			t.Errorf("toolCodeFor(%q) = %d, want %d", code, got, want)
+		}
+	}
+}
+
+// 指定は環境変数でも与えられ、両方あれば引数が勝つ。
+func TestFlagsFromEnv(t *testing.T) {
+	dir := echoBridge(t)
+	raw := map[string]string{"VW2026_SPOOL": dir, "VW2026_CALL_RAW": "true"}
+	if r := invoke(t, raw, "", nil, "call", "fail"); r.code != exitToolFailure || !strings.Contains(r.stdout, `"code":"internal"`) {
+		t.Fatalf("VW2026_CALL_RAW: %+v", r)
+	}
+	if r := invoke(t, raw, "", nil, "call", "fail", "--raw=false"); r.code != exitToolFailure || r.stdout != "" {
+		t.Fatalf("--raw=false over VW2026_CALL_RAW: %+v", r)
+	}
+
+	busy, _ := busySpool(t)
+	short := map[string]string{"VW2026_SPOOL": busy, "VW2026_CALL_TIMEOUT": "0.3", "VW2026_WAIT_TIMEOUT": "0.3", "VW2026_WAIT_DOWN": "1"}
+	if r := invoke(t, short, "", nil, "call", "ping"); r.code != exitTimeout {
+		t.Fatalf("VW2026_CALL_TIMEOUT: %+v", r)
+	}
+	if r := invoke(t, short, "", nil, "wait"); r.code != exitTimeout {
+		t.Fatalf("VW2026_WAIT_DOWN and VW2026_WAIT_TIMEOUT: %+v", r)
+	}
+	// 引数が勝つ（ロックが掴まれているので、上がるのを待つなら直ちに終わる）。
+	if r := invoke(t, short, "", nil, "wait", "--down=false"); r.code != exitOK {
+		t.Fatalf("--down=false over VW2026_WAIT_DOWN: %+v", r)
+	}
+	if r := invoke(t, map[string]string{"VW2026_SPOOL": busy, "VW2026_CALL_TIMEOUT": "60"}, "", nil, "call", "ping", "--timeout", "0.3"); r.code != exitTimeout {
+		t.Fatalf("--timeout over VW2026_CALL_TIMEOUT: %+v", r)
+	}
+	if r := invoke(t, map[string]string{"VW2026_SPOOL": busy, "VW2026_SESSION_TIMEOUT": "0.3"}, "", nil, "session", "start"); r.code != exitTimeout {
+		t.Fatalf("VW2026_SESSION_TIMEOUT: %+v", r)
+	}
+	if r := invoke(t, map[string]string{"VW2026_SPOOL": busy, "VW2026_CALL_TIMEOUT": ""}, "", nil, "call", "ping"); r.code != exitUsage {
+		t.Fatalf("an empty timeout: %+v", r)
+	}
+}
+
+// TestEveryFlagHasEnv は、ヘルプを除くすべての指定に環境変数があり、invoke がそれを
+// 置き直すことを確かめる（指定を足して環境変数を付け忘れないように）。
+func TestEveryFlagHasEnv(t *testing.T) {
+	known := map[string]bool{}
+	for _, name := range envVars {
+		known[name] = true
+	}
+	for _, node := range kong.Must(&cli{}).Model.Leaves(true) {
+		for _, group := range node.AllFlags(false) {
+			for _, flag := range group {
+				if flag.Name == "help" {
+					continue
+				}
+				if len(flag.Envs) == 0 {
+					t.Errorf("%s --%s has no environment variable", node.Path(), flag.Name)
+				}
+				for _, name := range flag.Envs {
+					if !known[name] {
+						t.Errorf("%s is missing from envVars", name)
+					}
+				}
+			}
 		}
 	}
 }
