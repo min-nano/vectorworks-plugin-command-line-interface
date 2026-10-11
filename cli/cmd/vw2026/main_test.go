@@ -231,6 +231,9 @@ func TestCodeFor(t *testing.T) {
 	for err, want := range map[error]int{
 		spool.ErrNotRunning: exitDown,
 		spool.ErrTimeout:    exitTimeout,
+		spool.ErrNoWait:     exitTimeout,
+		spool.ErrBusy:       exitBusy,
+		spool.ErrNoSession:  exitBusy,
 		spool.ErrNoResponse: exitNoResponse,
 	} {
 		if got := codeFor(fmt.Errorf("%w (detail)", err)); got != want {

@@ -34,8 +34,10 @@ that the plug-in would not read (over 1 MiB, or nested deeper than 64).
 On success, call prints the result of the tool. With --raw it prints the
 whole response. When the tool fails, call writes its code and reason to the
 standard error and exits with 1; with --raw the response also carries the
-code (unknown_tool, invalid_args, invalid_request, no_wait, or internal;
-docs/protocol.md). A failure with a missing or unknown code is a malformed
+code (unknown_tool, invalid_args, invalid_request, or internal;
+docs/protocol.md). The codes that mean the tool did not run (no_wait, busy,
+no_session) are not tool failures: call exits with 4 or 9 for them instead,
+as described below. A failure with a missing or unknown code is a malformed
 response, so call exits with 6 for it. So does a response file that stays
 broken (not JSON) for a second; call removes it without waiting for --timeout.
 
@@ -102,7 +104,7 @@ func codeFor(err error) int {
 	switch {
 	case errors.Is(err, spool.ErrNotRunning):
 		return exitDown
-	case errors.Is(err, spool.ErrTimeout):
+	case errors.Is(err, spool.ErrTimeout), errors.Is(err, spool.ErrNoWait):
 		return exitTimeout
 	case errors.Is(err, spool.ErrNoResponse):
 		return exitNoResponse

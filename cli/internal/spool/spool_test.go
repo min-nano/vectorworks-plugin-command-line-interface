@@ -86,8 +86,8 @@ func TestCallTimeoutWithdrawsRequest(t *testing.T) {
 	assertNoFiles(t, dir, WaitSuffix)
 }
 
-// 猶予の間に届いた no_wait は「実行しなかった」なので、道具の失敗ではなく ErrTimeout。
-func TestCallNoWaitDuringGraceIsTimeout(t *testing.T) {
+// 猶予の間に届いた no_wait は「実行しなかった」なので、道具の失敗ではなく ErrNoWait。
+func TestCallNoWaitDuringGrace(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.HoldLock(t, dir)
 	taken := takeRequest(t, dir)
@@ -97,10 +97,26 @@ func TestCallNoWaitDuringGraceIsTimeout(t *testing.T) {
 		_ = os.WriteFile(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":false,"code":"no_wait","error":"no wait file"}`), 0o600)
 	}()
 	_, err := Open(dir).Call("ping", nil, "", 200*time.Millisecond)
-	if !errors.Is(err, ErrTimeout) {
-		t.Fatalf("want ErrTimeout, got %v", err)
+	if !errors.Is(err, ErrNoWait) {
+		t.Fatalf("want ErrNoWait, got %v", err)
 	}
 	assertNoFiles(t, dir, ResponseSuffix)
+}
+
+// 締切の前に届いた no_wait（掃除が待つ印を消したときなど）は、待たずに ErrNoWait で終わり、
+// 待ちきれなかったとは言わない。
+func TestCallNoWaitBeforeDeadline(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	answer(t, dir, `{"ok":false,"code":"no_wait","error":"no wait file"}`)
+	start := time.Now()
+	_, err := Open(dir).Call("ping", nil, "", 30*time.Second)
+	if !errors.Is(err, ErrNoWait) || errors.Is(err, ErrTimeout) || strings.Contains(err.Error(), "30s") {
+		t.Fatalf("want ErrNoWait without a timeout, got %v", err)
+	}
+	if time.Since(start) > 5*time.Second {
+		t.Fatal("should not wait for the deadline")
+	}
 }
 
 // ロックファイルがあっても、掴まれていなければ（異常終了のあと）止まっている。

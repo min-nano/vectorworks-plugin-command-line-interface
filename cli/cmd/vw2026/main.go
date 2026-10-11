@@ -114,7 +114,8 @@ The commands exit with
 	1  the tool reported a failure (reason on the standard error; with --raw also on the standard output)
 	2  wrong usage
 	3  the bridge is not running
-	4  timed out (the tool did not run and will not run; Vectorworks is running)
+	4  timed out, or refused for a missing wait file (the tool did not run and will not run;
+	   Vectorworks is running)
 	5  unused (meant "protocol mismatch" up to protocol 2; the numbers are not reused)
 	6  any other failure (cannot write, cannot start, cannot locate the spool)
 	7  Vectorworks is running, so install or uninstall did nothing (planned)

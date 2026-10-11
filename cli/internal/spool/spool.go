@@ -82,6 +82,11 @@ var ErrNotRunning = errors.New("bridge is not running")
 // 無かった。受け付けが見送られている（モーダルダイアログ・undo の記録の最中）ことが多い。
 var ErrTimeout = errors.New("timed out waiting for the response")
 
+// ErrNoWait は、プラグインが no_wait で断った（待つ印が無いので実行しなかった）。ErrTimeout と
+// 同じく実行されていないが、締切まで待ったとは限らない（掃除が待つ印を消したときなどは、
+// 締切の前に届く）ので、待ちきれなかったとは言わない。
+var ErrNoWait = errors.New("the bridge did not run the request, as its wait file was missing")
+
 // ErrMalformedResponse は、応答のファイルが JSON として壊れたまま malformedGrace を過ぎた
 // （docs/protocol.md「ファイル」）か、失敗の応答の code が無い・知らない値だった
 // （docs/protocol.md「互換性」: 知っているフィールドの未知の値はエラー）。
@@ -145,9 +150,8 @@ func NewID(now time.Time) string {
 //     受け取っていれば実行される。takenGrace だけ応答を待ち、届かなければ ErrNoResponse
 //     （実行されたかは分からない）。
 //
-// no_wait の応答は作法の種別で「実行しなかった」を意味するので、道具の失敗ではなく
-// ErrNotRunning / ErrTimeout として返す（やめたあとにプラグインが受け取ったときや、.wait が
-// 想定外に消えたときに届く）。busy / no_session も「実行しなかった」なので、ErrBusy /
+// no_wait の応答は作法の種別で「実行しなかった」を意味するので、道具の失敗ではなく ErrNoWait
+// として返す（やめたあとにプラグインが受け取ったときや、.wait が想定外に消えたときに届く）。busy / no_session も「実行しなかった」なので、ErrBusy /
 // ErrNoSession として返す。
 func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout time.Duration) (*Response, error) {
 	if len(args) == 0 {
@@ -206,7 +210,7 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		}
 		switch response.Code {
 		case CodeNoWait:
-			return nil, notRun("the bridge did not run it")
+			return nil, fmt.Errorf("%w (%s)", ErrNoWait, tool)
 		case CodeBusy:
 			return nil, fmt.Errorf("%w (%s did not run)", ErrBusy, tool)
 		case CodeNoSession:
