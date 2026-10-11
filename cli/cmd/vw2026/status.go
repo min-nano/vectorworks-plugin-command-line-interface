@@ -42,9 +42,17 @@ cannot be located), or the loop will not end. In sh, for up to 120 seconds:
 
 In PowerShell, the same with $LASTEXITCODE:
 
+	# until the bridge starts
 	for ($i = 0; $i -lt 120; $i++) {
 	    vw2026 status *> $null
-	    if ($LASTEXITCODE -ne 5) { break }   # -ne 0 to wait until it stops
+	    if ($LASTEXITCODE -ne 5) { break }
+	    Start-Sleep 1
+	}
+
+	# until the bridge stops
+	for ($i = 0; $i -lt 120; $i++) {
+	    vw2026 status *> $null
+	    if ($LASTEXITCODE -ne 0) { break }
 	    Start-Sleep 1
 	}
 
