@@ -68,13 +68,13 @@ func TestServeTakesOnlyRequestsListedAtStart(t *testing.T) {
 		put(t, dir, fmt.Sprintf("%04d", i), `{"tool":"ping"}`)
 	}
 	added := false
-	serveOnce(dir, func(string, json.RawMessage) spool.Response {
+	(&server{dir: dir, handle: func(string, json.RawMessage) spool.Response {
 		if !added {
 			added = true
 			put(t, dir, "9999", `{"tool":"ping"}`)
 		}
 		return spool.Response{OK: true}
-	})
+	}}).serveOnce()
 	if got := count(t, dir, spool.ResponseSuffix); got != listed {
 		t.Fatalf("want %d responses, got %d", listed, got)
 	}
@@ -87,10 +87,10 @@ func TestServeTakesOnlyRequestsListedAtStart(t *testing.T) {
 func TestServeIgnoresInvalidID(t *testing.T) {
 	dir := NewDir(t)
 	put(t, dir, "a.b", `{"tool":"ping"}`)
-	serveOnce(dir, func(tool string, _ json.RawMessage) spool.Response {
+	(&server{dir: dir, handle: func(tool string, _ json.RawMessage) spool.Response {
 		t.Fatalf("%s must not run", tool)
 		return spool.Response{}
-	})
+	}}).serveOnce()
 	if !exists(dir, "a.b"+spool.RequestSuffix) || count(t, dir, spool.ResponseSuffix) != 0 {
 		t.Fatal("the request should be left as is")
 	}
@@ -108,10 +108,10 @@ func TestServeRejectsUnreadableRequests(t *testing.T) {
 	for id, text := range requests {
 		put(t, dir, id, text)
 	}
-	serveOnce(dir, func(tool string, _ json.RawMessage) spool.Response {
+	(&server{dir: dir, handle: func(tool string, _ json.RawMessage) spool.Response {
 		t.Fatalf("%s must not run", tool)
 		return spool.Response{}
-	})
+	}}).serveOnce()
 	for id := range requests {
 		if response := responseOf(t, dir, id); response.OK || response.Code != spool.CodeInvalidRequest {
 			t.Errorf("%s: want invalid_request, got %+v", id, response)
@@ -126,10 +126,10 @@ func TestServeAcceptsLimitDepthAndDefaultsArgs(t *testing.T) {
 	put(t, dir, "deep", `{"tool":"ping","args":{"a":`+nested+`}}`)
 	put(t, dir, "list", `{"tool":"ping","args":[1]}`)
 	got := map[string]string{}
-	serveOnce(dir, func(_ string, args json.RawMessage) spool.Response {
+	(&server{dir: dir, handle: func(_ string, args json.RawMessage) spool.Response {
 		got[string(args)] = ""
 		return spool.Response{OK: true}
-	})
+	}}).serveOnce()
 	if _, ok := got["{}"]; !ok || len(got) != 2 {
 		t.Fatalf("unexpected args: %v", got)
 	}
@@ -161,5 +161,60 @@ func TestStartSweepsOnlyFilesWithoutWaiter(t *testing.T) {
 		if !exists(dir, name) {
 			t.Errorf("%s should be kept", name)
 		}
+	}
+}
+
+// 占有の印は 1 つだけ発行され、その印の要求だけが実行される。quit は占有の中でだけ呼べる。
+func TestServeSession(t *testing.T) {
+	dir := NewDir(t)
+	s := &server{dir: dir, handle: ok}
+	step := func(id, text string) spool.Response {
+		t.Helper()
+		put(t, dir, id, text)
+		s.serveOnce()
+		return responseOf(t, dir, id)
+	}
+	if r := step("q0", `{"tool":"quit"}`); r.Code != spool.CodeNoSession {
+		t.Fatalf("quit without a session: %+v", r)
+	}
+	if r := step("s0", `{"tool":"session_end","session":"x"}`); r.Code != spool.CodeNoSession {
+		t.Fatalf("end without a session: %+v", r)
+	}
+	started := step("s1", `{"tool":"session_start"}`)
+	var issued struct {
+		Session string `json:"session"`
+	}
+	if !started.OK || json.Unmarshal(started.Result, &issued) != nil || !spool.ValidID(issued.Session) {
+		t.Fatalf("start: %+v", started)
+	}
+	if r := step("s2", `{"tool":"session_start"}`); r.Code != spool.CodeBusy {
+		t.Fatalf("a second start: %+v", r)
+	}
+	for id, text := range map[string]string{
+		"b1": `{"tool":"layers"}`,
+		"b2": `{"tool":"layers","session":"other"}`,
+		"b3": `{"tool":"quit"}`,
+		"b4": `{"tool":"session_end","session":"other"}`,
+	} {
+		if r := step(id, text); r.Code != spool.CodeBusy {
+			t.Errorf("%s: want busy, got %+v", text, r)
+		}
+	}
+	if r := step("p1", `{"tool":"ping"}`); !r.OK {
+		t.Fatalf("ping is for everyone: %+v", r)
+	}
+	for id, tool := range map[string]string{"r1": "layers", "r2": "quit"} {
+		if r := step(id, `{"tool":"`+tool+`","session":"`+issued.Session+`"}`); !r.OK {
+			t.Errorf("%s in the session: %+v", tool, r)
+		}
+	}
+	if r := step("e1", `{"tool":"session_end","session":"`+issued.Session+`"}`); !r.OK {
+		t.Fatalf("end: %+v", r)
+	}
+	if r := step("a1", `{"tool":"layers","session":"`+issued.Session+`"}`); r.Code != spool.CodeNoSession {
+		t.Fatalf("the ended session: %+v", r)
+	}
+	if r := step("a2", `{"tool":"layers"}`); !r.OK {
+		t.Fatalf("without a session: %+v", r)
 	}
 }
