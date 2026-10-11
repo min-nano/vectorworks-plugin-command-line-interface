@@ -7,10 +7,10 @@
 | 段 | 中身 | 確かめ方 | 実機 |
 | --- | --- | --- | --- |
 | 1 | **SDK に依らない共通部**: `core/Json`（入れ子の深さの上限を足す）・`core/Bridge`・`core/Serve`（偽の道具の表・占有）・`protocol/fixtures/`・`test.yml`（`core/Json` のファジングを含む）・`lint.yml`・`CLAUDE.md` の追記（PR の進め方） | CI（ASan・UBSan）。Go 側のテストも同じ見本を読む | 不要 |
-| 2 | **骨格**: CMake・`BuildConfig`・`ModuleMain`・`Clock`・道具 `tools` / `ping` / `quit`・リソース・`build.yml`（ビルドと PR のプレリリースまで） | CI。実機で zip を手で置き、`vw2026 status` が `running:true` になり `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。`session start` のあと `call quit` で保存の確認が出て、取り消すと `call ping` がまた応え、保存すると `wait --down` が終わる | 要 |
+| 2 | **骨格**: CMake・`BuildConfig`・`ModuleMain`・`Clock`・道具 `tools` / `ping` / `quit`・リソース・`build.yml`（ビルドと PR のプレリリースまで） | CI。実機で zip を手で置き、`vw2026 status` が `running:true` になり `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。`session start` のあと `call quit` で保存の確認が出て、取り消すと `call ping` がまた応え、保存すると `status` が止まっていると答える | 要 |
 | 3 | **読む道具**: `layers` / `classes` / `layer_objects` / `object_counts` | 実機で、元のプラグインの `vw_*` と同じ図面に対して同じ結果になる | 要 |
 | 4 | **配布**: 梱包（`bin/vw2026`）・main のリリース・`cleanup-dev-release.yml` | CI。リリースの資産を取ってきて、zip の形（直下に `build.json` と `bin/`）と `bin/vw2026 version` が動くことを確かめる | 不要 |
-| 5 | **インストールと更新・アンインストール**: `vw2026 install` / `uninstall`（資産の取得・新しいビルドの判定・付け替え・CLI の入れ替え・PATH）・初回のスクリプト（`get-vw2026.sh` / `.ps1`）・`CLAUDE.md` に消すコードの歯止めを写す | CI（Go の単体テスト。偽の HTTP サーバー。動いている CLI の入れ替えを Windows で押さえる。shellcheck・PSScriptAnalyzer）。実機で、初回のスクリプトを curl からパイプで実行 → 新しい端末で `vw2026 status` が動き、起動して `call ping` が応える。動いている間は「Vectorworks が動いている」終了コードで何も変わらず、`session start` → `call quit` → `wait --down` → `install` → `launch` → `wait` で `call ping` の `version` が変わる。`--tag dev-<slug>` で PR のプレリリースに入れ替わり、`install` で main に戻る。`--plugins-dir` で既定以外へ入れられる。`uninstall` でリンクと PATH の項目だけが消える | 要 |
+| 5 | **インストールと更新・アンインストール**: `vw2026 install` / `uninstall`（資産の取得・新しいビルドの判定・付け替え・CLI の入れ替え・PATH）・初回のスクリプト（`get-vw2026.sh` / `.ps1`）・`CLAUDE.md` に消すコードの歯止めを写す | CI（Go の単体テスト。偽の HTTP サーバー。動いている CLI の入れ替えを Windows で押さえる。shellcheck・PSScriptAnalyzer）。実機で、初回のスクリプトを curl からパイプで実行 → 新しい端末で `vw2026 status` が動き、起動して `call ping` が応える。動いている間は「Vectorworks が動いている」終了コードで何も変わらず、`session start` → `call quit` → 止まるのを待つ → `install` → `launch` → 動き出すのを待つ（待つのは `status` の繰り返し）で `call ping` の `version` が変わる。`--tag dev-<slug>` で PR のプレリリースに入れ替わり、`install` で main に戻る。`--plugins-dir` で既定以外へ入れられる。`uninstall` でリンクと PATH の項目だけが消える | 要 |
 
 段 1 で決めておくこと:
 

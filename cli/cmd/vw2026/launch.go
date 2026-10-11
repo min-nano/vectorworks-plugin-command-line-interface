@@ -14,9 +14,8 @@ type launchCmd struct {
 func (launchCmd) Help() string {
 	return `
 Launch starts Vectorworks unless the bridge is already running. It does not
-wait for the bridge; run "vw2026 wait" next to wait for it.
-
-	vw2026 launch && vw2026 wait
+wait for the bridge; run status in a loop next to wait for it ("vw2026 help
+status").
 
 It prints one of
 
