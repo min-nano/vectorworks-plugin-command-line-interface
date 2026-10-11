@@ -30,8 +30,11 @@ var version = "dev"
 
 // 終了コード（cli.Help の一覧と対）。1 は慣例どおり汎用の失敗に充て、呼ぶ側が分岐する
 // 必要のある結果だけに別の番号を与える。道具が返した失敗は 20 番台に置き、1 の位を CLI 側と
-// 合わせる（21 は汎用の失敗、22 は使い方の誤り、23 は受け付けたが実行されない）。1 桁は
-// プラグインの答えを待たずに CLI が判定したもの、20 番台はプラグインが失敗を答えたもの。
+// 合わせる（21 は汎用の失敗、22 は使い方の誤り、23 は受け付けたが実行されない）。20 番台は
+// 道具や占有の失敗としてプラグインが答えたもの、1 桁はそれ以外（no_wait と壊れた応答を含む）。
+//
+// 番号は呼ぶ側との約束なので、この振り直し（リリース前）のあとは変えない。使わなくなった番号は
+// 別の意味に再利用しない（旧い表に従う呼ぶ側の分岐が、黙って別の意味になるため）。
 const (
 	exitOK      = 0
 	exitFailure = 1 // そのほか（書き込めない・起動できない等）
@@ -129,10 +132,11 @@ The commands exit with
 	23 refused by the session: another one occupies the bridge, the given one has ended,
 	   or quit was called outside a session (the tool did not run)
 
-The codes below 20 are decided by vw2026 without an answer from the plug-in;
-the codes from 21 are the plug-in's answers, and their last digit matches the
-code below 20 of the same kind (1 failure, 2 wrong usage, 3 did not run). For
-21 to 23 the reason is on the standard error, and with --raw the response is
+The codes from 21 are failures that the plug-in answered for the tool or the
+session; the codes below 20 are everything else, including a no_wait response
+and a malformed one. The last digit of a code from 21 matches the code below 20
+of the same kind (1 failure, 2 wrong usage, 3 did not run). For 21 to 23 the
+reason is on the standard error; for 21 and 22, with --raw, the response is
 also on the standard output.
 
 Vectorworks can be running, holding the lock, while the plug-in defers the

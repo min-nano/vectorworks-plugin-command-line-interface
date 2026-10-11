@@ -300,3 +300,36 @@ func TestSessionEndNeedsSession(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+// 終了コードは呼ぶ側との約束なので、定数の名前ではなく番号そのものを固定する。
+func TestExitCodeNumbers(t *testing.T) {
+	for name, c := range map[string][2]int{
+		"OK":          {exitOK, 0},
+		"Failure":     {exitFailure, 1},
+		"Usage":       {exitUsage, 2},
+		"Timeout":     {exitTimeout, 3},
+		"NoResponse":  {exitNoResponse, 4},
+		"Down":        {exitDown, 5},
+		"ToolFailure": {exitToolFailure, 21},
+		"ToolUsage":   {exitToolUsage, 22},
+		"Busy":        {exitBusy, 23},
+	} {
+		if c[0] != c[1] {
+			t.Errorf("exit%s = %d, want %d", name, c[0], c[1])
+		}
+	}
+}
+
+func TestToolCodeFor(t *testing.T) {
+	for code, want := range map[string]int{
+		spool.CodeInvalidRequest: exitToolUsage,
+		spool.CodeUnknownTool:    exitToolUsage,
+		spool.CodeInvalidArgs:    exitToolUsage,
+		spool.CodeInternal:       exitToolFailure,
+		"something_new":          exitFailure,
+	} {
+		if got := toolCodeFor(code); got != want {
+			t.Errorf("toolCodeFor(%q) = %d, want %d", code, got, want)
+		}
+	}
+}
