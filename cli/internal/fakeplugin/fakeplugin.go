@@ -226,11 +226,7 @@ func parseRequest(data []byte) (tool string, args json.RawMessage, session strin
 	if len(data) > spool.MaxRequestBytes || spool.NestingDepth(data) > spool.MaxNestingDepth {
 		return "", nil, "", false
 	}
-	var request struct {
-		Tool    string          `json:"tool"`
-		Args    json.RawMessage `json:"args"`
-		Session string          `json:"session"`
-	}
+	var request spool.Request
 	if json.Unmarshal(data, &request) != nil || request.Tool == "" {
 		return "", nil, "", false
 	}

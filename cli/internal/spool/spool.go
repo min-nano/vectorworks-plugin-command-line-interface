@@ -53,6 +53,14 @@ func ValidID(id string) bool {
 	return idPattern.MatchString(id)
 }
 
+// Request は要求 1 件の封筒（docs/protocol.md「要求」）。Call と偽のプラグインが同じ型を使い、
+// 片側だけ綴りが変わらないようにする。
+type Request struct {
+	Tool    string          `json:"tool"`
+	Args    json.RawMessage `json:"args"`
+	Session string          `json:"session,omitempty"`
+}
+
 // Response は応答 1 件。OK が false のときだけ Code（機械が読む種別）と Error（人向けの理由）が
 // 入る。id はファイル名が持つ。知らないフィールドは無視する（docs/protocol.md「互換性」）。
 type Response struct {
@@ -157,11 +165,7 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 	if len(args) == 0 {
 		args = json.RawMessage("{}")
 	}
-	payload, err := json.Marshal(struct {
-		Tool    string          `json:"tool"`
-		Args    json.RawMessage `json:"args"`
-		Session string          `json:"session,omitempty"`
-	}{tool, args, session})
+	payload, err := json.Marshal(Request{Tool: tool, Args: args, Session: session})
 	if err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
 	}

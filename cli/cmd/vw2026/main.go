@@ -186,24 +186,16 @@ func run(args []string, e env) int {
 	return cmd.run(&grammar.globals, &e)
 }
 
-// dir はスプールの場所を決める。決まらなければ標準エラーへ理由を書いて空。
-func (g *globals) dir(e *env) string {
-	if g.Spool != "" {
-		return g.Spool
-	}
-	dir, err := spool.DefaultDir()
-	if err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: %v (set VW2026_SPOOL)\n", err)
-		return ""
-	}
-	return dir
-}
-
-// open はスプールを決めて、ブリッジの状態を判定する。場所が決まらなければ nil。
+// open はスプールを決めて、ブリッジの状態を判定する。場所が決まらなければ標準エラーへ
+// 理由を書いて nil。
 func (g *globals) open(e *env) *spool.Bridge {
-	dir := g.dir(e)
+	dir := g.Spool
 	if dir == "" {
-		return nil
+		var err error
+		if dir, err = spool.DefaultDir(); err != nil {
+			fmt.Fprintf(e.stderr, "vw2026: %v (set VW2026_SPOOL)\n", err)
+			return nil
+		}
 	}
 	return spool.Open(dir)
 }

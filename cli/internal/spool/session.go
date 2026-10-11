@@ -14,4 +14,5 @@ var ErrBusy = errors.New("the bridge is occupied by another session")
 
 // ErrNoSession は、要求に載せた印がいまの占有のものではない（占有を終えた・Vectorworks を起動
 // し直した）か、占有の中でしか呼べない道具（quit）を占有せずに呼んだ。要求は実行されていない。
-var ErrNoSession = errors.New("no such session")
+// 文言は両方を言う（印を渡していない呼ぶ側に、印の誤りと読ませないように）。
+var ErrNoSession = errors.New("not in the current session (the session has ended, or the tool runs only in a session: see \"vw2026 help session\")")
