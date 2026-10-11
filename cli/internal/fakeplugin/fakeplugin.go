@@ -234,8 +234,8 @@ func parseRequest(data []byte) (tool string, args json.RawMessage, session strin
 	if len(request.Args) == 0 || string(request.Args) == "null" {
 		request.Args = json.RawMessage("{}")
 	}
-	var object map[string]json.RawMessage
-	if json.Unmarshal(request.Args, &object) != nil {
+	// RawMessage は解析済みの値をそのまま持つので、先頭の 1 文字でオブジェクトかが分かる。
+	if request.Args[0] != '{' {
 		return "", nil, "", false
 	}
 	return request.Tool, request.Args, request.Session, true

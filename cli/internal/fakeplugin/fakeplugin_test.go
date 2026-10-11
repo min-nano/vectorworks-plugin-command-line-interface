@@ -136,7 +136,7 @@ func TestServeAcceptsLimitDepthAndDefaultsArgs(t *testing.T) {
 		got[string(args)] = ""
 		return spool.Response{OK: true}
 	}}).serveOnce()
-	if _, ok := got["{}"]; !ok || len(got) != 2 || !responseOf(t, dir, "null").OK {
+	if _, ok := got["{}"]; !ok || len(got) != 2 || !responseOf(t, dir, "none").OK || !responseOf(t, dir, "null").OK {
 		t.Fatalf("unexpected args: %v", got)
 	}
 	if !responseOf(t, dir, "deep").OK {
