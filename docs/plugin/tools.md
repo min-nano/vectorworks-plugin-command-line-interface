@@ -27,7 +27,7 @@
 | `branch` | `VW_BUILD_BRANCH`（PR のプレリリースを入れているかが分かる） |
 | `protocol` | 作法の版（[作法「版」](../protocol.md#版)） |
 | `pid` | 受け付けている Vectorworks のプロセス ID（`getpid` / `GetCurrentProcessId`。2 つ起動しているときにどちらが受け付けているかが分かる） |
-| `session` | いずれかの呼ぶ側が占有しているか（`session.lock` が掴まれているか。[作法「占有」](../protocol.md#占有sessionlock)）。`ping` は占有によらず誰にでも答える |
+| `session` | 占有の印を発行しているか（[作法「占有」](../protocol.md#占有セッション)）。`ping` は占有によらず誰にでも答える |
 | `document_open` | `gSDK->GetCurrentLayer()` が取れるか（元と同じ） |
 | `current_layer` | 現在のレイヤの名前 |
 

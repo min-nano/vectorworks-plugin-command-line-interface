@@ -9,8 +9,8 @@
 | ファイル | SDK | 中身 |
 | --- | --- | --- |
 | `src/core/Json.{h,cpp}` | 依らない | 小さな JSON（元から移し、入れ子の深さの上限を足す。[受け付け 1 回](#受け付け-1-回coreserve)の 3） |
-| `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つ（`prepare` / `lock` / `sweep` / `poll` / `waitState` / `sessionState` / `reply`）・id の検査・要求と応答の形。場所は引数で受ける（テストは一時ディレクトリを渡す） |
-| `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（下記）。道具の表と時刻を引数で受けるので無 SDK でテストできる |
+| `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つ（`prepare` / `lock` / `sweep` / `poll` / `waitState` / `reply`）・id の検査・要求と応答の形。場所は引数で受ける（テストは一時ディレクトリを渡す） |
+| `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（下記）と、占有の印（発行した 1 つをメモリに持つ）。道具の表と時刻を引数で受けるので無 SDK でテストできる |
 | `src/tools/ToolTable.cpp` | 依る | 道具の表 |
 | `src/tools/<道具>.cpp` | 依る | 道具の中身 |
 | `src/Clock.cpp` | 依る | OS タイマーから `core::serve(…, tools::table())` を呼ぶ |
@@ -35,11 +35,6 @@
 - `sweep`: **ロックを取れた直後に 1 度だけ**、`*.req.json`・`*.res.json`・`*.wait`・`*.tmp` の
   うち、**`<id>.wait` を掴める・無い id のものだけ**を消す（id はファイル名の最初の `.` より前）。
   待つ印が掴まれている id のファイルは残す（[作法「ロック」](../protocol.md#ロックbridgelock)）。
-  占有のファイル（`session.` で始まる名前）は呼ぶ側のものなので対象にしない。
-- `sessionState`: 占有されているかと、その印（`session.json`）を読む。`session.lock` を掴めるか
-  一瞬だけ試す（POSIX は `O_CLOEXEC` を付けて開き `flock(LOCK_EX|LOCK_NB)`、取れたらすぐ放す。
-  Windows は共有なしで開き、開けたらすぐ閉じる。[作法「占有」](../protocol.md#占有sessionlock)）。
-  要求ごとに呼ぶ（占有は回の途中でも始まり・終わる）。
 
 ## 受け付け 1 回（`core::serve`）
 
@@ -60,9 +55,10 @@
    超えたら再帰を降りずに失敗する**（解析の前に別に数える必要はない。スタックを溢れさせない
    ことが目的）。
 4. 要求ごとに:
-   - `tools`・`ping` 以外は、まず占有に照らす（`sessionState`）。占有されていなければ、`session`
-     の無い要求を実行し、ある要求は `no_session` で応える。占有されていれば、`session` が印と同じ
-     要求だけを実行し、ほか（`session.json` が読めないときも）は `busy` で応える。
+   - `tools`・`ping` 以外は、まず占有に照らす（[作法「占有」](../protocol.md#占有セッション)の表）。
+     占有の印は `core::serve` が持つ状態（1 つだけ。メモリだけで、ファイルに書かない）で、
+     Vectorworks が終われば消える。印は推測されにくい乱数から作る。
+   - `session_start` → 占有されていなければ印を発行して返す。`session_end` → 印を消す（表を検索しない）。
    - `tools` → 道具の一覧を返す（表を検索しない）。
    - 種類 `app`（`quit`）→ 応答を書き、終了の依頼を結果に載せて、**その回の残りの要求を
      取り出さずに戻る**（終了したら応えられないので、残りは置いたままにする）。

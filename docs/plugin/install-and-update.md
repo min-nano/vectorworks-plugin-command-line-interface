@@ -108,8 +108,11 @@ vw2026 install
   この組み合わせの真実はここで、ほかのページはここを参照します）。
 
   ```sh
-  vw2026 call quit && vw2026 wait --down && vw2026 install && vw2026 launch && vw2026 wait
+  id=…  # vw2026 session start の {"session":…}（quit は占有の中でだけ呼べる）
+  vw2026 call quit --session "$id" && vw2026 wait --down && vw2026 install && vw2026 launch && vw2026 wait
   ```
+
+  Vectorworks が終われば占有も消えるので、起動し直したあとに使うなら占有を取り直します。
 
 - `--tag` はタグをそのまま受け取ります（ブランチ名から slug を作らない。slug の規則は
   [名前と識別子](identifiers.md)）。

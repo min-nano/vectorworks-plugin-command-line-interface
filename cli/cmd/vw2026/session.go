@@ -1,90 +1,93 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"os"
-	"os/exec"
-	"os/signal"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// sessionEnv は占有の印を子へ渡す環境変数。call が読む。
-const sessionEnv = "VW2026_SESSION"
-
 type sessionCmd struct {
-	Command []string `arg:"" passthrough:"" placeholder:"COMMAND" help:"Command to run while occupying the bridge, after \"--\"."`
+	Start sessionStartCmd `cmd:"" help:"Occupy the bridge and print the session."`
+	End   sessionEndCmd   `cmd:"" help:"End the session."`
 }
 
 func (sessionCmd) Help() string {
 	return `
-Session occupies the bridge, runs the command, and ends the occupation when
-the command exits. While the bridge is occupied, the plug-in runs only the
-calls of this session: "vw2026 call" in the command (and in what it starts)
-finds the session in VW2026_SESSION. Other calls exit with 9 and do not run;
-"call tools" and "call ping" are answered for everyone. Without a session,
-nobody occupies the bridge and every call runs, as before.
+A session occupies the bridge: while it lasts, the plug-in runs only the calls
+that carry it (--session, or VW2026_SESSION). Other calls exit with 9 and do
+not run; "call tools" and "call ping" are answered for everyone. Without a
+session, nobody occupies the bridge and every call runs, except quit, which
+runs only in a session.
 
-	vw2026 session -- claude
-	vw2026 session -- sh -c 'vw2026 call layers && vw2026 call classes'
+	vw2026 session start                     # {"session":"<ID>"}
+	vw2026 call layers --session <ID>
+	vw2026 session end --session <ID>
 
-The occupation lives only as long as this process. If it dies, the operating
-system releases it at once, so a crashed caller never blocks the bridge; the
-calls the command still makes then exit with 9 and do not run. Session can
-start before Vectorworks and lasts across "call quit" and "launch".
-
-Session exits with the exit code of the command, with 9 when another session
-occupies the bridge, and with 2 when it is already inside a session.
+The plug-in issues one session at a time and keeps it in memory only. Nothing
+ends it but "session end" and the end of Vectorworks: a session that is never
+ended keeps the bridge occupied until Vectorworks restarts. Quitting
+Vectorworks ends the session, so after "call quit" and "launch", start a new
+one; calls with the old one exit with 9.
 `
 }
 
-func (c *sessionCmd) run(g *globals, e *env) int {
-	if os.Getenv(sessionEnv) != "" {
-		// 中で占有し直すと、外の占有に断られて動かない。
-		fmt.Fprintln(e.stderr, "vw2026: already in a session")
+type sessionStartCmd struct {
+	Timeout float64 `default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
+}
+
+func (sessionStartCmd) Help() string {
+	return `
+Start asks the plug-in for a session and prints it as {"session":"<ID>"}. It
+exits with 9 when another session occupies the bridge. If start exits with 8,
+the plug-in may have issued a session that nobody knows; it lasts until
+Vectorworks restarts.
+`
+}
+
+func (c *sessionStartCmd) run(g *globals, e *env) int {
+	return callReserved(g, e, spool.ToolSessionStart, "", c.Timeout)
+}
+
+type sessionEndCmd struct {
+	Session string  `env:"VW2026_SESSION" placeholder:"ID" help:"Session to end (required)."`
+	Timeout float64 `default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
+}
+
+func (sessionEndCmd) Help() string {
+	return `
+End ends the session and prints {"ended":true}. It exits with 9 when the
+session is not the one that occupies the bridge, for example after
+Vectorworks has restarted.
+`
+}
+
+func (c *sessionEndCmd) run(g *globals, e *env) int {
+	// kong の required は、空の環境変数も値とみなすので、ここで確かめる。
+	if c.Session == "" {
+		fmt.Fprintln(e.stderr, "vw2026: session end needs --session or VW2026_SESSION")
 		return exitUsage
 	}
-	// kong は passthrough の引数に "--" を残す。
-	command := c.Command
-	if len(command) > 0 && command[0] == "--" {
-		command = command[1:]
-	}
-	if len(command) == 0 {
-		fmt.Fprintln(e.stderr, "vw2026: session needs a command (run \"vw2026 help session\")")
-		return exitUsage
-	}
-	dir := g.dir(e)
-	if dir == "" {
+	return callReserved(g, e, spool.ToolSessionEnd, c.Session, c.Timeout)
+}
+
+// callReserved は予約された道具を引数なしで呼び、結果を出す。
+func callReserved(g *globals, e *env, tool, session string, timeout float64) int {
+	bridge := g.open(e)
+	if bridge == nil {
 		return exitFailure
 	}
-	session, err := spool.HoldSession(dir)
+	if !bridge.Running {
+		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (try `vw2026 status`)")
+		return exitDown
+	}
+	response, err := bridge.Call(tool, nil, session, seconds(timeout))
 	if err != nil {
 		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
-		if errors.Is(err, spool.ErrBusy) {
-			return exitBusy
-		}
-		return exitFailure
+		return codeFor(err)
 	}
-	defer session.Release()
-
-	// Ctrl-C は子にも届く。こちらは子が終わるのを待ち、占有を終えてから終わる。
-	interrupts := make(chan os.Signal, 1)
-	signal.Notify(interrupts, os.Interrupt)
-	defer signal.Stop(interrupts)
-
-	cmd := exec.Command(command[0], command[1:]...)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = e.stdin, e.stdout, e.stderr
-	cmd.Env = append(os.Environ(), sessionEnv+"="+session.ID)
-	err = cmd.Run()
-	var exit *exec.ExitError
-	switch {
-	case err == nil:
-		return exitOK
-	case errors.As(err, &exit) && exit.ExitCode() >= 0:
-		return exit.ExitCode()
-	default:
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
-		return exitFailure
+	if !response.OK {
+		fmt.Fprintf(e.stderr, "vw2026: %s: %s: %s\n", tool, response.Code, response.Error)
+		return exitToolErr
 	}
+	return emitRaw(e, response.Result)
 }

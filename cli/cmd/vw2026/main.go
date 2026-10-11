@@ -44,7 +44,8 @@ const (
 	// 待つのをやめたときに要求をプラグインが既に受け取っていて、応答が届かなかった。exitTimeout
 	// （実行されない）と分けるのは、書く道具を呼んだ側が二重に操作しないように。
 	exitNoResponse = 8
-	// ほかの呼ぶ側が占有している・載せた占有が終わっている。要求は実行されていない。
+	// 占有に断られた（ほかが占有している・載せた占有が終わっている・quit を占有せずに呼んだ）。
+	// 要求は実行されていない。
 	exitBusy = 9
 )
 
@@ -73,7 +74,7 @@ type cli struct {
 	Call    callCmd    `cmd:"" help:"Call one tool."`
 	Wait    waitCmd    `cmd:"" help:"Wait until the bridge starts or stops."`
 	Launch  launchCmd  `cmd:"" help:"Start Vectorworks."`
-	Session sessionCmd `cmd:"" help:"Occupy the bridge while a command runs."`
+	Session sessionCmd `cmd:"" help:"Occupy the bridge, or end the occupation."`
 	Version versionCmd `cmd:"" help:"Print the versions of the CLI and the protocol."`
 }
 
@@ -104,7 +105,8 @@ exit status. Flags may come before or after the positional arguments.
 To update the plug-in, the caller combines the commands (install is not
 implemented yet; see docs/plugin/install-and-update.md):
 
-	vw2026 call quit && vw2026 wait --down && vw2026 install && vw2026 launch && vw2026 wait
+	vw2026 session start                  # quit runs only in a session
+	vw2026 call quit --session <ID> && vw2026 wait --down && vw2026 install && vw2026 launch && vw2026 wait
 
 The commands exit with
 
@@ -117,7 +119,8 @@ The commands exit with
 	6  any other failure (cannot write, cannot start, cannot locate the spool)
 	7  Vectorworks is running, so install or uninstall did nothing (planned)
 	8  the plug-in took the request but no response came (the tool may have run)
-	9  another session occupies the bridge, or this session has ended (the tool did not run)
+	9  refused by the session: another one occupies the bridge, the given one has ended,
+	   or quit was called outside a session (the tool did not run)
 
 Vectorworks can be running, holding the lock, while the plug-in defers the
 requests, for example during a modal dialog or while undo is being recorded

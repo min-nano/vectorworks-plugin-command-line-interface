@@ -239,63 +239,50 @@ func TestCodeFor(t *testing.T) {
 	}
 }
 
-// TestMain は、VW2026_TEST_CHILD が立っていれば vw2026 そのものとして動く（session が包む
-// コマンドに、このテストの実行ファイルを使う）。
-func TestMain(m *testing.M) {
-	if os.Getenv("VW2026_TEST_CHILD") != "" {
-		os.Exit(run(os.Args[1:], env{stdin: os.Stdin, stdout: os.Stdout, stderr: os.Stderr}))
-	}
-	os.Exit(m.Run())
-}
-
-// session が包むコマンドの call は、占有の中で実行される。外の call は 9 で断られる。
-func TestSessionRunsCommandInSession(t *testing.T) {
+// session start が印を出し、その印の call だけが実行される。end のあとは印の無い call が実行される。
+func TestSessionStartCallEnd(t *testing.T) {
 	dir := echoBridge(t)
-	t.Setenv("VW2026_TEST_CHILD", "1")
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "session", "--", os.Args[0], "call", "layers")
-	if r.code != exitOK || strings.TrimSpace(r.stdout) != `{"args":{},"tool":"layers"}` {
+	vars := map[string]string{"VW2026_SPOOL": dir}
+	r := invoke(t, vars, "", nil, "session", "start")
+	var started struct {
+		Session string `json:"session"`
+	}
+	if r.code != exitOK || json.Unmarshal([]byte(r.stdout), &started) != nil || started.Session == "" {
 		t.Fatalf("%+v", r)
 	}
-	// 終わったら占有は解ける。
-	if spool.Open(dir).Session {
-		t.Fatal("the session should end with the command")
-	}
-}
-
-func TestSessionPassesExitCode(t *testing.T) {
-	dir := echoBridge(t)
-	t.Setenv("VW2026_TEST_CHILD", "1")
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "session", "--", os.Args[0], "call", "fail")
-	if r.code != exitToolErr {
-		t.Fatalf("%+v", r)
-	}
-}
-
-func TestCallOutsideSessionIsBusy(t *testing.T) {
-	dir := echoBridge(t)
-	session, err := spool.HoldSession(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer session.Release()
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "layers")
-	if r.code != exitBusy {
-		t.Fatalf("%+v", r)
-	}
-	r = invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"session":true`) {
-		t.Fatalf("%+v", r)
-	}
-	r = invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "session", "--", os.Args[0], "version")
-	if r.code != exitBusy {
+	if r := invoke(t, vars, "", nil, "session", "start"); r.code != exitBusy {
 		t.Fatalf("a second session should be refused: %+v", r)
 	}
+	if r := invoke(t, vars, "", nil, "call", "layers"); r.code != exitBusy {
+		t.Fatalf("a call outside the session should be refused: %+v", r)
+	}
+	if r := invoke(t, vars, "", nil, "call", "ping"); r.code != exitOK {
+		t.Fatalf("ping is for everyone: %+v", r)
+	}
+	if r := invoke(t, vars, "", nil, "call", "layers", "--session", started.Session); r.code != exitOK {
+		t.Fatalf("%+v", r)
+	}
+	inSession := map[string]string{"VW2026_SPOOL": dir, "VW2026_SESSION": started.Session}
+	if r := invoke(t, inSession, "", nil, "call", "quit"); r.code != exitOK {
+		t.Fatalf("quit in the session (from VW2026_SESSION): %+v", r)
+	}
+	if r := invoke(t, inSession, "", nil, "session", "end"); r.code != exitOK || strings.TrimSpace(r.stdout) != `{"ended":true}` {
+		t.Fatalf("%+v", r)
+	}
+	if r := invoke(t, inSession, "", nil, "call", "layers"); r.code != exitBusy {
+		t.Fatalf("the ended session should be refused: %+v", r)
+	}
+	if r := invoke(t, vars, "", nil, "call", "layers"); r.code != exitOK {
+		t.Fatalf("%+v", r)
+	}
+	if r := invoke(t, vars, "", nil, "call", "quit"); r.code != exitBusy {
+		t.Fatalf("quit outside a session should be refused: %+v", r)
+	}
 }
 
-func TestSessionInsideSessionIsUsageError(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir, "VW2026_SESSION": "x"}, "", nil, "session", "--", os.Args[0], "version")
-	if r.code != exitUsage {
+func TestSessionEndNeedsSession(t *testing.T) {
+	dir := echoBridge(t)
+	if r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "session", "end"); r.code != exitUsage {
 		t.Fatalf("%+v", r)
 	}
 }

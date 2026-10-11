@@ -15,7 +15,7 @@ type callCmd struct {
 	Args    string  `arg:"" optional:"" name:"args" help:"Arguments as a JSON object, or - to read them from the standard input."`
 	Raw     bool    `help:"Print the whole response (ok, result, and error)."`
 	Timeout float64 `default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
-	Session string  `env:"VW2026_SESSION" placeholder:"ID" help:"Session to call in. \"vw2026 session\" sets it for its command."`
+	Session string  `env:"VW2026_SESSION" placeholder:"ID" help:"Session to call in (\"vw2026 session start\" prints it)."`
 }
 
 func (callCmd) Help() string {
@@ -48,7 +48,7 @@ killed while waiting leaves a request that will not run either.
 
 While another session occupies the bridge (see "vw2026 help session"), call
 exits with 9: the tool did not run. So it does when the session it calls in
-has ended.
+has ended, and for quit outside a session.
 `
 }
 
