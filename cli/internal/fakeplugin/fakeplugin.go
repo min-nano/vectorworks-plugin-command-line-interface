@@ -220,19 +220,34 @@ func refuse(code string) spool.Response {
 }
 
 // parseRequest は要求を読む（docs/protocol.md「要求」）。大きすぎる・入れ子が深すぎる・JSON と
-// して壊れている・tool が無い要求は読めない（プラグインは深さを解析の中で数えるが、
-// encoding/json は上限が違うので、解析の前に数える）。args が無い・オブジェクトでなければ {} とする。
+// して壊れている・tool が無い（null・空を含む）・知っているフィールドの型が違う要求は読めない
+// （プラグインは深さを解析の中で数えるが、encoding/json は上限が違うので、解析の前に数える）。
+// args は省略できるフィールドなので、無い・null なら既定値の {} とし、オブジェクト以外は読めない
+// 要求とする。session の null は無いものとする。
+//
+// 構造体へ直に解析すると encoding/json はキーを大文字と小文字を区別せずに照合し、ARGS のような
+// 知らないキーまで拾ってしまう。作法ではキーは区別して照合するので、map に解析して正確な綴りで引く。
 func parseRequest(data []byte) (tool string, args json.RawMessage, session string, ok bool) {
 	if len(data) > spool.MaxRequestBytes || spool.NestingDepth(data) > spool.MaxNestingDepth {
 		return "", nil, "", false
 	}
-	var request spool.Request
-	if json.Unmarshal(data, &request) != nil || request.Tool == "" {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(data, &fields) != nil || fields == nil {
 		return "", nil, "", false
 	}
-	var object map[string]json.RawMessage
-	if json.Unmarshal(request.Args, &object) != nil || object == nil {
-		request.Args = json.RawMessage("{}")
+	if json.Unmarshal(fields["tool"], &tool) != nil || tool == "" {
+		return "", nil, "", false
 	}
-	return request.Tool, request.Args, request.Session, true
+	if raw, found := fields["session"]; found && json.Unmarshal(raw, &session) != nil {
+		return "", nil, "", false
+	}
+	args = fields["args"]
+	if len(args) == 0 || string(args) == "null" {
+		args = json.RawMessage("{}")
+	}
+	// RawMessage は解析済みの値をそのまま持つので、先頭の 1 文字でオブジェクトかが分かる。
+	if args[0] != '{' {
+		return "", nil, "", false
+	}
+	return tool, args, session, true
 }

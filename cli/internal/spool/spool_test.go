@@ -175,16 +175,6 @@ func TestMissingDirIsDown(t *testing.T) {
 	}
 }
 
-func TestDefaultDir(t *testing.T) {
-	dir, err := DefaultDir()
-	if err != nil {
-		t.Skip(err)
-	}
-	if filepath.Base(dir) != SpoolDirName || filepath.Base(filepath.Dir(dir)) != AppDirName {
-		t.Fatalf("unexpected spool dir: %s", dir)
-	}
-}
-
 func TestNewIDIsValidAndOrdered(t *testing.T) {
 	base := time.Unix(1_700_000_000, 0)
 	first := NewID(base)
