@@ -32,7 +32,8 @@ func invoke(t *testing.T, vars map[string]string, stdin string, started *[]strin
 	// kong は環境変数を os から直接読むので、テストごとに置き直す（並行には走らせない）。
 	for _, name := range envVars {
 		value, ok := vars[name]
-		t.Setenv(name, value) // 終わったら元に戻させる
+		// 終わったら元に戻させる
+		t.Setenv(name, value)
 		if !ok {
 			// 空の値も値になる（空のタイムアウトは使い方の誤り）ので、渡さないものは消す。
 			os.Unsetenv(name)

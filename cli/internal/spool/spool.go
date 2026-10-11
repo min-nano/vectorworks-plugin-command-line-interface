@@ -73,13 +73,20 @@ type Response struct {
 // 失敗の種別（Response.Code）。綴りは作法で固定する（docs/protocol.md「応答」）。CLI は
 // これを解釈せず、そのまま呼ぶ側へ渡す。
 const (
-	CodeInvalidRequest = "invalid_request" // 要求が読めない（JSON として壊れている・大きすぎる・tool が無い）
-	CodeUnknownTool    = "unknown_tool"    // 知らない道具
-	CodeInvalidArgs    = "invalid_args"    // 道具の引数が誤っている
-	CodeInternal       = "internal"        // そのほか（道具の中の例外など）
-	CodeNoWait         = "no_wait"         // 待つ印（<id>.wait）が無いので実行しなかった
-	CodeBusy           = "busy"            // ほかの呼ぶ側が占有しているので実行しなかった
-	CodeNoSession      = "no_session"      // 載せた印がいまの占有のものではない・占有の中でしか呼べない道具なので実行しなかった
+	// 要求が読めない（JSON として壊れている・大きすぎる・tool が無い）
+	CodeInvalidRequest = "invalid_request"
+	// 知らない道具
+	CodeUnknownTool = "unknown_tool"
+	// 道具の引数が誤っている
+	CodeInvalidArgs = "invalid_args"
+	// そのほか（道具の中の例外など）
+	CodeInternal = "internal"
+	// 待つ印（<id>.wait）が無いので実行しなかった
+	CodeNoWait = "no_wait"
+	// ほかの呼ぶ側が占有しているので実行しなかった
+	CodeBusy = "busy"
+	// 載せた印がいまの占有のものではない・占有の中でしか呼べない道具なので実行しなかった
+	CodeNoSession = "no_session"
 )
 
 // ErrNotRunning はブリッジが見つからない（Vectorworks が起動していない・プラグインが
@@ -116,9 +123,11 @@ var malformedGrace = time.Second
 
 // Bridge はスプール 1 つと、その状態。
 type Bridge struct {
-	Dir     string
-	Running bool   // プラグインがロックを掴んでいる（Vectorworks が動いている）
-	Reason  string // 動いていない理由
+	Dir string
+	// プラグインがロックを掴んでいる（Vectorworks が動いている）
+	Running bool
+	// 動いていない理由
+	Reason string
 }
 
 // Open はその場所のブリッジの状態を判定する（docs/protocol.md「生存の判定」）。

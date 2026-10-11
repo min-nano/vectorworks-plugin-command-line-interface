@@ -22,9 +22,12 @@ import (
 type waitState int
 
 const (
-	waitHeld     waitState = iota // 呼ぶ側が待っている
-	waitReleased                  // 呼ぶ側が放した・死んだ
-	waitMissing                   // 無い（作法に反する）
+	// 呼ぶ側が待っている
+	waitHeld waitState = iota
+	// 呼ぶ側が放した・死んだ
+	waitReleased
+	// 無い（作法に反する）
+	waitMissing
 )
 
 // Handler は道具 1 つの呼び出しに応える。
@@ -112,9 +115,10 @@ func sweep(dir string) {
 
 // server は受け付ける橋 1 つ。占有の印（session）はメモリだけに持つ（docs/protocol.md「占有」）。
 type server struct {
-	dir     string
-	handle  Handler
-	session string // 発行している占有の印。空なら占有されていない
+	dir    string
+	handle Handler
+	// 発行している占有の印。空なら占有されていない
+	session string
 }
 
 // serveOnce は受け付け 1 回。要求を名前の昇順で読み、消し、呼ぶ側が待っていれば実行する。
