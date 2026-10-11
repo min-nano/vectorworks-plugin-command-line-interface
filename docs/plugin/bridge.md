@@ -10,22 +10,29 @@
 | --- | --- | --- |
 | `src/core/Json.{h,cpp}` | 依らない | 小さな JSON（元から移し、入れ子の深さの上限を足す。[受け付け 1 回](#受け付け-1-回coreserve)の 3） |
 | `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つ（`prepare` / `lock` / `sweep` / `poll` / `waitState` / `reply`）・id の検査・要求と応答の形。場所は引数で受ける（テストは一時ディレクトリを渡す） |
-| `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（下記）と、占有の印（発行した 1 つをメモリに持つ）。道具の表と時刻を引数で受けるので無 SDK でテストできる |
+| `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（下記）と、占有の印（発行した 1 つをメモリに持つ）。道具の表を引数で受けるので無 SDK でテストできる |
 | `src/tools/ToolTable.cpp` | 依る | 道具の表 |
 | `src/tools/<道具>.cpp` | 依る | 道具の中身 |
 | `src/Clock.cpp` | 依る | OS タイマーから `core::serve(…, tools::table())` を呼ぶ |
 
 元では受け付けの手順（`serveMcpBridge`）が SDK 依存の `draw/McpBridge.cpp` に入っていました。
-ここでは**手順を `core/Serve` へ出し、偽の道具の表でテストします**（終了の依頼の
+ここでは**手順を `core/Serve` へ出し、偽の道具の表でテストします**（`tests/CoreServeTests.cpp`。終了の依頼の
 返し方・壊れた要求・ロックを取れたときに 1 度だけ残骸を消すこと・ロックを取れないときに何も
 しないこと・無くなっていた要求を飛ばすこと・待つ者の居ない要求と待つ印の無い要求を実行しないこと・失敗の `code`・
 回の始めに並べた要求だけを処理すること・綴りを満たさない id を取り出さないこと・大きすぎる要求と入れ子の深すぎる要求・
-占有に照らすこと）。
+占有に照らすこと）。同じ手順を、作法の見本（[`protocol/fixtures/`](../../protocol/fixtures/README.md)）に
+照らします（`tests/ProtocolFixturesTests.cpp`）。見本は Go の偽のプラグイン（`cli/internal/fakeplugin`）の
+テストも読むので、両側の受け付けの振る舞いが食い違えばどちらかが落ちます。
 
 ## スプールの用意
 
 - 場所は `<CLI>/spool`（[作法「スプールの場所」](../protocol.md#スプールの場所)）。環境変数は
-  読まず、**探索しません**。
+  読まず、**探索しません**（`core::bridgeSpoolDir`。mac は `getpwuid_r(getuid())` の `pw_dir`、Windows は
+  `SHGetKnownFolderPath(FOLDERID_LocalAppData)`）。パスは `std::filesystem::path` で持ち、Windows でも
+  利用者の名前を ANSI のコードページに通しません。
+- 開くファイル（`bridge.lock`・`<id>.wait`・要求・応答）は OS の呼び出しで開きます（POSIX は
+  `O_CLOEXEC`、Windows は `lpSecurityAttributes` に null）。`std::fstream` は子プロセスに受け継がせない
+  指定ができないので使いません。
 - `prepare`: 無ければ 0700 で作る（親も無ければ作る）。持ち主と権限は確かめない。失敗したら
   次の回にやり直す（理由は受け付けの結果に載せる）。
 - `lock`: `bridge.lock` を掴む（POSIX は `flock(LOCK_EX|LOCK_NB)`、Windows は共有なしで開く。
@@ -53,21 +60,25 @@
    とは、1 MiB を超える・入れ子の深さが 64 を超える・JSON として読めない・`tool` が無い・
    `tool`・`args`・`session` の型が違うこと（`tool` の `null`・空の文字列も壊れている。キーは大文字と
    小文字を区別して照合する）。`args` が無い・`null`
-   なら既定値の `{}` を道具へ渡し、`session` の `null` は無いものとして扱う
+   なら既定値の `{}` を道具へ渡し、`session` の `null`・空の文字列は無いものとして扱う
    （[作法「要求」](../protocol.md#要求idreqjson)）。**深さは `core/Json` が解析の中で数え、上限を
    超えたら再帰を降りずに失敗する**（解析の前に別に数える必要はない。スタックを溢れさせない
-   ことが目的）。
+   ことが目的）。`core/Json` は RFC 8259 のとおりに厳しく読み、UTF-8 として正しくないテキストも
+   読まない。オブジェクトの鍵の重なりは表で判定する（1 MiB に鍵を十数万並べた要求で、受け付けを
+   長く止めない）。
 4. 要求ごとに:
    - `tools`・`ping` 以外は、まず占有に照らす（[作法「占有」](../protocol.md#占有セッション)の表）。
      占有の印は `core::serve` が持つ状態（1 つだけ。メモリだけで、ファイルに書かない）で、
      Vectorworks が終われば消える。印は推測されにくい乱数から作る。
    - `session_start` → 占有されていなければ印を発行して返す。`session_end` → 印を消す（表を検索しない）。
-   - `tools` → 道具の一覧を返す（表を検索しない）。
+   - `tools` → 道具の一覧を返す（表を検索しない）。予約された道具（`tools`・`session_start`・
+     `session_end`）は一覧に載せない（`ping` は中身が SDK に依るので表に載せ、一覧にも出る）。
    - 種類 `app`（`quit`）→ 応答を書き、終了の依頼を結果に載せて、**その回の残りの要求を
      取り出さずに戻る**（終了したら応えられないので、残りは置いたままにする）。
    - それ以外 → 実行して応答を書く。
    - 表に無い道具 → `unknown_tool` で応える。
-   - **道具 1 つの例外はここで受けて `internal` の応答にする**（橋を止めない）。
+   - **道具 1 つの例外はここで受けて `internal` の応答にする**（橋を止めない）。`std::exception`
+     以外の例外も受ける。
 5. 結果（終了の依頼の有無と、受け付けの状態）を返す。
 
 - 終了の依頼はタイマーが `core::serve` から戻ってから行います（[構成「受け付けの流れ」](architecture.md#受け付けの流れ)）。
@@ -99,25 +110,37 @@ Windows では Vectorworks 2026 を 2 つ起動でき、どちらのプラグイ
 ## 道具の表
 
 ```cpp
+// src/core/Serve.h
 enum class ToolKind { Read, Write, App };
 
-struct Tool {
-    const char* name;            // [a-z0-9_]+(\.[a-z0-9_]+)*
-    const char* description;     // 日本語。呼ぶ側がそのまま読む
-    const char* inputSchema;     // JSON Schema（文字列）。tools の結果にそのまま載る
-    ToolKind    kind;
-    ToolFn      run;             // Json (const Json& args, ToolError& error)
+struct ToolContext {
+    bool session;                // 占有の印を発行しているか（ping の session）
 };
-
-enum class ErrorCode { InvalidArgs, Internal };   // 道具が返す種別
 
 struct ToolError {
-    ErrorCode   code;
+    bool        failed;          // 真のときだけ応答を失敗にする
+    BridgeCode  code;            // InvalidArgs か Internal（ほかを付けても internal になる）
     std::string message;         // 日本語。応答の error にそのまま載る
+    Json invalidArgs(std::string why);   // failed を立てて null を返す
+    Json internal(std::string why);
 };
+
+using ToolFn = std::function<Json(const Json& args, const ToolContext& context, ToolError& error)>;
+
+struct Tool {
+    std::string name;            // [a-z0-9_]+(\.[a-z0-9_]+)*
+    std::string description;     // 日本語。呼ぶ側がそのまま読む
+    std::string inputSchema;     // JSON Schema（オブジェクトのテキスト）。tools の結果に載る
+    ToolKind    kind;
+    ToolFn      run;
+};
+
+using ToolTable = std::vector<Tool>;
 ```
 
 - **道具を足すときに触るのは表の 1 行と中身 1 つだけ**です。CLI は道具を知らないので直しません。
+- 表の正しさ（名前の綴り・重複・予約された名前・`inputSchema` がオブジェクトの JSON か・`ping` が
+  `read` か）は `core::validateToolTable` で確かめます（表のテストが呼ぶ）。
 - `tools` の結果は `{"protocol":5,"tools":[{"name","description","inputSchema","kind"}]}`。
   `kind` は `read` / `write` / `app` を小文字で載せます（呼ぶ側が「図面を変えるか」を
   判定できるように）。

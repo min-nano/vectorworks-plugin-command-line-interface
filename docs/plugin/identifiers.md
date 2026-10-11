@@ -44,9 +44,10 @@
 
 ```cpp
 #define PLUGIN_VWR_ID   "cli"
-#define PLUGIN_APP_DIR  "vectorworks2026-cli"   // <CLI> のディレクトリ名。スプールはその下の spool
 // VW_BUILD_VERSION / VW_BUILD_BRANCH は CMake が渡す（無ければ "local"）
 ```
 
-`PLUGIN_APP_DIR` は CLI 側の `cli/internal/spool` の `AppDirName` / `SpoolDirName` と対です
-（[作法](../protocol.md#スプールの場所)）。
+`<CLI>` のディレクトリ名とスプールの名前は作法の一部なので、SDK に依らない `src/core/Bridge.h` が
+持ちます（`kBridgeAppDirName = "vectorworks2026-cli"`・`kBridgeSpoolDirName = "spool"`）。CLI 側の
+`cli/internal/spool` の `AppDirName` / `SpoolDirName` と対で、両側のテストが
+`protocol/fixtures/constants.json` に照らします（[作法](../protocol.md#スプールの場所)）。

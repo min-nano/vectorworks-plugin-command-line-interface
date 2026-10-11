@@ -2,8 +2,10 @@
 // docs/plugin/bridge.md「受け付け 1 回」）。spool と vw2026 の単体テストだけが使う。
 //
 // 作法より緩く真似ると、CLI がプラグインの断る要求を送っても単体テストが気づかないので、
-// 関門（id の綴り・回の始めに並べた要求だけの処理・大きさと入れ子の深さの上限・占有・ロックを取ったときの掃除）は
-// プラグインと同じに持つ。道具の種類（quit で残りを取り出さない）は道具の表を持たないので真似ない。
+// 関門（id の綴り・回の始めに並べた要求だけの処理・大きさと入れ子の深さの上限・UTF-8・表せない数・
+// 占有・ロックを取ったときの掃除・quit のあとに残りを取り出さないこと）はプラグインと同じに持つ。
+// 同じであることは、作法の見本（protocol/fixtures/）をプラグイン（tests/ProtocolFixturesTests.cpp）と
+// このパッケージ（fixtures_test.go）の両方に照らして確かめる。
 package fakeplugin
 
 import (
@@ -14,6 +16,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
@@ -123,8 +126,9 @@ type server struct {
 
 // serveOnce は受け付け 1 回。要求を名前の昇順で読み、消し、呼ぶ側が待っていれば実行する。
 // 処理するのは回の始めに並べた要求だけで（件数と時間の上限は無い）、取り出した要求には同じ回の
-// 中で応える。
-func (s *server) serveOnce() {
+// 中で応える。quit を実行したら（種類 app の道具。偽のプラグインの道具では quit だけ）、応えてから
+// 残りを取り出さずに戻り、真を返す（終了したら応えられないため）。
+func (s *server) serveOnce() (quit bool) {
 	entries, _ := os.ReadDir(s.dir)
 	var names []string
 	for _, entry := range entries {
@@ -156,18 +160,24 @@ func (s *server) serveOnce() {
 			continue
 		}
 		var response spool.Response
+		ranQuit := false
 		if state == waitMissing {
 			response = spool.Response{OK: false, Code: spool.CodeNoWait, Error: "no wait file"}
 		} else if tool, args, session, ok := parseRequest(data); !ok {
 			response = spool.Response{OK: false, Code: spool.CodeInvalidRequest, Error: "unreadable request"}
 		} else {
 			response = s.answer(tool, args, session)
+			ranQuit = tool == "quit" && response.OK
 		}
 		out, _ := json.Marshal(response)
 		temp := filepath.Join(s.dir, id+spool.ResponseSuffix+spool.TempSuffix)
 		_ = os.WriteFile(temp, out, 0o600)
 		_ = os.Rename(temp, filepath.Join(s.dir, id+spool.ResponseSuffix))
+		if ranQuit {
+			return true
+		}
 	}
+	return false
 }
 
 // answer は要求を占有に照らしてから応える（docs/protocol.md「占有」）。
@@ -223,16 +233,23 @@ func refuse(code string) spool.Response {
 	return spool.Response{OK: false, Code: code, Error: "refused by the session"}
 }
 
-// parseRequest は要求を読む（docs/protocol.md「要求」）。大きすぎる・入れ子が深すぎる・JSON と
-// して壊れている・tool が無い（null・空を含む）・知っているフィールドの型が違う要求は読めない
-// （プラグインは深さを解析の中で数えるが、encoding/json は上限が違うので、解析の前に数える）。
+// parseRequest は要求を読む（docs/protocol.md「要求」）。大きすぎる・入れ子が深すぎる・UTF-8 で
+// ない・JSON として壊れている・double で表せない大きな数を含む・tool が無い（null・空を含む）・
+// 知っているフィールドの型が違う要求は読めない（プラグインは深さを解析の中で数えるが、
+// encoding/json は上限が違うので、解析の前に数える。encoding/json は不正な UTF-8 を置き換え文字に
+// して読むので、先に確かめる）。
 // args は省略できるフィールドなので、無い・null なら既定値の {} とし、オブジェクト以外は読めない
 // 要求とする。session の null は無いものとする。
 //
 // 構造体へ直に解析すると encoding/json はキーを大文字と小文字を区別せずに照合し、ARGS のような
 // 知らないキーまで拾ってしまう。作法ではキーは区別して照合するので、map に解析して正確な綴りで引く。
 func parseRequest(data []byte) (tool string, args json.RawMessage, session string, ok bool) {
-	if len(data) > spool.MaxRequestBytes || spool.NestingDepth(data) > spool.MaxNestingDepth {
+	if len(data) > spool.MaxRequestBytes || spool.NestingDepth(data) > spool.MaxNestingDepth || !utf8.Valid(data) {
+		return "", nil, "", false
+	}
+	// any へ解析すると数を float64 で読むので、表せない大きな数で失敗する（小さすぎる数は 0）。
+	var whole any
+	if json.Unmarshal(data, &whole) != nil {
 		return "", nil, "", false
 	}
 	var fields map[string]json.RawMessage

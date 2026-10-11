@@ -14,8 +14,8 @@ vw2026 call tools
 vw2026 call layers '{"include_sheets":false}'
 ```
 
-> **開発中です。** いまあるのは受け渡しの作法と CLI（`cli/`）とプラグインの設計だけで、
-> プラグインはこれから作ります（[実装の順序](docs/plugin/plan.md)）。
+> **開発中です。** いまあるのは受け渡しの作法と CLI（`cli/`）と、プラグインの設計・SDK に依らない
+> 共通部（`src/core/`）です。プラグイン本体はこれから作ります（[実装の順序](docs/plugin/plan.md)）。
 
 ## ドキュメント
 
@@ -24,6 +24,7 @@ vw2026 call layers '{"include_sheets":false}'
 | [docs/design.md](docs/design.md) | 目的・決めたこと・構成・安全の前提・配布・進め方 |
 | [docs/plugin/](docs/plugin/README.md) | プラグインの設計（構成・ブリッジ・道具・識別子・ビルド・配布・移植・実装の順序・未決） |
 | [docs/protocol.md](docs/protocol.md) | 受け渡しの作法（プラグインと呼ぶ側の約束。真実はここ） |
+| [protocol/fixtures/](protocol/fixtures/README.md) | 作法の定数と受け付けの見本（プラグインと CLI の両方のテストが読む） |
 | `vw2026 --help` | `vw2026` のコマンド・指定・終了コード（定義は [cli/cmd/vw2026/](cli/cmd/vw2026/)。`vw2026 help <command>` で各コマンド） |
 | [docs/sdk-research.md](docs/sdk-research.md) | SDK リファレンスでの調査を待っているもの |
 | [docs/review.md](docs/review.md) | 受け渡しの仕組みの設計レビューと、反映の扱い（反映し終えたら消す） |

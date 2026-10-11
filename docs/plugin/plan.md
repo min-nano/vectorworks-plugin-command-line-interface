@@ -6,25 +6,35 @@
 
 | 段 | 中身 | 確かめ方 | 実機 |
 | --- | --- | --- | --- |
-| 1 | **SDK に依らない共通部**: `core/Json`（入れ子の深さの上限を足す）・`core/Bridge`・`core/Serve`（偽の道具の表・占有）・`protocol/fixtures/`・`test.yml`（`core/Json` のファジングを含む）・`lint.yml`・`CLAUDE.md` の追記（PR の進め方） | CI（ASan・UBSan）。Go 側のテストも同じ見本を読む | 不要 |
-| 2 | **骨格**: CMake・`BuildConfig`・`ModuleMain`・`Clock`・道具 `tools` / `ping` / `quit`・リソース・`build.yml`（ビルドと PR のプレリリースまで） | CI。実機で zip を手で置き、`vw2026 status` が `running:true` になり `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。`session start` のあと `call quit` で保存の確認が出て、取り消すと `call ping` がまた応え、保存すると `status` が止まっていると答える | 要 |
+| 1 | **SDK に依らない共通部**: `core/Json`（入れ子の深さの上限を足す）・`core/Bridge`・`core/Serve`（偽の道具の表・占有）・`protocol/fixtures/`・CMake（`VwCliCore` とテスト）・`test.yml`（`core/Json` のファジングを含む）・`lint.yml`・`scripts/lint.sh`・`CLAUDE.md` の追記（PR の進め方） | CI（ASan・UBSan。Windows は MSVC）。Go 側のテストも同じ見本を読む | 不要 |
+| 2 | **骨格**: CMake のプラグインの部分（SDK・`add_vw_plugin`）・`BuildConfig`・`ModuleMain`・`Clock`・道具 `tools` / `ping` / `quit`・リソース・`build.yml`（ビルドと PR のプレリリースまで） | CI。実機で zip を手で置き、`vw2026 status` が `running:true` になり `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。`session start` のあと `call quit` で保存の確認が出て、取り消すと `call ping` がまた応え、保存すると `status` が止まっていると答える | 要 |
 | 3 | **読む道具**: `layers` / `classes` / `layer_objects` / `object_counts` | 実機で、元のプラグインの `vw_*` と同じ図面に対して同じ結果になる | 要 |
 | 4 | **配布**: 梱包（`bin/vw2026`）・main のリリース・`cleanup-dev-release.yml` | CI。リリースの資産を取ってきて、zip の形（直下に `build.json` と `bin/`）と `bin/vw2026 version` が動くことを確かめる | 不要 |
 | 5 | **インストールと更新・アンインストール**: `vw2026 install` / `uninstall`（資産の取得・新しいビルドの判定・付け替え・CLI の入れ替え・PATH）・初回のスクリプト（`get-vw2026.sh` / `.ps1`）・`CLAUDE.md` に消すコードの歯止めを写す | CI（Go の単体テスト。偽の HTTP サーバー。動いている CLI の入れ替えを Windows で押さえる。shellcheck・PSScriptAnalyzer）。実機で、初回のスクリプトを curl からパイプで実行 → 新しい端末で `vw2026 status` が動き、起動して `call ping` が応える。動いている間は「Vectorworks が動いている」終了コードで何も変わらず、`session start` → `call quit` → 止まるのを待つ → `install` → `launch` → 動き出すのを待つ（待つのは `status` の繰り返し）で `call ping` の `version` が変わる。`--tag dev-<slug>` で PR のプレリリースに入れ替わり、`install` で main に戻る。`--plugins-dir` で既定以外へ入れられる。`uninstall` でリンクと PATH の項目だけが消える | 要 |
 
-段 1 で決めておくこと:
+段 1 で決めたこと:
 
-- **`core/Json` の入れ子の深さの上限。** 元の `core/Json` は再帰で解析し、深さの上限を
-  確かめていない。1 MiB の `[[[[…` を読ませるとスタックが溢れ、Vectorworks ごと落ちて利用者の
-  未保存の作業が失われる。深さ 64 を超えたら再帰を降りずに失敗させ、`core::serve` は
-  「読めない要求」（`invalid_request`）で応える（[作法「要求」](../protocol.md#要求idreqjson)）。
-- **`core/Json` のファジング。** ASan・UBSan を有効にしたビルドで、libFuzzer（clang の
-  `-fsanitize=fuzzer`）の入口を `core/Json` の解析に設け、`test.yml` で決まった時間だけ回す。
-  種は `protocol/fixtures/` の要求の見本と、深い入れ子・長い文字列・不正な UTF-8 を使う。
-- **`protocol/fixtures/` の中身。** 作法の定数（スプールの名前・ファイルの綴り・予約された道具の名前・1 MiB・深さ 64・
-  `code` の綴り）と、受け付け 1 回の入出力の見本（置いたファイル →
-  残るファイルと応答）を置く。C++ のテストと Go の `cli/internal/fakeplugin` の両方がそれを読み、
-  定数を二重に書かない（いまは `cli/internal/spool` と `fakeplugin` が持ち、作法と揃えてある）。
+- **`core/Json` の入れ子の深さの上限。** 元の `core/Json` も 64 で止めていたが、外側を 0 と数えて
+  いたので 65 段まで読んでいた。作法どおり外側を 1 と数え、64 を超える値に入る前（再帰を降りる前）に
+  失敗させる。`core::Server` は「読めない要求」（`invalid_request`）で応える
+  （[作法「要求」](../protocol.md#要求idreqjson)）。
+- **`core/Json` の文法。** 元は `+1`・`01`・文字列の中の生の制御文字を読み、不正な UTF-8 を通していた。
+  呼ぶ側の JSON の読み手と受け付ける要求を揃えるため、RFC 8259 のとおりに読み、UTF-8 として
+  正しくないテキストを読まない。決めごとは[作法「要求」](../protocol.md#要求idreqjson)に書いた。
+- **`core/Json` のファジング。** `tests/fuzz/JsonFuzz.cpp` を libFuzzer（clang の
+  `-fsanitize=fuzzer`）・ASan・UBSan でビルドし、`test.yml` で 3 分回す。読めた値を書き出して読み直すと
+  同じになることも確かめる。種は `tests/fuzz/make-seeds.py` が作る（`protocol/fixtures/` の要求の
+  見本と、深い入れ子・長い文字列・不正な UTF-8・double の端の数）。最初の実行で、元から引き継いだ
+  書き出しの誤り（double の最大値を 15 桁に丸めて、読み戻せない `1.79769313486232e+308` を書く）が
+  見つかり、直した。
+- **`protocol/fixtures/` の中身。** 作法の定数（`constants.json`）と、受け付けの見本（`serve/*.json`。
+  置いたファイル → 受け付け 1 回 → 残るファイルと応答）。C++ のテスト（`tests/ProtocolFixturesTests.cpp`）と
+  Go のテスト（`cli/internal/spool/fixtures_test.go`・`cli/internal/fakeplugin/fixtures_test.go`）の両方が
+  読む。定数は各言語の実装が持ち（C++ は `core/Bridge.h`、Go は `cli/internal/spool`）、テストが見本と
+  照らす。形は [protocol/fixtures/README.md](../../protocol/fixtures/README.md)。
+- **偽のプラグイン（`cli/internal/fakeplugin`）をプラグインに揃えた。** 見本に照らした結果、
+  不正な UTF-8・表せない大きな数を読まないことと、`quit` を実行したらその回の残りを取り出さないことを
+  足した。
 
 その先（順序は未定）:
 

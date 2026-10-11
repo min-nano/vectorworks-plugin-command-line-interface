@@ -1,0 +1,106 @@
+name: lint
+
+# Style and static checks. scripts/lint.sh runs the same checks locally.
+#   * clang-format        - C/C++ formatting (src/, tests/)
+#   * clang-tidy          - static analysis of the SDK-free code (src/core/)
+#   * cmake-format / lint - CMakeLists.txt layout and bug-prone patterns
+#   * actionlint          - the workflows (and shellcheck on their run: scripts)
+#   * shellcheck          - scripts/*.sh
+#   * yamllint            - YAML structure (.yamllint.yaml)
+#   * editorconfig        - final newline, trailing whitespace, UTF-8, LF, indentation
+# PSScriptAnalyzer joins when the first PowerShell script does
+# (docs/plugin/plan.md, step 5). Go is checked by cli.yml (gofmt, go vet).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CLANG_VERSION: "18"
+  CMAKELANG_VERSION: "0.6.13"
+  YAMLLINT_VERSION: "1.38.0"
+  ACTIONLINT_VERSION: "v1.7.12"
+  EDITORCONFIG_CHECKER_VERSION: "v3.8.0"
+
+jobs:
+  clang-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends "clang-format-${CLANG_VERSION}"
+      - name: Check formatting
+        run: |
+          mapfile -t files < <(find src tests \( -name '*.cpp' -o -name '*.h' \) | sort)
+          "clang-format-${CLANG_VERSION}" --dry-run --Werror "${files[@]}"
+
+  clang-tidy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-tidy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends "clang-tidy-${CLANG_VERSION}"
+      - name: Configure (compile database, no SDK)
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DVW_BUILD_TESTS=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      - name: Run clang-tidy
+        run: |
+          "clang-tidy-${CLANG_VERSION}" -p build --warnings-as-errors='*' src/core/*.cpp
+
+  cmake-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "cmakelang==${CMAKELANG_VERSION}" pyyaml
+      - run: cmake-format --check CMakeLists.txt tests/CMakeLists.txt tests/fuzz/CMakeLists.txt
+      - run: cmake-lint CMakeLists.txt tests/CMakeLists.txt tests/fuzz/CMakeLists.txt
+
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go install "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
+      - run: '"$(go env GOPATH)/bin/actionlint" -color'
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck scripts/*.sh
+
+  yamllint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "yamllint==${YAMLLINT_VERSION}"
+      - run: yamllint --strict .
+
+  editorconfig:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go install "github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker@${EDITORCONFIG_CHECKER_VERSION}"
+      - run: '"$(go env GOPATH)/bin/editorconfig-checker"'

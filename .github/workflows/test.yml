@@ -1,0 +1,96 @@
+name: test
+
+# The SDK-free half of the plug-in (src/core/: Json, Bridge, Serve):
+#   * unit - the unit tests and the protocol fixtures (protocol/fixtures/, also
+#            read by the Go tests in cli.yml) on the three platforms. Linux and
+#            macOS run them under AddressSanitizer + UndefinedBehaviorSanitizer,
+#            so a memory error or undefined behaviour fails the run, not only a
+#            failed assertion. Windows builds them with MSVC (/W4 /WX), which is
+#            what compiles the plug-in, and exercises the share-mode locks. Linux
+#            also measures coverage and uploads it to Codecov (flag "core").
+#   * fuzz - core/Json under libFuzzer (ASan + UBSan) for a fixed time, seeded
+#            with the request examples of protocol/fixtures/ plus deep nesting,
+#            long strings and invalid UTF-8 (tests/fuzz/make-seeds.py).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure (sanitizers)
+        if: runner.os != 'Windows'
+        run: |
+          coverage=OFF
+          if [ "$RUNNER_OS" = Linux ]; then coverage=ON; fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DVW_BUILD_TESTS=ON \
+            -DVW_ENABLE_SANITIZERS=ON -DVW_ENABLE_COVERAGE="$coverage"
+      - name: Configure (MSVC)
+        if: runner.os == 'Windows'
+        run: cmake -S . -B build -DVW_BUILD_TESTS=ON
+      - name: Build
+        run: cmake --build build --config Debug --parallel
+      # LeakSanitizer runs on Linux only (macOS ASan does not support detect_leaks).
+      - name: Test
+        env:
+          ASAN_OPTIONS: ${{ runner.os == 'Linux' && 'abort_on_error=1:detect_leaks=1:strict_string_checks=1' || 'abort_on_error=1' }}
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ctest --test-dir build -C Debug --output-on-failure
+      - name: Coverage report
+        if: runner.os == 'Linux'
+        run: |
+          pipx install gcovr
+          gcovr --root . --filter 'src/.*' build --cobertura coverage.xml --txt --print-summary
+      - uses: codecov/codecov-action@v5
+        if: runner.os == 'Linux'
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: core
+          fail_ci_if_error: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+  fuzz:
+    runs-on: ubuntu-latest
+    env:
+      CLANG_VERSION: "18"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Clang and libFuzzer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends "clang-${CLANG_VERSION}" "libclang-rt-${CLANG_VERSION}-dev"
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER="clang++-${CLANG_VERSION}" \
+            -DVW_BUILD_FUZZERS=ON
+          cmake --build build --target JsonFuzz --parallel
+      - name: Seeds
+        run: python3 tests/fuzz/make-seeds.py seeds
+      # Run the seeds whole first (the fuzzing below truncates inputs to -max_len).
+      - name: Run the seeds
+        run: build/tests/fuzz/JsonFuzz seeds/*.json
+      - name: Fuzz core/Json
+        run: |
+          mkdir -p corpus artifacts
+          build/tests/fuzz/JsonFuzz corpus seeds -max_total_time=180 -timeout=10 \
+            -rss_limit_mb=2048 -max_len=4096 -print_final_stats=1 -artifact_prefix=artifacts/
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-artifacts
+          path: artifacts/

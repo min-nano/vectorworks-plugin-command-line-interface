@@ -1,0 +1,24 @@
+{
+  "description": "要求を名前の昇順で取り出し、それぞれに応える。args の省略・null は {}。知らないトップレベルのキーは無視する。double で表せないほど小さい数は 0",
+  "rounds": [
+    {
+      "requests": [
+        {"id": "0003", "text": "{\"tool\":\"echo\",\"args\":{\"n\":3,\"tiny\":1e-400}}"},
+        {"id": "0001", "json": {"tool": "echo"}},
+        {"id": "0002", "json": {"tool": "echo", "args": null, "session": null, "extra": [1]}},
+        {"id": "0004", "json": {"tool": "echo", "ARGS": {"n": 4}}}
+      ],
+      "expect": {
+        "phase": "serving",
+        "quit": false,
+        "files": ["0001.res.json", "0001.wait", "0002.res.json", "0002.wait", "0003.res.json", "0003.wait", "0004.res.json", "0004.wait"],
+        "responses": {
+          "0001": {"ok": true, "result": {"args": {}}},
+          "0002": {"ok": true, "result": {"args": {}}},
+          "0003": {"ok": true, "result": {"args": {"n": 3, "tiny": 0}}},
+          "0004": {"ok": true, "result": {"args": {}}}
+        }
+      }
+    }
+  ]
+}

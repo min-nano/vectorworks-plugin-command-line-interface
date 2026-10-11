@@ -90,6 +90,7 @@ src/
 scripts/                                   … get-vw2026（.sh / .ps1。CLI を取って install を走らせるだけ）
 resources/                                 … cli.vwr（拡張機能を登録しないので最小限）
 tests/                                     … 無 SDK の単体テスト・スクリプトのテスト
+├─ fuzz/                                   … core/Json のファジングの入口と種を作るもの
 protocol/fixtures/                         … 作法の見本（C++ と Go の両方のテストが読む）
 cli/                                       … vw2026（Go）。インストールと更新（install）・アンインストール（uninstall）もここ
 ```

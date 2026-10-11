@@ -7,9 +7,10 @@
 | 項目 | 内容 |
 | --- | --- |
 | プロジェクト | `project(VwCli CXX)`（Apple では OBJCXX も） |
-| 選択肢 | `VW_BUILD_PLUGIN`（ON）・`VW_BUILD_TESTS`（OFF）・`VW_ENABLE_SANITIZERS`・`VW_ENABLE_COVERAGE`・`VW_ENABLE_PCH`（ON） |
+| 選択肢 | `VW_BUILD_PLUGIN`（ON。段 2 で足す）・`VW_BUILD_TESTS`（OFF）・`VW_ENABLE_SANITIZERS`・`VW_ENABLE_COVERAGE`・`VW_BUILD_FUZZERS`（OFF。clang だけ）・`VW_ENABLE_PCH`（ON。段 2 で足す） |
 | SDK | `VW_SDK_DIR`（`SDKLib` を含む）。mac は `libVWSDK.a`＋VWMM・`BuildVWR`、Windows は x64 だけ（`VWSDK.lib`・`VWMM.lib`・`buildvwr.exe`） |
-| 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。プラグインとテストがリンク） |
+| 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。プラグインとテストがリンク。警告はエラー（MSVC は `/W4 /WX /utf-8`）。Windows は `shell32`・`ole32` をリンクする（スプールの場所）） |
+| テスト | `tests/`（`VW_BUILD_TESTS`。`ctest`）。ファジングの入口は `tests/fuzz/`（`VW_BUILD_FUZZERS`） |
 | プラグイン | `add_library(<target> MODULE)`。`VW_PLUGIN_SOURCES`（`src/*.cpp`・`src/tools/*`） |
 | 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH`。コンパイル時の定義だけで、`ping` の結果に載る。ファイルとしての版の情報は `build.json` だけ（下記） |
 | mac | `Module-Info.plist.in`（版の鍵は持たない）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr` |
@@ -25,9 +26,9 @@ plist の `VWBuildBranch` / `VWBuildCommit`）を除いて使います。版の�
 
 | ワークフロー | 起動 | 中身 |
 | --- | --- | --- |
-| `cli.yml`（既存） | push / PR（`cli/**`） | Go のテスト（3 OS）とビルド |
-| `test.yml` | push / PR | 無 SDK の単体テスト（ASan・UBSan）・作法の見本の照合 |
-| `lint.yml` | push / PR | clang-format・clang-tidy（無 SDK）・actionlint・shellcheck・PSScriptAnalyzer |
+| `cli.yml`（既存） | push / PR（`cli/**`・`protocol/**`） | Go のテスト（3 OS。作法の見本の照合を含む）とビルド |
+| `test.yml` | push / PR | 無 SDK の単体テストと作法の見本の照合（Linux・mac は ASan・UBSan、Windows は MSVC。Linux はカバレッジを Codecov へ。フラグ `core`）・`core/Json` のファジング（3 分） |
+| `lint.yml` | push / PR | clang-format・clang-tidy（無 SDK）・cmake-format・actionlint・shellcheck・yamllint・editorconfig-checker（手元では `scripts/lint.sh`）。PSScriptAnalyzer は最初の `.ps1`（段 5）と一緒に足す |
 | `build.yml` | push（main）/ PR / 手動 | mac と Windows のビルド・梱包・リリース |
 | `cleanup-dev-release.yml` | PR が閉じたとき | `dev-<slug>` を消す |
 

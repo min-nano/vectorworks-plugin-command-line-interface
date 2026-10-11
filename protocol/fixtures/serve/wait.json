@@ -1,0 +1,24 @@
+{
+  "description": "ロックを取ったあとに置かれた要求について（取る前に置かれたものは掃除が消す）、待つ印を放した要求は実行も応答もせず待つ印を消す。待つ印の無い要求は実行せずに no_wait で応える",
+  "rounds": [
+    {
+      "expect": {"phase": "serving", "quit": false, "files": [], "responses": {}}
+    },
+    {
+      "requests": [
+        {"id": "released", "wait": "released", "json": {"tool": "echo"}},
+        {"id": "missing", "wait": "missing", "json": {"tool": "echo"}},
+        {"id": "missing_broken", "wait": "missing", "text": "{"}
+      ],
+      "expect": {
+        "phase": "serving",
+        "quit": false,
+        "files": ["missing.res.json", "missing_broken.res.json"],
+        "responses": {
+          "missing": {"ok": false, "code": "no_wait"},
+          "missing_broken": {"ok": false, "code": "no_wait"}
+        }
+      }
+    }
+  ]
+}

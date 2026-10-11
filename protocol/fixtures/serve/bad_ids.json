@@ -1,0 +1,21 @@
+{
+  "description": "綴りを満たさない id の要求は読まず・消さず・応えない（ロックを取ったときの掃除は、最初の . より前を id とみなして消す）",
+  "rounds": [
+    {
+      "expect": {"phase": "serving", "quit": false, "files": [], "responses": {}}
+    },
+    {
+      "files": [
+        {"name": "bad.id.req.json", "text": "{\"tool\":\"echo\"}"},
+        {"name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.req.json", "text": "{\"tool\":\"echo\"}"},
+        {"name": "a b.req.json", "text": "{\"tool\":\"echo\"}"}
+      ],
+      "expect": {
+        "phase": "serving",
+        "quit": false,
+        "files": ["a b.req.json", "bad.id.req.json", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.req.json"],
+        "responses": {}
+      }
+    }
+  ]
+}

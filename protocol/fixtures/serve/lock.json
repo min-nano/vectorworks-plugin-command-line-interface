@@ -1,0 +1,30 @@
+{
+  "description": "ロックを取れない回は何もしない（取り出さず、掃除もしない）。相手が終われば次の回に引き継ぐ",
+  "rounds": [
+    {
+      "lock_held_elsewhere": true,
+      "files": [
+        {"name": "orphan.res.json", "text": "{}"}
+      ],
+      "requests": [
+        {"id": "a", "json": {"tool": "ping"}}
+      ],
+      "expect": {
+        "phase": "waiting",
+        "quit": false,
+        "files": ["a.req.json", "a.wait", "orphan.res.json"],
+        "responses": {}
+      }
+    },
+    {
+      "expect": {
+        "phase": "serving",
+        "quit": false,
+        "files": ["a.res.json", "a.wait"],
+        "responses": {
+          "a": {"ok": true, "result": {"pong": true}}
+        }
+      }
+    }
+  ]
+}

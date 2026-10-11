@@ -1,0 +1,32 @@
+{
+  "description": "種類 app の道具（quit）は占有の中でだけ呼べる。応えてから終了の依頼を返し、その回の残りの要求は取り出さずに置いたままにする",
+  "rounds": [
+    {
+      "requests": [
+        {"id": "a", "json": {"tool": "session_start"}}
+      ],
+      "expect": {
+        "phase": "serving",
+        "quit": false,
+        "files": ["a.res.json", "a.wait"],
+        "responses": {
+          "a": {"ok": true, "result": {"session": "$session"}}
+        }
+      }
+    },
+    {
+      "requests": [
+        {"id": "b", "json": {"tool": "quit", "session": "$session"}},
+        {"id": "c", "json": {"tool": "ping"}}
+      ],
+      "expect": {
+        "phase": "serving",
+        "quit": true,
+        "files": ["b.res.json", "b.wait", "c.req.json", "c.wait"],
+        "responses": {
+          "b": {"ok": true, "result": {"quitting": true}}
+        }
+      }
+    }
+  ]
+}
