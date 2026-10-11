@@ -1,4 +1,3 @@
-# 依存の更新を毎日確かめる。ラベルは Dependabot の既定に任せる。
 version: 2
 updates:
   - package-ecosystem: gomod
