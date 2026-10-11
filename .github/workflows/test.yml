@@ -56,11 +56,15 @@ jobs:
         run: |
           pipx install gcovr
           gcovr --root . --filter 'src/.*' build --cobertura coverage.xml --txt --print-summary
-      - uses: codecov/codecov-action@v5
+      # Pinned to a commit (third-party action that receives the upload token).
+      - uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
         if: runner.os == 'Linux'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
+          # Only the gcovr report (src/): without this the uploader also runs gcov
+          # over every .gcda in the tree, test sources included.
+          disable_search: true
           flags: core
           fail_ci_if_error: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
 

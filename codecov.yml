@@ -3,6 +3,8 @@
 # map them to paths in the repository.
 fixes:
   - "github.com/min-nano/vectorworks-plugin-command-line-interface/::"
-# The fake plugin is test code; keep the numbers about production code only.
+# The fake plugin and the C++ tests are test code; keep the numbers about
+# production code only.
 ignore:
   - "cli/internal/fakeplugin"
+  - "tests"
