@@ -30,7 +30,9 @@ jobs:
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
       # -race と併用するため covermode は atomic にする。
+      # PowerShell は -coverprofile=coverage.out を「.」で 2 つの引数に分けるため、bash で走らせる。
       - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+        shell: bash
       # OS ごとに分岐するコード（launch など）があるため、全 OS の結果をフラグ付きで送る。
       - uses: codecov/codecov-action@v5
         with:
