@@ -28,25 +28,23 @@ import (
 // version はビルド時に -ldflags "-X main.version=…" で埋め込む。
 var version = "dev"
 
-// 終了コード（cli.Help の一覧と対）。
+// 終了コード（cli.Help の一覧と対）。1 は慣例どおり汎用の失敗に充て、呼ぶ側が分岐する
+// 必要のある結果だけに別の番号を与える。
 const (
 	exitOK      = 0
-	exitToolErr = 1 // 道具が失敗を返した（応答は届いている）
+	exitFailure = 1 // そのほか（書き込めない・起動できない・Vectorworks が動いていて install できない等）
 	exitUsage   = 2 // 使い方の誤り
 	exitDown    = 3 // ブリッジが見つからない
 	// 待ちきれなかった。Vectorworks は動いている（モーダル・undo の記録の最中など）。
 	// exitDown と分けるのは、呼ぶ側が起動し直さずに待てばよいと判定できるように。
 	exitTimeout = 4
-	// 5 は使わない（protocol 2 までは「作法の版が違う」だった。呼ぶ側の分岐を変えないよう
-	// 番号を詰めない）。
-	exitFailure = 6 // そのほか（書き込めない・起動できない等）
-	// 7 は install / uninstall（未実装）が「Vectorworks が動いているので行えない」に使う。
+	exitToolErr = 5 // 道具が失敗を返した（応答は届いている）
 	// 待つのをやめたときに要求をプラグインが既に受け取っていて、応答が届かなかった。exitTimeout
 	// （実行されない）と分けるのは、書く道具を呼んだ側が二重に操作しないように。
-	exitNoResponse = 8
+	exitNoResponse = 6
 	// 占有に断られた（ほかが占有している・載せた占有が終わっている・quit を占有せずに呼んだ）。
 	// 要求は実行されていない。
-	exitBusy = 9
+	exitBusy = 7
 )
 
 // env は外の世界との接点。テストが差し替える。
@@ -112,16 +110,14 @@ implemented yet; see docs/plugin/install-and-update.md):
 The commands exit with
 
 	0  success
-	1  the tool reported a failure (reason on the standard error; with --raw also on the standard output)
+	1  any other failure (cannot write, cannot start, cannot locate the spool)
 	2  wrong usage
 	3  the bridge is not running
 	4  timed out, or refused for a missing wait file (the tool did not run and will not run;
 	   Vectorworks is running)
-	5  unused (meant "protocol mismatch" up to protocol 2; the numbers are not reused)
-	6  any other failure (cannot write, cannot start, cannot locate the spool)
-	7  Vectorworks is running, so install or uninstall did nothing (planned)
-	8  the plug-in took the request but no response came (the tool may have run)
-	9  refused by the session: another one occupies the bridge, the given one has ended,
+	5  the tool reported a failure (reason on the standard error; with --raw also on the standard output)
+	6  the plug-in took the request but no response came (the tool may have run)
+	7  refused by the session: another one occupies the bridge, the given one has ended,
 	   or quit was called outside a session (the tool did not run)
 
 Vectorworks can be running, holding the lock, while the plug-in defers the
@@ -130,8 +126,8 @@ requests, for example during a modal dialog or while undo is being recorded
 --down" wait up to --timeout and then exit with 4. Recover from 3 and 4
 differently: 3 means Vectorworks is not running, while 4 means it is running
 but did not answer in time, so launching it again or reinstalling the plug-in
-does not help. Tell 4 and 8 apart before calling a tool that changes the
-drawing again: after 4 the tool did not run, while after 8 it may have.
+does not help. Tell 4 and 6 apart before calling a tool that changes the
+drawing again: after 4 the tool did not run, while after 6 it may have.
 `
 }
 

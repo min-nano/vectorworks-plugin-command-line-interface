@@ -46,8 +46,9 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
 1. `stable` の zip（mac は `cli.vwlibrary.zip`、Windows は `cli.vlb.zip`）を一時フォルダへ
    取ってきて、中の `bin/vw2026`（Windows は `bin\vw2026.exe`）だけを取り出す。
 2. 取り出した CLI で `install` を走らせる（スクリプトの引数をそのまま渡す）。
-3. 一時フォルダを消し、`install` の終了コードで終わる。終了コード 7 なら「Vectorworks を
-   終了してからもう一度走らせる」と表示する。
+3. 一時フォルダを消し、`install` の終了コードで終わる。出力の `outcome` が
+   `vectorworks_running` なら「Vectorworks を終了してからもう一度走らせる」と表示する（終了コードは
+   ほかの失敗と同じ 1 なので、出力で見分ける）。
 
 - CLI だけの資産は持ちません。zip から取り出すので、CLI と同じビルドのものしか配らずに済みます。
 - 一時フォルダの CLI は、`install` の中で zip をもう一度取り、その `bin/` を `<CLI>/bin/` に
@@ -76,7 +77,7 @@ vw2026 install
   3. 版を比べる                       zip の中の build.json と <Plug-Ins>/cli/build.json の version
                                      同じで <CLI>/bin/vw2026 もあれば、PATH を確かめて終わり {"outcome":"up_to_date"}
                                      --check なら入れずに {"outcome":"available"}
-  4. Vectorworks が動いていないか     ロックが掴まれていれば終わり {"outcome":"vectorworks_running"}（終了コード 7）
+  4. Vectorworks が動いていないか     ロックが掴まれていれば終わり {"outcome":"vectorworks_running"}（終了コード 1）
   5. プラグインのフォルダを付け替える  下記「入れ替えの手順」
   6. CLI を入れ替える                 下記「CLI の入れ替え」
   7. PATH を通す                      下記「PATH」
@@ -96,11 +97,11 @@ vw2026 install
   `branch` は表示のため）。入っている `build.json` が読めないときは「入っていない」とみなして入れます。
   版が同じでも `<CLI>/bin/vw2026` が無ければ（初回のスクリプトで、プラグインだけが入っているとき）
   入れます。
-- 初回でも Vectorworks が動いていれば終了コード 7 で終わり、CLI も置きません（何も変えない）。
+- 初回でも Vectorworks が動いていれば `vectorworks_running` で終わり、CLI も置きません（何も変えない）。
 - **Vectorworks が動いているかはロックで判定します**（[作法「生存の判定」](../protocol.md#生存の判定)）。
   プロセス名は見ません。ロックを掴んでいない Vectorworks（プラグインが入っていない・起動直後の
   10 秒・2 つ目の起動）が居るときは、Windows では読み込み中のフォルダの名前を変えられないので
-  付け替えが失敗し（終了コード 6）、何も変わりません。mac では付け替えが成功し、その
+  付け替えが失敗し（終了コード 1）、何も変わりません。mac では付け替えが成功し、その
   Vectorworks は古い版のまま動き、次の起動から新しい版になります。
 - **終了させるのは呼ぶ側です。** `install` は終了を頼まず、待ちもしません（[設計「CLI は
   プリミティブに保つ」](../design.md#cli-はプリミティブに保つ)）。終了から起動し直すまでを 1 度に
@@ -117,7 +118,7 @@ vw2026 install
 - `--tag` はタグをそのまま受け取ります（ブランチ名から slug を作らない。slug の規則は
   [名前と識別子](identifiers.md)）。
 - 失敗したら（取れない・展開できない・付け替えられない）、何も変えずに理由を `message` に載せて
-  終了コード 6 で終わります。
+  終了コード 1 で終わります。
 
 ### 入れ替えの手順
 
@@ -181,7 +182,7 @@ vw2026 uninstall --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> から
 消すもの: `<Plug-Ins>/cli/`・スプール（`<CLI>/spool/`）・組み立てと退避の場所・CLI
 （`<CLI>/bin/`）・リンクと PATH の項目。最後に `<CLI>` が空なら `<CLI>` も消します。
 
-- **Vectorworks が動いていれば何もせずに終わる**（ロックで判定。終了コード 7）。
+- **Vectorworks が動いていれば何もせずに終わる**（ロックで判定。`{"outcome":"vectorworks_running"}`・終了コード 1）。
 - **安全弁**: プラグインのフォルダは、フォルダ名が `cli` と一致し、中にモジュール
   （`cli.vwlibrary` / `cli.vlb`）があるときだけ消す。無ければ消さずに成功として扱う。
   `<CLI>` の下は、決まった名前（`bin` / `spool` / `staging` / `old`）のものだけを消す。

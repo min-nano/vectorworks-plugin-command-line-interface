@@ -33,23 +33,23 @@ that the plug-in would not read (over 1 MiB, or nested deeper than 64).
 
 On success, call prints the result of the tool. With --raw it prints the
 whole response. When the tool fails, call writes its code and reason to the
-standard error and exits with 1; with --raw the response also carries the
+standard error and exits with 5; with --raw the response also carries the
 code (unknown_tool, invalid_args, invalid_request, or internal;
 docs/protocol.md). The codes that mean the tool did not run (no_wait, busy,
-no_session) are not tool failures: call exits with 4 or 9 for them instead,
+no_session) are not tool failures: call exits with 4 or 7 for them instead,
 as described below. A failure with a missing or unknown code is a malformed
-response, so call exits with 6 for it. So does a response file that stays
+response, so call exits with 1 for it. So does a response file that stays
 broken (not JSON) for a second; call removes it without waiting for --timeout.
 
 When --timeout runs out, call stops waiting, withdraws the request, and
 exits with 4: the tool did not run. If the plug-in had already taken the
-request, call waits a few more seconds for the response, and exits with 8 if
+request, call waits a few more seconds for the response, and exits with 6 if
 none comes: the tool may have run. A no_wait response also means that the
-tool did not run, so call exits with 4 for it, not with 1. A call that is
+tool did not run, so call exits with 4 for it, not with 5. A call that is
 killed while waiting leaves a request that will not run either.
 
 While another session occupies the bridge (see "vw2026 help session"), call
-exits with 9: the tool did not run. So it does when the session it calls in
+exits with 7: the tool did not run. So it does when the session it calls in
 has ended, and for quit outside a session.
 `
 }
