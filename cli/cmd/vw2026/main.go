@@ -36,9 +36,11 @@ var version = "dev"
 // 番号は呼ぶ側との約束なので、この振り直し（リリース前）のあとは変えない。使わなくなった番号は
 // 別の意味に再利用しない（旧い表に従う呼ぶ側の分岐が、黙って別の意味になるため）。
 const (
-	exitOK      = 0
-	exitFailure = 1 // そのほか（書き込めない・起動できない等）
-	exitUsage   = 2 // 使い方の誤り
+	exitOK = 0
+	// そのほか（書き込めない・起動できない等）
+	exitFailure = 1
+	// 使い方の誤り
+	exitUsage = 2
 	// 待ちきれなかった（no_wait を含む）。要求は実行されない。Vectorworks は動いている
 	// （モーダル・undo の記録の最中など）。exitDown と分けるのは、呼ぶ側が起動し直さずに
 	// 待てばよいと判定できるように。
@@ -46,12 +48,16 @@ const (
 	// 待つのをやめたときに要求をプラグインが既に受け取っていて、応答が届かなかった。exitTimeout
 	// （実行されない）と分けるのは、書く道具を呼んだ側が二重に操作しないように。
 	exitNoResponse = 4
-	exitDown       = 5 // ブリッジが見つからない
+	// ブリッジが見つからない
+	exitDown = 5
 	// 6 は install / uninstall（未実装）が「Vectorworks が動いているので行えない」に使う。
 
-	// プラグインが失敗を答えた（応答は届いている）。
-	exitToolFailure = 21 // internal
-	exitToolUsage   = 22 // invalid_request・unknown_tool・invalid_args
+	// 以下はプラグインが失敗を答えた（応答は届いている）。
+
+	// internal を答えた。
+	exitToolFailure = 21
+	// invalid_request・unknown_tool・invalid_args を答えた。
+	exitToolUsage = 22
 	// 占有に断られた（busy・no_session。ほかが占有している・載せた占有が終わっている・quit を
 	// 占有せずに呼んだ）。要求は実行されていない。
 	exitBusy = 23
@@ -184,7 +190,8 @@ func run(args []string, e env) int {
 	}
 
 	var grammar cli
-	exited := -1 // kong asks to exit after printing the help
+	// kong asks to exit after printing the help
+	exited := -1
 	parser, err := kong.New(&grammar,
 		kong.Name("vw2026"),
 		kong.Writers(e.stdout, e.stderr),

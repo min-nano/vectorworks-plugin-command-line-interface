@@ -93,7 +93,8 @@ func TestCallNoWaitDuringGrace(t *testing.T) {
 	taken := takeRequest(t, dir)
 	go func() {
 		id := <-taken
-		time.Sleep(400 * time.Millisecond) // 締切（200 ms）を過ぎ、.wait が消えてから断る
+		// 締切（200 ms）を過ぎ、.wait が消えてから断る
+		time.Sleep(400 * time.Millisecond)
 		_ = os.WriteFile(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":false,"code":"no_wait","error":"no wait file"}`), 0o600)
 	}()
 	_, err := Open(dir).Call("ping", nil, "", 200*time.Millisecond)
@@ -307,7 +308,8 @@ func TestCallTakenThenAnswered(t *testing.T) {
 	taken := takeRequest(t, dir)
 	go func() {
 		id := <-taken
-		time.Sleep(400 * time.Millisecond) // 締切（200 ms）を過ぎてから応える
+		// 締切（200 ms）を過ぎてから応える
+		time.Sleep(400 * time.Millisecond)
 		_ = os.WriteFile(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":true,"result":{"late":1}}`), 0o600)
 	}()
 	response, err := Open(dir).Call("ping", nil, "", 200*time.Millisecond)
