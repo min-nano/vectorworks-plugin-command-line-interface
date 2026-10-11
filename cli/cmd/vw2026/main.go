@@ -89,9 +89,10 @@ Vw2026 sends tool calls, one at a time, to the bridge that the cli plug-in
 runs inside Vectorworks 2026.
 
 It is a primitive: each run does exactly what it is told once. It does not
-tell sessions apart, take exclusive use of Vectorworks, lock across
-sessions, retry, or interpret the tools; the caller does those
-(docs/design.md). The bridge and vw2026 exchange files in a spool by the
+retry, wait for a session to be free, or interpret the tools; the caller
+does those (docs/design.md). Exclusive use of the bridge is the plug-in's:
+vw2026 only asks it for a session and carries the session in the calls
+("vw2026 help session"). The bridge and vw2026 exchange files in a spool by the
 protocol in docs/protocol.md.
 
 Each command prints one line of JSON to the standard output, writes the

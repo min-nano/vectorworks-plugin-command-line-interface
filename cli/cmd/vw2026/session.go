@@ -70,24 +70,8 @@ func (c *sessionEndCmd) run(g *globals, e *env) int {
 	return callReserved(g, e, spool.ToolSessionEnd, c.Session, c.Timeout)
 }
 
-// callReserved は予約された道具を引数なしで呼び、結果を出す。
+// callReserved は予約された道具を引数なしで呼び、結果を出す。出力・終了コードは call と同じ。
 func callReserved(g *globals, e *env, tool, session string, timeout float64) int {
-	bridge := g.open(e)
-	if bridge == nil {
-		return exitFailure
-	}
-	if !bridge.Running {
-		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (try `vw2026 status`)")
-		return exitDown
-	}
-	response, err := bridge.Call(tool, nil, session, seconds(timeout))
-	if err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
-		return codeFor(err)
-	}
-	if !response.OK {
-		fmt.Fprintf(e.stderr, "vw2026: %s: %s: %s\n", tool, response.Code, response.Error)
-		return exitToolErr
-	}
-	return emitRaw(e, response.Result)
+	c := callCmd{Tool: tool, Session: session, Timeout: timeout}
+	return c.run(g, e)
 }
