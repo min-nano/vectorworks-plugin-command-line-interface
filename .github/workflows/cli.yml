@@ -63,7 +63,7 @@ jobs:
               go build -trimpath -ldflags "-s -w -X main.version=${version}" \
               -o "../dist/${os}-${arch}/vw2026${ext}" ./cmd/vw2026
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: vw2026
           path: dist/
