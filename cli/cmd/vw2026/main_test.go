@@ -45,8 +45,11 @@ func invoke(t *testing.T, vars map[string]string, stdin string, started *[]strin
 func echoBridge(t *testing.T) string {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) spool.Response {
-		if tool == "fail" {
+		switch tool {
+		case "fail":
 			return spool.Response{OK: false, Code: spool.CodeInternal, Error: "boom"}
+		case "picky":
+			return spool.Response{OK: false, Code: spool.CodeInvalidArgs, Error: "no such argument"}
 		}
 		out, _ := json.Marshal(map[string]any{"tool": tool, "args": args})
 		return spool.Response{OK: true, Result: out}
@@ -88,12 +91,20 @@ func TestCallArgsFromStdin(t *testing.T) {
 func TestCallToolError(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "fail")
-	if r.code != exitToolErr || r.stdout != "" || !strings.Contains(r.stderr, "internal: boom") {
+	if r.code != exitToolFailure || r.stdout != "" || !strings.Contains(r.stderr, "internal: boom") {
 		t.Fatalf("%+v", r)
 	}
 	raw := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "--raw", "fail")
-	if raw.code != exitToolErr || !strings.Contains(raw.stdout, `"ok":false`) || !strings.Contains(raw.stdout, `"code":"internal"`) {
+	if raw.code != exitToolFailure || !strings.Contains(raw.stdout, `"ok":false`) || !strings.Contains(raw.stdout, `"code":"internal"`) {
 		t.Fatalf("%+v", raw)
+	}
+}
+
+func TestCallToolUsageError(t *testing.T) {
+	dir := echoBridge(t)
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "picky")
+	if r.code != exitToolUsage || r.stdout != "" || !strings.Contains(r.stderr, "invalid_args: no such argument") {
+		t.Fatalf("%+v", r)
 	}
 }
 
