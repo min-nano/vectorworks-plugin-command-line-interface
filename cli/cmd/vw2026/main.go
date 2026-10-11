@@ -44,6 +44,9 @@ const (
 	// 待つのをやめたときに要求をプラグインが既に受け取っていて、応答が届かなかった。exitTimeout
 	// （実行されない）と分けるのは、書く道具を呼んだ側が二重に操作しないように。
 	exitNoResponse = 8
+	// 占有に断られた（ほかが占有している・載せた占有が終わっている・quit を占有せずに呼んだ）。
+	// 要求は実行されていない。
+	exitBusy = 9
 )
 
 // env は外の世界との接点。テストが差し替える。
@@ -71,6 +74,7 @@ type cli struct {
 	Call    callCmd    `cmd:"" help:"Call one tool."`
 	Wait    waitCmd    `cmd:"" help:"Wait until the bridge starts or stops."`
 	Launch  launchCmd  `cmd:"" help:"Start Vectorworks."`
+	Session sessionCmd `cmd:"" help:"Occupy the bridge, or end the occupation."`
 	Version versionCmd `cmd:"" help:"Print the versions of the CLI and the protocol."`
 }
 
@@ -85,9 +89,10 @@ Vw2026 sends tool calls, one at a time, to the bridge that the cli plug-in
 runs inside Vectorworks 2026.
 
 It is a primitive: each run does exactly what it is told once. It does not
-tell sessions apart, take exclusive use of Vectorworks, lock across
-sessions, retry, or interpret the tools; the caller does those
-(docs/design.md). The bridge and vw2026 exchange files in a spool by the
+retry, wait for a session to be free, or interpret the tools; the caller
+does those (docs/design.md). Exclusive use of the bridge is the plug-in's:
+vw2026 only asks it for a session and carries the session in the calls
+("vw2026 help session"). The bridge and vw2026 exchange files in a spool by the
 protocol in docs/protocol.md.
 
 Each command prints one line of JSON to the standard output, writes the
@@ -101,7 +106,8 @@ exit status. Flags may come before or after the positional arguments.
 To update the plug-in, the caller combines the commands (install is not
 implemented yet; see docs/plugin/install-and-update.md):
 
-	vw2026 call quit && vw2026 wait --down && vw2026 install && vw2026 launch && vw2026 wait
+	vw2026 session start                  # quit runs only in a session
+	vw2026 call quit --session <ID> && vw2026 wait --down && vw2026 install && vw2026 launch && vw2026 wait
 
 The commands exit with
 
@@ -109,11 +115,14 @@ The commands exit with
 	1  the tool reported a failure (reason on the standard error; with --raw also on the standard output)
 	2  wrong usage
 	3  the bridge is not running
-	4  timed out (the tool did not run and will not run; Vectorworks is running)
+	4  timed out, or refused for a missing wait file (the tool did not run and will not run;
+	   Vectorworks is running)
 	5  unused (meant "protocol mismatch" up to protocol 2; the numbers are not reused)
 	6  any other failure (cannot write, cannot start, cannot locate the spool)
 	7  Vectorworks is running, so install or uninstall did nothing (planned)
 	8  the plug-in took the request but no response came (the tool may have run)
+	9  refused by the session: another one occupies the bridge, the given one has ended,
+	   or quit was called outside a session (the tool did not run)
 
 Vectorworks can be running, holding the lock, while the plug-in defers the
 requests, for example during a modal dialog or while undo is being recorded

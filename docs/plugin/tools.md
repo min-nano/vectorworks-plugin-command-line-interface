@@ -18,7 +18,7 @@
 ## `ping`
 
 ```json
-{"version":"abc1234","branch":"main","protocol":4,"pid":4242,"document_open":true,"current_layer":"1F"}
+{"version":"abc1234","branch":"main","protocol":5,"pid":4242,"session":false,"document_open":true,"current_layer":"1F"}
 ```
 
 | フィールド | 値 |
@@ -27,6 +27,7 @@
 | `branch` | `VW_BUILD_BRANCH`（PR のプレリリースを入れているかが分かる） |
 | `protocol` | 作法の版（[作法「版」](../protocol.md#版)） |
 | `pid` | 受け付けている Vectorworks のプロセス ID（`getpid` / `GetCurrentProcessId`。2 つ起動しているときにどちらが受け付けているかが分かる） |
+| `session` | 占有の印を発行しているか（[作法「占有」](../protocol.md#占有セッション)）。`ping` は占有によらず誰にでも答える |
 | `document_open` | `gSDK->GetCurrentLayer()` が取れるか（元と同じ） |
 | `current_layer` | 現在のレイヤの名前 |
 
@@ -37,8 +38,11 @@
 
 - **保存の確認は必ず出します**（第 1 引数は常に真。**利用者の図面を保存せずに閉じる手段は持たない**）。
   利用者が取り消せば Vectorworks は終わりません。
-- **再起動の手段は持ちません**（第 2 引数は常に偽）。起動し直すのは呼ぶ側で、`quit`・`wait --down`・
-  `launch`・`wait` を組み合わせます（更新を挟む形を含めて[インストール「流れ」](install-and-update.md#流れ)）。
+- **占有の中でだけ呼べます**（[作法「占有」](../protocol.md#占有セッション)。占有していなければ
+  `no_session`、ほかが占有していれば `busy` で断られる）。Vectorworks が終われば占有も消えます。
+- **再起動の手段は持ちません**（第 2 引数は常に偽）。起動し直すのは呼ぶ側で、`session start` で占有を
+  取ってから `quit`（`--session` を付ける）・`wait --down`・`launch`・`wait` を組み合わせます（更新を
+  挟む形を含めて[インストール「流れ」](install-and-update.md#流れ)）。
 - 終了を見届けるのは呼ぶ側の役割です（`vw2026 wait --down`。保存の確認を開いている間の扱いは
   [作法「生存の判定」](../protocol.md#生存の判定)）。
 
