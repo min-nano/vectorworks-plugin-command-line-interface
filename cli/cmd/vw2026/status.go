@@ -20,7 +20,7 @@ It prints one of
 	{"running":true,"spool":"..."}
 	{"running":false,"spool":"...","reason":"..."}
 
-and exits with 3 when the bridge is not running.
+and exits with 5 when the bridge is not running.
 `
 }
 

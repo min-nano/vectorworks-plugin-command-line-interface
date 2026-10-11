@@ -45,8 +45,11 @@ func invoke(t *testing.T, vars map[string]string, stdin string, started *[]strin
 func echoBridge(t *testing.T) string {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) spool.Response {
-		if tool == "fail" {
+		switch tool {
+		case "fail":
 			return spool.Response{OK: false, Code: spool.CodeInternal, Error: "boom"}
+		case "picky":
+			return spool.Response{OK: false, Code: spool.CodeInvalidArgs, Error: "no such argument"}
 		}
 		out, _ := json.Marshal(map[string]any{"tool": tool, "args": args})
 		return spool.Response{OK: true, Result: out}
@@ -88,12 +91,20 @@ func TestCallArgsFromStdin(t *testing.T) {
 func TestCallToolError(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "fail")
-	if r.code != exitToolErr || r.stdout != "" || !strings.Contains(r.stderr, "internal: boom") {
+	if r.code != exitToolFailure || r.stdout != "" || !strings.Contains(r.stderr, "internal: boom") {
 		t.Fatalf("%+v", r)
 	}
 	raw := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "--raw", "fail")
-	if raw.code != exitToolErr || !strings.Contains(raw.stdout, `"ok":false`) || !strings.Contains(raw.stdout, `"code":"internal"`) {
+	if raw.code != exitToolFailure || !strings.Contains(raw.stdout, `"ok":false`) || !strings.Contains(raw.stdout, `"code":"internal"`) {
 		t.Fatalf("%+v", raw)
+	}
+}
+
+func TestCallToolUsageError(t *testing.T) {
+	dir := echoBridge(t)
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "picky")
+	if r.code != exitToolUsage || r.stdout != "" || !strings.Contains(r.stderr, "invalid_args: no such argument") {
+		t.Fatalf("%+v", r)
 	}
 }
 
@@ -287,5 +298,38 @@ func TestSessionEndNeedsSession(t *testing.T) {
 	dir := echoBridge(t)
 	if r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "session", "end"); r.code != exitUsage {
 		t.Fatalf("%+v", r)
+	}
+}
+
+// 終了コードは呼ぶ側との約束なので、定数の名前ではなく番号そのものを固定する。
+func TestExitCodeNumbers(t *testing.T) {
+	for name, c := range map[string][2]int{
+		"OK":          {exitOK, 0},
+		"Failure":     {exitFailure, 1},
+		"Usage":       {exitUsage, 2},
+		"Timeout":     {exitTimeout, 3},
+		"NoResponse":  {exitNoResponse, 4},
+		"Down":        {exitDown, 5},
+		"ToolFailure": {exitToolFailure, 21},
+		"ToolUsage":   {exitToolUsage, 22},
+		"Busy":        {exitBusy, 23},
+	} {
+		if c[0] != c[1] {
+			t.Errorf("exit%s = %d, want %d", name, c[0], c[1])
+		}
+	}
+}
+
+func TestToolCodeFor(t *testing.T) {
+	for code, want := range map[string]int{
+		spool.CodeInvalidRequest: exitToolUsage,
+		spool.CodeUnknownTool:    exitToolUsage,
+		spool.CodeInvalidArgs:    exitToolUsage,
+		spool.CodeInternal:       exitToolFailure,
+		"something_new":          exitFailure,
+	} {
+		if got := toolCodeFor(code); got != want {
+			t.Errorf("toolCodeFor(%q) = %d, want %d", code, got, want)
+		}
 	}
 }

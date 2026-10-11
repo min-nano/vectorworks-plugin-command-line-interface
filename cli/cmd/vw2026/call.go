@@ -33,23 +33,25 @@ that the plug-in would not read (over 1 MiB, or nested deeper than 64).
 
 On success, call prints the result of the tool. With --raw it prints the
 whole response. When the tool fails, call writes its code and reason to the
-standard error and exits with 1; with --raw the response also carries the
-code (unknown_tool, invalid_args, invalid_request, or internal;
-docs/protocol.md). The codes that mean the tool did not run (no_wait, busy,
-no_session) are not tool failures: call exits with 4 or 9 for them instead,
-as described below. A failure with a missing or unknown code is a malformed
-response, so call exits with 6 for it. So does a response file that stays
-broken (not JSON) for a second; call removes it without waiting for --timeout.
+standard error and exits with 22 for wrong usage (invalid_request,
+unknown_tool, or invalid_args) or 21 for any other failure (internal); with
+--raw the response also carries the code (docs/protocol.md). The codes that
+mean the tool did not run are not tool failures: call exits with 3 for no_wait
+and 23 for busy and no_session, as described below, and prints nothing to the
+standard output even with --raw. A failure with a missing or unknown code is
+a malformed response, so call exits with 1 for it. So does a response file
+that stays broken (not JSON) for a second; call removes it without waiting for
+--timeout.
 
 When --timeout runs out, call stops waiting, withdraws the request, and
-exits with 4: the tool did not run. If the plug-in had already taken the
-request, call waits a few more seconds for the response, and exits with 8 if
+exits with 3: the tool did not run. If the plug-in had already taken the
+request, call waits a few more seconds for the response, and exits with 4 if
 none comes: the tool may have run. A no_wait response also means that the
-tool did not run, so call exits with 4 for it, not with 1. A call that is
-killed while waiting leaves a request that will not run either.
+tool did not run, so call exits with 3 for it, not with 21 or 22. A call that
+is killed while waiting leaves a request that will not run either.
 
 While another session occupies the bridge (see "vw2026 help session"), call
-exits with 9: the tool did not run. So it does when the session it calls in
+exits with 23: the tool did not run. So it does when the session it calls in
 has ended, and for quit outside a session.
 `
 }
@@ -95,9 +97,22 @@ func (c *callCmd) run(g *globals, e *env) int {
 	}
 	if !response.OK {
 		fmt.Fprintf(e.stderr, "vw2026: %s: %s: %s\n", c.Tool, response.Code, response.Error)
-		return exitToolErr
+		return toolCodeFor(response.Code)
 	}
 	return exitOK
+}
+
+// toolCodeFor は道具の失敗の code を終了コードにする。
+func toolCodeFor(code string) int {
+	switch code {
+	case spool.CodeInvalidRequest, spool.CodeUnknownTool, spool.CodeInvalidArgs:
+		return exitToolUsage
+	case spool.CodeInternal:
+		return exitToolFailure
+	default:
+		// spool が新しい code を通すようになってここを直し忘れたら、壊れた応答と同じに扱う。
+		return exitFailure
+	}
 }
 
 func codeFor(err error) int {

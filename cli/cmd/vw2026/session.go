@@ -14,7 +14,7 @@ type sessionCmd struct {
 func (sessionCmd) Help() string {
 	return `
 A session occupies the bridge: while it lasts, the plug-in runs only the calls
-that carry it (--session, or VW2026_SESSION). Other calls exit with 9 and do
+that carry it (--session, or VW2026_SESSION). Other calls exit with 23 and do
 not run; "call tools" and "call ping" are answered for everyone. Without a
 session, nobody occupies the bridge and every call runs, except quit, which
 runs only in a session.
@@ -27,7 +27,7 @@ The plug-in issues one session at a time and keeps it in memory only. Nothing
 ends it but "session end" and the end of Vectorworks: a session that is never
 ended keeps the bridge occupied until Vectorworks restarts. Quitting
 Vectorworks ends the session, so after "call quit" and "launch", start a new
-one; calls with the old one exit with 9.
+one; calls with the old one exit with 23.
 `
 }
 
@@ -38,7 +38,7 @@ type sessionStartCmd struct {
 func (sessionStartCmd) Help() string {
 	return `
 Start asks the plug-in for a session and prints it as {"session":"<ID>"}. It
-exits with 9 when another session occupies the bridge. If start exits with 8,
+exits with 23 when another session occupies the bridge. If start exits with 4,
 the plug-in may have issued a session that nobody knows; it lasts until
 Vectorworks restarts.
 `
@@ -55,7 +55,7 @@ type sessionEndCmd struct {
 
 func (sessionEndCmd) Help() string {
 	return `
-End ends the session and prints {"ended":true}. It exits with 9 when the
+End ends the session and prints {"ended":true}. It exits with 23 when the
 session is not the one that occupies the bridge, for example after
 Vectorworks has restarted.
 `

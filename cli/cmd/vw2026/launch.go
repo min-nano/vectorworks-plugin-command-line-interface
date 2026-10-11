@@ -29,7 +29,7 @@ Windows. Launch does not search other places; name them with --app. A value
 that does not end in .app is started as an executable.
 
 When Vectorworks is running but the bridge is not (the plug-in is not
-installed), launch exits with 3.
+installed), launch exits with 5.
 `
 }
 
