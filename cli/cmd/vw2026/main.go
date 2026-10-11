@@ -80,7 +80,6 @@ type cli struct {
 
 	Status  statusCmd  `cmd:"" help:"Report whether the bridge is running."`
 	Call    callCmd    `cmd:"" help:"Call one tool."`
-	Wait    waitCmd    `cmd:"" help:"Wait until the bridge starts or stops."`
 	Launch  launchCmd  `cmd:"" help:"Start Vectorworks."`
 	Session sessionCmd `cmd:"" help:"Occupy the bridge, or end the occupation."`
 	Version versionCmd `cmd:"" help:"Print the versions of the CLI and the protocol."`
@@ -116,13 +115,18 @@ true or false (or 1 or 0), and --no-raw turns it off again.
 
 	vw2026 status
 	vw2026 call tools
-	vw2026 launch && vw2026 wait
+	vw2026 launch
+
+vw2026 does not wait for the bridge to start or stop: the caller runs status
+in a loop ("vw2026 help status").
 
 To update the plug-in, the caller combines the commands (install is not
 implemented yet; see docs/plugin/install-and-update.md):
 
-	vw2026 session start                  # quit runs only in a session
-	vw2026 call quit --session <ID> && vw2026 wait --down && vw2026 install && vw2026 launch && vw2026 wait
+	vw2026 session start             # quit runs only in a session
+	vw2026 call quit --session <ID>  # then wait for the bridge to stop
+	vw2026 install
+	vw2026 launch                    # then wait for the bridge to start
 
 The commands exit with
 
@@ -148,8 +152,8 @@ also on the standard output.
 
 Vectorworks can be running, holding the lock, while the plug-in defers the
 requests, for example during a modal dialog or while undo is being recorded
-(docs/protocol.md). Status does not tell this state apart; call and "wait
---down" wait up to --timeout and then exit with 3. Recover from 5 and 3
+(docs/protocol.md). Status reports this state as running; call waits up to
+--timeout and then exits with 3. Recover from 5 and 3
 differently: 5 means Vectorworks is not running, while 3 means it is running
 but did not answer in time, so launching it again or reinstalling the plug-in
 does not help. Tell 3 and 4 apart before calling a tool that changes the

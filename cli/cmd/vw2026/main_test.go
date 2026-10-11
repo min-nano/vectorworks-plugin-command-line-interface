@@ -25,7 +25,6 @@ type result struct {
 var envVars = []string{
 	"VW2026_SPOOL", "VW2026_APP", "VW2026_SESSION",
 	"VW2026_CALL_RAW", "VW2026_CALL_TIMEOUT", "VW2026_SESSION_TIMEOUT",
-	"VW2026_WAIT_DOWN", "VW2026_WAIT_TIMEOUT",
 }
 
 func invoke(t *testing.T, vars map[string]string, stdin string, started *[]string, args ...string) result {
@@ -157,17 +156,6 @@ func TestLaunchStartsApp(t *testing.T) {
 	}
 }
 
-func TestWaitTimesOut(t *testing.T) {
-	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "wait", "--timeout", "0.3")
-	if r.code != exitTimeout {
-		t.Fatalf("%+v", r)
-	}
-	down := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "wait", "--down")
-	if down.code != exitOK || !strings.Contains(down.stdout, `"running":false`) {
-		t.Fatalf("%+v", down)
-	}
-}
-
 func TestVersion(t *testing.T) {
 	r := invoke(t, nil, "", nil, "version")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":5`) {
@@ -192,15 +180,17 @@ func TestCallWhileBusyTimesOut(t *testing.T) {
 	}
 }
 
-func TestWaitDownWaitsForTheProcess(t *testing.T) {
+// 終了を待つ呼ぶ側は status を繰り返すので、応えなくてもロックが掴まれている間は
+// 動いていると答え、放されたら止まったと答える（保存の確認のダイアログを止まったと誤らない）。
+func TestStatusWhileBusyUntilTheProcessEnds(t *testing.T) {
 	dir, quit := busySpool(t)
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "wait", "--down", "--timeout", "0.3")
-	if r.code != exitTimeout {
-		t.Fatalf("a held lock must not count as down: %+v", r)
+	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
+	if r.code != exitOK || !strings.Contains(r.stdout, `"running":true`) {
+		t.Fatalf("a held lock must count as running: %+v", r)
 	}
 	quit()
-	r = invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "wait", "--down", "--timeout", "0.3")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"running":false`) {
+	r = invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
+	if r.code != exitDown || !strings.Contains(r.stdout, `"running":false`) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -358,16 +348,9 @@ func TestFlagsFromEnv(t *testing.T) {
 	}
 
 	busy, _ := busySpool(t)
-	short := map[string]string{"VW2026_SPOOL": busy, "VW2026_CALL_TIMEOUT": "0.3", "VW2026_WAIT_TIMEOUT": "0.3", "VW2026_WAIT_DOWN": "1"}
+	short := map[string]string{"VW2026_SPOOL": busy, "VW2026_CALL_TIMEOUT": "0.3"}
 	if r := invoke(t, short, "", nil, "call", "ping"); r.code != exitTimeout {
 		t.Fatalf("VW2026_CALL_TIMEOUT: %+v", r)
-	}
-	if r := invoke(t, short, "", nil, "wait"); r.code != exitTimeout {
-		t.Fatalf("VW2026_WAIT_DOWN and VW2026_WAIT_TIMEOUT: %+v", r)
-	}
-	// 引数が勝つ（ロックが掴まれているので、上がるのを待つなら直ちに終わる）。
-	if r := invoke(t, short, "", nil, "wait", "--no-down"); r.code != exitOK {
-		t.Fatalf("--no-down over VW2026_WAIT_DOWN: %+v", r)
 	}
 	if r := invoke(t, map[string]string{"VW2026_SPOOL": busy, "VW2026_CALL_TIMEOUT": "60"}, "", nil, "call", "ping", "--timeout", "0.3"); r.code != exitTimeout {
 		t.Fatalf("--timeout over VW2026_CALL_TIMEOUT: %+v", r)

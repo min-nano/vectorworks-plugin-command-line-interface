@@ -109,8 +109,27 @@ vw2026 install
 
   ```sh
   id=…  # vw2026 session start の {"session":…}（quit は占有の中でだけ呼べる）
-  vw2026 call quit --session "$id" && vw2026 wait --down && vw2026 install && vw2026 launch && vw2026 wait
+  vw2026 call quit --session "$id" || exit
+  # 止まるのを待つ（5 で止まった。0 のまま上限を過ぎたら、保存の確認が取り消された。
+  # そのときは 0 のまま抜けると成功に見えるので、待ちきれなかったことを表す 3 で抜ける）
+  for i in $(seq 120); do
+      vw2026 status >/dev/null 2>&1; code=$?
+      [ "$code" -ne 0 ] && break
+      sleep 1
+  done
+  case $code in 5) ;; 0) exit 3 ;; *) exit "$code" ;; esac
+  vw2026 install && vw2026 launch || exit
+  # 動き出すのを待つ（0 で動き出した。5 のまま上限を過ぎた・1 で失敗したら、その終了コードで抜ける）
+  for i in $(seq 120); do
+      vw2026 status >/dev/null 2>&1; code=$?
+      [ "$code" -ne 5 ] && break
+      sleep 1
+  done
+  exit "$code"
   ```
+
+  CLI は動き出す・止まるのを待つコマンドを持ちません（[設計](../design.md#cli-はプリミティブに保つ)）。
+  `vw2026 status` を繰り返し、終了コードで分けます（PowerShell の書き方は `vw2026 help status`）。
 
   Vectorworks が終われば占有も消えるので、起動し直したあとに使うなら占有を取り直します。
 
@@ -216,6 +235,6 @@ vw2026 uninstall --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> から
   - 付け替えの途中の失敗で元に戻る
   - 消すコードの歯止め（名前が違う・モジュールが無いフォルダを消さない、別の場所を指すリンクと
     似た名前の PATH 項目を消さない）
-  - **動いている exe の名前を変えられること**（Windows の CI。`vw2026 wait` を動かしたまま入れ替える）
+  - **動いている exe の名前を変えられること**（Windows の CI。応えない偽のプラグインがロックを掴んだスプールに対して `vw2026 call ping --timeout 60` を動かしたまま入れ替える）
 - **初回のスクリプト**: shellcheck・PSScriptAnalyzer。取ってきて `install` を走らせるだけなので、
   実機の確認（段 5）で押さえます。
