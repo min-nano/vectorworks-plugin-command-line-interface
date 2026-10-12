@@ -1,0 +1,30 @@
+{
+	"description": "種類 app の道具（quit）が成功したら、応答を書いて終了の依頼を返し、その回の残りの要求は取り出さない",
+	"steps": [
+		{"description": "ロックを取る（空のスプールなので何も消さない）", "expect": {"files": ["bridge.lock"]}},
+		{
+			"requests": {"start": "session-start.json"},
+			"expect": {
+				"responses": {"start": {"ok": true, "result": {"session": "$session"}}},
+				"files": ["bridge.lock", "start.res.json", "start.wait"]
+			}
+		},
+		{
+			"requests": {"1": "quit-in-session.json", "2": "echo-in-session.json"},
+			"expect": {
+				"quit": true,
+				"calls": [{"tool": "quit", "args": {}}],
+				"responses": {"1": {"ok": true, "result": {}}},
+				"files": ["1.res.json", "1.wait", "2.req.json", "2.wait", "bridge.lock"]
+			}
+		},
+		{
+			"description": "残した要求は次の回に処理する",
+			"expect": {
+				"calls": [{"tool": "echo"}],
+				"responses": {"2": {"ok": true, "result": {}}},
+				"files": ["2.res.json", "2.wait", "bridge.lock"]
+			}
+		}
+	]
+}

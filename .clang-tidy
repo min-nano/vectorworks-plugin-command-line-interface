@@ -1,0 +1,8 @@
+# C++ の検査（docs/lint.md）。既定（clang-analyzer）に、不具合につながる書き方（bugprone）を
+# 足すだけにし、指摘は失敗として扱う。
+#   - easily-swappable-parameters は同じ型の引数が並ぶだけで指摘し、直しようのないものが多いので外す。
+Checks: >
+  bugprone-*,
+  -bugprone-easily-swappable-parameters
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/(src|tests)/.*'

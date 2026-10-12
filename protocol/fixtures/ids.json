@@ -1,0 +1,21 @@
+{
+	"valid": [
+		"0",
+		"0001-abc_DEF",
+		"1760000000000000000-0a1b2c3d",
+		"-",
+		"_",
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	],
+	"invalid": [
+		"",
+		"a.b",
+		"../x",
+		"a/b",
+		"a\\b",
+		"a b",
+		"a:b",
+		"é",
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	]
+}

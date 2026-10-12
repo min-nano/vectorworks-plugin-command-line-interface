@@ -1,0 +1,27 @@
+{
+	"description": "綴り（[0-9A-Za-z_-]{1,64}）を満たさない id の要求は、読まず・消さず・応えない",
+	"steps": [
+		{"description": "ロックを取る（空のスプールなので何も消さない）", "expect": {"files": ["bridge.lock"]}},
+		{
+			"waits": {
+				"a.b": "held",
+				"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": "held"
+			},
+			"files": {
+				"a.b.req.json": "{\"tool\":\"ping\"}",
+				".req.json": "{\"tool\":\"ping\"}",
+				"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.req.json": "{\"tool\":\"ping\"}"
+			},
+			"expect": {
+				"files": [
+					".req.json",
+					"a.b.req.json",
+					"a.b.wait",
+					"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.req.json",
+					"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.wait",
+					"bridge.lock"
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,162 @@
+{
+	"description": "占有（作法「占有」の表）。$session は発行された印に置き換える",
+	"steps": [
+		{"description": "ロックを取る（空のスプールなので何も消さない）", "expect": {"files": ["bridge.lock"]}},
+		{
+			"description": "誰も占有していない。印を載せた要求・session_end・quit は no_session、印の無い要求は実行する",
+			"requests": {
+				"1-quit": "quit.json",
+				"2-end": "session-end.json",
+				"3-end-other": "session-end-other-session.json",
+				"4-echo-other": "echo-other-session.json",
+				"5-start-with-session": "session-start-with-session.json",
+				"6-edit": "edit.json"
+			},
+			"expect": {
+				"calls": [{"tool": "edit"}],
+				"responses": {
+					"1-quit": {"ok": false, "code": "no_session"},
+					"2-end": {"ok": false, "code": "no_session"},
+					"3-end-other": {"ok": false, "code": "no_session"},
+					"4-echo-other": {"ok": false, "code": "no_session"},
+					"5-start-with-session": {"ok": false, "code": "no_session"},
+					"6-edit": {"ok": true, "result": {"name": "x"}}
+				},
+				"files": [
+					"1-quit.res.json",
+					"1-quit.wait",
+					"2-end.res.json",
+					"2-end.wait",
+					"3-end-other.res.json",
+					"3-end-other.wait",
+					"4-echo-other.res.json",
+					"4-echo-other.wait",
+					"5-start-with-session.res.json",
+					"5-start-with-session.wait",
+					"6-edit.res.json",
+					"6-edit.wait",
+					"bridge.lock"
+				]
+			}
+		},
+		{
+			"description": "印を発行する",
+			"requests": {"start": "session-start.json"},
+			"expect": {
+				"responses": {"start": {"ok": true, "result": {"session": "$session"}}},
+				"files": ["bridge.lock", "start.res.json", "start.wait"]
+			}
+		},
+		{
+			"description": "占有されている。その印の要求だけを実行し、ほかは busy。tools と ping は誰にでも答える。表に無い道具も占有に照らしてから答える",
+			"requests": {
+				"a-start": "session-start.json",
+				"b-echo": "echo.json",
+				"c-echo-other": "echo-other-session.json",
+				"d-quit": "quit.json",
+				"e-quit-other": "quit-other-session.json",
+				"f-end": "session-end.json",
+				"g-end-other": "session-end-other-session.json",
+				"h-unknown": "unknown.json",
+				"i-ping": "ping.json",
+				"j-ping-other": "ping-other-session.json",
+				"k-tools-other": "tools-other-session.json",
+				"l-echo": "echo-in-session.json",
+				"m-edit": "edit-in-session.json",
+				"n-unknown": "unknown-in-session.json"
+			},
+			"expect": {
+				"calls": [
+					{"tool": "ping"},
+					{"tool": "ping"},
+					{"tool": "echo", "args": {}},
+					{"tool": "edit", "args": {}}
+				],
+				"responses": {
+					"a-start": {"ok": false, "code": "busy"},
+					"b-echo": {"ok": false, "code": "busy"},
+					"c-echo-other": {"ok": false, "code": "busy"},
+					"d-quit": {"ok": false, "code": "busy"},
+					"e-quit-other": {"ok": false, "code": "busy"},
+					"f-end": {"ok": false, "code": "busy"},
+					"g-end-other": {"ok": false, "code": "busy"},
+					"h-unknown": {"ok": false, "code": "busy"},
+					"i-ping": {"ok": true, "result": {}},
+					"j-ping-other": {"ok": true, "result": {}},
+					"k-tools-other": {"ok": true},
+					"l-echo": {"ok": true, "result": {}},
+					"m-edit": {"ok": true, "result": {}},
+					"n-unknown": {"ok": false, "code": "unknown_tool"}
+				},
+				"files": [
+					"a-start.res.json",
+					"a-start.wait",
+					"b-echo.res.json",
+					"b-echo.wait",
+					"bridge.lock",
+					"c-echo-other.res.json",
+					"c-echo-other.wait",
+					"d-quit.res.json",
+					"d-quit.wait",
+					"e-quit-other.res.json",
+					"e-quit-other.wait",
+					"f-end.res.json",
+					"f-end.wait",
+					"g-end-other.res.json",
+					"g-end-other.wait",
+					"h-unknown.res.json",
+					"h-unknown.wait",
+					"i-ping.res.json",
+					"i-ping.wait",
+					"j-ping-other.res.json",
+					"j-ping-other.wait",
+					"k-tools-other.res.json",
+					"k-tools-other.wait",
+					"l-echo.res.json",
+					"l-echo.wait",
+					"m-edit.res.json",
+					"m-edit.wait",
+					"n-unknown.res.json",
+					"n-unknown.wait"
+				]
+			}
+		},
+		{
+			"description": "占有を終える",
+			"requests": {"end": "session-end-in-session.json"},
+			"expect": {
+				"responses": {"end": {"ok": true, "result": {"ended": true}}},
+				"files": ["bridge.lock", "end.res.json", "end.wait"]
+			}
+		},
+		{
+			"description": "終えた印は no_session。同じ回の中でも、発行した印はその後の要求に効く",
+			"requests": {
+				"a-echo": "echo-in-session.json",
+				"b-echo": "echo-no-args.json",
+				"c-start": "session-start.json",
+				"d-echo": "echo-no-args.json"
+			},
+			"expect": {
+				"calls": [{"tool": "echo"}],
+				"responses": {
+					"a-echo": {"ok": false, "code": "no_session"},
+					"b-echo": {"ok": true, "result": {}},
+					"c-start": {"ok": true, "result": {"session": "$session"}},
+					"d-echo": {"ok": false, "code": "busy"}
+				},
+				"files": [
+					"a-echo.res.json",
+					"a-echo.wait",
+					"b-echo.res.json",
+					"b-echo.wait",
+					"bridge.lock",
+					"c-start.res.json",
+					"c-start.wait",
+					"d-echo.res.json",
+					"d-echo.wait"
+				]
+			}
+		}
+	]
+}

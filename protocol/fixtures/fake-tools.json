@@ -1,0 +1,53 @@
+{
+	"tools": [
+		{
+			"name": "ping",
+			"description": "生きているかを確かめる",
+			"inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
+			"kind": "read",
+			"does": "empty"
+		},
+		{
+			"name": "echo",
+			"description": "引数をそのまま返す",
+			"inputSchema": {"type": "object"},
+			"kind": "read",
+			"does": "echo"
+		},
+		{
+			"name": "edit",
+			"description": "図面を変える道具の代わり",
+			"inputSchema": {"type": "object"},
+			"kind": "write",
+			"does": "echo"
+		},
+		{
+			"name": "bad_args",
+			"description": "引数の誤りで失敗する",
+			"inputSchema": {"type": "object"},
+			"kind": "read",
+			"does": "invalid_args"
+		},
+		{
+			"name": "broken",
+			"description": "道具の中で失敗する",
+			"inputSchema": {"type": "object"},
+			"kind": "read",
+			"does": "internal"
+		},
+		{
+			"name": "throws",
+			"description": "道具の中で例外を投げる",
+			"inputSchema": {"type": "object"},
+			"kind": "read",
+			"does": "throw"
+		},
+		{
+			"name": "quit",
+			"description": "Vectorworks を終わらせる道具の代わり",
+			"inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
+			"kind": "app",
+			"does": "empty"
+		}
+	]
+}

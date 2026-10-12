@@ -6,18 +6,21 @@
 
 | ファイル | SDK | 中身 |
 | --- | --- | --- |
-| `src/core/Json.{h,cpp}` | 依らない | 小さな JSON（入れ子の深さに上限を設ける。[受け付け 1 回](#受け付け-1-回coreserve)の 3） |
-| `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つ（`prepare` / `lock` / `sweep` / `poll` / `waitState` / `reply`）・id の検査・要求と応答の形。場所は引数で受ける（テストは一時ディレクトリを渡す） |
-| `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（下記）と、占有の印（発行した 1 つをメモリに持つ）。道具の表と時刻を引数で受けるので無 SDK でテストできる |
+| `src/core/Protocol.h` | 依らない | 作法の定数（ファイルの綴り・上限・予約された道具・`code`）と id の検査。`protocol/fixtures/constants.json` と対（[作法の見本](../fixtures.md)） |
+| `src/core/Json.{h,cpp}` | 依らない | 小さな JSON（入れ子の深さに上限を設ける。読み方は Go の `encoding/json` に合わせる。[受け付け 1 回](#受け付け-1-回coreserverserve)の 3） |
+| `src/core/Files.h`・`FilesPosix.cpp`・`FilesWindows.cpp` | 依らない | スプールに使う OS の呼び出し（ロック・待つ印・読み書き・`<CLI>` の親の場所）。開くファイルは子プロセスに受け継がせない |
+| `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つ（`prepare` / `lock` / `sweep` / `poll` / `take` / `waitState` / `reply`）と、スプールの場所（`defaultSpoolDir`）。場所は引数で受ける（テストは一時ディレクトリを渡す） |
+| `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（`core::Server::serve`。下記）と、占有の印（`Server` が発行した 1 つをメモリに持つ）。道具の表と時刻を引数で受けるので無 SDK でテストできる |
 | `src/tools/ToolTable.cpp` | 依る | 道具の表 |
 | `src/tools/<道具>.cpp` | 依る | 道具の中身 |
-| `src/Clock.cpp` | 依る | OS タイマーから `core::serve(…, tools::table())` を呼ぶ |
+| `src/Clock.cpp` | 依る | OS タイマーから `core::Server::serve(tools::table(), …)` を呼ぶ |
 
 **受け付けの手順は SDK に依らない `core/Serve` に置き、偽の道具の表でテストします**（終了の依頼の
 返し方・壊れた要求・ロックを取れたときに 1 度だけ残骸を消すこと・ロックを取れないときに何も
 しないこと・無くなっていた要求を飛ばすこと・待つ者の居ない要求と待つ印の無い要求を実行しないこと・失敗の `code`・
 回の始めに並べた要求だけを処理すること・綴りを満たさない id を取り出さないこと・大きすぎる要求と入れ子の深すぎる要求・
-占有に照らすこと）。
+占有に照らすこと）。表せるものは[作法の見本](../fixtures.md)に置き、CLI の偽のプラグイン
+（`cli/internal/fakeplugin`）も同じ見本で確かめます。
 
 ## スプールの用意
 
@@ -33,7 +36,7 @@
   うち、**`<id>.wait` を掴める・無い id のものだけ**を消す（id はファイル名の最初の `.` より前）。
   待つ印が掴まれている id のファイルは残す（[作法「ロック」](../protocol.md#ロックbridgelock)）。
 
-## 受け付け 1 回（`core::serve`）
+## 受け付け 1 回（`core::Server::serve`）
 
 1. ロックを掴んでいなければ用意（`prepare` → `lock` → `sweep`）をする。
    **ロックを取れなければ何もせずに戻る**（結果 `waiting`。次の回に取り直す）。
@@ -50,24 +53,31 @@
    とは、1 MiB を超える・入れ子の深さが 64 を超える・JSON として読めない・`tool` が無い・
    `tool`・`args`・`session` の型が違うこと（`tool` の `null`・空の文字列も壊れている。キーは大文字と
    小文字を区別して照合する）。`args` が無い・`null`
-   なら既定値の `{}` を道具へ渡し、`session` の `null` は無いものとして扱う
+   なら既定値の `{}` を道具へ渡し、`session` の `null` と空の文字列は無いものとして扱う
    （[作法「要求」](../protocol.md#要求idreqjson)）。**深さは `core/Json` が解析の中で数え、上限を
    超えたら再帰を降りずに失敗する**（解析の前に別に数える必要はない。スタックを溢れさせない
-   ことが目的）。
+   ことが目的）。文字列の不正な UTF-8 と対にならないサロゲートは U+FFFD に置き換えて読み、
+   書き出すときも同じにする（応答を常に UTF-8 にする。道具が返す例外の文言が UTF-8 でなくてもよい）。
 4. 要求ごとに:
    - `tools`・`ping` 以外は、まず占有に照らす（[作法「占有」](../protocol.md#占有セッション)の表）。
-     占有の印は `core::serve` が持つ状態（1 つだけ。メモリだけで、ファイルに書かない）で、
-     Vectorworks が終われば消える。印は推測されにくい乱数から作る。
+     占有の印は `core::Server` が持つ状態（1 つだけ。メモリだけで、ファイルに書かない）で、
+     Vectorworks が終われば消える。印は `<時刻のナノ秒 19 桁>-<乱数 16 桁の 16 進>` で、乱数は
+     `std::random_device` から作る。
    - `session_start` → 占有されていなければ印を発行して返す。`session_end` → 印を消す（表を検索しない）。
    - `tools` → 道具の一覧を返す（表を検索しない）。
-   - 種類 `app`（`quit`）→ 応答を書き、終了の依頼を結果に載せて、**その回の残りの要求を
-     取り出さずに戻る**（終了したら応えられないので、残りは置いたままにする）。
+   - 種類 `app`（`quit`）→ 応答を書き、道具が成功したら終了の依頼を結果に載せて、**その回の
+     残りの要求を取り出さずに戻る**（終了したら応えられないので、残りは置いたままにする）。道具が
+     失敗したら、ほかの道具と同じく失敗で応えて続ける。
    - それ以外 → 実行して応答を書く。
    - 表に無い道具 → `unknown_tool` で応える。
    - **道具 1 つの例外はここで受けて `internal` の応答にする**（橋を止めない）。
 5. 結果（終了の依頼の有無と、受け付けの状態）を返す。
 
-- 終了の依頼はタイマーが `core::serve` から戻ってから行います（[構成「受け付けの流れ」](architecture.md#受け付けの流れ)）。
+- 終了の依頼はタイマーが `serve` から戻ってから行います（[構成「受け付けの流れ」](architecture.md#受け付けの流れ)）。
+- 道具の例外は `serve` が受けます。メモリが足りないときなどに `serve` そのものが投げた例外は、
+  呼ぶタイマー（`Clock`）が受け、Vectorworks へ通しません。
+- 解析は要求の大きさに対して線形の時間で終えます（同じキーは、キーが増えたら索引で探す）。1 MiB の
+  要求で受け付けの 1 回が長引き、図面の操作を止めないためです。
 
 ## 版の情報
 
@@ -98,37 +108,53 @@ Windows では Vectorworks 2026 を 2 つ起動でき、どちらのプラグイ
 ```cpp
 enum class ToolKind { Read, Write, App };
 
-struct Tool {
-    const char* name;            // [a-z0-9_]+(\.[a-z0-9_]+)*
-    const char* description;     // 日本語。呼ぶ側がそのまま読む
-    const char* inputSchema;     // JSON Schema（文字列）。tools の結果にそのまま載る
-    ToolKind    kind;
-    ToolFn      run;             // Json (const Json& args, ToolError& error)
-};
-
-enum class ErrorCode { InvalidArgs, Internal };   // 道具が返す種別
+// 道具が返す失敗の種別。None は失敗していない。
+enum class ErrorCode { None, InvalidArgs, Internal };
 
 struct ToolError {
-    ErrorCode   code;
-    std::string message;         // 日本語。応答の error にそのまま載る
+	ErrorCode code = ErrorCode::None;
+	// 日本語。応答の error にそのまま載る。
+	std::string message;
+};
+
+// 道具に渡す受け付けの状態。
+struct ToolContext {
+	// 占有の印を発行しているか（ping の session）。
+	bool session = false;
+};
+
+// 失敗は error に書き（戻り値は使わない）、例外は Server が internal で応える。
+using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolError &error);
+
+struct Tool {
+	// [a-z0-9_]+(\.[a-z0-9_]+)*
+	const char *name;
+	// 日本語。呼ぶ側がそのまま読む。
+	const char *description;
+	// JSON Schema（文字列）。tools の結果にそのまま載る。
+	const char *inputSchema;
+	ToolKind kind;
+	ToolFn run;
 };
 ```
 
 - **道具を足すときに触るのは表の 1 行と中身 1 つだけ**です。CLI は道具を知らないので直しません。
 - `tools` の結果は `{"protocol":5,"tools":[{"name","description","inputSchema","kind"}]}`。
   `kind` は `read` / `write` / `app` を小文字で載せます（呼ぶ側が「図面を変えるか」を
-  判定できるように）。
+  判定できるように）。予約された道具のうち `tools`・`session_start`・`session_end` は表に載せず、
+  `tools` の結果にも出しません。`ping` と `quit` は表に載せます（[作法「予約された道具」](../protocol.md#予約された道具)）。
+- 道具が受け付けの状態を知るのは `ToolContext` からだけです（`ping` の `session`）。
 - 引数の検査は道具の中で行います（JSON Schema の検証器は持たない）。省略できる引数には
   既定値を設け（`inputSchema` の `default` にも書く）、知らない引数・知っている引数の未知の値は
   `invalid_args` で返します（[作法「互換性」](../protocol.md#互換性)）。
 - 失敗の種別は応答の `code` に小文字の綴り（`invalid_args` / `internal`）で
   載せます（[作法「応答」](../protocol.md#応答idresjson)）。`invalid_request`・`unknown_tool`・`no_wait`・`busy`・`no_session` は
-  `core::serve` が付けます（`busy`・`no_session` は占有に照らした結果。道具は付けない）。図面が開かれていないなど、道具によって失敗になるかが違う理由は
+  `core::Server::serve` が付けます（`busy`・`no_session` は占有に照らした結果。道具は付けない）。図面が開かれていないなど、道具によって失敗になるかが違う理由は
   `internal` とし、`error` に書きます。
 - **種類 `write` の道具は、undo の作法を通すまで表に載せません**（[未決 1](open-questions.md)）。
 
 ## 受け付けの結果
 
-`core::serve` がタイマーへ返す値です。`phase`（`serving` / `waiting` / `error`）・`message`
-（`error` なら理由）・`quit`（終了の依頼）。タイマーが見るのは `quit` だけで、ほかは単体テストで
-手順を確かめるためにあります。
+`core::Server::serve` がタイマーへ返す値（`ServeResult`）です。`phase`（`serving` / `waiting` /
+`error`）・`message`（`error` なら理由）・`quit`（終了の依頼）。タイマーが見るのは `quit` だけで、
+ほかは単体テストで手順を確かめるためにあります。

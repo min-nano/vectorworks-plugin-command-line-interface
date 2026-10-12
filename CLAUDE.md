@@ -10,7 +10,8 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 ## 守ること
 
 1. **作法の真実は `docs/protocol.md` だけ。** プラグイン側と `cli/internal/spool` はその対。
-   どちらかを変えたら文書と両方を直す。`protocol` の版を上げるかは `docs/protocol.md「互換性」`
+   どちらかを変えたら文書と両方を直す。両側のテストが読む作法の見本（`protocol/fixtures`。
+   `docs/fixtures.md`）も合わせて直す。`protocol` の版を上げるかは `docs/protocol.md「互換性」`
    に従う。
 2. **CLI はプリミティブに保つ。** 再試行・占有を待つこと・道具ごとの解釈を入れない（呼ぶ側の
    責任）。排他はプラグインの占有（作法の「占有」。CLI は印を受け取って載せるだけ）だけで持ち、
@@ -41,7 +42,8 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 - 言語をまたぐ決まり（UTF-8・LF・タブ・100 桁の目安）は `.editorconfig` に
   だけ書く。各言語の設定には、その言語にしかない項目だけを書く（`docs/format.md`）。
 - ツールは言語ごとに標準のもの 1 つを、ほぼ既定のまま使い、版を固定する。Go で書かれたツールは
-  `tools/go.mod` に置く。ツールと対象は `docs/format.md`・`docs/lint.md`。
+  `tools/go.mod`、pip のツール（clang-format・clang-tidy）は `tools/requirements.txt`、
+  PSScriptAnalyzer は `scripts/powershell.ps1` に版を置く。ツールと対象は `docs/format.md`・`docs/lint.md`。
 - **コメントは対象のコードの直前の行に置き、コードと同じ行の末尾には書かない**（どの言語でも。
   1 行で足りるものも同じ。複数行と 1 行で置き場所が混ざると読みにくいため）。
 
@@ -72,6 +74,21 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 - コメントは日本語でも英語でもよく、**なぜ**を書く。CLI の出力・エラーの文言は英語（機械が
   読む・端末の文字コードに依らない）。
 
+## C++（`src/`）
+
+- **SDK に依らない部分は `src/core` に置き、無 SDK の単体テスト（`tests/`）で確かめる。** 受け付けの
+  手順・JSON・スプールの OS の呼び出しはここ。SDK を呼ぶのは `src/core` の外だけ。
+- **作法に関わる振る舞いは作法の見本（`protocol/fixtures`。`docs/fixtures.md`）に置く。** C++ と Go の
+  両方のテストが同じ見本を読むので、片側だけを直すと落ちる。見本で表しにくいことだけを、各言語の
+  テストに書く。
+- 手元のテスト（CI の `test.yml` と同じ指定）:
+  `cmake -S . -B build -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug && cmake --build build && ctest --test-dir build --output-on-failure`。
+  ファジングは clang（Apple の clang は不可）で `-DVW_BUILD_FUZZERS=ON` を足し、
+  `mkdir -p corpus crashes && build/JsonFuzzer -max_total_time=120 -artifact_prefix=crashes/ corpus protocol/fixtures/requests`
+  で回す（libFuzzer は見つけた入力を最初に渡したディレクトリへ書くので、空のコーパスを先に渡し、
+  見本のディレクトリを汚さない）。
+- 外部のライブラリ（テストの枠組みを含む）は足さない。標準ライブラリと OS の呼び出しで書く。
+
 ## 文書
 
 - 日本語。1 ページ 1 トピック。技術文書の語で書き、くだけた言い回し・比喩を使わない。
@@ -82,3 +99,8 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 
 - `main` へは直接 push せず、ブランチを切って PR で進める。
 - コミットメッセージには Claude セッションの URL を入れる。
+- **プラグインは `docs/plugin/plan.md` の段ごとに 1 PR で進める。** PR には、その段の確かめ方と、
+  確かめた結果を書く。
+- **実機でしか確かめられない段（プラグイン・スクリプト）は、利用者が実機で「確認できた」と言うまで
+  マージしない。** CI が通ることも、道具が応えることも、実機の確認の代わりにはならない。実機の
+  確かめ方は `docs/plugin/plan.md「実機の確かめ方」`（PR のプレリリースを入れ、`vw2026` で呼ぶ）。

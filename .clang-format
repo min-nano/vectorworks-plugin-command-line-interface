@@ -1,0 +1,13 @@
+# C++ の整形（docs/format.md）。LLVM の既定から変えるのは次だけ。
+#   - .editorconfig のタブ（幅 4）と 100 桁を clang-format は読まないので、同じ値をここにも書く。
+#     タブはインデントにだけ使い、揃えには空白を使う（タブの幅に依らず揃うように）。
+#   - インデントの幅を 4 にしたので、public: などをクラスの開き括弧と同じ位置に戻す。
+#   - 名前空間の閉じ括弧の行末にコメントを付けない（CLAUDE.md「コメントはコードと同じ行の末尾に
+#     書かない」。LLVM の既定は付ける）。
+BasedOnStyle: LLVM
+UseTab: ForIndentation
+IndentWidth: 4
+TabWidth: 4
+ColumnLimit: 100
+AccessModifierOffset: -4
+FixNamespaceComments: false

@@ -3,7 +3,9 @@
 //
 // 作法より緩く真似ると、CLI がプラグインの断る要求を送っても単体テストが気づかないので、
 // 関門（id の綴り・回の始めに並べた要求だけの処理・大きさと入れ子の深さの上限・占有・ロックを取ったときの掃除）は
-// プラグインと同じに持つ。道具の種類（quit で残りを取り出さない）は道具の表を持たないので真似ない。
+// プラグインと同じに持つ。プラグインと同じに振る舞うかは、両方のテストが読む作法の見本
+// （protocol/fixtures。docs/fixtures.md）で確かめる。道具の表は持たないので、種類 app の道具は
+// quit だけとみなす（占有の中でだけ呼べ、成功したらその回の残りを取り出さない）。
 package fakeplugin
 
 import (
@@ -67,9 +69,10 @@ func HoldLock(t *testing.T, dir string) (release func()) {
 // 持つ（Vectorworks を起動し直すと消えるのと同じ）。
 func Start(t *testing.T, dir string, handle Handler) (stop func()) {
 	t.Helper()
-	release := HoldLock(t, dir)
-	sweep(dir)
 	s := &server{dir: dir, handle: handle}
+	if !s.take() {
+		t.Fatalf("cannot take %s", spool.LockFile)
+	}
 	quit := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
@@ -89,7 +92,7 @@ func Start(t *testing.T, dir string, handle Handler) (stop func()) {
 			stopped = true
 			close(quit)
 			<-done
-			release()
+			s.release()
 		}
 	}
 	t.Cleanup(stop)
@@ -117,14 +120,38 @@ func sweep(dir string) {
 type server struct {
 	dir    string
 	handle Handler
+	// 掴んでいるロックを放す。nil ならロックを掴んでいない
+	unlock func()
 	// 発行している占有の印。空なら占有されていない
 	session string
 }
 
-// serveOnce は受け付け 1 回。要求を名前の昇順で読み、消し、呼ぶ側が待っていれば実行する。
-// 処理するのは回の始めに並べた要求だけで（件数と時間の上限は無い）、取り出した要求には同じ回の
-// 中で応える。
-func (s *server) serveOnce() {
+// take はロックを取ってみて、取れたら前の回の残骸を消す。
+func (s *server) take() bool {
+	unlock, err := lock(filepath.Join(s.dir, spool.LockFile))
+	if err != nil {
+		return false
+	}
+	s.unlock = unlock
+	sweep(s.dir)
+	return true
+}
+
+func (s *server) release() {
+	if s.unlock != nil {
+		s.unlock()
+		s.unlock = nil
+	}
+}
+
+// serveOnce は受け付け 1 回。ロックを掴んでいなければ取ってみて、取れなければ何もせずに
+// serving を偽で返す。要求を名前の昇順で読み、消し、呼ぶ側が待っていれば実行する。処理するのは
+// 回の始めに並べた要求だけで（件数と時間の上限は無い）、取り出した要求には同じ回の中で応える。
+// quit が成功したら、その回の残りの要求を取り出さずに quit を真で返す。
+func (s *server) serveOnce() (serving, quit bool) {
+	if s.unlock == nil && !s.take() {
+		return false, false
+	}
 	entries, _ := os.ReadDir(s.dir)
 	var names []string
 	for _, entry := range entries {
@@ -156,18 +183,25 @@ func (s *server) serveOnce() {
 			continue
 		}
 		var response spool.Response
+		var tool string
 		if state == waitMissing {
 			response = spool.Response{OK: false, Code: spool.CodeNoWait, Error: "no wait file"}
-		} else if tool, args, session, ok := parseRequest(data); !ok {
+		} else if name, args, session, ok := parseRequest(data); !ok {
 			response = spool.Response{OK: false, Code: spool.CodeInvalidRequest, Error: "unreadable request"}
 		} else {
+			tool = name
 			response = s.answer(tool, args, session)
 		}
 		out, _ := json.Marshal(response)
 		temp := filepath.Join(s.dir, id+spool.ResponseSuffix+spool.TempSuffix)
 		_ = os.WriteFile(temp, out, 0o600)
 		_ = os.Rename(temp, filepath.Join(s.dir, id+spool.ResponseSuffix))
+		// 終了したら応えられないので、残りは置いたままにする。
+		if tool == "quit" && response.OK {
+			return true, true
+		}
 	}
+	return true, false
 }
 
 // answer は要求を占有に照らしてから応える（docs/protocol.md「占有」）。
@@ -178,7 +212,7 @@ func (s *server) serveOnce() {
 //   - そのほかは、占有されていなければ印の無い要求を、されていれば同じ印の要求だけを実行する。
 func (s *server) answer(tool string, args json.RawMessage, session string) spool.Response {
 	switch tool {
-	case "tools", "ping":
+	case spool.ToolTools, spool.ToolPing:
 		return s.handle(tool, args)
 	case spool.ToolSessionStart:
 		if s.session != "" {

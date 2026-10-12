@@ -1,0 +1,30 @@
+{
+	"description": "ロックを取ったら、待つ印を掴める・無い id の要求・応答・待つ印・書きかけだけを消す。待っている呼ぶ側のファイルと、作法の綴りでないファイルは残す",
+	"steps": [
+		{
+			"waits": {"dead": "released", "live": "held"},
+			"files": {
+				"dead.res.json": "{\"ok\":true}",
+				"dead.req.json.tmp": "",
+				"gone.res.json": "{\"ok\":true}",
+				"gone.req.json": "{\"tool\":\"ping\"}",
+				"x.y.req.json": "{\"tool\":\"ping\"}",
+				"live.res.json": "{\"ok\":true}",
+				"notes.txt": ""
+			},
+			"requests": {"live2": "ping.json"},
+			"expect": {
+				"calls": [{"tool": "ping", "args": {}}],
+				"responses": {"live2": {"ok": true, "result": {}}},
+				"files": [
+					"bridge.lock",
+					"live.res.json",
+					"live.wait",
+					"live2.res.json",
+					"live2.wait",
+					"notes.txt"
+				]
+			}
+		}
+	]
+}

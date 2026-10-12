@@ -1,0 +1,109 @@
+{
+	"description": "tools は道具の表を返す。表に無い道具は unknown_tool、道具の失敗は invalid_args と internal（例外を含む）。種類 write の道具も、占有されていなければ印なしで実行する",
+	"steps": [
+		{"description": "ロックを取る（空のスプールなので何も消さない）", "expect": {"files": ["bridge.lock"]}},
+		{
+			"requests": {
+				"tools": "tools.json",
+				"unknown": "unknown.json",
+				"bad-args": "bad-args.json",
+				"broken": "broken-tool.json",
+				"throws": "throws.json",
+				"edit": "edit.json",
+				"ping": "ping.json"
+			},
+			"expect": {
+				"calls": [
+					{"tool": "bad_args"},
+					{"tool": "broken"},
+					{"tool": "edit"},
+					{"tool": "ping"},
+					{"tool": "throws"}
+				],
+				"responses": {
+					"tools": {
+						"ok": true,
+						"result": {
+							"protocol": 5,
+							"tools": [
+								{
+									"name": "ping",
+									"description": "生きているかを確かめる",
+									"inputSchema": {
+										"type": "object",
+										"properties": {},
+										"additionalProperties": false
+									},
+									"kind": "read"
+								},
+								{
+									"name": "echo",
+									"description": "引数をそのまま返す",
+									"inputSchema": {"type": "object"},
+									"kind": "read"
+								},
+								{
+									"name": "edit",
+									"description": "図面を変える道具の代わり",
+									"inputSchema": {"type": "object"},
+									"kind": "write"
+								},
+								{
+									"name": "bad_args",
+									"description": "引数の誤りで失敗する",
+									"inputSchema": {"type": "object"},
+									"kind": "read"
+								},
+								{
+									"name": "broken",
+									"description": "道具の中で失敗する",
+									"inputSchema": {"type": "object"},
+									"kind": "read"
+								},
+								{
+									"name": "throws",
+									"description": "道具の中で例外を投げる",
+									"inputSchema": {"type": "object"},
+									"kind": "read"
+								},
+								{
+									"name": "quit",
+									"description": "Vectorworks を終わらせる道具の代わり",
+									"inputSchema": {
+										"type": "object",
+										"properties": {},
+										"additionalProperties": false
+									},
+									"kind": "app"
+								}
+							]
+						}
+					},
+					"unknown": {"ok": false, "code": "unknown_tool"},
+					"bad-args": {"ok": false, "code": "invalid_args"},
+					"broken": {"ok": false, "code": "internal"},
+					"throws": {"ok": false, "code": "internal"},
+					"edit": {"ok": true, "result": {"name": "x"}},
+					"ping": {"ok": true, "result": {}}
+				},
+				"files": [
+					"bad-args.res.json",
+					"bad-args.wait",
+					"bridge.lock",
+					"broken.res.json",
+					"broken.wait",
+					"edit.res.json",
+					"edit.wait",
+					"ping.res.json",
+					"ping.wait",
+					"throws.res.json",
+					"throws.wait",
+					"tools.res.json",
+					"tools.wait",
+					"unknown.res.json",
+					"unknown.wait"
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,44 @@
+{
+	"description": "要求はファイル名の昇順で処理する（id の昇順ではない。- は . より小さいので、a-b.req.json は a.req.json より先）",
+	"steps": [
+		{"description": "ロックを取る（空のスプールなので何も消さない）", "expect": {"files": ["bridge.lock"]}},
+		{
+			"requests": {
+				"0001": "echo.json",
+				"0002": "edit.json",
+				"0010": "ping.json",
+				"a-b": "echo-no-args.json",
+				"a": "bad-args.json"
+			},
+			"expect": {
+				"calls": [
+					{"tool": "echo", "args": {"include_sheets": false, "limit": 50, "layer": "1F"}},
+					{"tool": "edit", "args": {"name": "x"}},
+					{"tool": "ping", "args": {}},
+					{"tool": "echo", "args": {}},
+					{"tool": "bad_args", "args": {"limit": "many"}}
+				],
+				"responses": {
+					"0001": {"ok": true, "result": {"include_sheets": false, "limit": 50, "layer": "1F"}},
+					"0002": {"ok": true, "result": {"name": "x"}},
+					"0010": {"ok": true, "result": {}},
+					"a-b": {"ok": true, "result": {}},
+					"a": {"ok": false, "code": "invalid_args"}
+				},
+				"files": [
+					"0001.res.json",
+					"0001.wait",
+					"0002.res.json",
+					"0002.wait",
+					"0010.res.json",
+					"0010.wait",
+					"a-b.res.json",
+					"a-b.wait",
+					"a.res.json",
+					"a.wait",
+					"bridge.lock"
+				]
+			}
+		}
+	]
+}

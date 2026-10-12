@@ -19,6 +19,11 @@ indent_size = 2
 [*.md]
 max_line_length = off
 
+# PowerShell は BOM 付き。Windows PowerShell 5.1 は BOM の無いファイルを ANSI のコードページで
+# 読み、日本語のコメントや文字列を読み崩すため。
+[*.{ps1,psm1,psd1}]
+charset = utf-8-bom
+
 # Vectorworks のリソースの文字列。UTF-16LE（BOM 付き）・CRLF のまま保つ。
 [*.vwstrings]
 charset = utf-16le

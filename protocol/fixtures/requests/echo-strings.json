@@ -1,0 +1,1 @@
+{"tool":"echo","args":{"escapes":"\"\\\/\b\f\n\r\t","unicode":"\u00e9\u3042","pair":"\ud83d\ude00","raw":"éあ😀"}}

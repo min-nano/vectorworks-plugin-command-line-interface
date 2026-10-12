@@ -3,3 +3,6 @@
 
 # UTF-16LE・CRLF のまま保つ。git に改行を変換させない。
 *.vwstrings -text
+
+# 作法の見本。壊れた要求（CRLF・BOM・不正な UTF-8）をわざと含むので、git にも中身を変えさせない。
+protocol/fixtures/** -text
