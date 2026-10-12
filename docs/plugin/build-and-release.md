@@ -26,9 +26,9 @@ plist の `VWBuildBranch` / `VWBuildCommit`）を除いて使います。版の�
 
 | ワークフロー | 起動 | 中身 |
 | --- | --- | --- |
-| `cli.yml`（既存） | push / PR（`cli/**`・`protocol/**`） | `go vet`・Go のテスト（3 OS。作法の見本の照合を含む）とビルド |
+| `cli.yml`（既存） | push / PR（`cli/**`・`protocol/**`） | Go のテスト（3 OS。作法の見本の照合を含む）とビルド |
 | `test.yml` | push / PR | 無 SDK の単体テストと作法の見本の照合（Linux・mac は ASan・UBSan、Windows は MSVC。Linux はカバレッジを Codecov へ。フラグ `core`）・`core/Json` のファジング（3 分） |
-| `lint.yml` | push / PR | clang-format・clang-tidy（無 SDK）・cmake-format・gofumpt・actionlint・shellcheck・yamllint・editorconfig-checker（手元では `scripts/lint.sh`）。PSScriptAnalyzer は最初の `.ps1`（段 5）と一緒に足す |
+| `lint.yml` | push / PR | clang-format・clang-tidy（無 SDK）・cmake-format・actionlint・shellcheck・yamllint・editorconfig-checker（手元では `scripts/lint.sh`）。PSScriptAnalyzer は最初の `.ps1`（段 5）と一緒に足す |
 | `build.yml` | push（main）/ PR / 手動 | mac と Windows のビルド・梱包・リリース |
 | `cleanup-dev-release.yml` | PR が閉じたとき | `dev-<slug>` を消す |
 

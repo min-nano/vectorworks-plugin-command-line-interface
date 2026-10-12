@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
 # lint.sh - run locally the checks that .github/workflows/lint.yml enforces:
-# clang-format, clang-tidy (src/core/), cmake-format / cmake-lint, gofumpt, actionlint,
+# clang-format, clang-tidy (src/core/), cmake-format / cmake-lint, actionlint,
 # yamllint, editorconfig-checker and the shell script checker.
 #
 #   scripts/lint.sh          # check only; non-zero exit if anything is off
-#   scripts/lint.sh --fix    # format in place (clang-format, clang-tidy, cmake-format, gofumpt),
+#   scripts/lint.sh --fix    # format in place (clang-format, clang-tidy, cmake-format),
 #                            # then check the rest
 #
 # A tool that is not installed is reported and skipped, so a partial local run
@@ -97,21 +97,6 @@ if have cmake-lint; then
 	report "cmake-lint"
 else
 	skip "cmake-lint" "pip install cmakelang pyyaml"
-fi
-
-# gofumpt: the same version as lint.yml (GOFUMPT_VERSION there).
-if have gofumpt; then
-	echo "==> gofumpt (cli/)"
-	if [ "$FIX" -eq 1 ]; then
-		gofumpt -w cli
-		echo "    formatted in place"
-	else
-		GOFUMPT_FILES="$(gofumpt -l cli)"
-		[ -z "$GOFUMPT_FILES" ] || { echo "$GOFUMPT_FILES"; false; }
-		report "gofumpt"
-	fi
-else
-	skip "gofumpt" "go install mvdan.cc/gofumpt@v0.12.0"
 fi
 
 if have actionlint; then

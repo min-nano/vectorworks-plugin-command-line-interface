@@ -12,10 +12,10 @@ end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
 
-# Tabs everywhere they are allowed, 4 columns wide: gofmt / gofumpt can only
+# Tabs everywhere they are allowed, 4 columns wide: gofmt can only
 # indent Go with tabs, so the other languages follow. Lines up to 100 columns
 # (a tab counts 4); the formatters wrap C/C++ and CMake, editorconfig-checker
-# checks shell and Python. gofumpt does not limit Go lines.
+# checks shell and Python. gofmt does not limit Go lines.
 [{*.go,go.mod,*.c,*.cpp,*.h,*.hpp,*.mm,CMakeLists.txt,*.cmake,*.sh,*.py,*.ps1,*.json}]
 indent_style = tab
 indent_size = 4
