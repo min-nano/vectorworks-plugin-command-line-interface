@@ -27,10 +27,10 @@ jobs:
         with:
           go-version-file: cli/go.mod
       # -race と併用するため covermode は atomic にする。
-      # PowerShell は -coverprofile=coverage.out を「.」で 2 つの引数に分けるため、bash で走らせる。
+      # PowerShell は「.」を区切り文字として解釈し -coverprofile=coverage.out が 2 つの引数として入力されるため、bash で実行する。
       - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
         shell: bash
-      # OS ごとに分岐するコード（launch など）があるため、全 OS の結果をフラグ付きで送る。
+      # OS ごとに分岐するコード（launch 等）があるので、全 OS の結果をフラグ付きで送る。
       - uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
