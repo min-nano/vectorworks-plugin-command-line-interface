@@ -3,10 +3,7 @@ name: cli
 on:
   push:
     branches: [main]
-    paths: ["cli/**", ".github/workflows/cli.yml", "codecov.yml"]
   pull_request:
-    paths: ["cli/**", ".github/workflows/cli.yml", "codecov.yml"]
-  # マージキューで必須のチェックを走らせる（merge_group には paths が効かず、常に走る）。
   merge_group:
 
 permissions:
@@ -17,8 +14,7 @@ jobs:
   test:
     strategy:
       fail-fast: false
-      # Vectorworks に Linux 版は無く、配る実行ファイルも darwin・windows だけなので、テストは
-      # その 2 つの OS で走らせる。
+      # Vectorworks の対応 OS (darwin・windows) でのみテストする。
       matrix:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
