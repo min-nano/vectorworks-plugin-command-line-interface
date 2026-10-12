@@ -1,17 +1,9 @@
 name: lint
 
-# 検査の対象（docs/lint.md）と道具の版を変えたときだけ走らせる。
 on:
   push:
     branches: [main]
-    paths: &paths
-      - "cli/**"
-      - "scripts/**"
-      - "tools/**"
-      - ".github/**"
   pull_request:
-    paths: *paths
-  # マージキューで必須のチェックを走らせる（merge_group には paths が効かず、常に走る）。
   merge_group:
 
 permissions:
