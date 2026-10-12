@@ -15,11 +15,11 @@ for goos in darwin windows; do
 	GOOS="$goos" go -C cli vet ./... || status=1
 done
 
-# ツールは go.mod の無いリポジトリの根では動かないので、tools/ で動かす。
-# actionlint は .github/workflows を上へたどって見つけ、run: の中も shellcheck で検査する。
+# 検査ツールは go.mod の無いリポジトリのルートでは動かないので、tools/ で実行する。
+# actionlint は .github/workflows を上へたどって見つけ、run: の内容も shellcheck で検査する。
 go -C tools tool actionlint || status=1
 
-# shfmt が整形するのと同じファイル（scripts/ の下のシェルスクリプト）を検査する。
+# shfmt が整形するのと同じファイル（scripts/ 内のシェルスクリプト）を検査する。
 files="$(go -C tools tool shfmt -f "$root/scripts")"
 # ファイル名に空白を含めない前提で、行ごとに引数へ分ける。
 # shellcheck disable=SC2086
