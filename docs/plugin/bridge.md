@@ -141,8 +141,8 @@ struct Tool {
 - **道具を足すときに触るのは表の 1 行と中身 1 つだけ**です。CLI は道具を知らないので直しません。
 - `tools` の結果は `{"protocol":5,"tools":[{"name","description","inputSchema","kind"}]}`。
   `kind` は `read` / `write` / `app` を小文字で載せます（呼ぶ側が「図面を変えるか」を
-  判定できるように）。予約された道具（`tools`・`session_start`・`session_end`）は表に載せず、
-  `tools` の結果にも出しません（作法で決まっている）。`ping` と `quit` は表に載せます。
+  判定できるように）。予約された道具のうち `tools`・`session_start`・`session_end` は表に載せず、
+  `tools` の結果にも出しません。`ping` と `quit` は表に載せます（[作法「予約された道具」](../protocol.md#予約された道具)）。
 - 道具が受け付けの状態を知るのは `ToolContext` からだけです（`ping` の `session`）。
 - 引数の検査は道具の中で行います（JSON Schema の検証器は持たない）。省略できる引数には
   既定値を設け（`inputSchema` の `default` にも書く）、知らない引数・知っている引数の未知の値は

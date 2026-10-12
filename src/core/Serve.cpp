@@ -111,7 +111,7 @@ std::optional<Json> toolsList(std::span<const Tool> tools, std::string &reason) 
 	    {{"protocol", Json::integer(protocol::kVersion)}, {"tools", std::move(list)}});
 }
 
-} // namespace
+}
 
 std::string_view kindName(ToolKind kind) {
 	switch (kind) {
@@ -260,4 +260,4 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 	return {success(std::move(result)), tool->kind == ToolKind::App};
 }
 
-} // namespace VwCli::core
+}

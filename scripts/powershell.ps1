@@ -45,12 +45,12 @@ foreach ($file in $Path) {
 	if ($formatted -ceq $text) {
 		continue
 	}
+	# else を書かない（整形の規則が } と else の間で改行し、else を空白で字下げするため）。
 	if ($Mode -eq 'Fix') {
 		[System.IO.File]::WriteAllText($file, $formatted, $utf8)
+		continue
 	}
- else {
-		$file
-		$status = 1
-	}
+	$file
+	$status = 1
 }
 exit $status

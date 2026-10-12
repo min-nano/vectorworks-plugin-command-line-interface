@@ -122,7 +122,7 @@ void dumpString(std::string &out, std::string_view text) {
 
 bool isDigit(char c) { return c >= '0' && c <= '9'; }
 
-} // namespace
+}
 
 // JsonParser は再帰下降で読む。深さは入れ子に入る前に数え、上限を超えたら降りずに失敗する。
 class JsonParser {
@@ -613,4 +613,4 @@ bool operator==(const Json &a, const Json &b) {
 	return false;
 }
 
-} // namespace VwCli::core
+}

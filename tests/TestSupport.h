@@ -17,7 +17,7 @@ inline std::ostream &operator<<(std::ostream &out, const Json &value) {
 	return out << value.dump();
 }
 
-} // namespace VwCli::core
+}
 
 namespace VwCli::test {
 
@@ -72,7 +72,7 @@ template <typename T> std::string show(const std::vector<T> &values) {
 	return out + "]";
 }
 
-} // namespace VwCli::test
+}
 
 #define VWCLI_JOIN2(a, b) a##b
 #define VWCLI_JOIN(a, b) VWCLI_JOIN2(a, b)

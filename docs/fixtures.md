@@ -22,6 +22,10 @@
 見本の中身は整形も検査もせず（[整形](format.md#整形しないもの)）、git にも改行を変えさせません
 （`.gitattributes` の `-text`）。
 
+**両側のテストは、見本の知らないキーと型の違う値を誤りとして読みます**（Go は
+`DisallowUnknownFields`、C++ はキーと型の表）。キーの綴りを誤ると、その確かめが黙って省かれる
+ためです。手順（`steps`）の無い見本も誤りです。
+
 ## 偽の道具の表（`fake-tools.json`）
 
 `tools` の各要素は、道具の表の 1 行（`name`・`description`・`inputSchema`・`kind`）と、振る舞い
@@ -34,6 +38,8 @@
 | `invalid_args` | `invalid_args` で失敗する |
 | `internal` | `internal` で失敗する |
 | `throw` | 例外を投げる（応答は `internal`。Go の偽のプラグインは例外を投げず、同じ応答を返す） |
+
+知らない `does` は、その道具が呼ばれたときにテストの誤りになります（両側とも）。
 
 ## 受け付けの見本（`serve/*.json`）
 

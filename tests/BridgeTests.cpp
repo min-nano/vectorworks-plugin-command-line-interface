@@ -26,7 +26,7 @@ bool exists(const TempDir &dir, const std::string &name) {
 	return std::filesystem::exists(dir.path() / name);
 }
 
-} // namespace
+}
 
 TEST(BridgePrepareCreatesMissingParents) {
 	TempDir dir;

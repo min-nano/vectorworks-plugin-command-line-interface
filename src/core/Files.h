@@ -83,4 +83,4 @@ private:
 	std::intptr_t handle_ = kNone;
 };
 
-} // namespace VwCli::core::files
+}

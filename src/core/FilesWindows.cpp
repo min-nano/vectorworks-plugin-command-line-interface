@@ -55,7 +55,7 @@ HANDLE openFile(const std::string &path, DWORD access, DWORD share, DWORD dispos
 	                     FILE_ATTRIBUTE_NORMAL, nullptr);
 }
 
-} // namespace
+}
 
 std::string join(const std::string &dir, std::string_view name) {
 	std::string path = dir;
@@ -87,10 +87,15 @@ bool makeDirectories(const std::string &path, std::string &error) {
 	     at = wide.find_first_of(L"\\/", at + 1)) {
 		(void)::CreateDirectoryW(wide.substr(0, at).c_str(), nullptr);
 	}
-	if (::CreateDirectoryW(wide.c_str(), nullptr) || isDirectory(wide)) {
+	if (::CreateDirectoryW(wide.c_str(), nullptr)) {
 		return true;
 	}
-	error = describe("CreateDirectory", path, ::GetLastError());
+	// isDirectory が上書きする前に、作れなかった理由を残す。
+	DWORD failure = ::GetLastError();
+	if (isDirectory(wide)) {
+		return true;
+	}
+	error = describe("CreateDirectory", path, failure);
 	return false;
 }
 
@@ -192,4 +197,4 @@ void Lock::release() {
 	}
 }
 
-} // namespace VwCli::core::files
+}

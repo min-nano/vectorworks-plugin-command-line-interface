@@ -25,7 +25,7 @@ int &failures() {
 	return count;
 }
 
-} // namespace
+}
 
 Registrar::Registrar(const char *name, TestFn run) noexcept { registry().push_back({name, run}); }
 
@@ -80,4 +80,4 @@ int runAll(int argc, char **argv) {
 	return failures() == 0 && run > 0 ? 0 : 1;
 }
 
-} // namespace VwCli::test
+}

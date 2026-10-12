@@ -89,4 +89,4 @@ private:
 	friend class JsonParser;
 };
 
-} // namespace VwCli::core
+}

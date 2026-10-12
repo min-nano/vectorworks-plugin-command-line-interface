@@ -37,7 +37,13 @@ type call struct {
 	args json.RawMessage
 }
 
+type fixtureCase struct {
+	Description string        `json:"description"`
+	Steps       []fixtureStep `json:"steps"`
+}
+
 type fixtureStep struct {
+	Description string                     `json:"description"`
 	OtherBridge bool                       `json:"other_bridge"`
 	Waits       map[string]string          `json:"waits"`
 	Files       map[string]string          `json:"files"`
@@ -49,19 +55,36 @@ type fixtureStep struct {
 			Tool string          `json:"tool"`
 			Args json.RawMessage `json:"args"`
 		} `json:"calls"`
-		Responses map[string]json.RawMessage `json:"responses"`
-		Files     []string                   `json:"files"`
+		Responses map[string]expectedResponse `json:"responses"`
+		Files     []string                    `json:"files"`
 	} `json:"expect"`
 }
 
+// expectedResponse は期待する応答。ok は必須で、result は書いたときだけ比べる。
+type expectedResponse struct {
+	OK     *bool           `json:"ok"`
+	Code   string          `json:"code"`
+	Result json.RawMessage `json:"result"`
+}
+
+// readFixture は見本のファイルを読む。
 func readFixture(t *testing.T, name string, v any) {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(fixtures, name))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(data, v); err != nil {
-		t.Fatalf("%s: %v", name, err)
+	strictDecode(t, name, data, v)
+}
+
+// strictDecode は知らないキーを誤りとして読む。見本のキーの綴りを誤ると、その確かめが黙って
+// 省かれるため。
+func strictDecode(t *testing.T, where string, data []byte, v any) {
+	t.Helper()
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(v); err != nil {
+		t.Fatalf("%s: %v", where, err)
 	}
 }
 
@@ -78,7 +101,7 @@ func decode(t *testing.T, data []byte) any {
 }
 
 // fakeHandler は見本の偽の道具の表（fake-tools.json）で応える。呼ばれた道具を calls に残す。
-func fakeHandler(tools []fakeTool, calls *[]call) Handler {
+func fakeHandler(t *testing.T, tools []fakeTool, calls *[]call) Handler {
 	return func(tool string, args json.RawMessage) spool.Response {
 		if tool == spool.ToolTools {
 			type entry struct {
@@ -109,10 +132,11 @@ func fakeHandler(tools []fakeTool, calls *[]call) Handler {
 				return spool.Response{OK: true, Result: json.RawMessage(`{}`)}
 			case "invalid_args":
 				return spool.Response{Code: spool.CodeInvalidArgs, Error: "invalid args"}
-			default:
-				// internal と throw（Go の偽の道具は例外を投げないので、プラグインが例外を受けた
-				// ときの応答を返す）。
+			case "internal", "throw":
+				// Go の偽の道具は例外を投げないので、throw にはプラグインが例外を受けたときの応答を返す。
 				return spool.Response{Code: spool.CodeInternal, Error: "the tool failed"}
+			default:
+				t.Fatalf("fake-tools.json: unknown does %q", fake.Does)
 			}
 		}
 		return spool.Response{Code: spool.CodeUnknownTool, Error: "unknown tool: " + tool}
@@ -195,10 +219,11 @@ func (r *caseRunner) request(spec json.RawMessage) []byte {
 			Size int    `json:"size"`
 		} `json:"fill"`
 	}
-	if err := json.Unmarshal(spec, &fill); err != nil || len(fill.Fill.Pad) != 1 {
-		r.t.Fatalf("%s: bad request %s", r.name, spec)
-	}
+	strictDecode(r.t, r.name, spec, &fill)
 	f := fill.Fill
+	if len(f.Pad) != 1 || f.Size < len(f.Head)+len(f.Tail) {
+		r.t.Fatalf("%s: bad fill %s", r.name, spec)
+	}
 	return []byte(f.Head + strings.Repeat(f.Pad, f.Size-len(f.Head)-len(f.Tail)) + f.Tail)
 }
 
@@ -291,27 +316,29 @@ func (r *caseRunner) step(step fixtureStep) {
 			t.Errorf("%s: unexpected response %s", r.name, name)
 		}
 	}
-	for id, raw := range want.Responses {
+	for id, expected := range want.Responses {
+		if expected.OK == nil {
+			t.Fatalf("%s: the expected response for %s has no ok", r.name, id)
+		}
 		data, err := os.ReadFile(filepath.Join(r.dir, id+spool.ResponseSuffix))
 		if err != nil {
 			t.Errorf("%s: no response for %s", r.name, id)
 			continue
 		}
 		actual, _ := decode(t, data).(map[string]any)
-		expected, _ := decode(t, raw).(map[string]any)
-		good := actual != nil && actual["ok"] == expected["ok"]
-		if expected["ok"] == true {
+		good := actual != nil && actual["ok"] == *expected.OK
+		if *expected.OK {
 			result, found := actual["result"]
-			if want, check := expected["result"]; found && check {
-				good = good && match(want, result, &r.session)
-			}
 			good = good && found
+			if found && expected.Result != nil {
+				good = good && match(decode(t, expected.Result), result, &r.session)
+			}
 		} else {
 			_, hasError := actual["error"].(string)
-			good = good && hasError && actual["code"] == expected["code"]
+			good = good && hasError && actual["code"] == expected.Code
 		}
 		if !good {
-			t.Errorf("%s: %s responded %s, want %s", r.name, id, data, raw)
+			t.Errorf("%s: %s responded %s, want %+v", r.name, id, data, expected)
 		}
 	}
 
@@ -339,6 +366,11 @@ func TestFixtureServeCases(t *testing.T) {
 		Tools []fakeTool `json:"tools"`
 	}
 	readFixture(t, "fake-tools.json", &table)
+	for _, fake := range table.Tools {
+		if fake.Kind != "read" && fake.Kind != "write" && fake.Kind != "app" {
+			t.Fatalf("fake-tools.json: unknown kind %q", fake.Kind)
+		}
+	}
 	paths, err := filepath.Glob(filepath.Join(fixtures, "serve", "*.json"))
 	if err != nil || len(paths) == 0 {
 		t.Fatalf("no serve cases: %v", err)
@@ -346,12 +378,13 @@ func TestFixtureServeCases(t *testing.T) {
 	for _, path := range paths {
 		name := filepath.Base(path)
 		t.Run(strings.TrimSuffix(name, ".json"), func(t *testing.T) {
-			var fixture struct {
-				Steps []fixtureStep `json:"steps"`
-			}
+			var fixture fixtureCase
 			readFixture(t, filepath.Join("serve", name), &fixture)
+			if len(fixture.Steps) == 0 {
+				t.Fatalf("%s: no steps", name)
+			}
 			r := &caseRunner{t: t, dir: NewDir(t), held: map[string]func(){}}
-			r.server = &server{dir: r.dir, handle: fakeHandler(table.Tools, &r.calls)}
+			r.server = &server{dir: r.dir, handle: fakeHandler(t, table.Tools, &r.calls)}
 			// 一時ディレクトリを消す前に、ロックと待つ印を放す（Windows は開いたままでは消せない）。
 			t.Cleanup(func() {
 				r.server.release()

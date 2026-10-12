@@ -21,7 +21,7 @@ std::string describe(const char *what, const std::string &path, int error) {
 	return std::string(what) + " " + path + ": " + std::strerror(error);
 }
 
-} // namespace
+}
 
 std::string join(const std::string &dir, std::string_view name) {
 	std::string path = dir;
@@ -178,4 +178,4 @@ void Lock::release() {
 	}
 }
 
-} // namespace VwCli::core::files
+}

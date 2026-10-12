@@ -62,6 +62,132 @@ std::string text(const Json &object, const char *key) {
 	return value.isString() ? value.asString() : "";
 }
 
+// Key は見本のオブジェクトに書いてよいキーと、その値の型（空なら型を問わない）。
+struct Key {
+	std::string_view name;
+	std::optional<Json::Type> type;
+};
+
+// shaped は見本のオブジェクトが、知らないキーと型の違う値を持たないかを確かめる。見本のキーの
+// 綴りを誤ると、その確かめが黙って省かれるため（Go 側は DisallowUnknownFields で読む）。
+bool shaped(const Json &value, std::initializer_list<Key> keys, const std::string &where) {
+	if (!value.isObject()) {
+		failAt(where, "not an object: " + value.dump());
+		return false;
+	}
+	bool good = true;
+	for (const Json::Member &member : value.members()) {
+		const Key *key = nullptr;
+		for (const Key &candidate : keys) {
+			if (candidate.name == member.first) {
+				key = &candidate;
+			}
+		}
+		if (!key) {
+			failAt(where, "unknown key: " + member.first);
+			good = false;
+		} else if (key->type && member.second.type() != *key->type) {
+			failAt(where, "wrong type: " + member.first);
+			good = false;
+		}
+	}
+	return good;
+}
+
+// strings は配列の要素かオブジェクトの値が、すべて文字列かを確かめる。
+bool strings(const Json &value, const std::string &where) {
+	bool good = true;
+	auto check = [&](const Json &item) {
+		if (!item.isString()) {
+			failAt(where, "not a string: " + item.dump());
+			good = false;
+		}
+	};
+	if (value.isArray()) {
+		for (const Json &item : value.items()) {
+			check(item);
+		}
+	} else if (value.isObject()) {
+		for (const Json::Member &member : value.members()) {
+			check(member.second);
+		}
+	}
+	return good;
+}
+
+// checkCase は受け付けの見本の形（docs/fixtures.md）を確かめる。
+bool checkCase(const Json &fixture, const std::string &where) {
+	using T = Json::Type;
+	bool good = shaped(fixture, {{"description", T::String}, {"steps", T::Array}}, where);
+	const Json &steps = get(fixture, "steps");
+	if (!steps.isArray() || steps.items().empty()) {
+		failAt(where, "no steps");
+		return false;
+	}
+	int index = 0;
+	for (const Json &step : steps.items()) {
+		std::string at = where + " step " + std::to_string(++index);
+		good = shaped(step,
+		              {{"description", T::String},
+		               {"other_bridge", T::Bool},
+		               {"waits", T::Object},
+		               {"files", T::Object},
+		               {"requests", T::Object},
+		               {"expect", T::Object}},
+		              at) &&
+		       good;
+		good = strings(get(step, "waits"), at) && strings(get(step, "files"), at) && good;
+		if (get(step, "requests").isObject()) {
+			for (const Json::Member &member : get(step, "requests").members()) {
+				if (!member.second.isString()) {
+					good = shaped(member.second, {{"fill", T::Object}}, at) &&
+					       shaped(get(member.second, "fill"),
+					              {{"head", T::String},
+					               {"pad", T::String},
+					               {"tail", T::String},
+					               {"size", T::Number}},
+					              at) &&
+					       good;
+				}
+			}
+		}
+		const Json &expect = get(step, "expect");
+		if (expect.isNull()) {
+			continue;
+		}
+		good = shaped(expect,
+		              {{"phase", T::String},
+		               {"quit", T::Bool},
+		               {"calls", T::Array},
+		               {"responses", T::Object},
+		               {"files", T::Array}},
+		              at) &&
+		       strings(get(expect, "files"), at) && good;
+		if (get(expect, "calls").isArray()) {
+			for (const Json &call : get(expect, "calls").items()) {
+				good = shaped(call, {{"tool", T::String}, {"args", std::nullopt}}, at) && good;
+				if (!call.find("tool")) {
+					failAt(at, "a call has no tool");
+					good = false;
+				}
+			}
+		}
+		if (get(expect, "responses").isObject()) {
+			for (const Json::Member &member : get(expect, "responses").members()) {
+				good =
+				    shaped(member.second,
+				           {{"ok", T::Bool}, {"code", T::String}, {"result", std::nullopt}}, at) &&
+				    good;
+				if (!member.second.find("ok")) {
+					failAt(at, "the expected response for " + member.first + " has no ok");
+					good = false;
+				}
+			}
+		}
+	}
+	return good;
+}
+
 // --- 偽の道具の表（fake-tools.json） ---------------------------------------------------------
 
 struct Fake {
@@ -113,9 +239,21 @@ constexpr std::array<ToolFn, sizeof...(I)> makeRunners(std::index_sequence<I...>
 constexpr auto kRunners = makeRunners(std::make_index_sequence<16>{});
 
 std::vector<Tool> loadTools() {
+	using T = Json::Type;
 	gFakes.clear();
 	Json table = load(fixtures() / "fake-tools.json");
+	shaped(table, {{"tools", T::Array}}, "fake-tools.json");
+	if (!get(table, "tools").isArray()) {
+		return {};
+	}
 	for (const Json &entry : get(table, "tools").items()) {
+		shaped(entry,
+		       {{"name", T::String},
+		        {"description", T::String},
+		        {"inputSchema", T::Object},
+		        {"kind", T::String},
+		        {"does", T::String}},
+		       "fake-tools.json");
 		std::string kind = text(entry, "kind");
 		gFakes.push_back({text(entry, "name"), text(entry, "description"),
 		                  get(entry, "inputSchema").dump(),
@@ -400,7 +538,7 @@ private:
 	std::string where_;
 };
 
-std::set<std::string> strings(const Json &list) {
+std::set<std::string> stringSet(const Json &list) {
 	std::set<std::string> values;
 	for (const Json &value : list.items()) {
 		values.insert(value.asString());
@@ -408,10 +546,26 @@ std::set<std::string> strings(const Json &list) {
 	return values;
 }
 
-} // namespace
+}
 
 TEST(FixtureConstantsMatchTheCode) {
+	using T = Json::Type;
 	Json constants = load(fixtures() / "constants.json");
+	CHECK(shaped(constants,
+	             {{"protocol", T::Number},
+	              {"app_dir", T::String},
+	              {"spool_dir", T::String},
+	              {"lock_file", T::String},
+	              {"request_suffix", T::String},
+	              {"response_suffix", T::String},
+	              {"wait_suffix", T::String},
+	              {"temp_suffix", T::String},
+	              {"max_request_bytes", T::Number},
+	              {"max_nesting_depth", T::Number},
+	              {"reserved_tools", T::Array},
+	              {"kinds", T::Array},
+	              {"codes", T::Array}},
+	             "constants.json"));
 	CHECK_EQ(get(constants, "protocol").asInt64().value_or(0), std::int64_t{protocol::kVersion});
 	CHECK_EQ(text(constants, "app_dir"), std::string(protocol::kAppDirName));
 	CHECK_EQ(text(constants, "spool_dir"), std::string(protocol::kSpoolDirName));
@@ -424,7 +578,7 @@ TEST(FixtureConstantsMatchTheCode) {
 	         static_cast<std::int64_t>(protocol::kMaxRequestBytes));
 	CHECK_EQ(get(constants, "max_nesting_depth").asInt64().value_or(0),
 	         std::int64_t{protocol::kMaxNestingDepth});
-	CHECK(strings(get(constants, "reserved_tools")) ==
+	CHECK(stringSet(get(constants, "reserved_tools")) ==
 	      (std::set<std::string>{
 	          std::string(protocol::kToolTools), std::string(protocol::kToolPing),
 	          std::string(protocol::kToolSessionStart), std::string(protocol::kToolSessionEnd)}));
@@ -435,7 +589,7 @@ TEST(FixtureConstantsMatchTheCode) {
 	CHECK_EQ(kinds, (std::vector<std::string>{std::string(VwCli::core::kindName(ToolKind::Read)),
 	                                          std::string(VwCli::core::kindName(ToolKind::Write)),
 	                                          std::string(VwCli::core::kindName(ToolKind::App))}));
-	CHECK(strings(get(constants, "codes")) ==
+	CHECK(stringSet(get(constants, "codes")) ==
 	      (std::set<std::string>{
 	          std::string(protocol::kCodeInvalidRequest), std::string(protocol::kCodeUnknownTool),
 	          std::string(protocol::kCodeInvalidArgs), std::string(protocol::kCodeNoWait),
@@ -444,7 +598,9 @@ TEST(FixtureConstantsMatchTheCode) {
 }
 
 TEST(FixtureIdsMatchValidId) {
+	using T = Json::Type;
 	Json ids = load(fixtures() / "ids.json");
+	CHECK(shaped(ids, {{"valid", T::Array}, {"invalid", T::Array}}, "ids.json"));
 	for (const Json &id : get(ids, "valid").items()) {
 		if (!protocol::validId(id.asString())) {
 			failAt("ids.json", "should be valid: " + id.asString());
@@ -467,6 +623,9 @@ TEST(FixtureServeCases) {
 	CHECK(!cases.empty());
 	for (const std::filesystem::path &path : cases) {
 		Json fixture = load(path);
-		CaseRunner(VwCli::test::utf8(path.filename()), tools).run(get(fixture, "steps"));
+		std::string name = VwCli::test::utf8(path.filename());
+		if (checkCase(fixture, name)) {
+			CaseRunner(name, tools).run(get(fixture, "steps"));
+		}
 	}
 }

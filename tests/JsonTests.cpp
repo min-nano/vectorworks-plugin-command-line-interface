@@ -2,6 +2,7 @@
 
 #include "core/Json.h"
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 
@@ -40,7 +41,7 @@ std::string nestedObjects(int depth) {
 	return text;
 }
 
-} // namespace
+}
 
 TEST(JsonParsesEveryType) {
 	std::optional<Json> value =
@@ -181,14 +182,19 @@ TEST(JsonKeepsTheLastOfDuplicateKeysAmongMany) {
 }
 
 TEST(JsonParsesAMebibyteOfKeysInLinearTime) {
-	// 1 MiB の要求に 10 万のキーを並べても、同じキーを探すのが 2 乗の時間にならない（並びを順に
-	// 見ると、Vectorworks のメインスレッドを長く止める）。
+	// 1 MiB の要求に 10 万のキーを並べても、同じキーを探すのが 2 乗の時間にならない
+	// （並びを順に見ると、Vectorworks のメインスレッドを長く止める）。索引を使えば
+	// 最適化なし・サニタイザ付きでも数秒かからず、並びを順に見ると最適化なしでも
+	// 100 秒を超えるので、その間に上限を置く。
 	std::string text = "{";
 	for (int i = 0; i < 100000; ++i) {
 		text += "\"" + std::to_string(i) + "\":0,";
 	}
 	text += R"("0":1})";
+	auto start = std::chrono::steady_clock::now();
 	Json value = must(text);
+	auto elapsed = std::chrono::steady_clock::now() - start;
+	CHECK(elapsed < std::chrono::seconds(20));
 	CHECK_EQ(value.members().size(), std::size_t{100000});
 	CHECK_EQ(value.find("0")->numberText(), std::string("1"));
 }

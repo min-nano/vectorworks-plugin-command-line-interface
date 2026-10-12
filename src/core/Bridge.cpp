@@ -13,7 +13,7 @@ bool endsWith(std::string_view text, std::string_view suffix) {
 	return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
 }
 
-} // namespace
+}
 
 std::optional<std::string> defaultSpoolDir() {
 	std::optional<std::string> root = files::appRoot();
@@ -100,4 +100,4 @@ bool Bridge::reply(const std::string &id, const std::string &body) {
 	return true;
 }
 
-} // namespace VwCli::core
+}

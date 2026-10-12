@@ -55,4 +55,4 @@ private:
 	files::Lock lock_;
 };
 
-} // namespace VwCli::core
+}

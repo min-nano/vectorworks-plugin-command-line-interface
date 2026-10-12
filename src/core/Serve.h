@@ -92,4 +92,4 @@ private:
 // kindName は tools の結果に載せる種類の綴り。
 std::string_view kindName(ToolKind kind);
 
-} // namespace VwCli::core
+}

@@ -1,6 +1,7 @@
 package spool_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -17,13 +18,17 @@ import (
 // fixtures は作法の見本の場所（go test はパッケージのディレクトリで走る）。
 const fixtures = "../../../protocol/fixtures"
 
+// readFixture は見本のファイルを、知らないキーを誤りとして読む（綴りを誤った確かめが黙って
+// 省かれないように）。
 func readFixture(t *testing.T, name string, v any) {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(fixtures, name))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(data, v); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(v); err != nil {
 		t.Fatalf("%s: %v", name, err)
 	}
 }
@@ -46,7 +51,9 @@ func TestConstantsMatchFixtures(t *testing.T) {
 		MaxRequestBytes int      `json:"max_request_bytes"`
 		MaxNestingDepth int      `json:"max_nesting_depth"`
 		ReservedTools   []string `json:"reserved_tools"`
-		Codes           []string `json:"codes"`
+		// CLI は道具の種類を読まないので、照らす定数が無い（プラグイン側だけが照らす）。
+		Kinds []string `json:"kinds"`
+		Codes []string `json:"codes"`
 	}
 	readFixture(t, "constants.json", &c)
 	got := []any{ProtocolVersion, AppDirName, SpoolDirName, LockFile, RequestSuffix, ResponseSuffix,

@@ -67,4 +67,4 @@ constexpr bool validId(std::string_view id) {
 	return true;
 }
 
-} // namespace VwCli::core::protocol
+}

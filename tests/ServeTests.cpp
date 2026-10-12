@@ -49,6 +49,13 @@ public:
 		return value ? *value : Json();
 	}
 
+	// ok は応答が成功か。応答が無ければ偽。
+	bool ok(const std::string &id) const {
+		Json value = response(id);
+		const Json *ok = value.find("ok");
+		return ok && ok->isBool() && ok->asBool();
+	}
+
 	std::string code(const std::string &id) const {
 		Json value = response(id);
 		const Json *code = value.find("code");
@@ -112,7 +119,7 @@ std::string startSession(Server &server, Caller &caller, const std::string &id) 
 	return session && session->isString() ? session->asString() : "";
 }
 
-} // namespace
+}
 
 TEST(ServeLeavesRequestsPutDuringTheRoundForTheNext) {
 	TempDir dir;
@@ -143,7 +150,7 @@ TEST(ServeDoesNotQuitWhenTheAppToolFails) {
 	CHECK(!result.quit);
 	CHECK_EQ(caller.code("1"), std::string("internal"));
 	CHECK_EQ(caller.code("2"), std::string("busy"));
-	CHECK(caller.response("3").find("ok")->asBool());
+	CHECK(caller.ok("3"));
 	CHECK_EQ(gCalls, (std::vector<std::string>{"app_fails", "first"}));
 }
 
@@ -155,7 +162,7 @@ TEST(ServeAnswersAnyExceptionWithInternal) {
 	caller.put("2", R"({"tool":"first"})");
 	server.serve(kTools, kNow);
 	CHECK_EQ(caller.code("1"), std::string("internal"));
-	CHECK(caller.response("2").find("ok")->asBool());
+	CHECK(caller.ok("2"));
 }
 
 TEST(ServeTellsToolsWhetherASessionIsIssued) {
