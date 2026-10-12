@@ -1,11 +1,15 @@
 # clang-format configuration for the cli Vectorworks plug-in (src/, tests/).
 #
-# It encodes the house style the sources already use so `clang-format` becomes
-# the single source of truth for formatting:
-#   * tabs for indentation (width 4),
-#   * Allman braces (opening brace on its own line),
-#   * indented namespace bodies,
-#   * pointers/references bound to the type (int* p, not int *p).
+# The layout follows gofmt, the formatter of the Go half of this repository
+# (cli/), so that the two languages read the same:
+#   * tabs for indentation, spaces for alignment (gofmt), a tab shown as 2 columns
+#     (.editorconfig),
+#   * one more tab for a continued line, no alignment after an open bracket,
+#   * braces on the same line, case labels at the level of the switch,
+#   * namespace bodies not indented (Go has no nesting at the top level),
+#   * no line-length limit: like gofmt, the author decides where a long line
+#     breaks, and the formatter keeps those breaks,
+#   * includes sorted within each block (gofmt sorts imports within a group).
 #
 # Format a file in place:            clang-format -i src/core/Json.cpp
 # Check without writing (CI does):   clang-format --dry-run --Werror src/core/*.cpp
@@ -14,17 +18,18 @@ Language: Cpp
 BasedOnStyle: LLVM
 
 # --- Indentation ------------------------------------------------------------
-UseTab: Always
-TabWidth: 4
-IndentWidth: 4
-ContinuationIndentWidth: 4
-NamespaceIndentation: All
-AccessModifierOffset: -4
+UseTab: ForIndentation
+TabWidth: 2
+IndentWidth: 2
+ContinuationIndentWidth: 2
+NamespaceIndentation: None
+AccessModifierOffset: -2
 IndentPPDirectives: AfterHash
 IndentCaseLabels: false
+AlignAfterOpenBracket: DontAlign
 
 # --- Braces -----------------------------------------------------------------
-BreakBeforeBraces: Allman
+BreakBeforeBraces: Attach
 
 # --- Pointers / references bind to the type ---------------------------------
 PointerAlignment: Left
@@ -32,22 +37,16 @@ ReferenceAlignment: Left
 DerivePointerAlignment: false
 
 # --- Line width -------------------------------------------------------------
-# Wrap code at 100 columns. Comments are NOT reflowed (ReflowComments: false):
-# the sources carry heavy, hand-wrapped comment blocks (often with box-drawing
-# rules and Japanese text) that automatic reflow would mangle, so their width
-# stays the author's responsibility while code wrapping is enforced.
-ColumnLimit: 100
+ColumnLimit: 0
 ReflowComments: false
 
 # --- Includes ---------------------------------------------------------------
-# The project relies on a specific include order (PluginPrefix / BuildConfig
-# first), so leave grouping to the author rather than re-sorting across blocks.
-SortIncludes: false
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve
 
-# --- Misc house style -------------------------------------------------------
+# --- Misc ---------------------------------------------------------------------
 FixNamespaceComments: true
 SpaceAfterCStyleCast: false
-AlignAfterOpenBracket: Align
 AllowShortFunctionsOnASingleLine: Empty
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false

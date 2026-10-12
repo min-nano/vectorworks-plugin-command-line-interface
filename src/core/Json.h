@@ -30,120 +30,108 @@
 #include <utility>
 #include <vector>
 
-namespace VwCli::core
-{
-	// 入れ子（オブジェクトと配列）の深さの上限。外側の値を 1 と数える。作法の上限と同じ値
-	// （docs/protocol.md「要求」。core/Bridge.h の kBridgeMaxNestingDepth）。
-	inline constexpr int kJsonMaxDepth = 64;
+namespace VwCli::core {
+// 入れ子（オブジェクトと配列）の深さの上限。外側の値を 1 と数える。作法の上限と同じ値
+// （docs/protocol.md「要求」。core/Bridge.h の kBridgeMaxNestingDepth）。
+inline constexpr int kJsonMaxDepth = 64;
 
-	// JSON の値 1 つ。null / 真偽 / 数 / 文字列 / 配列 / オブジェクトのいずれか。
-	class Json
-	{
-	public:
-		enum class Kind
-		{
-			Null,
-			Bool,
-			Number,
-			String,
-			Array,
-			Object,
-		};
-
-		Json() = default;
-
-		// --- 作る ----------------------------------------------------------
-		static Json null();
-		static Json boolean(bool value);
-		static Json number(double value);
-		static Json integer(long long value);
-		static Json string(std::string value);
-		static Json array();
-		static Json object();
-
-		// --- 見る ----------------------------------------------------------
-		Kind kind() const
-		{
-			return fKind;
-		}
-		bool isNull() const
-		{
-			return fKind == Kind::Null;
-		}
-		bool isBool() const
-		{
-			return fKind == Kind::Bool;
-		}
-		bool isNumber() const
-		{
-			return fKind == Kind::Number;
-		}
-		bool isString() const
-		{
-			return fKind == Kind::String;
-		}
-		bool isArray() const
-		{
-			return fKind == Kind::Array;
-		}
-		bool isObject() const
-		{
-			return fKind == Kind::Object;
-		}
-
-		// 型が違えば既定値を返す。型を問う必要があるところ（引数の検査）は is*() で確かめる。
-		bool asBool(bool fallback = false) const;
-		double asNumber(double fallback = 0.0) const;
-		std::string asString(const std::string& fallback = std::string()) const;
-
-		// 配列の要素（配列でなければ空）。
-		const std::vector<Json>& items() const
-		{
-			return fItems;
-		}
-
-		// オブジェクトのメンバ（入れた順）。
-		const std::vector<std::pair<std::string, Json>>& members() const
-		{
-			return fMembers;
-		}
-
-		// オブジェクトのメンバ 1 つ。**無ければ null を返す**。
-		const Json& at(const std::string& key) const;
-		bool has(const std::string& key) const;
-
-		// --- 足す ----------------------------------------------------------
-		// 配列へ 1 つ（配列でなければ何もしない）。
-		void push(Json value);
-		// オブジェクトへ 1 つ。**同じ鍵が既にあれば置き換える**（並びは最初に入れた位置の
-		// まま）。オブジェクトでなければ何もしない。
-		void set(std::string key, Json value);
-
-		// --- 書き出す・読み取る --------------------------------------------
-		// 1 行の JSON テキスト（整形しない。読むのは機械）。
-		std::string dump() const;
-
-		// 読み取り。成功したら true。失敗したら out は変えず、error に理由が入る。
-		static bool parse(const std::string& text, Json& out, std::string& error);
-
-		// 型と値が同じか。オブジェクトはメンバの並びを問わない（テストで応答を比べるため）。
-		bool equals(const Json& other) const;
-
-	private:
-		// 解析器はメンバへ直に足す（重複の判定を表で済ませるため。Json.cpp）。
-		friend class JsonParser;
-
-		Kind fKind = Kind::Null;
-		bool fBool = false;
-		double fNumber = 0.0;
-		std::string fString;
-		std::vector<Json> fItems;
-		std::vector<std::pair<std::string, Json>> fMembers;
+// JSON の値 1 つ。null / 真偽 / 数 / 文字列 / 配列 / オブジェクトのいずれか。
+class Json {
+public:
+	enum class Kind {
+		Null,
+		Bool,
+		Number,
+		String,
+		Array,
+		Object,
 	};
 
-	// JSON の文字列リテラル 1 つ分（引用符と傍線を含む）。
-	std::string jsonQuote(const std::string& text);
+	Json() = default;
 
-	// UTF-8 として正しいか（RFC 3629。冗長な表現・サロゲート・U+10FFFF を超えるものは誤り）。
-	bool isValidUtf8(const std::string& text);
+	// --- 作る ----------------------------------------------------------
+	static Json null();
+	static Json boolean(bool value);
+	static Json number(double value);
+	static Json integer(long long value);
+	static Json string(std::string value);
+	static Json array();
+	static Json object();
+
+	// --- 見る ----------------------------------------------------------
+	Kind kind() const {
+		return fKind;
+	}
+	bool isNull() const {
+		return fKind == Kind::Null;
+	}
+	bool isBool() const {
+		return fKind == Kind::Bool;
+	}
+	bool isNumber() const {
+		return fKind == Kind::Number;
+	}
+	bool isString() const {
+		return fKind == Kind::String;
+	}
+	bool isArray() const {
+		return fKind == Kind::Array;
+	}
+	bool isObject() const {
+		return fKind == Kind::Object;
+	}
+
+	// 型が違えば既定値を返す。型を問う必要があるところ（引数の検査）は is*() で確かめる。
+	bool asBool(bool fallback = false) const;
+	double asNumber(double fallback = 0.0) const;
+	std::string asString(const std::string& fallback = std::string()) const;
+
+	// 配列の要素（配列でなければ空）。
+	const std::vector<Json>& items() const {
+		return fItems;
+	}
+
+	// オブジェクトのメンバ（入れた順）。
+	const std::vector<std::pair<std::string, Json>>& members() const {
+		return fMembers;
+	}
+
+	// オブジェクトのメンバ 1 つ。**無ければ null を返す**。
+	const Json& at(const std::string& key) const;
+	bool has(const std::string& key) const;
+
+	// --- 足す ----------------------------------------------------------
+	// 配列へ 1 つ（配列でなければ何もしない）。
+	void push(Json value);
+	// オブジェクトへ 1 つ。**同じ鍵が既にあれば置き換える**（並びは最初に入れた位置の
+	// まま）。オブジェクトでなければ何もしない。
+	void set(std::string key, Json value);
+
+	// --- 書き出す・読み取る --------------------------------------------
+	// 1 行の JSON テキスト（整形しない。読むのは機械）。
+	std::string dump() const;
+
+	// 読み取り。成功したら true。失敗したら out は変えず、error に理由が入る。
+	static bool parse(const std::string& text, Json& out, std::string& error);
+
+	// 型と値が同じか。オブジェクトはメンバの並びを問わない（テストで応答を比べるため）。
+	bool equals(const Json& other) const;
+
+private:
+	// 解析器はメンバへ直に足す（重複の判定を表で済ませるため。Json.cpp）。
+	friend class JsonParser;
+
+	Kind fKind = Kind::Null;
+	bool fBool = false;
+	double fNumber = 0.0;
+	std::string fString;
+	std::vector<Json> fItems;
+	std::vector<std::pair<std::string, Json>> fMembers;
+};
+
+// JSON の文字列リテラル 1 つ分（引用符と傍線を含む）。
+std::string jsonQuote(const std::string& text);
+
+// UTF-8 として正しいか（RFC 3629。冗長な表現・サロゲート・U+10FFFF を超えるものは誤り）。
+bool isValidUtf8(const std::string& text);
 } // namespace VwCli::core

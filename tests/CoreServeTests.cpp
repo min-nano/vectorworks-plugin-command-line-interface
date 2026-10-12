@@ -30,82 +30,71 @@ using vwtest::ReadFile;
 using vwtest::TempDir;
 using vwtest::WriteFile;
 
-namespace
-{
-	// 呼ぶ側の真似。待つ印を掴んでから要求を置き、応答を読む。
-	class Caller
-	{
-	public:
-		explicit Caller(std::filesystem::path dir) : fDir(std::move(dir)) {}
+namespace {
+// 呼ぶ側の真似。待つ印を掴んでから要求を置き、応答を読む。
+class Caller {
+public:
+	explicit Caller(std::filesystem::path dir)
+	    : fDir(std::move(dir)) {}
 
-		void put(const std::string& id, const std::string& text)
-		{
-			hold(id);
-			WriteFile(fDir / (id + kBridgeRequestSuffix), text);
-		}
-
-		// 待つ印を置かずに要求だけ置く（作法に反する呼ぶ側）。
-		void putWithoutWait(const std::string& id, const std::string& text)
-		{
-			WriteFile(fDir / (id + kBridgeRequestSuffix), text);
-		}
-
-		void hold(const std::string& id)
-		{
-			fWaits[id] = std::make_unique<HeldFile>(fDir / (id + kBridgeWaitSuffix));
-		}
-
-		void release(const std::string& id)
-		{
-			fWaits.erase(id);
-		}
-
-		// 応答を読んで消す。無ければ null。
-		Json response(const std::string& id)
-		{
-			const std::filesystem::path path = fDir / (id + kBridgeResponseSuffix);
-			if (!Exists(path))
-				return Json::null();
-			Json value;
-			std::string error;
-			Json::parse(ReadFile(path), value, error);
-			std::filesystem::remove(path);
-			return value;
-		}
-
-		std::string code(const std::string& id)
-		{
-			return response(id).at("code").asString("<none>");
-		}
-
-	private:
-		std::filesystem::path fDir;
-		std::map<std::string, std::unique_ptr<HeldFile>> fWaits;
-	};
-
-	// 呼ばれた回数を数える道具を足した表。
-	ToolTable CountingTools(int& calls)
-	{
-		ToolTable tools = FakeTools();
-		tools.push_back(Tool{"count", "数える", "{}", ToolKind::Read,
-							 [&calls](const Json&, const ToolContext&, ToolError&)
-							 {
-								 ++calls;
-								 return Json::object();
-							 }});
-		return tools;
+	void put(const std::string& id, const std::string& text) {
+		hold(id);
+		WriteFile(fDir / (id + kBridgeRequestSuffix), text);
 	}
 
-	std::string Session(const Json& response)
-	{
-		return response.at("result").at("session").asString();
+	// 待つ印を置かずに要求だけ置く（作法に反する呼ぶ側）。
+	void putWithoutWait(const std::string& id, const std::string& text) {
+		WriteFile(fDir / (id + kBridgeRequestSuffix), text);
 	}
+
+	void hold(const std::string& id) {
+		fWaits[id] = std::make_unique<HeldFile>(fDir / (id + kBridgeWaitSuffix));
+	}
+
+	void release(const std::string& id) {
+		fWaits.erase(id);
+	}
+
+	// 応答を読んで消す。無ければ null。
+	Json response(const std::string& id) {
+		const std::filesystem::path path = fDir / (id + kBridgeResponseSuffix);
+		if (!Exists(path))
+			return Json::null();
+		Json value;
+		std::string error;
+		Json::parse(ReadFile(path), value, error);
+		std::filesystem::remove(path);
+		return value;
+	}
+
+	std::string code(const std::string& id) {
+		return response(id).at("code").asString("<none>");
+	}
+
+private:
+	std::filesystem::path fDir;
+	std::map<std::string, std::unique_ptr<HeldFile>> fWaits;
+};
+
+// 呼ばれた回数を数える道具を足した表。
+ToolTable CountingTools(int& calls) {
+	ToolTable tools = FakeTools();
+	tools.push_back(Tool{"count", "数える", "{}", ToolKind::Read,
+	  [&calls](const Json&, const ToolContext&, ToolError&) {
+		  ++calls;
+		  return Json::object();
+	  }});
+	return tools;
+}
+
+std::string Session(const Json& response) {
+	return response.at("result").at("session").asString();
+}
 } // namespace
 
 // --- ロックと掃除 -------------------------------------------------------------------
 
-TEST(serve_waits_while_another_bridge_holds_the_lock)
-{
+TEST(serve_waits_while_another_bridge_holds_the_lock) {
 	const TempDir temp;
 	Caller caller(temp.path());
 	caller.put("a", R"({"tool":"ping"})");
@@ -126,8 +115,7 @@ TEST(serve_waits_while_another_bridge_holds_the_lock)
 	CHECK_EQ(Joined(ListNames(temp.path())), std::string("a.wait"));
 }
 
-TEST(serve_reports_a_spool_it_cannot_prepare)
-{
+TEST(serve_reports_a_spool_it_cannot_prepare) {
 	const TempDir temp;
 	WriteFile(temp.path() / "blocked", "x");
 	Server server(temp.path() / "blocked" / "spool");
@@ -136,16 +124,14 @@ TEST(serve_reports_a_spool_it_cannot_prepare)
 	CHECK(!result.message.empty());
 }
 
-TEST(serve_creates_the_spool)
-{
+TEST(serve_creates_the_spool) {
 	const TempDir temp;
 	Server server(temp.path() / "app" / "spool");
 	CHECK(server.serve(FakeTools()).phase == ServePhase::Serving);
 	CHECK(Exists(temp.path() / "app" / "spool" / kBridgeLockFile));
 }
 
-TEST(serve_sweeps_only_when_it_takes_the_lock)
-{
+TEST(serve_sweeps_only_when_it_takes_the_lock) {
 	const TempDir temp;
 	Server server(temp.path());
 	CHECK(server.serve(FakeTools()).phase == ServePhase::Serving);
@@ -157,21 +143,19 @@ TEST(serve_sweeps_only_when_it_takes_the_lock)
 
 // --- 取り出し ---------------------------------------------------------------------
 
-TEST(serve_answers_in_name_order_only_what_was_listed_at_the_start)
-{
+TEST(serve_answers_in_name_order_only_what_was_listed_at_the_start) {
 	const TempDir temp;
 	Caller caller(temp.path());
 	std::string order;
 	ToolTable tools = FakeTools();
 	tools.push_back(Tool{"mark", "印を付ける", "{}", ToolKind::Read,
-						 [&order, &caller](const Json& args, const ToolContext&, ToolError&)
-						 {
-							 order += args.at("m").asString();
-							 // 回の途中で置かれた要求は次の回に回る。
-							 if (order.size() == 1)
-								 caller.put("0000", R"({"tool":"mark","args":{"m":"z"}})");
-							 return Json::object();
-						 }});
+	  [&order, &caller](const Json& args, const ToolContext&, ToolError&) {
+		  order += args.at("m").asString();
+		  // 回の途中で置かれた要求は次の回に回る。
+		  if (order.size() == 1)
+			  caller.put("0000", R"({"tool":"mark","args":{"m":"z"}})");
+		  return Json::object();
+	  }});
 	caller.put("0003", R"({"tool":"mark","args":{"m":"c"}})");
 	caller.put("0001", R"({"tool":"mark","args":{"m":"a"}})");
 	caller.put("0002", R"({"tool":"mark","args":{"m":"b"}})");
@@ -184,8 +168,7 @@ TEST(serve_answers_in_name_order_only_what_was_listed_at_the_start)
 	CHECK_EQ(order, std::string("abcz"));
 }
 
-TEST(serve_does_not_touch_requests_with_bad_ids)
-{
+TEST(serve_does_not_touch_requests_with_bad_ids) {
 	const TempDir temp;
 	Server server(temp.path());
 	server.serve(FakeTools());
@@ -197,8 +180,7 @@ TEST(serve_does_not_touch_requests_with_bad_ids)
 
 // --- 待つ印 -----------------------------------------------------------------------
 
-TEST(serve_skips_requests_nobody_waits_for)
-{
+TEST(serve_skips_requests_nobody_waits_for) {
 	const TempDir temp;
 	Caller caller(temp.path());
 	int calls = 0;
@@ -214,8 +196,7 @@ TEST(serve_skips_requests_nobody_waits_for)
 	CHECK(ListNames(temp.path()).empty());
 }
 
-TEST(serve_refuses_requests_without_a_wait_file)
-{
+TEST(serve_refuses_requests_without_a_wait_file) {
 	const TempDir temp;
 	Caller caller(temp.path());
 	int calls = 0;
@@ -231,34 +212,31 @@ TEST(serve_refuses_requests_without_a_wait_file)
 
 // --- 読めない要求 -------------------------------------------------------------------
 
-TEST(serve_answers_unreadable_requests)
-{
+TEST(serve_answers_unreadable_requests) {
 	const TempDir temp;
 	Caller caller(temp.path());
 	caller.put("a", "{");
 	caller.put("b", R"({"args":{}})");
 	caller.put("c", R"({"tool":"echo","args":[]})");
 	caller.put("d", R"({"tool":"echo","args":{"a":)" + std::string(70, '[') + std::string(70, ']') +
-						"}}");
+	                  "}}");
 	caller.put("e", std::string(kBridgeMaxRequestBytes + 1, ' '));
 	caller.put("f", R"({"tool":"echo","session":7})");
 	Server server(temp.path());
 	server.serve(FakeTools());
-	for (const char* id : {"a", "b", "c", "d", "e", "f"})
-	{
+	for (const char* id : {"a", "b", "c", "d", "e", "f"}) {
 		const Json response = caller.response(id);
 		CHECK(!response.at("ok").asBool(true));
 		CHECK_EQ(response.at("code").asString(), std::string("invalid_request"));
 		CHECK(!response.at("error").asString().empty());
 	}
 	CHECK_EQ(Joined(ListNames(temp.path())),
-			 std::string("a.wait b.wait c.wait d.wait e.wait f.wait"));
+	  std::string("a.wait b.wait c.wait d.wait e.wait f.wait"));
 }
 
 // --- 道具 -------------------------------------------------------------------------
 
-TEST(serve_runs_tools_and_reports_their_failures)
-{
+TEST(serve_runs_tools_and_reports_their_failures) {
 	const TempDir temp;
 	Caller caller(temp.path());
 	caller.put("a", R"({"tool":"echo","args":{"x":[1,"あ"]}})");
@@ -271,7 +249,7 @@ TEST(serve_runs_tools_and_reports_their_failures)
 	server.serve(FakeTools());
 
 	CHECK_EQ(caller.response("a").dump(),
-			 std::string(R"({"ok":true,"result":{"args":{"x":[1,"あ"]}}})"));
+	  std::string(R"({"ok":true,"result":{"args":{"x":[1,"あ"]}}})"));
 	CHECK_EQ(caller.response("b").dump(), std::string(R"({"ok":true,"result":{"args":{}}})"));
 	const Json unknown = caller.response("c");
 	CHECK_EQ(unknown.at("code").asString(), std::string("unknown_tool"));
@@ -283,23 +261,20 @@ TEST(serve_runs_tools_and_reports_their_failures)
 	CHECK_EQ(caller.response("f").dump(), std::string(R"({"ok":true,"result":{"pong":true}})"));
 }
 
-TEST(serve_limits_the_codes_a_tool_may_set)
-{
+TEST(serve_limits_the_codes_a_tool_may_set) {
 	const TempDir temp;
 	Caller caller(temp.path());
 	ToolTable tools = FakeTools();
 	tools.push_back(Tool{"odd", "作法の種別を付けようとする", "{}", ToolKind::Read,
-						 [](const Json&, const ToolContext&, ToolError& error)
-						 {
-							 error.failed = true;
-							 error.code = BridgeCode::Busy;
-							 return Json::null();
-						 }});
+	  [](const Json&, const ToolContext&, ToolError& error) {
+		  error.failed = true;
+		  error.code = BridgeCode::Busy;
+		  return Json::null();
+	  }});
 	tools.push_back(Tool{"thrown", "例外でないものを投げる", "{}", ToolKind::Read,
-						 [](const Json&, const ToolContext&, ToolError&) -> Json { throw 1; }});
+	  [](const Json&, const ToolContext&, ToolError&) -> Json { throw 1; }});
 	tools.push_back(Tool{"internal", "internal で失敗する", "{}", ToolKind::Read,
-						 [](const Json&, const ToolContext&, ToolError& error)
-						 { return error.internal("図面が開かれていません"); }});
+	  [](const Json&, const ToolContext&, ToolError& error) { return error.internal("図面が開かれていません"); }});
 	caller.put("a", R"({"tool":"odd"})");
 	caller.put("b", R"({"tool":"thrown"})");
 	caller.put("c", R"({"tool":"internal"})");
@@ -314,8 +289,7 @@ TEST(serve_limits_the_codes_a_tool_may_set)
 	CHECK_EQ(internal.at("error").asString(), std::string("図面が開かれていません"));
 }
 
-TEST(serve_lists_tools)
-{
+TEST(serve_lists_tools) {
 	const TempDir temp;
 	Caller caller(temp.path());
 	caller.put("a", R"({"tool":"tools"})");
@@ -328,8 +302,7 @@ TEST(serve_lists_tools)
 	const auto& items = result.at("tools").items();
 	CHECK_EQ(items.size(), FakeTools().size());
 	std::map<std::string, std::string> kinds;
-	for (const Json& item : items)
-	{
+	for (const Json& item : items) {
 		kinds[item.at("name").asString()] = item.at("kind").asString();
 		CHECK(item.at("inputSchema").isObject());
 		CHECK(!item.at("description").asString().empty());
@@ -344,8 +317,7 @@ TEST(serve_lists_tools)
 
 // --- 占有 -------------------------------------------------------------------------
 
-TEST(serve_sessions)
-{
+TEST(serve_sessions) {
 	const TempDir temp;
 	Caller caller(temp.path());
 	Server server(temp.path());
@@ -416,8 +388,7 @@ TEST(serve_sessions)
 	CHECK(next != session);
 }
 
-TEST(serve_session_is_lost_with_the_bridge)
-{
+TEST(serve_session_is_lost_with_the_bridge) {
 	// Vectorworks を起動し直すと占有は消え、前の印は no_session で断られる。
 	const TempDir temp;
 	Caller caller(temp.path());
@@ -434,14 +405,12 @@ TEST(serve_session_is_lost_with_the_bridge)
 	CHECK_EQ(caller.code("b"), std::string("no_session"));
 }
 
-TEST(serve_tells_tools_whether_a_session_is_active)
-{
+TEST(serve_tells_tools_whether_a_session_is_active) {
 	const TempDir temp;
 	Caller caller(temp.path());
 	ToolTable tools = FakeTools();
 	tools.push_back(Tool{"context", "状態を返す", "{}", ToolKind::Read,
-						 [](const Json&, const ToolContext& context, ToolError&)
-						 { return Json::boolean(context.session); }});
+	  [](const Json&, const ToolContext& context, ToolError&) { return Json::boolean(context.session); }});
 	Server server(temp.path());
 	caller.put("a", R"({"tool":"context"})");
 	caller.put("b", R"({"tool":"session_start"})");
@@ -455,8 +424,7 @@ TEST(serve_tells_tools_whether_a_session_is_active)
 
 // --- 終了の依頼 ---------------------------------------------------------------------
 
-TEST(serve_quit_answers_then_stops_the_round)
-{
+TEST(serve_quit_answers_then_stops_the_round) {
 	const TempDir temp;
 	Caller caller(temp.path());
 	Server server(temp.path());
@@ -473,8 +441,7 @@ TEST(serve_quit_answers_then_stops_the_round)
 	CHECK_EQ(Joined(ListNames(temp.path())), std::string("a.wait b.wait c.req.json c.wait"));
 }
 
-TEST(serve_refused_quit_does_not_stop_the_round)
-{
+TEST(serve_refused_quit_does_not_stop_the_round) {
 	const TempDir temp;
 	Caller caller(temp.path());
 	Server server(temp.path());
@@ -488,8 +455,7 @@ TEST(serve_refused_quit_does_not_stop_the_round)
 
 // --- 応答を書けない -------------------------------------------------------------------
 
-TEST(serve_reports_responses_it_cannot_write)
-{
+TEST(serve_reports_responses_it_cannot_write) {
 	const TempDir temp;
 	Caller caller(temp.path());
 	Server server(temp.path());
@@ -507,8 +473,7 @@ TEST(serve_reports_responses_it_cannot_write)
 
 // --- 表 ---------------------------------------------------------------------------
 
-TEST(serve_tool_names)
-{
+TEST(serve_tool_names) {
 	CHECK(isValidToolName("ping"));
 	CHECK(isValidToolName("layer_objects"));
 	CHECK(isValidToolName("structure.import_ifc"));
@@ -528,14 +493,12 @@ TEST(serve_tool_names)
 	CHECK_EQ(std::string(toolKindName(ToolKind::App)), "app");
 }
 
-TEST(serve_validate_tool_table)
-{
+TEST(serve_validate_tool_table) {
 	std::string error;
 	CHECK(validateToolTable(FakeTools(), error));
 	CHECK(error.empty());
 
-	const auto broken = [](auto change)
-	{
+	const auto broken = [](auto change) {
 		ToolTable tools = FakeTools();
 		change(tools);
 		std::string why;
@@ -551,11 +514,9 @@ TEST(serve_validate_tool_table)
 	CHECK(broken([](ToolTable& t) { t[0].kind = ToolKind::Write; }));
 }
 
-TEST(serve_session_ids_are_random_ids)
-{
+TEST(serve_session_ids_are_random_ids) {
 	std::set<std::string> seen;
-	for (int i = 0; i < 100; ++i)
-	{
+	for (int i = 0; i < 100; ++i) {
 		const std::string id = newSessionId();
 		CHECK_EQ(id.size(), std::size_t(32));
 		CHECK(isValidBridgeId(id));

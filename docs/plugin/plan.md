@@ -61,7 +61,7 @@
 | `src/Module-Info.plist.in` | 同じ | 版の鍵（`VWBuildBranch` / `VWBuildCommit`）を除く |
 | `scripts/fetch-vw-sdk.sh` / `ci-common.sh` / `ci-wait.sh` / `lint.sh` | 同じ | `VW_REPO` |
 | `tests/TestFramework.h` と `CoreJsonTests` / `CoreBridgeTests` | 同じ | |
-| `.clang-format` / `.clang-tidy` / `.cmake-format.yaml` / `.editorconfig` / `PSScriptAnalyzerSettings.psd1` | 同じ | 先頭の注釈 |
+| `.clang-format` / `.clang-tidy` / `.cmake-format.yaml` / `.editorconfig` / `PSScriptAnalyzerSettings.psd1` | 同じ | 先頭の注釈。体裁は元（タブ幅 4・Allman・100 桁）ではなく、このリポジトリの Go（gofmt）に合わせる（タブ幅 2・波括弧は同じ行・行の長さの上限なし） |
 | `.github/workflows/build.yml` / `test.yml` / `lint.yml` / `cleanup-dev-release.yml` | 同じ | 名前・資産名・`bin/` の梱包。SDK に依存する clang-tidy を除く（[ビルド](build-and-release.md)） |
 
 ### 作り替えて移す

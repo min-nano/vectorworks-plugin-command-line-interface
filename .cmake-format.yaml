@@ -2,10 +2,9 @@
 # https://cmake-format.readthedocs.io
 #
 # It makes `cmake-format` the single source of truth for how the CMakeLists.txt
-# files are laid out, mirroring the house style the C/C++ sources already use via
-# .clang-format:
-#   * tabs for indentation (width 4),
-#   * wrap at 100 columns,
+# files are laid out, following gofmt like .clang-format does:
+#   * tabs for indentation (shown 2 columns wide, .editorconfig),
+#   * wrap at 100 columns (cmake-format cannot leave line breaks to the author),
 #   * hand-written comments are left ALONE (never reflowed).
 #
 # Format a file in place:            cmake-format -i CMakeLists.txt
@@ -13,10 +12,10 @@
 # Lint for bug-prone patterns:       cmake-lint CMakeLists.txt
 
 format:
-  # Wrap at 100 columns, matching ColumnLimit in .clang-format.
+  # Wrap at 100 columns.
   line_width: 100
-  # Tabs for indentation (width 4), matching UseTab/TabWidth in .clang-format.
-  tab_size: 4
+  # Tabs for indentation (width 2), matching UseTab/TabWidth in .clang-format.
+  tab_size: 2
   use_tabchars: true
   # Indent with tabs, but use spaces for the fractional alignment cmake-format
   # adds after an open paren, so aligned arguments line up regardless of how wide

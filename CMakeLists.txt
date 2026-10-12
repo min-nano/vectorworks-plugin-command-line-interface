@@ -46,7 +46,7 @@ endif()
 # Flags shared by every SDK-free target, so that the library is checked / measured
 # exactly like the tests that link it.
 set(VW_SANITIZER_FLAGS -g -fno-omit-frame-pointer -fsanitize=address,undefined
-					   -fno-sanitize-recover=all)
+											 -fno-sanitize-recover=all)
 set(VW_COVERAGE_FLAGS -O0 -g --coverage)
 
 # vw_sdk_free_flags(<target>): warnings as errors plus the optional instrumentation.

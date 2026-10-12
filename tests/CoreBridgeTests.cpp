@@ -30,18 +30,15 @@ using vwtest::ReadFile;
 using vwtest::TempDir;
 using vwtest::WriteFile;
 
-namespace
-{
-	std::filesystem::path In(const TempDir& temp, const std::string& name)
-	{
-		return temp.path() / name;
-	}
+namespace {
+std::filesystem::path In(const TempDir& temp, const std::string& name) {
+	return temp.path() / name;
+}
 } // namespace
 
 // --- 場所 -----------------------------------------------------------------------
 
-TEST(bridge_spool_dir_is_under_the_cli_dir)
-{
+TEST(bridge_spool_dir_is_under_the_cli_dir) {
 	const std::filesystem::path base = std::filesystem::path("base");
 	CHECK(bridgeSpoolDirUnder(base) == base / "vectorworks2026-cli" / "spool");
 
@@ -55,20 +52,18 @@ TEST(bridge_spool_dir_is_under_the_cli_dir)
 #if !defined(_WIN32)
 	// mac はホームの Library/Application Support（環境変数 HOME は読まない）。
 	CHECK_EQ(utf8FromPath(dir.parent_path().parent_path().filename()),
-			 std::string("Application Support"));
+	  std::string("Application Support"));
 #endif
 }
 
-TEST(bridge_path_round_trips_utf8)
-{
+TEST(bridge_path_round_trips_utf8) {
 	const std::string name = "利用者/スプール";
 	CHECK_EQ(utf8FromPath(pathFromUtf8(name)), name);
 }
 
 // --- id と形 ---------------------------------------------------------------------
 
-TEST(bridge_valid_ids)
-{
+TEST(bridge_valid_ids) {
 	CHECK(isValidBridgeId("a"));
 	CHECK(isValidBridgeId("1760000000000000000-0a1b2c3d"));
 	CHECK(isValidBridgeId("A_z-9"));
@@ -81,8 +76,7 @@ TEST(bridge_valid_ids)
 	CHECK(!isValidBridgeId("あ"));
 }
 
-TEST(bridge_code_names)
-{
+TEST(bridge_code_names) {
 	CHECK_EQ(std::string(bridgeCodeName(BridgeCode::InvalidRequest)), "invalid_request");
 	CHECK_EQ(std::string(bridgeCodeName(BridgeCode::UnknownTool)), "unknown_tool");
 	CHECK_EQ(std::string(bridgeCodeName(BridgeCode::InvalidArgs)), "invalid_args");
@@ -92,12 +86,11 @@ TEST(bridge_code_names)
 	CHECK_EQ(std::string(bridgeCodeName(BridgeCode::Internal)), "internal");
 }
 
-TEST(bridge_parse_request)
-{
+TEST(bridge_parse_request) {
 	BridgeRequest request;
 	std::string error;
 	CHECK(
-		parseBridgeRequest(R"({"tool":"layers","args":{"include_sheets":false}})", request, error));
+	  parseBridgeRequest(R"({"tool":"layers","args":{"include_sheets":false}})", request, error));
 	CHECK_EQ(request.tool, std::string("layers"));
 	CHECK_EQ(request.args.dump(), std::string(R"({"include_sheets":false})"));
 	CHECK(request.session.empty());
@@ -113,14 +106,12 @@ TEST(bridge_parse_request)
 	CHECK_EQ(request.session, std::string("s-1"));
 }
 
-TEST(bridge_parse_request_rejects_unreadable_requests)
-{
+TEST(bridge_parse_request_rejects_unreadable_requests) {
 	for (const char* text :
-		 {"", "{", "[]", "null", "\"ping\"", R"({})", R"({"tool":null})", R"({"tool":""})",
-		  R"({"tool":1})", R"({"TOOL":"ping"})", R"({"tool":"ping","args":[]})",
-		  R"({"tool":"ping","args":"x"})", R"({"tool":"ping","args":1})",
-		  R"({"tool":"ping","session":1})", R"({"tool":"ping","session":{}})"})
-	{
+	  {"", "{", "[]", "null", "\"ping\"", R"({})", R"({"tool":null})", R"({"tool":""})",
+	    R"({"tool":1})", R"({"TOOL":"ping"})", R"({"tool":"ping","args":[]})",
+	    R"({"tool":"ping","args":"x"})", R"({"tool":"ping","args":1})",
+	    R"({"tool":"ping","session":1})", R"({"tool":"ping","session":{}})"}) {
 		BridgeRequest request;
 		std::string error;
 		CHECK(!parseBridgeRequest(text, request, error));
@@ -133,22 +124,20 @@ TEST(bridge_parse_request_rejects_unreadable_requests)
 	CHECK_EQ(request.args.dump(), std::string("{}"));
 }
 
-TEST(bridge_dump_response)
-{
+TEST(bridge_dump_response) {
 	Json result = Json::object();
 	result.set("n", Json::integer(1));
 	CHECK_EQ(dumpBridgeResponse(BridgeResponse::success(result)),
-			 std::string(R"({"ok":true,"result":{"n":1}})"));
+	  std::string(R"({"ok":true,"result":{"n":1}})"));
 	CHECK_EQ(dumpBridgeResponse(BridgeResponse::success(Json::null())),
-			 std::string(R"({"ok":true,"result":{}})"));
+	  std::string(R"({"ok":true,"result":{}})"));
 	CHECK_EQ(dumpBridgeResponse(BridgeResponse::failure(BridgeCode::UnknownTool, "知らない")),
-			 std::string(R"({"ok":false,"code":"unknown_tool","error":"知らない"})"));
+	  std::string(R"({"ok":false,"code":"unknown_tool","error":"知らない"})"));
 }
 
 // --- 用意とロック -------------------------------------------------------------------
 
-TEST(bridge_prepare_creates_the_spool_and_its_parents)
-{
+TEST(bridge_prepare_creates_the_spool_and_its_parents) {
 	const TempDir temp;
 	BridgeSpool spool(temp.path() / "app" / "spool");
 	std::string error;
@@ -158,10 +147,8 @@ TEST(bridge_prepare_creates_the_spool_and_its_parents)
 	CHECK(spool.prepare(error));
 #if !defined(_WIN32)
 	// 作ったものは 0700（親も）。
-	for (const auto& dir : {spool.dir(), spool.dir().parent_path()})
-	{
-		struct stat info
-		{
+	for (const auto& dir : {spool.dir(), spool.dir().parent_path()}) {
+		struct stat info {
 		};
 		CHECK(::stat(dir.c_str(), &info) == 0);
 		CHECK_EQ(static_cast<int>(info.st_mode & 0777), 0700);
@@ -169,8 +156,7 @@ TEST(bridge_prepare_creates_the_spool_and_its_parents)
 #endif
 }
 
-TEST(bridge_prepare_fails_on_a_file_in_the_way)
-{
+TEST(bridge_prepare_fails_on_a_file_in_the_way) {
 	const TempDir temp;
 	WriteFile(In(temp, "blocked"), "x");
 	BridgeSpool spool(In(temp, "blocked") / "spool");
@@ -183,8 +169,7 @@ TEST(bridge_prepare_fails_on_a_file_in_the_way)
 	CHECK(!error.empty());
 }
 
-TEST(bridge_lock_is_exclusive_and_released_on_unlock)
-{
+TEST(bridge_lock_is_exclusive_and_released_on_unlock) {
 	const TempDir temp;
 	BridgeSpool first(temp.path());
 	BridgeSpool second(temp.path());
@@ -209,8 +194,7 @@ TEST(bridge_lock_is_exclusive_and_released_on_unlock)
 	CHECK(Exists(In(temp, kBridgeLockFile)));
 }
 
-TEST(bridge_lock_is_released_when_the_spool_goes_away)
-{
+TEST(bridge_lock_is_released_when_the_spool_goes_away) {
 	const TempDir temp;
 	std::string error;
 	{
@@ -221,8 +205,7 @@ TEST(bridge_lock_is_released_when_the_spool_goes_away)
 	CHECK(second.lock(error) == LockResult::Locked);
 }
 
-TEST(bridge_lock_seen_by_a_caller)
-{
+TEST(bridge_lock_seen_by_a_caller) {
 	// 呼ぶ側が bridge.lock を確かめている間（掴んでいる間）は取れない。
 	const TempDir temp;
 	HeldFile caller(In(temp, kBridgeLockFile));
@@ -234,8 +217,7 @@ TEST(bridge_lock_seen_by_a_caller)
 	CHECK(spool.lock(error) == LockResult::Locked);
 }
 
-TEST(bridge_lock_fails_without_the_directory)
-{
+TEST(bridge_lock_fails_without_the_directory) {
 	const TempDir temp;
 	BridgeSpool spool(In(temp, "missing"));
 	std::string error;
@@ -245,8 +227,7 @@ TEST(bridge_lock_fails_without_the_directory)
 
 // --- 待つ印 -----------------------------------------------------------------------
 
-TEST(bridge_wait_state)
-{
+TEST(bridge_wait_state) {
 	const TempDir temp;
 	BridgeSpool spool(temp.path());
 	CHECK(spool.waitState("a") == WaitState::Missing);
@@ -267,8 +248,7 @@ TEST(bridge_wait_state)
 
 // --- 掃除 -------------------------------------------------------------------------
 
-TEST(bridge_sweep_keeps_only_files_of_waiting_callers)
-{
+TEST(bridge_sweep_keeps_only_files_of_waiting_callers) {
 	const TempDir temp;
 	BridgeSpool spool(temp.path());
 	// 待っている呼ぶ側（a）のファイルは残す。
@@ -292,12 +272,11 @@ TEST(bridge_sweep_keeps_only_files_of_waiting_callers)
 
 	CHECK_EQ(spool.sweep(), std::size_t(5));
 	CHECK_EQ(Joined(ListNames(temp.path())),
-			 std::string("a.req.json a.res.json a.res.json.tmp a.wait notes.txt"));
+	  std::string("a.req.json a.res.json a.res.json.tmp a.wait notes.txt"));
 	CHECK(Exists(In(temp, kBridgeLockFile)));
 }
 
-TEST(bridge_sweep_of_a_missing_directory_does_nothing)
-{
+TEST(bridge_sweep_of_a_missing_directory_does_nothing) {
 	const TempDir temp;
 	BridgeSpool spool(In(temp, "missing"));
 	CHECK_EQ(spool.sweep(), std::size_t(0));
@@ -305,8 +284,7 @@ TEST(bridge_sweep_of_a_missing_directory_does_nothing)
 
 // --- 取り出し -----------------------------------------------------------------------
 
-TEST(bridge_poll_lists_valid_ids_in_name_order)
-{
+TEST(bridge_poll_lists_valid_ids_in_name_order) {
 	const TempDir temp;
 	BridgeSpool spool(temp.path());
 	WriteFile(In(temp, "0002.req.json"), "{}");
@@ -326,8 +304,7 @@ TEST(bridge_poll_lists_valid_ids_in_name_order)
 	CHECK(missing.poll().empty());
 }
 
-TEST(bridge_take_reads_then_removes)
-{
+TEST(bridge_take_reads_then_removes) {
 	const TempDir temp;
 	BridgeSpool spool(temp.path());
 	WriteFile(In(temp, "a.req.json"), R"({"tool":"ping"})");
@@ -339,8 +316,7 @@ TEST(bridge_take_reads_then_removes)
 	CHECK(spool.take("a", text) == TakeResult::Skipped);
 }
 
-TEST(bridge_take_caps_the_size)
-{
+TEST(bridge_take_caps_the_size) {
 	const TempDir temp;
 	BridgeSpool spool(temp.path());
 	std::string text;
@@ -356,15 +332,14 @@ TEST(bridge_take_caps_the_size)
 }
 
 #if defined(_WIN32)
-TEST(bridge_take_skips_a_request_it_cannot_remove)
-{
+TEST(bridge_take_skips_a_request_it_cannot_remove) {
 	// ほかのプロセス（ウイルス対策ソフトなど）が消すことを許さずに開いている要求は、
 	// 消せないので実行しない（次の回にやり直す）。
 	const TempDir temp;
 	BridgeSpool spool(temp.path());
 	WriteFile(In(temp, "a.req.json"), R"({"tool":"ping"})");
 	const HANDLE other = CreateFileW(In(temp, "a.req.json").c_str(), GENERIC_READ, FILE_SHARE_READ,
-									 nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+	  nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
 	CHECK(other != INVALID_HANDLE_VALUE);
 	std::string text;
 	CHECK(spool.take("a", text) == TakeResult::Skipped);
@@ -375,8 +350,7 @@ TEST(bridge_take_skips_a_request_it_cannot_remove)
 
 // --- 応答 -------------------------------------------------------------------------
 
-TEST(bridge_reply_publishes_by_rename)
-{
+TEST(bridge_reply_publishes_by_rename) {
 	const TempDir temp;
 	BridgeSpool spool(temp.path());
 	std::string error;
@@ -387,11 +361,10 @@ TEST(bridge_reply_publishes_by_rename)
 	// 残っていた応答は置き換える。
 	CHECK(spool.reply("a", BridgeResponse::failure(BridgeCode::Internal, "x"), error));
 	CHECK_EQ(ReadFile(In(temp, "a.res.json")),
-			 std::string(R"({"ok":false,"code":"internal","error":"x"})"));
+	  std::string(R"({"ok":false,"code":"internal","error":"x"})"));
 }
 
-TEST(bridge_reply_refuses_bad_ids_and_reports_failures)
-{
+TEST(bridge_reply_refuses_bad_ids_and_reports_failures) {
 	const TempDir temp;
 	BridgeSpool spool(temp.path());
 	std::string error;

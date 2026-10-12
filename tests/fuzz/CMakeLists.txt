@@ -6,19 +6,19 @@
 # core sources (VwCliCore itself is built without -fsanitize=fuzzer).
 function(vw_add_fuzzer name)
 	add_executable(${name} ${ARGN} ${CMAKE_SOURCE_DIR}/src/core/Bridge.cpp
-						   ${CMAKE_SOURCE_DIR}/src/core/Json.cpp)
+												 ${CMAKE_SOURCE_DIR}/src/core/Json.cpp)
 	target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src")
 	target_compile_features(${name} PRIVATE cxx_std_20)
 	target_compile_options(
 		${name}
 		PRIVATE -g
-				-O1
-				-fno-omit-frame-pointer
-				-fsanitize=fuzzer,address,undefined
-				-fno-sanitize-recover=all
-				-Wall
-				-Wextra
-				-Werror)
+						-O1
+						-fno-omit-frame-pointer
+						-fsanitize=fuzzer,address,undefined
+						-fno-sanitize-recover=all
+						-Wall
+						-Wextra
+						-Werror)
 	target_link_options(${name} PRIVATE -fsanitize=fuzzer,address,undefined)
 endfunction()
 
