@@ -17,8 +17,10 @@ jobs:
   test:
     strategy:
       fail-fast: false
+      # Vectorworks に Linux 版は無く、配る実行ファイルも darwin・windows だけなので、テストは
+      # その 2 つの OS で走らせる。
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     defaults:
       run:

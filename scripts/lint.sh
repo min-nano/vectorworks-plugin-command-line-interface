@@ -10,7 +10,7 @@ status=0
 
 # OS ごとに分かれるコード（launch など）があるため、テストを走らせる OS それぞれで検査する。
 # cli/ で動かし、ビルドと同じ cli/go.mod の Go の検査器を使う。
-for goos in darwin windows linux; do
+for goos in darwin windows; do
 	GOOS="$goos" go -C cli vet ./... || status=1
 done
 

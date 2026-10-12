@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 )
 
-// appRoot は <CLI> の親（~/Library/Application Support）を返す。対象は macOS だけで、ほかの
-// POSIX でも同じ形にする（テストのため）。
+// appRoot は <CLI> の親（~/Library/Application Support）を返す。対象は macOS だけ。ほかの
+// POSIX でもビルドが通るよう同じ形にするが、配る対象でもテストする対象でもない。
 //
 // ホームは環境変数 HOME ではなく利用者の passwd の項目（getpwuid）から求める。HOME は
 // launchd のジョブで無い・ツールの実行環境で上書きされることがあり、プラグインと食い違うと
