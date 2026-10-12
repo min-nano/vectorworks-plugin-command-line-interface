@@ -18,8 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # go vet はビルドと同じ cli/go.mod の Go で動かす。道具は手元と同じく、tools/go.mod の Go へ
-      # go が切り替えて動かす（GOTOOLCHAIN=auto）。
+      # go vet はビルドと同じ cli/go.mod の Go で実行する。検査ツールは、開発者環境で
+      # scripts/lint.sh を実行するときと同様に、tools/go.mod に記述したバージョンの Go へ go が
+      # 切り替えて実行する（GOTOOLCHAIN=auto）。
       - uses: actions/setup-go@v7
         with:
           go-version-file: cli/go.mod
