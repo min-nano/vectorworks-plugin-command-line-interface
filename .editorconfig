@@ -1,0 +1,25 @@
+# 言語をまたぐ整形の決まり（docs/format.md）。各言語の設定には、その言語にしかない項目だけを書く。
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = tab
+indent_size = 4
+max_line_length = 100
+
+# YAML はタブを使えない。Markdown はリストの入れ子をスペースで書く。
+[*.{yml,yaml,md}]
+indent_style = space
+indent_size = 2
+
+# 長い表と日本語の段落を折り返さない。
+[*.md]
+max_line_length = off
+
+# Vectorworks のリソースの文字列。UTF-16LE（BOM 付き）・CRLF のまま保つ。
+[*.vwstrings]
+charset = utf-16le
+end_of_line = crlf

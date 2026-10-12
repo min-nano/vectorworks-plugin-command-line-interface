@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
 
+# 整形と go vet は format.yml・lint.yml が行う（docs/format.md・docs/lint.md）。
 jobs:
   test:
     strategy:
@@ -25,10 +26,6 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: cli/go.mod
-      - name: gofmt
-        if: runner.os != 'Windows'
-        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
-      - run: go vet ./...
       # -race と併用するため covermode は atomic にする。
       # PowerShell は -coverprofile=coverage.out を「.」で 2 つの引数に分けるため、bash で走らせる。
       - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...

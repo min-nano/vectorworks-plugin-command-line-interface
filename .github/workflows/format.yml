@@ -1,0 +1,21 @@
+name: format
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # 整形の道具の版は tools/go.mod で固定する。gofmt もこの Go のものを使う。
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: tools/go.mod
+          cache-dependency-path: tools/go.sum
+      - run: scripts/format.sh --check

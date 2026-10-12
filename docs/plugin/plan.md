@@ -6,7 +6,7 @@
 
 | 段 | 中身 | 確かめ方 | 実機 |
 | --- | --- | --- | --- |
-| 1 | **SDK に依らない共通部**: `core/Json`（入れ子の深さの上限を足す）・`core/Bridge`・`core/Serve`（偽の道具の表・占有）・`protocol/fixtures/`・`test.yml`（`core/Json` のファジングを含む）・`lint.yml`・`CLAUDE.md` の追記（PR の進め方） | CI（ASan・UBSan）。Go 側のテストも同じ見本を読む | 不要 |
+| 1 | **SDK に依らない共通部**: `core/Json`（入れ子の深さの上限を足す）・`core/Bridge`・`core/Serve`（偽の道具の表・占有）・`protocol/fixtures/`・`test.yml`（`core/Json` のファジングを含む）・`format.sh` / `lint.sh` に C++ と PowerShell を足す（[整形](../format.md)・[検査](../lint.md)）・`CLAUDE.md` の追記（PR の進め方） | CI（ASan・UBSan）。Go 側のテストも同じ見本を読む | 不要 |
 | 2 | **骨格**: CMake・`BuildConfig`・`ModuleMain`・`Clock`・道具 `tools` / `ping` / `quit`・リソース・`build.yml`（ビルドと PR のプレリリースまで） | CI。実機で zip を手で置き、`vw2026 status` が `running:true` になり `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。`session start` のあと `call quit` で保存の確認が出て、取り消すと `call ping` がまた応え、保存すると `status` が止まっていると答える | 要 |
 | 3 | **読む道具**: `layers` / `classes` / `layer_objects` / `object_counts` | 実機で、元のプラグインの `vw_*` と同じ図面に対して同じ結果になる | 要 |
 | 4 | **配布**: 梱包（`bin/vw2026`）・main のリリース・`cleanup-dev-release.yml` | CI。リリースの資産を取ってきて、zip の形（直下に `build.json` と `bin/`）と `bin/vw2026 version` が動くことを確かめる | 不要 |
@@ -46,10 +46,9 @@
 | `src/core/Json.{h,cpp}` | 同じ | |
 | `src/core/Bridge.{h,cpp}` | 同じ | `bridgeSpoolDir` を `<CLI>/spool` を求める形に（環境変数を読まない。mac は `getpwuid_r`、Windows は `SHGetKnownFolderPath`）。ロック（`lock`）を足す。持ち主と権限の確かめ・印（状態のファイル）を除く。受け付けの手順は `core/Serve` へ（[ブリッジ](bridge.md)） |
 | `src/Module-Info.plist.in` | 同じ | 版の鍵（`VWBuildBranch` / `VWBuildCommit`）を除く |
-| `scripts/fetch-vw-sdk.sh` / `ci-common.sh` / `ci-wait.sh` / `lint.sh` | 同じ | `VW_REPO` |
+| `scripts/fetch-vw-sdk.sh` / `ci-common.sh` / `ci-wait.sh` | 同じ | `VW_REPO` |
 | `tests/TestFramework.h` と `CoreJsonTests` / `CoreBridgeTests` | 同じ | |
-| `.clang-format` / `.clang-tidy` / `.cmake-format.yaml` / `.editorconfig` / `PSScriptAnalyzerSettings.psd1` | 同じ | 先頭の注釈 |
-| `.github/workflows/build.yml` / `test.yml` / `lint.yml` / `cleanup-dev-release.yml` | 同じ | 名前・資産名・`bin/` の梱包。SDK に依存する clang-tidy を除く（[ビルド](build-and-release.md)） |
+| `.github/workflows/build.yml` / `test.yml` / `cleanup-dev-release.yml` | 同じ | 名前・資産名・`bin/` の梱包。SDK に依存する clang-tidy を除く（[ビルド](build-and-release.md)） |
 
 ### 作り替えて移す
 
@@ -68,6 +67,9 @@
 `vw-uninstall.*`）とそのテストは、`vw2026 install` / `uninstall` が代わるので移しません。
 元のアップデータ（`src/Updater*`）も移しません（`vw2026 install` は API を使わず、決まった URL
 から資産を取る。[インストール](install-and-update.md#インストールと更新vw2026-install)）。
+整形と検査の設定（`.clang-format`・`.clang-tidy`・`.cmake-format.yaml`・`.editorconfig`・
+`PSScriptAnalyzerSettings.psd1`・`scripts/lint.sh`・`lint.yml`）も移さず、[整形](../format.md)・
+[検査](../lint.md)の決まりで書きます（インデントをタブにそろえるなど、元と決まりが違う）。
 
 ## 実機の確かめ方
 
