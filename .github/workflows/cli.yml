@@ -6,6 +6,8 @@ on:
     paths: ["cli/**", ".github/workflows/cli.yml", "codecov.yml"]
   pull_request:
     paths: ["cli/**", ".github/workflows/cli.yml", "codecov.yml"]
+  # マージキューで必須のチェックを走らせる（merge_group には paths が効かず、常に走る）。
+  merge_group:
 
 permissions:
   contents: read

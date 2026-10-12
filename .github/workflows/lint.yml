@@ -11,6 +11,8 @@ on:
       - ".github/**"
   pull_request:
     paths: *paths
+  # マージキューで必須のチェックを走らせる（merge_group には paths が効かず、常に走る）。
+  merge_group:
 
 permissions:
   contents: read
