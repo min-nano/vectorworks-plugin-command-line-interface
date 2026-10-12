@@ -1,12 +1,9 @@
 name: format
 
-# 必須のチェックなので、paths で絞らず常に走らせる（絞ると、対象外の変更だけの PR でチェックが
-# 報告されず、マージできない）。
 on:
   push:
     branches: [main]
   pull_request:
-  # マージキューで必須のチェックを走らせる。
   merge_group:
 
 permissions:
