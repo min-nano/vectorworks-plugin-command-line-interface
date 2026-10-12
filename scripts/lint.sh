@@ -1,6 +1,6 @@
 #!/bin/sh
 # Go のコード（go vet）・GitHub Actions のワークフロー（actionlint）・シェルスクリプト
-# （shellcheck）を検査する。修正は行わない（整形は scripts/format.sh）。道具と対象は docs/lint.md。
+# （shellcheck）を検査する。修正は行わない（整形は scripts/format.sh）。ツールと対象は docs/lint.md。
 # 指摘の有無に関わらず全ての検査を実行し、指摘があればコード 1 で終了する。
 set -eu
 
@@ -15,7 +15,7 @@ for goos in darwin windows; do
 	GOOS="$goos" go -C cli vet ./... || status=1
 done
 
-# 道具は go.mod の無いリポジトリの根では動かないので、tools/ で動かす。
+# ツールは go.mod の無いリポジトリの根では動かないので、tools/ で動かす。
 # actionlint は .github/workflows を上へたどって見つけ、run: の中も shellcheck で検査する。
 go -C tools tool actionlint || status=1
 

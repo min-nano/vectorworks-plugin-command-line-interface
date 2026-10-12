@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # 手元と同じく、道具は tools/go.mod の Go へ go が切り替えて動かす（GOTOOLCHAIN=auto）。
+      # 手元と同じく、ツールは tools/go.mod の Go へ go が切り替えて動かす（GOTOOLCHAIN=auto）。
       - uses: actions/setup-go@v7
         with:
           go-version-file: cli/go.mod

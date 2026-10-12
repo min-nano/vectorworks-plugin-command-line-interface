@@ -1,6 +1,6 @@
 # 整形
 
-複数の言語が同じリポジトリに入るので、**整形の決まりを 1 か所に集め、言語ごとの道具は標準のものを
+複数の言語が同じリポジトリに入るので、**整形の決まりを 1 か所に集め、言語ごとのツールは標準のものを
 ほぼ既定のまま使います。** 整形は直すことだけを行い、指摘は[検査](lint.md)が行います。
 
 ## 入口
@@ -15,7 +15,7 @@
 `format.yml` は必須のチェックなので、変えたパスで絞らず、すべての push（main）・PR・マージキューで
 走ります（[CI](plugin/build-and-release.md#ci)）。
 
-手元と CI は同じスクリプトを走らせます。道具の版は固定し（下記）、手元と CI で結果を食い違わせません。
+手元と CI は同じスクリプトを走らせます。ツールの版は固定し（下記）、手元と CI で結果を食い違わせません。
 
 ## 言語をまたぐ決まり
 
@@ -36,18 +36,18 @@ PSScriptAnalyzer も選べるためです。これで YAML と Markdown を除�
 `.editorconfig` で表せない決まりは次のとおりです。
 
 - **ブレース**: 開き括弧を同じ行に置きます（gofmt・shfmt の形）。C++ は `.clang-format` で同じ形にします。
-- **コメントの位置**: 真実は `CLAUDE.md`「整形と検査」です。道具では強制できないので、レビューで確かめます。
+- **コメントの位置**: 真実は `CLAUDE.md`「整形と検査」です。ツールでは強制できないので、レビューで確かめます。
 
-## 言語ごとの道具
+## 言語ごとのツール
 
-| 言語 | 道具 | 設定 | 版の固定 | 時期 |
+| 言語 | ツール | 設定 | 版の固定 | 時期 |
 | --- | --- | --- | --- | --- |
 | Go | gofmt | なし（設定できない） | `tools/go.mod` の Go の gofmt（PATH のものは使わない） | いま |
 | sh | shfmt | `.editorconfig` を読む。フラグで上書きしない | `tools/go.mod` | いま |
 | C++ / Objective-C++ | clang-format | `.clang-format`（`UseTab: ForIndentation`・`ColumnLimit: 100`・`BreakBeforeBraces: Attach`） | pip の `clang-format==X`（3 OS で同じ出力） | 段 1 |
 | PowerShell | `Invoke-Formatter`（PSScriptAnalyzer） | `PSScriptAnalyzerSettings.psd1`（`PSUseConsistentIndentation` の `Kind = 'tab'`） | `Install-Module -RequiredVersion` | 段 1 |
 
-Go で書かれた道具は `tools/go.mod` に `tool` で書き、`go -C tools tool <名前>` で呼びます。Go は
+Go で書かれたツールは `tools/go.mod` に `tool` で書き、`go -C tools tool <名前>` で呼びます。Go は
 すでに要るので、ほかのパッケージ管理を足さずに済みます。CLI の `go.mod` とは分けるので、
 `vw2026` には入りません。版は dependabot が上げます。
 
@@ -60,14 +60,14 @@ Go で書かれた道具は `tools/go.mod` に `tool` で書き、`go -C tools t
 | 対象 | 理由 |
 | --- | --- |
 | CMake | cmake-format（cmakelang）は保守が止まっている。`CMakeLists.txt` は 1 つだけで、`.editorconfig` の決まりで足りる |
-| Markdown | 整形の道具が日本語の段落と長い表をうまく扱えない |
+| Markdown | 整形ツールが日本語の段落と長い表をうまく扱えない |
 | YAML | actionlint の検査で足りる（[検査](lint.md)） |
 | `protocol/fixtures/` の JSON | 壊れた要求をわざと含む。整形すると見本の意味が変わる |
 | `.vwstrings` | Vectorworks が読む形のまま保つ |
 
-## 道具を足すとき
+## ツールを足すとき
 
-- 言語が入る段で、その言語の道具と設定を `scripts/format.sh` と上の表に足します。
+- 言語が入る段で、その言語のツールと設定を `scripts/format.sh` と上の表に足します。
 - 設定は既定から変える項目だけを書き、変える理由を先頭の注釈に書きます。上の「言語をまたぐ決まり」
   と食い違う設定は入れません。
-- 道具を Go のモジュールで足すときも、`CLAUDE.md` の依存の確認を行います（推移的な依存の数は問わない）。
+- ツールを Go のモジュールで足すときも、`CLAUDE.md` の依存の確認を行います（推移的な依存の数は問わない）。
