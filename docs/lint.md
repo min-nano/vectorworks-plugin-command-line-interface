@@ -17,7 +17,7 @@
 
 | 言語 | 道具 | 版の固定 | 時期 |
 | --- | --- | --- | --- |
-| Go | `go vet`（`GOOS` を darwin・windows・linux に替えて 3 回） | `cli/go.mod` の Go（ビルドと同じ検査器） | いま |
+| Go | `go vet`（`GOOS` を darwin・windows に替えて 2 回） | `cli/go.mod` の Go（ビルドと同じ検査器） | いま |
 | GitHub Actions | actionlint（`run:` の中も shellcheck で検査する） | `tools/go.mod` | いま |
 | sh | shellcheck（shfmt が整形するのと同じ、`scripts/` の下のシェルスクリプト） | `lint.yml` の `SHELLCHECK_VERSION`（リリースのバイナリを取り、`SHELLCHECK_SHA256` で照合する） | いま |
 | C++ | clang-tidy（SDK に依らない部分。チェックは少なく始める） | clang-format と同じ版 | 段 1 |
