@@ -6,15 +6,27 @@ set -eu
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
+case "$#:${1-}" in
+0:) check=false ;;
+1:--check) check=true ;;
+*)
+	echo "usage: scripts/format.sh [--check]" >&2
+	exit 2
+	;;
+esac
+
 # 道具は go.mod の無いリポジトリの根では動かないので、tools/ で動かして絶対パスを渡す。
 shfmt() {
 	go -C tools tool shfmt "$@"
 }
 
-if [ "${1-}" = --check ]; then
+# PATH の gofmt は手元の Go の版になるので、tools/go.mod の Go のものを使う（CI と同じ版）。
+gofmt="$(go -C tools env GOROOT)/bin/gofmt"
+
+if [ "$check" = true ]; then
 	status=0
 	# gofmt -l は整形が要っても 0 で終わるので、出力で判定する。
-	files="$(gofmt -l cli)"
+	files="$("$gofmt" -l cli)"
 	if [ -n "$files" ]; then
 		echo "$files"
 		status=1
@@ -27,5 +39,5 @@ if [ "${1-}" = --check ]; then
 	exit "$status"
 fi
 
-gofmt -w cli
+"$gofmt" -w cli
 shfmt -w "$root/scripts"

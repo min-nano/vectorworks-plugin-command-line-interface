@@ -1,9 +1,17 @@
 name: format
 
+# 整形の対象（docs/format.md）と道具の版を変えたときだけ走らせる。
 on:
   push:
     branches: [main]
+    paths: &paths
+      - "cli/**"
+      - "scripts/**"
+      - "tools/**"
+      - ".editorconfig"
+      - ".github/workflows/format.yml"
   pull_request:
+    paths: *paths
 
 permissions:
   contents: read
@@ -13,9 +21,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # 整形の道具の版は tools/go.mod で固定する。gofmt もこの Go のものを使う。
+      # 手元と同じく、道具は tools/go.mod の Go へ go が切り替えて動かす（GOTOOLCHAIN=auto）。
       - uses: actions/setup-go@v7
         with:
-          go-version-file: tools/go.mod
-          cache-dependency-path: tools/go.sum
+          go-version-file: cli/go.mod
+          cache-dependency-path: |
+            tools/go.sum
+            cli/go.sum
       - run: scripts/format.sh --check
+        env:
+          GOTOOLCHAIN: auto

@@ -7,18 +7,19 @@
 
 | 使い方 | 中身 |
 | --- | --- |
-| `scripts/lint.sh` | すべての検査を走らせ、1 つでも指摘があれば 0 以外で終わる。CI（`lint.yml`）はこれを走らせる |
+| `scripts/lint.sh` | すべての検査を走らせ（1 つが指摘を出しても残りを走らせる）、1 つでも指摘があれば 1 で終わる。CI（`lint.yml`）はこれを走らせる |
 
 `lint.yml` は ubuntu の 1 ジョブです。OS ごとの違いは、道具に対象の OS を渡して見ます（`go vet` の
-`GOOS`）。テストは `cli.yml` が OS ごとに走らせます。
+`GOOS`）。テストは `cli.yml` が OS ごとに走らせます。`lint.yml` は、検査の対象と道具の版
+（`cli/`・`scripts/`・`tools/`・`.github/`）を変えたときだけ走ります。対象を足したら `paths` にも足します。
 
 ## 言語ごとの道具
 
 | 言語 | 道具 | 版の固定 | 時期 |
 | --- | --- | --- | --- |
-| Go | `go vet`（`GOOS` を darwin・windows・linux に替えて 3 回） | `tools/go.mod` の Go | いま |
+| Go | `go vet`（`GOOS` を darwin・windows・linux に替えて 3 回） | `cli/go.mod` の Go（ビルドと同じ検査器） | いま |
 | GitHub Actions | actionlint（`run:` の中も shellcheck で検査する） | `tools/go.mod` | いま |
-| sh | shellcheck | `lint.yml` の `SHELLCHECK_VERSION`（リリースのバイナリを取る） | いま |
+| sh | shellcheck（shfmt が整形するのと同じ、`scripts/` の下のシェルスクリプト） | `lint.yml` の `SHELLCHECK_VERSION`（リリースのバイナリを取り、`SHELLCHECK_SHA256` で照合する） | いま |
 | C++ | clang-tidy（SDK に依らない部分。チェックは少なく始める） | clang-format と同じ版 | 段 1 |
 | PowerShell | PSScriptAnalyzer | `Install-Module -RequiredVersion` | 段 1 |
 
