@@ -6,10 +6,13 @@ on:
     paths: ["cli/**", ".github/workflows/cli.yml", "codecov.yml"]
   pull_request:
     paths: ["cli/**", ".github/workflows/cli.yml", "codecov.yml"]
+  # マージキューで必須のチェックを走らせる（merge_group には paths が効かず、常に走る）。
+  merge_group:
 
 permissions:
   contents: read
 
+# 整形と go vet は format.yml・lint.yml が行う（docs/format.md・docs/lint.md）。
 jobs:
   test:
     strategy:
@@ -25,10 +28,6 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: cli/go.mod
-      - name: gofmt
-        if: runner.os != 'Windows'
-        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
-      - run: go vet ./...
       # -race と併用するため covermode は atomic にする。
       # PowerShell は -coverprofile=coverage.out を「.」で 2 つの引数に分けるため、bash で走らせる。
       - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
