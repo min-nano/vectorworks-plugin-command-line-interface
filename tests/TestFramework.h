@@ -30,44 +30,44 @@
 namespace vwtest {
 // One registered test: a name and the function that runs its assertions.
 struct TestCase {
-    std::string name;
-    void (*fn)(int& failures);
+	std::string name;
+	void (*fn)(int& failures);
 };
 
 // Single global registry. Function-local static so there is no static-init
 // order problem between translation units.
 inline std::vector<TestCase>& Registry() {
-    static std::vector<TestCase> reg;
-    return reg;
+	static std::vector<TestCase> reg;
+	return reg;
 }
 
 // Registering one test is a side effect of constructing this object, so a
 // `static Registrar` at file scope adds the test before main() runs.
 struct Registrar {
-    Registrar(const char* name, void (*fn)(int&)) {
-        Registry().push_back(TestCase{name, fn});
-    }
+	Registrar(const char* name, void (*fn)(int&)) {
+		Registry().push_back(TestCase{name, fn});
+	}
 };
 
 // Run every registered test. Returns the number of tests that had at least
 // one failed assertion.
 inline int RunAll() {
-    int failedTests = 0;
-    std::size_t total = Registry().size();
-    for (const TestCase& tc : Registry()) {
-        int failures = 0;
-        tc.fn(failures);
-        if (failures == 0) {
-            std::cout << "[ PASS ] " << tc.name << "\n";
-        } else {
-            std::cout << "[ FAIL ] " << tc.name << " (" << failures << " assertion(s) failed)\n";
-            ++failedTests;
-        }
-    }
-    std::cout << "\n"
-              << (total - static_cast<std::size_t>(failedTests)) << "/" << total
-              << " test(s) passed.\n";
-    return failedTests;
+	int failedTests = 0;
+	std::size_t total = Registry().size();
+	for (const TestCase& tc : Registry()) {
+		int failures = 0;
+		tc.fn(failures);
+		if (failures == 0) {
+			std::cout << "[ PASS ] " << tc.name << "\n";
+		} else {
+			std::cout << "[ FAIL ] " << tc.name << " (" << failures << " assertion(s) failed)\n";
+			++failedTests;
+		}
+	}
+	std::cout << "\n"
+			  << (total - static_cast<std::size_t>(failedTests)) << "/" << total
+			  << " test(s) passed.\n";
+	return failedTests;
 }
 } // namespace vwtest
 
@@ -76,37 +76,37 @@ inline int RunAll() {
 // print a file:line message so a failure points straight at the offending line.
 
 #define CHECK(cond)                                                                                \
-    do {                                                                                           \
-        if (!(cond)) {                                                                             \
-            ++failures;                                                                            \
-            std::cout << "    CHECK failed: " << #cond << " @ " << __FILE__ << ":" << __LINE__     \
-                      << "\n";                                                                     \
-        }                                                                                          \
-    } while (0)
+	do {                                                                                           \
+		if (!(cond)) {                                                                             \
+			++failures;                                                                            \
+			std::cout << "    CHECK failed: " << #cond << " @ " << __FILE__ << ":" << __LINE__     \
+					  << "\n";                                                                     \
+		}                                                                                          \
+	} while (0)
 
 #define CHECK_EQ(a, b)                                                                             \
-    do {                                                                                           \
-        auto _va = (a);                                                                            \
-        auto _vb = (b);                                                                            \
-        if (!(_va == _vb)) {                                                                       \
-            ++failures;                                                                            \
-            std::ostringstream _oss;                                                               \
-            _oss << "    CHECK_EQ failed: " << #a << " == " << #b << " @ " << __FILE__ << ":"      \
-                 << __LINE__ << "\n"                                                               \
-                 << "        lhs = [" << _va << "]\n"                                              \
-                 << "        rhs = [" << _vb << "]\n";                                             \
-            std::cout << _oss.str();                                                               \
-        }                                                                                          \
-    } while (0)
+	do {                                                                                           \
+		auto _va = (a);                                                                            \
+		auto _vb = (b);                                                                            \
+		if (!(_va == _vb)) {                                                                       \
+			++failures;                                                                            \
+			std::ostringstream _oss;                                                               \
+			_oss << "    CHECK_EQ failed: " << #a << " == " << #b << " @ " << __FILE__ << ":"      \
+				 << __LINE__ << "\n"                                                               \
+				 << "        lhs = [" << _va << "]\n"                                              \
+				 << "        rhs = [" << _vb << "]\n";                                             \
+			std::cout << _oss.str();                                                               \
+		}                                                                                          \
+	} while (0)
 
 // Define a test. The body receives an `int& failures` (used by CHECK*).
 #define TEST(name)                                                                                 \
-    static void test_##name(int& failures);                                                        \
-    static ::vwtest::Registrar registrar_##name(#name, &test_##name);                              \
-    static void test_##name(int& failures)
+	static void test_##name(int& failures);                                                        \
+	static ::vwtest::Registrar registrar_##name(#name, &test_##name);                              \
+	static void test_##name(int& failures)
 
 // Provide main() in exactly one translation unit.
 #define TEST_MAIN()                                                                                \
-    int main() {                                                                                   \
-        return ::vwtest::RunAll() == 0 ? 0 : 1;                                                    \
-    }
+	int main() {                                                                                   \
+		return ::vwtest::RunAll() == 0 ? 0 : 1;                                                    \
+	}

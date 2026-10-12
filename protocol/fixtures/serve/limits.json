@@ -1,27 +1,27 @@
 {
-  "description": "1 件の上限は 1 MiB、入れ子の深さの上限は 64（外側のオブジェクトを 1 と数える）。padded・nested は ping の要求で、引数で大きさと深さを作る。超えるものは invalid_request",
-  "rounds": [
-    {
-      "requests": [
-        {"id": "size_at_limit", "padded": 1048576},
-        {"id": "size_over_limit", "padded": 1048577},
-        {"id": "depth_at_limit", "nested": 64},
-        {"id": "depth_over_limit", "nested": 65}
-      ],
-      "expect": {
-        "phase": "serving",
-        "quit": false,
-        "files": [
-          "depth_at_limit.res.json", "depth_at_limit.wait", "depth_over_limit.res.json", "depth_over_limit.wait",
-          "size_at_limit.res.json", "size_at_limit.wait", "size_over_limit.res.json", "size_over_limit.wait"
-        ],
-        "responses": {
-          "size_at_limit": {"ok": true, "result": {"pong": true}},
-          "size_over_limit": {"ok": false, "code": "invalid_request"},
-          "depth_at_limit": {"ok": true, "result": {"pong": true}},
-          "depth_over_limit": {"ok": false, "code": "invalid_request"}
-        }
-      }
-    }
-  ]
+	"description": "1 件の上限は 1 MiB、入れ子の深さの上限は 64（外側のオブジェクトを 1 と数える）。padded・nested は ping の要求で、引数で大きさと深さを作る。超えるものは invalid_request",
+	"rounds": [
+		{
+			"requests": [
+				{"id": "size_at_limit", "padded": 1048576},
+				{"id": "size_over_limit", "padded": 1048577},
+				{"id": "depth_at_limit", "nested": 64},
+				{"id": "depth_over_limit", "nested": 65}
+			],
+			"expect": {
+				"phase": "serving",
+				"quit": false,
+				"files": [
+					"depth_at_limit.res.json", "depth_at_limit.wait", "depth_over_limit.res.json", "depth_over_limit.wait",
+					"size_at_limit.res.json", "size_at_limit.wait", "size_over_limit.res.json", "size_over_limit.wait"
+				],
+				"responses": {
+					"size_at_limit": {"ok": true, "result": {"pong": true}},
+					"size_over_limit": {"ok": false, "code": "invalid_request"},
+					"depth_at_limit": {"ok": true, "result": {"pong": true}},
+					"depth_over_limit": {"ok": false, "code": "invalid_request"}
+				}
+			}
+		}
+	]
 }

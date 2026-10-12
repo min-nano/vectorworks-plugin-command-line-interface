@@ -1,38 +1,38 @@
 {
-  "description": "ロックを取れた直後に 1 度だけ、待つ印を掴める・無い id のファイルを消す。待っている呼ぶ側のファイルは残し、要求は引き継いで処理する",
-  "rounds": [
-    {
-      "files": [
-        {"name": "kept.res.json", "text": "{\"ok\":true,\"result\":{}}"},
-        {"name": "released.req.json", "text": "{\"tool\":\"echo\"}"},
-        {"name": "released.res.json", "text": "{}"},
-        {"name": "orphan.res.json", "text": "{}"},
-        {"name": "orphan.req.json.tmp", "text": "{"},
-        {"name": "notes.txt", "text": "not a spool file"}
-      ],
-      "waits": {"kept": "held", "released": "released", "orphan": "released"},
-      "requests": [
-        {"id": "waiting", "json": {"tool": "ping"}}
-      ],
-      "expect": {
-        "phase": "serving",
-        "quit": false,
-        "files": ["kept.res.json", "kept.wait", "notes.txt", "waiting.res.json", "waiting.wait"],
-        "responses": {
-          "waiting": {"ok": true, "result": {"pong": true}}
-        }
-      }
-    },
-    {
-      "files": [
-        {"name": "late.res.json", "text": "{}"}
-      ],
-      "expect": {
-        "phase": "serving",
-        "quit": false,
-        "files": ["kept.res.json", "kept.wait", "late.res.json", "notes.txt"],
-        "responses": {}
-      }
-    }
-  ]
+	"description": "ロックを取れた直後に 1 度だけ、待つ印を掴める・無い id のファイルを消す。待っている呼ぶ側のファイルは残し、要求は引き継いで処理する",
+	"rounds": [
+		{
+			"files": [
+				{"name": "kept.res.json", "text": "{\"ok\":true,\"result\":{}}"},
+				{"name": "released.req.json", "text": "{\"tool\":\"echo\"}"},
+				{"name": "released.res.json", "text": "{}"},
+				{"name": "orphan.res.json", "text": "{}"},
+				{"name": "orphan.req.json.tmp", "text": "{"},
+				{"name": "notes.txt", "text": "not a spool file"}
+			],
+			"waits": {"kept": "held", "released": "released", "orphan": "released"},
+			"requests": [
+				{"id": "waiting", "json": {"tool": "ping"}}
+			],
+			"expect": {
+				"phase": "serving",
+				"quit": false,
+				"files": ["kept.res.json", "kept.wait", "notes.txt", "waiting.res.json", "waiting.wait"],
+				"responses": {
+					"waiting": {"ok": true, "result": {"pong": true}}
+				}
+			}
+		},
+		{
+			"files": [
+				{"name": "late.res.json", "text": "{}"}
+			],
+			"expect": {
+				"phase": "serving",
+				"quit": false,
+				"files": ["kept.res.json", "kept.wait", "late.res.json", "notes.txt"],
+				"responses": {}
+			}
+		}
+	]
 }

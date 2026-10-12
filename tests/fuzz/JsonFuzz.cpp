@@ -17,24 +17,24 @@
 #include <string>
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
-    const std::string text(reinterpret_cast<const char*>(data), size);
+	const std::string text(reinterpret_cast<const char*>(data), size);
 
-    VwCli::core::Json value;
-    std::string error;
-    if (VwCli::core::Json::parse(text, value, error)) {
-        const std::string dumped = value.dump();
-        VwCli::core::Json again;
-        if (!VwCli::core::Json::parse(dumped, again, error) || again.dump() != dumped ||
-            !again.equals(value))
-            __builtin_trap();
-    } else if (error.empty()) {
-        // 失敗には必ず理由を付ける。
-        __builtin_trap();
-    }
+	VwCli::core::Json value;
+	std::string error;
+	if (VwCli::core::Json::parse(text, value, error)) {
+		const std::string dumped = value.dump();
+		VwCli::core::Json again;
+		if (!VwCli::core::Json::parse(dumped, again, error) || again.dump() != dumped ||
+			!again.equals(value))
+			__builtin_trap();
+	} else if (error.empty()) {
+		// 失敗には必ず理由を付ける。
+		__builtin_trap();
+	}
 
-    VwCli::core::BridgeRequest request;
-    if (VwCli::core::parseBridgeRequest(text, request, error) &&
-        (request.tool.empty() || !request.args.isObject()))
-        __builtin_trap();
-    return 0;
+	VwCli::core::BridgeRequest request;
+	if (VwCli::core::parseBridgeRequest(text, request, error) &&
+		(request.tool.empty() || !request.args.isObject()))
+		__builtin_trap();
+	return 0;
 }

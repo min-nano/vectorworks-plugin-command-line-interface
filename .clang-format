@@ -2,8 +2,8 @@
 #
 # The layout follows gofmt, the formatter of the Go half of this repository
 # (cli/), where gofmt leaves a choice, and the repository-wide rules elsewhere:
-#   * 4 spaces for indentation (gofmt can only use tabs; .editorconfig shows them
-#     4 columns wide, so both languages look the same),
+#   * tabs for indentation and continued lines, spaces only for alignment, as
+#     gofmt does; a tab is 4 columns wide (.editorconfig),
 #   * one more indentation for a continued line, no alignment after an open bracket,
 #   * braces on the same line, case labels at the level of the switch,
 #   * namespace bodies not indented (Go has no nesting at the top level),
@@ -17,7 +17,7 @@ Language: Cpp
 BasedOnStyle: LLVM
 
 # --- Indentation ------------------------------------------------------------
-UseTab: Never
+UseTab: ForContinuationAndIndentation
 TabWidth: 4
 IndentWidth: 4
 ContinuationIndentWidth: 4

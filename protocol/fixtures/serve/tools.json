@@ -1,24 +1,24 @@
 {
-  "description": "知らない道具は unknown_tool、道具の引数の誤りは invalid_args、道具の中の例外は internal",
-  "rounds": [
-    {
-      "requests": [
-        {"id": "a", "json": {"tool": "nope"}},
-        {"id": "b", "json": {"tool": "fail"}},
-        {"id": "c", "json": {"tool": "boom"}},
-        {"id": "d", "json": {"tool": "ping", "args": {}}}
-      ],
-      "expect": {
-        "phase": "serving",
-        "quit": false,
-        "files": ["a.res.json", "a.wait", "b.res.json", "b.wait", "c.res.json", "c.wait", "d.res.json", "d.wait"],
-        "responses": {
-          "a": {"ok": false, "code": "unknown_tool"},
-          "b": {"ok": false, "code": "invalid_args"},
-          "c": {"ok": false, "code": "internal"},
-          "d": {"ok": true, "result": {"pong": true}}
-        }
-      }
-    }
-  ]
+	"description": "知らない道具は unknown_tool、道具の引数の誤りは invalid_args、道具の中の例外は internal",
+	"rounds": [
+		{
+			"requests": [
+				{"id": "a", "json": {"tool": "nope"}},
+				{"id": "b", "json": {"tool": "fail"}},
+				{"id": "c", "json": {"tool": "boom"}},
+				{"id": "d", "json": {"tool": "ping", "args": {}}}
+			],
+			"expect": {
+				"phase": "serving",
+				"quit": false,
+				"files": ["a.res.json", "a.wait", "b.res.json", "b.wait", "c.res.json", "c.wait", "d.res.json", "d.wait"],
+				"responses": {
+					"a": {"ok": false, "code": "unknown_tool"},
+					"b": {"ok": false, "code": "invalid_args"},
+					"c": {"ok": false, "code": "internal"},
+					"d": {"ok": true, "result": {"pong": true}}
+				}
+			}
+		}
+	]
 }

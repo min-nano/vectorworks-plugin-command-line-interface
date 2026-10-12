@@ -1,91 +1,91 @@
 {
-  "description": "占有。占有されていない間は印の無い要求を実行し、占有の中だけの道具（session_end・quit）と印を載せた要求を no_session で断る。占有されている間は同じ印の要求だけを実行し、ほかを busy で断る。tools・ping は誰にでも答える。\"$session\" は session_start が返した印",
-  "rounds": [
-    {
-      "requests": [
-        {"id": "01", "json": {"tool": "echo"}},
-        {"id": "02", "json": {"tool": "echo", "session": "stale"}},
-        {"id": "03", "json": {"tool": "quit"}},
-        {"id": "04", "json": {"tool": "session_end"}},
-        {"id": "05", "json": {"tool": "session_start", "session": "stale"}},
-        {"id": "06", "json": {"tool": "ping", "session": "stale"}},
-        {"id": "07", "json": {"tool": "echo", "session": ""}}
-      ],
-      "expect": {
-        "phase": "serving",
-        "quit": false,
-        "files": ["01.res.json", "01.wait", "02.res.json", "02.wait", "03.res.json", "03.wait", "04.res.json", "04.wait", "05.res.json", "05.wait", "06.res.json", "06.wait", "07.res.json", "07.wait"],
-        "responses": {
-          "01": {"ok": true, "result": {"args": {}}},
-          "02": {"ok": false, "code": "no_session"},
-          "03": {"ok": false, "code": "no_session"},
-          "04": {"ok": false, "code": "no_session"},
-          "05": {"ok": false, "code": "no_session"},
-          "06": {"ok": true, "result": {"pong": true}},
-          "07": {"ok": true, "result": {"args": {}}}
-        }
-      }
-    },
-    {
-      "requests": [
-        {"id": "10", "json": {"tool": "session_start"}}
-      ],
-      "expect": {
-        "phase": "serving",
-        "quit": false,
-        "files": ["10.res.json", "10.wait"],
-        "responses": {
-          "10": {"ok": true, "result": {"session": "$session"}}
-        }
-      }
-    },
-    {
-      "requests": [
-        {"id": "11", "json": {"tool": "echo", "session": "$session"}},
-        {"id": "12", "json": {"tool": "echo"}},
-        {"id": "13", "json": {"tool": "echo", "session": "other"}},
-        {"id": "14", "json": {"tool": "ping"}},
-        {"id": "15", "json": {"tool": "session_start"}},
-        {"id": "16", "json": {"tool": "session_start", "session": "$session"}},
-        {"id": "17", "json": {"tool": "session_end", "session": "other"}},
-        {"id": "18", "json": {"tool": "quit"}},
-        {"id": "19", "json": {"tool": "nope"}},
-        {"id": "20", "json": {"tool": "nope", "session": "$session"}}
-      ],
-      "expect": {
-        "phase": "serving",
-        "quit": false,
-        "files": ["11.res.json", "11.wait", "12.res.json", "12.wait", "13.res.json", "13.wait", "14.res.json", "14.wait", "15.res.json", "15.wait", "16.res.json", "16.wait", "17.res.json", "17.wait", "18.res.json", "18.wait", "19.res.json", "19.wait", "20.res.json", "20.wait"],
-        "responses": {
-          "11": {"ok": true, "result": {"args": {}}},
-          "12": {"ok": false, "code": "busy"},
-          "13": {"ok": false, "code": "busy"},
-          "14": {"ok": true, "result": {"pong": true}},
-          "15": {"ok": false, "code": "busy"},
-          "16": {"ok": false, "code": "busy"},
-          "17": {"ok": false, "code": "busy"},
-          "18": {"ok": false, "code": "busy"},
-          "19": {"ok": false, "code": "busy"},
-          "20": {"ok": false, "code": "unknown_tool"}
-        }
-      }
-    },
-    {
-      "requests": [
-        {"id": "30", "json": {"tool": "session_end", "session": "$session"}},
-        {"id": "31", "json": {"tool": "echo", "session": "$session"}},
-        {"id": "32", "json": {"tool": "echo"}}
-      ],
-      "expect": {
-        "phase": "serving",
-        "quit": false,
-        "files": ["30.res.json", "30.wait", "31.res.json", "31.wait", "32.res.json", "32.wait"],
-        "responses": {
-          "30": {"ok": true, "result": {"ended": true}},
-          "31": {"ok": false, "code": "no_session"},
-          "32": {"ok": true, "result": {"args": {}}}
-        }
-      }
-    }
-  ]
+	"description": "占有。占有されていない間は印の無い要求を実行し、占有の中だけの道具（session_end・quit）と印を載せた要求を no_session で断る。占有されている間は同じ印の要求だけを実行し、ほかを busy で断る。tools・ping は誰にでも答える。\"$session\" は session_start が返した印",
+	"rounds": [
+		{
+			"requests": [
+				{"id": "01", "json": {"tool": "echo"}},
+				{"id": "02", "json": {"tool": "echo", "session": "stale"}},
+				{"id": "03", "json": {"tool": "quit"}},
+				{"id": "04", "json": {"tool": "session_end"}},
+				{"id": "05", "json": {"tool": "session_start", "session": "stale"}},
+				{"id": "06", "json": {"tool": "ping", "session": "stale"}},
+				{"id": "07", "json": {"tool": "echo", "session": ""}}
+			],
+			"expect": {
+				"phase": "serving",
+				"quit": false,
+				"files": ["01.res.json", "01.wait", "02.res.json", "02.wait", "03.res.json", "03.wait", "04.res.json", "04.wait", "05.res.json", "05.wait", "06.res.json", "06.wait", "07.res.json", "07.wait"],
+				"responses": {
+					"01": {"ok": true, "result": {"args": {}}},
+					"02": {"ok": false, "code": "no_session"},
+					"03": {"ok": false, "code": "no_session"},
+					"04": {"ok": false, "code": "no_session"},
+					"05": {"ok": false, "code": "no_session"},
+					"06": {"ok": true, "result": {"pong": true}},
+					"07": {"ok": true, "result": {"args": {}}}
+				}
+			}
+		},
+		{
+			"requests": [
+				{"id": "10", "json": {"tool": "session_start"}}
+			],
+			"expect": {
+				"phase": "serving",
+				"quit": false,
+				"files": ["10.res.json", "10.wait"],
+				"responses": {
+					"10": {"ok": true, "result": {"session": "$session"}}
+				}
+			}
+		},
+		{
+			"requests": [
+				{"id": "11", "json": {"tool": "echo", "session": "$session"}},
+				{"id": "12", "json": {"tool": "echo"}},
+				{"id": "13", "json": {"tool": "echo", "session": "other"}},
+				{"id": "14", "json": {"tool": "ping"}},
+				{"id": "15", "json": {"tool": "session_start"}},
+				{"id": "16", "json": {"tool": "session_start", "session": "$session"}},
+				{"id": "17", "json": {"tool": "session_end", "session": "other"}},
+				{"id": "18", "json": {"tool": "quit"}},
+				{"id": "19", "json": {"tool": "nope"}},
+				{"id": "20", "json": {"tool": "nope", "session": "$session"}}
+			],
+			"expect": {
+				"phase": "serving",
+				"quit": false,
+				"files": ["11.res.json", "11.wait", "12.res.json", "12.wait", "13.res.json", "13.wait", "14.res.json", "14.wait", "15.res.json", "15.wait", "16.res.json", "16.wait", "17.res.json", "17.wait", "18.res.json", "18.wait", "19.res.json", "19.wait", "20.res.json", "20.wait"],
+				"responses": {
+					"11": {"ok": true, "result": {"args": {}}},
+					"12": {"ok": false, "code": "busy"},
+					"13": {"ok": false, "code": "busy"},
+					"14": {"ok": true, "result": {"pong": true}},
+					"15": {"ok": false, "code": "busy"},
+					"16": {"ok": false, "code": "busy"},
+					"17": {"ok": false, "code": "busy"},
+					"18": {"ok": false, "code": "busy"},
+					"19": {"ok": false, "code": "busy"},
+					"20": {"ok": false, "code": "unknown_tool"}
+				}
+			}
+		},
+		{
+			"requests": [
+				{"id": "30", "json": {"tool": "session_end", "session": "$session"}},
+				{"id": "31", "json": {"tool": "echo", "session": "$session"}},
+				{"id": "32", "json": {"tool": "echo"}}
+			],
+			"expect": {
+				"phase": "serving",
+				"quit": false,
+				"files": ["30.res.json", "30.wait", "31.res.json", "31.wait", "32.res.json", "32.wait"],
+				"responses": {
+					"30": {"ok": true, "result": {"ended": true}},
+					"31": {"ok": false, "code": "no_session"},
+					"32": {"ok": true, "result": {"args": {}}}
+				}
+			}
+		}
+	]
 }

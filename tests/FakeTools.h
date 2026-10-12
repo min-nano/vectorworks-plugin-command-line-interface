@@ -23,40 +23,40 @@
 
 namespace vwtest {
 inline VwCli::core::ToolTable FakeTools() {
-    using VwCli::core::Json;
-    using VwCli::core::Tool;
-    using VwCli::core::ToolContext;
-    using VwCli::core::ToolError;
-    using VwCli::core::ToolKind;
+	using VwCli::core::Json;
+	using VwCli::core::Tool;
+	using VwCli::core::ToolContext;
+	using VwCli::core::ToolError;
+	using VwCli::core::ToolKind;
 
-    const char* const kNoArgs = R"({"type":"object","properties":{},"additionalProperties":false})";
-    return {
-        Tool{"ping", "応える", kNoArgs, ToolKind::Read,
-            [](const Json&, const ToolContext&, ToolError&) {
-                Json result = Json::object();
-                result.set("pong", Json::boolean(true));
-                return result;
-            }},
-        Tool{"echo", "引数を返す", R"({"type":"object"})", ToolKind::Read,
-            [](const Json& args, const ToolContext&, ToolError&) {
-                Json result = Json::object();
-                result.set("args", args);
-                return result;
-            }},
-        Tool{"fail", "引数の誤りで失敗する", kNoArgs, ToolKind::Read,
-            [](const Json&, const ToolContext&, ToolError& error) {
-                return error.invalidArgs("引数が誤っています");
-            }},
-        Tool{"boom", "例外を投げる", kNoArgs, ToolKind::Read,
-            [](const Json&, const ToolContext&, ToolError&) -> Json {
-                throw std::runtime_error("boom");
-            }},
-        Tool{"quit", "終わる", kNoArgs, ToolKind::App,
-            [](const Json&, const ToolContext&, ToolError&) {
-                Json result = Json::object();
-                result.set("quitting", Json::boolean(true));
-                return result;
-            }},
-    };
+	const char* const kNoArgs = R"({"type":"object","properties":{},"additionalProperties":false})";
+	return {
+		Tool{"ping", "応える", kNoArgs, ToolKind::Read,
+			[](const Json&, const ToolContext&, ToolError&) {
+				Json result = Json::object();
+				result.set("pong", Json::boolean(true));
+				return result;
+			}},
+		Tool{"echo", "引数を返す", R"({"type":"object"})", ToolKind::Read,
+			[](const Json& args, const ToolContext&, ToolError&) {
+				Json result = Json::object();
+				result.set("args", args);
+				return result;
+			}},
+		Tool{"fail", "引数の誤りで失敗する", kNoArgs, ToolKind::Read,
+			[](const Json&, const ToolContext&, ToolError& error) {
+				return error.invalidArgs("引数が誤っています");
+			}},
+		Tool{"boom", "例外を投げる", kNoArgs, ToolKind::Read,
+			[](const Json&, const ToolContext&, ToolError&) -> Json {
+				throw std::runtime_error("boom");
+			}},
+		Tool{"quit", "終わる", kNoArgs, ToolKind::App,
+			[](const Json&, const ToolContext&, ToolError&) {
+				Json result = Json::object();
+				result.set("quitting", Json::boolean(true));
+				return result;
+			}},
+	};
 }
 } // namespace vwtest

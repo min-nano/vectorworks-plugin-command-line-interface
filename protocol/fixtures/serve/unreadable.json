@@ -1,75 +1,75 @@
 {
-  "description": "読めない要求には invalid_request で応える（JSON として壊れている・UTF-8 でない・tool が無い・tool・args・session の型が違う・表せない数）",
-  "rounds": [
-    {
-      "requests": [
-        {"id": "broken", "text": "{\"tool\":"},
-        {"id": "empty", "text": ""},
-        {"id": "array", "text": "[]"},
-        {"id": "null", "text": "null"},
-        {"id": "no_tool", "json": {"args": {}}},
-        {"id": "tool_null", "json": {"tool": null}},
-        {"id": "tool_empty", "json": {"tool": ""}},
-        {"id": "tool_number", "json": {"tool": 1}},
-        {"id": "tool_upper", "json": {"TOOL": "echo"}},
-        {"id": "args_array", "json": {"tool": "echo", "args": []}},
-        {"id": "args_string", "json": {"tool": "echo", "args": "x"}},
-        {"id": "args_number", "json": {"tool": "echo", "args": 1}},
-        {"id": "session_number", "json": {"tool": "echo", "session": 1}},
-        {"id": "session_object", "json": {"tool": "echo", "session": {}}},
-        {"id": "trailing", "text": "{\"tool\":\"echo\"} x"},
-        {"id": "trailing_comma", "text": "{\"tool\":\"echo\",}"},
-        {"id": "plus_number", "text": "{\"tool\":\"echo\",\"args\":{\"n\":+1}}"},
-        {"id": "leading_zero", "text": "{\"tool\":\"echo\",\"args\":{\"n\":01}}"},
-        {"id": "out_of_range", "text": "{\"tool\":\"echo\",\"args\":{\"n\":1e999}}"},
-        {"id": "control_char", "text": "{\"tool\":\"echo\",\"args\":{\"s\":\"a\tb\"}}"},
-        {"id": "bom", "base64": "77u/eyJ0b29sIjoiZWNobyJ9"},
-        {"id": "invalid_utf8", "base64": "eyJ0b29sIjoiZWNobyIsImFyZ3MiOnsicyI6Iv8ifX0="},
-        {"id": "overlong_utf8", "base64": "eyJ0b29sIjoiZWNobyIsImFyZ3MiOnsicyI6IsCvIn19"}
-      ],
-      "expect": {
-        "phase": "serving",
-        "quit": false,
-        "files": [
-          "args_array.res.json", "args_array.wait", "args_number.res.json", "args_number.wait",
-          "args_string.res.json", "args_string.wait", "array.res.json", "array.wait",
-          "bom.res.json", "bom.wait", "broken.res.json", "broken.wait",
-          "control_char.res.json", "control_char.wait", "empty.res.json", "empty.wait",
-          "invalid_utf8.res.json", "invalid_utf8.wait", "leading_zero.res.json", "leading_zero.wait",
-          "no_tool.res.json", "no_tool.wait", "null.res.json", "null.wait",
-          "out_of_range.res.json", "out_of_range.wait", "overlong_utf8.res.json", "overlong_utf8.wait",
-          "plus_number.res.json", "plus_number.wait", "session_number.res.json", "session_number.wait",
-          "session_object.res.json", "session_object.wait", "tool_empty.res.json", "tool_empty.wait",
-          "tool_null.res.json", "tool_null.wait", "tool_number.res.json", "tool_number.wait",
-          "tool_upper.res.json", "tool_upper.wait", "trailing.res.json", "trailing.wait",
-          "trailing_comma.res.json", "trailing_comma.wait"
-        ],
-        "responses": {
-          "broken": {"ok": false, "code": "invalid_request"},
-          "empty": {"ok": false, "code": "invalid_request"},
-          "array": {"ok": false, "code": "invalid_request"},
-          "null": {"ok": false, "code": "invalid_request"},
-          "no_tool": {"ok": false, "code": "invalid_request"},
-          "tool_null": {"ok": false, "code": "invalid_request"},
-          "tool_empty": {"ok": false, "code": "invalid_request"},
-          "tool_number": {"ok": false, "code": "invalid_request"},
-          "tool_upper": {"ok": false, "code": "invalid_request"},
-          "args_array": {"ok": false, "code": "invalid_request"},
-          "args_string": {"ok": false, "code": "invalid_request"},
-          "args_number": {"ok": false, "code": "invalid_request"},
-          "session_number": {"ok": false, "code": "invalid_request"},
-          "session_object": {"ok": false, "code": "invalid_request"},
-          "trailing": {"ok": false, "code": "invalid_request"},
-          "trailing_comma": {"ok": false, "code": "invalid_request"},
-          "plus_number": {"ok": false, "code": "invalid_request"},
-          "leading_zero": {"ok": false, "code": "invalid_request"},
-          "out_of_range": {"ok": false, "code": "invalid_request"},
-          "control_char": {"ok": false, "code": "invalid_request"},
-          "bom": {"ok": false, "code": "invalid_request"},
-          "invalid_utf8": {"ok": false, "code": "invalid_request"},
-          "overlong_utf8": {"ok": false, "code": "invalid_request"}
-        }
-      }
-    }
-  ]
+	"description": "読めない要求には invalid_request で応える（JSON として壊れている・UTF-8 でない・tool が無い・tool・args・session の型が違う・表せない数）",
+	"rounds": [
+		{
+			"requests": [
+				{"id": "broken", "text": "{\"tool\":"},
+				{"id": "empty", "text": ""},
+				{"id": "array", "text": "[]"},
+				{"id": "null", "text": "null"},
+				{"id": "no_tool", "json": {"args": {}}},
+				{"id": "tool_null", "json": {"tool": null}},
+				{"id": "tool_empty", "json": {"tool": ""}},
+				{"id": "tool_number", "json": {"tool": 1}},
+				{"id": "tool_upper", "json": {"TOOL": "echo"}},
+				{"id": "args_array", "json": {"tool": "echo", "args": []}},
+				{"id": "args_string", "json": {"tool": "echo", "args": "x"}},
+				{"id": "args_number", "json": {"tool": "echo", "args": 1}},
+				{"id": "session_number", "json": {"tool": "echo", "session": 1}},
+				{"id": "session_object", "json": {"tool": "echo", "session": {}}},
+				{"id": "trailing", "text": "{\"tool\":\"echo\"} x"},
+				{"id": "trailing_comma", "text": "{\"tool\":\"echo\",}"},
+				{"id": "plus_number", "text": "{\"tool\":\"echo\",\"args\":{\"n\":+1}}"},
+				{"id": "leading_zero", "text": "{\"tool\":\"echo\",\"args\":{\"n\":01}}"},
+				{"id": "out_of_range", "text": "{\"tool\":\"echo\",\"args\":{\"n\":1e999}}"},
+				{"id": "control_char", "text": "{\"tool\":\"echo\",\"args\":{\"s\":\"a\tb\"}}"},
+				{"id": "bom", "base64": "77u/eyJ0b29sIjoiZWNobyJ9"},
+				{"id": "invalid_utf8", "base64": "eyJ0b29sIjoiZWNobyIsImFyZ3MiOnsicyI6Iv8ifX0="},
+				{"id": "overlong_utf8", "base64": "eyJ0b29sIjoiZWNobyIsImFyZ3MiOnsicyI6IsCvIn19"}
+			],
+			"expect": {
+				"phase": "serving",
+				"quit": false,
+				"files": [
+					"args_array.res.json", "args_array.wait", "args_number.res.json", "args_number.wait",
+					"args_string.res.json", "args_string.wait", "array.res.json", "array.wait",
+					"bom.res.json", "bom.wait", "broken.res.json", "broken.wait",
+					"control_char.res.json", "control_char.wait", "empty.res.json", "empty.wait",
+					"invalid_utf8.res.json", "invalid_utf8.wait", "leading_zero.res.json", "leading_zero.wait",
+					"no_tool.res.json", "no_tool.wait", "null.res.json", "null.wait",
+					"out_of_range.res.json", "out_of_range.wait", "overlong_utf8.res.json", "overlong_utf8.wait",
+					"plus_number.res.json", "plus_number.wait", "session_number.res.json", "session_number.wait",
+					"session_object.res.json", "session_object.wait", "tool_empty.res.json", "tool_empty.wait",
+					"tool_null.res.json", "tool_null.wait", "tool_number.res.json", "tool_number.wait",
+					"tool_upper.res.json", "tool_upper.wait", "trailing.res.json", "trailing.wait",
+					"trailing_comma.res.json", "trailing_comma.wait"
+				],
+				"responses": {
+					"broken": {"ok": false, "code": "invalid_request"},
+					"empty": {"ok": false, "code": "invalid_request"},
+					"array": {"ok": false, "code": "invalid_request"},
+					"null": {"ok": false, "code": "invalid_request"},
+					"no_tool": {"ok": false, "code": "invalid_request"},
+					"tool_null": {"ok": false, "code": "invalid_request"},
+					"tool_empty": {"ok": false, "code": "invalid_request"},
+					"tool_number": {"ok": false, "code": "invalid_request"},
+					"tool_upper": {"ok": false, "code": "invalid_request"},
+					"args_array": {"ok": false, "code": "invalid_request"},
+					"args_string": {"ok": false, "code": "invalid_request"},
+					"args_number": {"ok": false, "code": "invalid_request"},
+					"session_number": {"ok": false, "code": "invalid_request"},
+					"session_object": {"ok": false, "code": "invalid_request"},
+					"trailing": {"ok": false, "code": "invalid_request"},
+					"trailing_comma": {"ok": false, "code": "invalid_request"},
+					"plus_number": {"ok": false, "code": "invalid_request"},
+					"leading_zero": {"ok": false, "code": "invalid_request"},
+					"out_of_range": {"ok": false, "code": "invalid_request"},
+					"control_char": {"ok": false, "code": "invalid_request"},
+					"bom": {"ok": false, "code": "invalid_request"},
+					"invalid_utf8": {"ok": false, "code": "invalid_request"},
+					"overlong_utf8": {"ok": false, "code": "invalid_request"}
+				}
+			}
+		}
+	]
 }

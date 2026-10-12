@@ -7,9 +7,11 @@ name: lint
 #   * actionlint          - the workflows (and shellcheck on their run: scripts)
 #   * shellcheck          - scripts/*.sh
 #   * yamllint            - YAML structure (.yamllint.yaml)
-#   * editorconfig        - final newline, trailing whitespace, UTF-8, LF, indentation
+#   * editorconfig        - final newline, trailing whitespace, UTF-8, LF, line length
+#   * gofumpt             - Go formatting (a stricter gofmt; it replaces the gofmt step
+#                           cli.yml used to run)
 # PSScriptAnalyzer joins when the first PowerShell script does
-# (docs/plugin/plan.md, step 5). Go is checked by cli.yml (gofmt, go vet).
+# (docs/plugin/plan.md, step 5). go vet and the Go tests run in cli.yml.
 
 on:
   push:
@@ -29,6 +31,7 @@ env:
   YAMLLINT_VERSION: "1.38.0"
   ACTIONLINT_VERSION: "v1.7.12"
   EDITORCONFIG_CHECKER_VERSION: "v3.8.0"
+  GOFUMPT_VERSION: "v0.12.0"
 
 jobs:
   clang-format:
@@ -104,3 +107,21 @@ jobs:
           go-version: stable
       - run: go install "github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker@${EDITORCONFIG_CHECKER_VERSION}"
       - run: '"$(go env GOPATH)/bin/editorconfig-checker"'
+
+  gofumpt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # gofumpt v0.12.0 needs Go 1.26 to build; it formats any Go version.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go install "mvdan.cc/gofumpt@${GOFUMPT_VERSION}"
+      - name: Check formatting
+        working-directory: cli
+        run: |
+          files="$("$(go env GOPATH)/bin/gofumpt" -l .)"
+          if [ -n "$files" ]; then
+            echo "$files"
+            exit 1
+          fi

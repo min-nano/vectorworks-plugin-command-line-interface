@@ -31,7 +31,8 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 
 ## Go（`cli/`）
 
-- `gofmt`・`go vet` を通す。実行ファイルは 1 つにする（cgo を使わない）。
+- `gofumpt`（gofmt より厳しい整形。版は `lint.yml` の `GOFUMPT_VERSION`）・`go vet` を通す。実行ファイルは
+  1 つにする（cgo を使わない）。
 - **外部の依存は、信頼できるかを確かめてから足す。** 標準ライブラリで足りるならそちらを使う。
   足す前に次を確かめ、結果をコミットメッセージに書く。
   - 保守されているか（最近のリリース・issue への応答）と、広く使われているか
@@ -60,10 +61,10 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 
 - `src/core/` は SDK に依らない（SDK のヘッダを読まない。OS の呼び出しと標準ライブラリだけ）。
   プラグインとテストが同じ `VwCliCore` をリンクする。SDK に依る処理は `src/tools/` などに置く。
-- 体裁（`.clang-format`・`.editorconfig`）: C++・CMake・シェル・Python はインデントを空白 4 つ、
-  行は 100 桁まで。波括弧は同じ行・括弧の後で揃えないなど、ほかは Go（gofmt）に合わせる。Go は
-  gofmt が設定を持たないのでタブのまま（幅 4 で表示）、行の長さも gofmt は確かめない。YAML・JSON は
-  空白 2 つ。名前は元のプラグインに合わせる（`VwCli::core` の名前空間・メンバは `f` で
+- 体裁（`.clang-format`・`.editorconfig`）: インデントはどの言語もタブ（幅 4）、揃えは空白
+  （Go の gofumpt が必ずタブで書くので、ほかを合わせる。タブを使えない YAML だけ空白 2 つ）。
+  C++・CMake・シェル・Python の行は 100 桁まで（タブは 4 桁と数える）。波括弧は同じ行・括弧の後で
+  揃えないなど、ほかも Go に合わせる。Go の行の長さは gofumpt が確かめない。名前は元のプラグインに合わせる（`VwCli::core` の名前空間・メンバは `f` で
   始める）。`clang-format`・`clang-tidy`（`src/core/`）・警告をエラーにしたビルド（MSVC も）を通す。
   手元では `scripts/lint.sh`（`--fix` で整形）。
 - テストは `tests/` に、標準ライブラリだけの小さな枠（`tests/TestFramework.h`）で書く。CI は
