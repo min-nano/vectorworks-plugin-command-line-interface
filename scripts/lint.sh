@@ -1,6 +1,7 @@
 #!/bin/sh
-# 検査する。直さない（整形は scripts/format.sh）。道具と対象は docs/lint.md。
-# 1 つが指摘を出しても残りを走らせ、指摘があれば最後に 1 で終わる。
+# Go のコード（go vet）・GitHub Actions のワークフロー（actionlint）・シェルスクリプト
+# （shellcheck）を検査する。修正は行わない（整形は scripts/format.sh）。道具と対象は docs/lint.md。
+# 指摘の有無に関わらず全ての検査を実行し、指摘があればコード 1 で終了する。
 set -eu
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -8,8 +9,8 @@ cd "$root"
 
 status=0
 
-# OS ごとに分かれるコード（launch など）があるため、テストを走らせる OS それぞれで検査する。
-# cli/ で動かし、ビルドと同じ cli/go.mod の Go の検査器を使う。
+# OS ごとに分かれるコード（launch など）があるため、テストを実行する OS それぞれで検査する。
+# cli/ で動かし、ビルドと同じ cli/go.mod の Go の検査ツールを使う。
 for goos in darwin windows; do
 	GOOS="$goos" go -C cli vet ./... || status=1
 done
