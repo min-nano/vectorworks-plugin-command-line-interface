@@ -176,7 +176,7 @@ bool checkCase(const Json &fixture, const std::string &where) {
 			for (const Json::Member &member : get(expect, "responses").members()) {
 				good =
 				    shaped(member.second,
-				           {{"ok", T::Bool}, {"code", T::String}, {"result", std::nullopt}}, at) &&
+					       {{"ok", T::Bool}, {"code", T::String}, {"result", std::nullopt}}, at) &&
 				    good;
 				if (!member.second.find("ok")) {
 					failAt(at, "the expected response for " + member.first + " has no ok");
