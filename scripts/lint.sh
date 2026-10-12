@@ -1,6 +1,6 @@
 #!/bin/sh
-# Go のコード（go vet）・GitHub Actions のワークフロー（actionlint）・シェルスクリプト
-# （shellcheck）を検査する。修正は行わない（整形は scripts/format.sh）。ツールと対象は docs/lint.md。
+# ソースコードを実行せずに解析し、文法の誤りや不具合につながる書き方を検査する（静的解析）。
+# 修正は行わない（整形は scripts/format.sh）。ツールと対象は docs/lint.md。
 # 指摘の有無に関わらず全ての検査を実行し、指摘があればコード 1 で終了する。
 set -eu
 
