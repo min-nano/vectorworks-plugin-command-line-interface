@@ -26,7 +26,7 @@ plist の `VWBuildBranch` / `VWBuildCommit`）を除いて使います。版の�
 | ワークフロー | 起動 | 中身 |
 | --- | --- | --- |
 | `cli.yml`（既存） | push / PR（`cli/**`） | Go のテスト（3 OS）とビルド |
-| `format.yml`（既存） | push / PR | `scripts/format.sh --check`（[整形](../format.md)）。clang-format・PowerShell を足す |
+| `format.yml`（既存） | push / PR | `scripts/format.sh`（[整形](../format.md)）。clang-format・PowerShell を足す |
 | `test.yml` | push / PR | 無 SDK の単体テスト（ASan・UBSan）・作法の見本の照合 |
 | `lint.yml`（既存） | push / PR | `scripts/lint.sh`（[検査](../lint.md)）。clang-tidy（無 SDK）・PSScriptAnalyzer を足す |
 | `build.yml` | push（main）/ PR / 手動 | mac と Windows のビルド・梱包・リリース |

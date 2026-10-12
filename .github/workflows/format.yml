@@ -28,6 +28,6 @@ jobs:
           cache-dependency-path: |
             tools/go.sum
             cli/go.sum
-      - run: scripts/format.sh --check
+      - run: scripts/format.sh
         env:
           GOTOOLCHAIN: auto

@@ -32,7 +32,8 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 ## 整形と検査
 
 - **整形（`scripts/format.sh`）と検査（`scripts/lint.sh`）を分ける。** 整形は直すだけ、検査は
-  指摘するだけ。CI は `format.sh --check` と `lint.sh` を走らせる。push の前に両方を通す。
+  指摘するだけ。`format.sh` は既定で確かめるだけで、`--fix` で書き換える。CI は `format.sh` と
+  `lint.sh` を走らせる。push の前に両方を通す。
 - 言語をまたぐ決まり（UTF-8・LF・タブ・100 桁の目安）は `.editorconfig` に
   だけ書く。各言語の設定には、その言語にしかない項目だけを書く（`docs/format.md`）。
 - 道具は言語ごとに標準のもの 1 つを、ほぼ既定のまま使い、版を固定する。Go で書かれた道具は
