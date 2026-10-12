@@ -50,6 +50,5 @@
 
 ## 他のプラグインの機能
 
-[SDK リファレンス #217](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/217)
-の結果が出てから、ユニバーサル名で呼ぶ道具（例: `call` に `universal_name` と引数を渡す、
-または `<提供者>.<名前>` の道具を表に動的に並べる）を設計します。
+手段は `CallPluginLibrary` です（[設計「他のプラグインの道具」](../design.md#他のプラグインの道具)）。
+道具の形は[未決 3](open-questions.md#3-ほかのプラグインの機能の呼び出しの形)で決めます。

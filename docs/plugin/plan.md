@@ -28,7 +28,7 @@
 
 その先（順序は未定）:
 
-- **他のプラグインの機能をユニバーサル名で呼ぶ**（[SDK リファレンス #217](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/217) の結果しだい）。
+- **他のプラグインの機能を名前で呼ぶ**（`CallPluginLibrary`。形は[未決 3](open-questions.md#3-ほかのプラグインの機能の呼び出しの形)）。
 - **図面に書く道具**（undo の作法・人の操作との混在の扱いを決めてから。[未決 1](open-questions.md)）。
 - 構造設計支援プラグインの開発版ブリッジの移行（当面は並存）。
 
