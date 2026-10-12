@@ -52,7 +52,8 @@ Go で書かれた道具は `tools/go.mod` に `tool` で書き、`go -C tools t
 `vw2026` には入りません。版は dependabot が上げます。
 
 `tools/go.mod` が求める Go が手元や CI の Go より新しければ、`go` がその版を取ってきて切り替えます
-（`GOTOOLCHAIN=auto`。CI でも同じ指定で動かす）。
+（`GOTOOLCHAIN=auto`。CI でも同じ指定で動かす）。手元の Go のほうが新しければ手元の版で動きます。
+新しい版のほうが厳しくなる向きなので、版を下げて揃えることはしません。
 
 ## 整形しないもの
 
