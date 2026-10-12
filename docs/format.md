@@ -24,7 +24,7 @@
 
 | 項目 | 決まり | 例外 |
 | --- | --- | --- |
-| 文字コード | UTF-8（BOM なし） | `.vwstrings` は UTF-16LE（BOM 付き） |
+| 文字コード | UTF-8（BOM なし） | `.vwstrings` は UTF-16LE（BOM 付き）。PowerShell（`.ps1`・`.psm1`・`.psd1`）は UTF-8（BOM 付き。Windows PowerShell 5.1 は BOM の無いファイルを ANSI のコードページで読み、日本語を読み崩すため） |
 | 改行 | LF。`.gitattributes` でも LF にそろえる | `.vwstrings` は CRLF。git に変換させない（`-text`） |
 | 末尾 | 改行で終える。行末の空白を残さない | |
 | インデント | **タブ（表示幅 4）** | YAML（タブを使えない）と Markdown はスペース 2 |
@@ -44,8 +44,13 @@ PSScriptAnalyzer も選べるためです。これで YAML と Markdown を除�
 | --- | --- | --- | --- | --- |
 | Go | gofmt | なし（設定できない） | `tools/go.mod` の Go の gofmt（PATH のものは使わない） | いま |
 | sh | shfmt | `.editorconfig` を読む。フラグで上書きしない | `tools/go.mod` | いま |
-| C++ / Objective-C++ | clang-format | `.clang-format`（`UseTab: ForIndentation`・`ColumnLimit: 100`・`BreakBeforeBraces: Attach`） | pip の `clang-format==X`（3 OS で同じ出力） | 段 1 |
-| PowerShell | `Invoke-Formatter`（PSScriptAnalyzer） | `PSScriptAnalyzerSettings.psd1`（`PSUseConsistentIndentation` の `Kind = 'tab'`） | `Install-Module -RequiredVersion` | 段 1 |
+| C++ / Objective-C++ | clang-format | `.clang-format`（LLVM の既定に `UseTab: ForIndentation`・`IndentWidth`・`TabWidth`・`ColumnLimit: 100`・`AccessModifierOffset` だけを足す。ブレースは既定の `Attach`） | `tools/requirements.txt`（pip の `clang-format==X`。3 OS で同じ出力。`format.sh` は PATH の版が違えば止める） | いま |
+| PowerShell | `Invoke-Formatter`（PSScriptAnalyzer） | `PSScriptAnalyzerSettings.psd1`（`CodeFormatting` と同じ規則で、`PSUseConsistentIndentation` の `Kind = 'tab'`） | `scripts/powershell.ps1` の `$version`（`Install-Module -RequiredVersion`。`-Mode Install` で入る） | いま |
+
+対象は、Go は `cli/`、sh は `scripts/`、C++ と PowerShell は git が追う・無視しないファイル
+（`git ls-files -co --exclude-standard`。ビルドの出力や SDK の写しを含めない）です。PowerShell の
+整形と検査は `scripts/powershell.ps1` を通して行います（PSScriptAnalyzer を呼ぶための入口で、
+`format.sh` と `lint.sh` が呼ぶ）。
 
 Go で書かれたツールは `tools/go.mod` に `tool` で書き、`go -C tools tool <名前>` で呼びます。Go は
 すでに要るので、ほかのパッケージ管理を足さずに済みます。CLI の `go.mod` とは分けるので、

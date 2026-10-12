@@ -22,6 +22,14 @@ jobs:
           cache-dependency-path: |
             tools/go.sum
             cli/go.sum
+      # clang-format は tools/requirements.txt の版を pip で入れる（ランナーの版は決まらない）。
+      - name: clang-format
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install -r tools/requirements.txt
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+      # PSScriptAnalyzer は scripts/powershell.ps1 が固定した版を入れる（pwsh はランナーにある）。
+      - run: pwsh -NoProfile -File scripts/powershell.ps1 -Mode Install
       - run: scripts/format.sh
         env:
           GOTOOLCHAIN: auto

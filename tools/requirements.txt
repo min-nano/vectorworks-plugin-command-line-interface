@@ -1,0 +1,4 @@
+# C++ の整形と検査のツール（docs/format.md・docs/lint.md）。pip の版で 3 OS の出力を揃える。
+# 手元: pip install -r tools/requirements.txt（venv の中など）。
+clang-format==22.1.8
+clang-tidy==22.1.8

@@ -1,0 +1,18 @@
+{
+	"description": "ほかの Vectorworks がロックを掴んでいる間は何もしない（掃除もしない）。放されたら次の回にロックを取り、待つ者の居ない残骸を消して、待っている要求を引き継ぐ",
+	"steps": [
+		{
+			"other_bridge": true,
+			"files": {"stale.res.json": "{\"ok\":true}"},
+			"requests": {"r": "ping.json"},
+			"expect": {"phase": "waiting", "files": ["bridge.lock", "r.req.json", "r.wait", "stale.res.json"]}
+		},
+		{
+			"expect": {
+				"calls": [{"tool": "ping"}],
+				"responses": {"r": {"ok": true, "result": {}}},
+				"files": ["bridge.lock", "r.res.json", "r.wait"]
+			}
+		}
+	]
+}

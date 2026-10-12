@@ -1,0 +1,51 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+# SDK に依らない共通部（src/core）の単体テストとファジング（docs/plugin/build-and-release.md「CI」）。
+# テストは作法の見本（protocol/fixtures）も読む。同じ見本を読む Go のテストは cli.yml が走らせる。
+jobs:
+  unit:
+    strategy:
+      fail-fast: false
+      # Vectorworks の対応 OS（darwin・windows）でテストする。MSVC には UndefinedBehaviorSanitizer が
+      # 無いので、Windows はサニタイザを付けない（ASan と UBSan は macOS と fuzz のジョブが受け持つ）。
+      matrix:
+        include:
+          - os: macos-latest
+            sanitizers: "ON"
+          - os: windows-latest
+            sanitizers: "OFF"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: cmake -S . -B build -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=${{ matrix.sanitizers }} -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
+      - run: cmake --build build --config Debug
+      - run: ctest --test-dir build --build-config Debug --output-on-failure
+
+  # libFuzzer は Apple の clang に無いので、ubuntu の clang で回す。単体テストも同じビルドで走らせる。
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: cmake -S . -B build -DCMAKE_CXX_COMPILER=clang++ -DVW_BUILD_TESTS=ON -DVW_BUILD_FUZZERS=ON -DVW_ENABLE_SANITIZERS=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
+      - run: cmake --build build
+      - run: ctest --test-dir build --output-on-failure
+      # 種（要求の見本。深い入れ子・長い文字列・不正な UTF-8 を含む）から決まった時間だけ回す。
+      # 落ちた入力は crashes/ に残るので、失敗したら成果物として上げる。
+      - name: fuzz
+        run: |
+          mkdir -p corpus crashes
+          build/JsonFuzzer -max_total_time=120 -artifact_prefix=crashes/ corpus protocol/fixtures/requests
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: fuzz-crashes
+          path: crashes/

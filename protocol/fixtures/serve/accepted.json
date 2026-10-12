@@ -1,0 +1,105 @@
+{
+	"description": "読める要求の既定と境目。args の省略・null は {}、session の null・空の文字列は省略と同じ、知らないキーは無視、キーは大文字と小文字を区別、同じキーは後のもの、文字列の不正な UTF-8 と対にならないサロゲートは U+FFFD、数は綴りのまま、深さ 64 と 1 MiB ちょうどは受け付ける",
+	"steps": [
+		{"description": "ロックを取る（空のスプールなので何も消さない）", "expect": {"files": ["bridge.lock"]}},
+		{
+			"requests": {
+				"args-missing": "echo-no-args.json",
+				"args-null": "echo-null.json",
+				"empty-session": "echo-empty-session.json",
+				"unknown-keys": "echo-unknown-keys.json",
+				"key-case": "echo-key-case.json",
+				"duplicate-keys": "echo-duplicate-keys.json",
+				"spaces": "echo-spaces.json",
+				"strings": "echo-strings.json",
+				"numbers": "echo-numbers.json",
+				"invalid-utf8": "echo-invalid-utf8.json",
+				"lone-surrogates": "echo-lone-surrogates.json",
+				"depth-64": "depth-64.json",
+				"exactly-1mib": {
+					"fill": {
+						"head": "{\"tool\":\"ping\",\"args\":{\"s\":\"",
+						"pad": "x",
+						"tail": "\"}}",
+						"size": 1048576
+					}
+				}
+			},
+			"expect": {
+				"calls": [
+					{"tool": "echo"},
+					{"tool": "echo"},
+					{"tool": "echo"},
+					{"tool": "echo"},
+					{"tool": "echo"},
+					{"tool": "ping"},
+					{"tool": "echo"},
+					{"tool": "echo"},
+					{"tool": "echo"},
+					{"tool": "echo"},
+					{"tool": "echo"},
+					{"tool": "echo"},
+					{"tool": "echo"}
+				],
+				"responses": {
+					"args-missing": {"ok": true, "result": {}},
+					"args-null": {"ok": true, "result": {}},
+					"empty-session": {"ok": true, "result": {}},
+					"unknown-keys": {"ok": true, "result": {}},
+					"key-case": {"ok": true, "result": {}},
+					"duplicate-keys": {"ok": true, "result": {"a": 2}},
+					"spaces": {"ok": true, "result": {"a": [1, 2]}},
+					"strings": {
+						"ok": true,
+						"result": {"escapes": "\"\\/\b\f\n\r\t", "unicode": "éあ", "pair": "😀", "raw": "éあ😀"}
+					},
+					"numbers": {"ok": true, "result": {"zero": 0, "negative": -12, "fraction": 3.25, "exponent": -1.5E+10, "big": 123456789012345678901234567890, "tiny": 1e-400}},
+					"invalid-utf8": {
+						"ok": true,
+						"result": {"lone": "a\ufffdb", "truncated": "\ufffd\ufffd", "overlong": "\ufffd\ufffd", "surrogate": "\ufffd\ufffd\ufffd"}
+					},
+					"lone-surrogates": {
+						"ok": true,
+						"result": {"high": "\ufffd", "low": "\ufffd", "reversed": "\ufffd\ufffd", "high-then-letter": "\ufffdA"}
+					},
+					"depth-64": {
+						"ok": true,
+						"result": {
+							"a": [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]
+						}
+					},
+					"exactly-1mib": {"ok": true, "result": {}}
+				},
+				"files": [
+					"args-missing.res.json",
+					"args-missing.wait",
+					"args-null.res.json",
+					"args-null.wait",
+					"bridge.lock",
+					"depth-64.res.json",
+					"depth-64.wait",
+					"duplicate-keys.res.json",
+					"duplicate-keys.wait",
+					"empty-session.res.json",
+					"empty-session.wait",
+					"exactly-1mib.res.json",
+					"exactly-1mib.wait",
+					"invalid-utf8.res.json",
+					"invalid-utf8.wait",
+					"key-case.res.json",
+					"key-case.wait",
+					"lone-surrogates.res.json",
+					"lone-surrogates.wait",
+					"numbers.res.json",
+					"numbers.wait",
+					"spaces.res.json",
+					"spaces.wait",
+					"strings.res.json",
+					"strings.wait",
+					"unknown-keys.res.json",
+					"unknown-keys.wait"
+				]
+			}
+		}
+	]
+}

@@ -44,9 +44,10 @@
 
 ```cpp
 #define PLUGIN_VWR_ID   "cli"
-#define PLUGIN_APP_DIR  "vectorworks2026-cli"   // <CLI> のディレクトリ名。スプールはその下の spool
 // VW_BUILD_VERSION / VW_BUILD_BRANCH は CMake が渡す（無ければ "local"）
 ```
 
-`PLUGIN_APP_DIR` は CLI 側の `cli/internal/spool` の `AppDirName` / `SpoolDirName` と対です
-（[作法](../protocol.md#スプールの場所)）。
+`<CLI>` のディレクトリ名（`vectorworks2026-cli`）とスプールの名前（`spool`）は、スプールの場所を
+求める共通部（SDK に依らない）が使うので、`src/core/Protocol.h` の `kAppDirName` / `kSpoolDirName`
+に置きます。CLI 側の `cli/internal/spool` の `AppDirName` / `SpoolDirName` と対で、両側のテストが
+[作法の見本](../fixtures.md)の `constants.json` に照らします（[作法](../protocol.md#スプールの場所)）。

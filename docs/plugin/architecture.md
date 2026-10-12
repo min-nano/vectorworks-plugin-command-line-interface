@@ -14,7 +14,7 @@ Vectorworks ──読み込む──▶ cli.vwlibrary / cli.vlb     … 起動�
 | 入口 | 処理 |
 | --- | --- |
 | `plugin_module_main`（起動時） | VCOM の初期化・SDK のコールバックを記憶・**OS タイマーの開始**（拡張機能は登録しない） |
-| OS タイマー（250 ms ごと） | 見送りの判定 → 受け付け 1 回（`core::serve`）→ `quit` が頼まれていたら終了を頼む |
+| OS タイマー（250 ms ごと） | 見送りの判定 → 受け付け 1 回（`core::Server::serve`）→ `quit` が頼まれていたら終了を頼む |
 
 OS タイマーは起動時に開始します（最初の 10 秒は受け付けない）。
 
@@ -25,7 +25,7 @@ OS タイマー
   ├─ gSDK が無い・開始から 10 秒以内 → 何もしない
   ├─ undo の記録が開いている（IsCurrentlyBuildingAnUndoEvent）→ 見送る
   ├─ 受け付けの入れ子（受け付け中にまた呼ばれた）→ 見送る
-  └─ core::serve（受け付け 1 回）
+  └─ core::Server::serve（受け付け 1 回）
         ├─ ロックを掴んでいない → 取ってみる。取れなければ何もしない（次の回に取り直す）
         │                         取れたら前の回の残骸を消す
         ├─ 要求を名前の昇順で読んで消す（回の始めに並べたものだけ。読めない・消せないものは飛ばす）
@@ -83,20 +83,21 @@ Vectorworks の処理の妨げにならないよう、次のときはその回�
 ## ソースの配置
 
 ```
+CMakeLists.txt                             … 共通部・テスト・ファジング・プラグインのビルド
 src/
 ├─ PluginPrefix.h / BuildConfig.h          … PCH・名前と識別子
 ├─ ModuleMain.cpp                          … 入口: VCOM の初期化・タイマーの開始
 ├─ Clock.{h,cpp}                           … OS タイマー・見送りの判定・終了の依頼
-├─ core/                                   … SDK に依らない（Json・Bridge・Serve）。プラグインとテストがリンク
+├─ core/                                   … SDK に依らない（Protocol・Json・Files・Bridge・Serve）。プラグインとテストがリンク
 └─ tools/                                  … 道具の表（ToolTable.cpp）と中身（SDK 依存）
-scripts/                                   … get-vw2026（.sh / .ps1。CLI を取って install を走らせるだけ）
+scripts/                                   … 整形と検査（format.sh・lint.sh・powershell.ps1）・get-vw2026（.sh / .ps1。CLI を取って install を走らせるだけ）
 resources/                                 … cli.vwr（拡張機能を登録しないので最小限）
-tests/                                     … 無 SDK の単体テスト・スクリプトのテスト
-protocol/fixtures/                         … 作法の見本（C++ と Go の両方のテストが読む）
+tests/                                     … 無 SDK の単体テスト・ファジングの入口・スクリプトのテスト
+protocol/fixtures/                         … 作法の見本（C++ と Go の両方のテストが読む。docs/fixtures.md）
 cli/                                       … vw2026（Go）。インストールと更新（install）・アンインストール（uninstall）もここ
 ```
 
 - 名前空間は `VwCli`（`VwCli::core` / `VwCli::tools`）。図面にも配布物にも現れない内部の綴りで、
   改名しても据え置きます。
 - スプールの場所・ロックは `core/Bridge` が持ちます（ロックは OS の
-  呼び出しだけで SDK に依らない）。
+  呼び出しだけで SDK に依らない。OS ごとの呼び出しは `core/Files*`）。

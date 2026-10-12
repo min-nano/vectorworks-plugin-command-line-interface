@@ -12,3 +12,11 @@ updates:
     directory: /tools
     schedule:
       interval: daily
+  # clang-format と clang-tidy は同じ版にそろえる（docs/lint.md）ので、1 つの PR で上げる。
+  - package-ecosystem: pip
+    directory: /tools
+    schedule:
+      interval: daily
+    groups:
+      llvm:
+        patterns: ["clang-*"]

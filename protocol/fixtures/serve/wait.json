@@ -1,0 +1,18 @@
+{
+	"description": "要求を消した直後に待つ印を確かめる。掴めない（待っている）なら実行し、掴めた（放した・死んだ）なら待つ印を消して実行も応答もせず、無いなら実行せずに no_wait で応える",
+	"steps": [
+		{"description": "ロックを取る（空のスプールなので何も消さない）", "expect": {"files": ["bridge.lock"]}},
+		{
+			"requests": {"held": "echo.json", "released": "echo.json", "missing": "echo.json"},
+			"waits": {"released": "released", "missing": "missing"},
+			"expect": {
+				"calls": [{"tool": "echo"}],
+				"responses": {
+					"held": {"ok": true, "result": {"include_sheets": false, "limit": 50, "layer": "1F"}},
+					"missing": {"ok": false, "code": "no_wait"}
+				},
+				"files": ["bridge.lock", "held.res.json", "held.wait", "missing.res.json"]
+			}
+		}
+	]
+}
