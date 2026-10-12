@@ -3,7 +3,7 @@
 **SDK の挙動が分からないまま実装に入らない**のがこのリポジトリの決めごとです。調べるのは
 [SDK リファレンス](https://github.com/min-nano/vectorworks-developer-sdk-reference)の側で、
 issue を立てて `Findings/` に反映されてから、それを根拠に実装します。待つ間は SDK に依らない
-作業（作法・CLI・共通部の移植）を進めます。
+作業（作法・CLI・SDK に依らない共通部）を進めます。
 
 ## 0. 拡張機能を 1 つも登録しないプラグインの読み込み
 
@@ -51,3 +51,16 @@ SDK リファレンスに記載がありません。読み込みは登録の種�
   呼び出しが新しい前面の図面に働くか。
 - 前面にしないまま、別の図面を読めるか（読めるなら切り替えは要らない）。
 - 閉じている図面を開けるか（保存の確認と、開けなかったときの振る舞い）。
+
+## 4. 最初の道具が使う SDK 呼び出し
+
+[最初に提供する道具](plugin/tools.md)のため。プラグインを 1 から書くので、ほかのプラグインで
+動いていたことは根拠にしません。SDK リファレンスの `Findings/` に無いものを確かめます。
+
+| 道具 | 呼び出し | リファレンス |
+| --- | --- | --- |
+| `layers` | デザインレイヤの列挙（`GetDrawingHeaderFristMember`＋`NextObject`） | [Layers and Stories「デザインレイヤの並びと並べ替え」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)にある。シートレイヤを含むか・縮尺の読み方は未確認 |
+| `classes` | クラスの一覧 | 無い |
+| `layer_objects` / `object_counts` | レイヤの中のオブジェクトの列挙・種別・名前・クラス・外形 | 種別（`GetObjectTypeN`）・外形（`GetObjectBounds`）は各ページに使い方がある。列挙の順と、グループ・シンボルの中を数えるかは未確認 |
+| `ping` | `GetCurrentLayer()` で図面が開いているかを判定する | [Documents](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md)に現在のレイヤが文書に従って移ることはある。図面が 1 枚も無いときに何を返すかは未確認 |
+| `quit` | OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼ぶ | 無い（Documents が「プラグインの読み込み中に呼ぶと落ちる」として Plug-in Modules を指すが、その節は見当たらない）。保存の確認を取り消したときに戻ることも未確認 |

@@ -40,11 +40,12 @@ OS タイマー
   （[作法「予約された道具」](../protocol.md#予約された道具)）。
 - **終了の依頼は受け付けの外で行います。** `CloseAllFilesAndQuitVectorworks` は保存の確認を
   出すので、応答を書き終え、受け付けから戻ってからタイマーが呼びます（[道具「quit」](tools.md#quit)）。
-- タイマーの実装は元:`src/Extensions/ExtMcpPalette.cpp` の `StartMcpBridgeClock` / `ClockTick` /
-  `ServeOnce` を移します。mac は `CFRunLoopTimer` を
-  **`kCFRunLoopDefaultMode` にだけ**登録します（common modes だとモーダルダイアログの最中にも
-  呼ばれ、開いている undo の記録へ書き込みが混ざる）。Windows はスレッドタイマー
-  （`SetTimer(nullptr, 0, 250, …)`）。経緯は元:`docs/dev-notes/milestones/m41-bridge-os-timer.md`。
+- タイマーは、mac は `CFRunLoopTimer` を **`kCFRunLoopCommonModes` に**登録し、Windows は
+  スレッドタイマー（`SetTimer(nullptr, 0, 250, …)`）にします。mac で `kCFRunLoopDefaultMode`
+  にだけ登録すると、ふつうの操作でも十数秒から数分、レンダリング中は 6 分近く刻みが止まります
+  （[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 7）。
+- **間隔は保証されません**（250 ms で登録しても、最大 3〜5 秒空く。同 4 の 2）。刻みの間隔に
+  頼る処理（時間の計測など）は持たず、時刻は時計から読みます。
 
 ## 受け付けを止めない・処理中は見送る
 
@@ -53,14 +54,15 @@ Vectorworks の処理の妨げにならないよう、次のときはその回�
 
 | 見送る条件 | 理由 |
 | --- | --- |
-| undo の記録が開いている（`gSDK->IsCurrentlyBuildingAnUndoEvent()`） | その間の書き込みは開いている記録へ混ざる。VW のモーダルダイアログの最中はここに当たる（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 6・7） |
+| undo の記録が開いている（`gSDK->IsCurrentlyBuildingAnUndoEvent()`） | その間の書き込みは開いている記録へ混ざる。VW のモーダルダイアログの最中はここに当たる（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 6・7）。この条件の是非は[未決 2](open-questions.md#2-undo-の記録が開いている間の見送り) |
 | 受け付けの入れ子 | 受け付けのコードがスタックに載っている（道具の中から Vectorworks がイベントを回したときなど） |
 | 開始から 10 秒以内 | Vectorworks の起動処理と重ねない |
 
 - 何も要求が無いときの 1 回の費用は、スプールの一覧を読むことだけです。利用者がドラッグやレンダリングをしている最中にも刻みは届きますが、
   そのとき VW は undo の記録を開いていないので、読む道具はそのまま応えます（同 Findings の表）。
-- mac は `kCFRunLoopDefaultMode` にだけ登録するので、モーダルの最中はそもそも刻みません。
-  **Windows の `SetTimer` はモーダルの最中も刻む**ので、上の undo の条件が見送りを担います。
+- mac（共通モード）も Windows もモーダルダイアログの最中に刻むので、上の undo の条件が
+  見送りを担います（VW のモーダルの最中は、刻みの中の `IsCurrentlyBuildingAnUndoEvent()` が
+  真を返すことを確かめてある。同 Findings の 6）。
 - 見送った要求は消さずに残るので、次に受け付けたときに処理されます（呼ぶ側の待ち時間の内なら
   応答が届く。過ぎた・呼ぶ側が強制終了された要求は、待つ印を掴める（または無い）ので実行しない。[作法「待つ印」](../protocol.md#待つ印idwait)）。
 - 見送りの間もロックは掴んだままです（呼ぶ側から見た扱いは[作法「生存の判定」](../protocol.md#生存の判定)）。
@@ -96,6 +98,5 @@ cli/                                       … vw2026（Go）。インストー�
 
 - 名前空間は `VwCli`（`VwCli::core` / `VwCli::tools`）。図面にも配布物にも現れない内部の綴りで、
   改名しても据え置きます。
-- 元の `draw/` に当たるものは `tools/` にします（このプラグインは描画しない）。
 - スプールの場所・ロックは `core/Bridge` が持ちます（ロックは OS の
   呼び出しだけで SDK に依らない）。

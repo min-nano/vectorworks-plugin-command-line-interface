@@ -34,7 +34,7 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
   そのビルドのものに入れ替わります。
 - **隔離属性の解除（mac）・`Unblock-File`（Windows）は行いません。** curl・`Invoke-RestMethod`・
   Go の HTTP で取ったファイルには、隔離属性も Web からの印（Mark of the Web）も付かないためです。
-  署名は元と同じくビルドがかけたアドホック署名で、zip から取り出したファイルにそのまま残ります。
+  署名はビルドがかけたアドホック署名で、zip から取り出したファイルにそのまま残ります。
 
 場所は[名前と識別子「置き場所」](identifiers.md#置き場所)にあります。
 
@@ -215,8 +215,7 @@ vw2026 uninstall --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> から
 
 ## 消すコードの歯止め
 
-**利用者のものを消すコードは次の場所だけ**にし、歯止めを緩めません（元のプラグインの規約に
-倣う）。段 5 でこの表を `CLAUDE.md` に写します。
+**利用者のものを消すコードは次の場所だけ**にし、歯止めを緩めません。段 5 でこの表を `CLAUDE.md` に写します。
 
 | 消すコード | 消してよいもの |
 | --- | --- |

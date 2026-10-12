@@ -1,22 +1,21 @@
 # 最初に提供する道具
 
 図面を**読むだけ**の道具と、Vectorworks を終わらせる 1 つ（`quit`）から始めます。更新は道具ではなく CLI の
-`vw2026 install` です（[インストール](install-and-update.md#インストールと更新vw2026-install)）。どれも元のプラグインの
-`vw_*` で実機で通った SDK 呼び出しだけを使います（元:`src/draw/McpBridge.cpp`）。**新しい SDK
-呼び出しを使う道具は、SDK リファレンスで確かめてから足します。**
+`vw2026 install` です（[インストール](install-and-update.md#インストールと更新vw2026-install)）。**SDK 呼び出しは、SDK リファレンスで
+挙動が確かめられているものだけを使います**（無いものはリファレンスで調べてから足す。[SDK の調査](../sdk-research.md)）。
 
 引数は、省略できるものに既定値を設けます（表の「既定」）。知らない引数と、知っている引数の
 未知の値（型の違い・決まった綴り以外の値）は `invalid_args` で返します（[作法「互換性」](../protocol.md#互換性)）。
 
-| 道具 | 種類 | 元 | 引数 | 結果 |
-| --- | --- | --- | --- | --- |
-| `tools` | （予約） | `vw_tools` | なし | [ブリッジ「道具の表」](bridge.md#道具の表) |
-| `ping` | read | `vw_ping` | なし | 下記 |
-| `layers` | read | `vw_layers` | `include_sheets`（既定 true） | `{"layers":[{"name","kind":"design"\|"sheet","scale","objects","current"}],"count"}` |
-| `classes` | read | `vw_classes` | なし | `{"classes":[名前…],"count"}` |
-| `layer_objects` | read | `vw_layer_objects` | `layer`（必須）・`limit`（既定 50）・`offset`（既定 0）・`type`（省略＝すべての種別） | `{"layer","objects":[{"index","type","type_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}` |
-| `object_counts` | read | `vw_object_counts` | `layer`（省略＝図面全体） | `{"layer"?,"types":[{"type","type_name","count"}],"total"}`（種別番号の昇順） |
-| `quit` | app | `vw_restart` | なし | `{"quitting":true}` |
+| 道具 | 種類 | 引数 | 結果 |
+| --- | --- | --- | --- |
+| `tools` | （予約） | なし | [ブリッジ「道具の表」](bridge.md#道具の表) |
+| `ping` | read | なし | 下記 |
+| `layers` | read | `include_sheets`（既定 true） | `{"layers":[{"name","kind":"design"\|"sheet","scale","objects","current"}],"count"}` |
+| `classes` | read | なし | `{"classes":[名前…],"count"}` |
+| `layer_objects` | read | `layer`（必須）・`limit`（既定 50）・`offset`（既定 0）・`type`（省略＝すべての種別） | `{"layer","objects":[{"index","type","type_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}` |
+| `object_counts` | read | `layer`（省略＝図面全体） | `{"layer"?,"types":[{"type","type_name","count"}],"total"}`（種別番号の昇順） |
+| `quit` | app | なし | `{"quitting":true}` |
 
 ## `ping`
 
@@ -31,7 +30,7 @@
 | `protocol` | 作法の版（[作法「版」](../protocol.md#版)） |
 | `pid` | 受け付けている Vectorworks のプロセス ID（`getpid` / `GetCurrentProcessId`。2 つ起動しているときにどちらが受け付けているかが分かる） |
 | `session` | 占有の印を発行しているか（[作法「占有」](../protocol.md#占有セッション)）。`ping` は占有によらず誰にでも答える |
-| `document_open` | `gSDK->GetCurrentLayer()` が取れるか（元と同じ） |
+| `document_open` | `gSDK->GetCurrentLayer()` が取れるか |
 | `current_layer` | 現在のレイヤの名前 |
 
 ## `quit`
