@@ -11,5 +11,41 @@
   見送る。ドラッグやレンダリングの最中は記録が開いていないので届く——読むだけなら問題ないが、
   書くときに人の操作と順序が混ざらないかを確かめる）
 - 書いてよい対象の限定（利用者の名前付きリソースを作らない・書き換えない、など）
+- 道具が開けた undo の記録は、受け付けから戻る前に閉じる。閉じずに戻ると数十秒開いたままになり、
+  その間の刻みの書き込みがそこへ入る（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 7「落とし穴」）
+
+## 2. undo の記録が開いている間の見送り
+
+いまは `IsCurrentlyBuildingAnUndoEvent()` が真の間、受け付けの回ごと見送ります
+（[構成「受け付けを止めない・処理中は見送る」](architecture.md#受け付けを止めない処理中は見送る)）。
+ただし SDK リファレンスによると、
+
+- 真は「利用者が操作中」を意味しない。SDK の内部（PIO の再計算・ビューポートの更新・
+  スクリプトエンジンなど）が開き、スクリプトエンジンはコマンドをまたいで真を残す。文書ごとの状態でもある。
+  真を見送りの条件にすると、残った記録 1 つで受け付けが止まったままになりうる
+  （[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 6「`yes` の意味が広い」）。
+- 記録が開いている間も、読むだけなら安全（同 6「線引き」）。
+
+決めること:
+
+- 見送りを書く道具（`write`）と `quit` だけに絞り、読む道具は記録が開いていても応えるか
+- 見送りが続くとき、呼ぶ側にどう見えるか（いまはタイムアウトになるだけ）
+
+## 3. ほかのプラグインの機能の呼び出しの形
+
+手段は `CallPluginLibrary` に決まりました（[設計「他のプラグインの道具」](../design.md#他のプラグインの道具)）。
+SDK リファレンスから分かる制約は次のとおりです（[Findings「Plug-in Interop」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Interop.md)）。
+
+- 呼ぶ名前はプラグインライブラリルーチンの名前で、名前の空間はプラグインをまたいで 1 つ。
+- **どのルーチンが在るかを列挙する口が無い。** 在るかは呼んで `false` かどうかでしか分からない。
+- 引数は位置で渡す最大 11 本で、型（文字列・数値・真偽・出力引数など）は呼ぶ側が決める。
+
+決めること:
+
+- 道具の表（`tools`）にほかのプラグインの機能をどう載せるか。列挙できないので、提供者が
+  自分の機能の一覧（名前・説明・`inputSchema`・`kind`）を返すルーチンを 1 つ持つ、などの決まりが要る
+- `<提供者>.<名前>` とルーチンの名前の対応
+- JSON の引数と、位置で渡す引数の対応（提供者が JSON の文字列 1 本を受けて返す形にするか）
+- 相手が居ない・相手が失敗したとき（どちらも `false`）の `code`
 
 決まったことは[設計「決めたこと」](../design.md#決めたこと)と各ページにあります（ここには残しません）。
