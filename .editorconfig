@@ -12,15 +12,22 @@ end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
 
-# Indentation follows gofmt (cli/): tabs, shown 2 columns wide. clang-format,
-# cmake-format and gofmt are the source of truth for the layout.
-[{*.go,go.mod,*.c,*.cpp,*.h,*.hpp,*.mm,CMakeLists.txt,*.cmake,*.sh,*.py}]
+# Go: tabs, as gofmt writes them (it has no option for spaces), shown 4 columns
+# wide like the 4-space indentation of the other languages.
+[{*.go,go.mod}]
 indent_style = tab
-indent_size = 2
-tab_width = 2
+indent_size = 4
+tab_width = 4
 
-# Data files and PowerShell: 2 spaces (YAML cannot use tabs).
-[*.{yml,yaml,json,ps1}]
+# C/C++, CMake, shell and Python: 4 spaces, lines up to 100 columns (the
+# formatters wrap C/C++ and CMake; editorconfig-checker checks shell and Python).
+[{*.c,*.cpp,*.h,*.hpp,*.mm,CMakeLists.txt,*.cmake,*.sh,*.py,*.ps1}]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+# Data files: 2 spaces (the YAML and JSON already in the repository).
+[*.{yml,yaml,json}]
 indent_style = space
 indent_size = 2
 

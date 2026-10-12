@@ -1,14 +1,13 @@
 # clang-format configuration for the cli Vectorworks plug-in (src/, tests/).
 #
 # The layout follows gofmt, the formatter of the Go half of this repository
-# (cli/), so that the two languages read the same:
-#   * tabs for indentation, spaces for alignment (gofmt), a tab shown as 2 columns
-#     (.editorconfig),
-#   * one more tab for a continued line, no alignment after an open bracket,
+# (cli/), where gofmt leaves a choice, and the repository-wide rules elsewhere:
+#   * 4 spaces for indentation (gofmt can only use tabs; .editorconfig shows them
+#     4 columns wide, so both languages look the same),
+#   * one more indentation for a continued line, no alignment after an open bracket,
 #   * braces on the same line, case labels at the level of the switch,
 #   * namespace bodies not indented (Go has no nesting at the top level),
-#   * no line-length limit: like gofmt, the author decides where a long line
-#     breaks, and the formatter keeps those breaks,
+#   * lines wrapped at 100 columns (comments are left to the author),
 #   * includes sorted within each block (gofmt sorts imports within a group).
 #
 # Format a file in place:            clang-format -i src/core/Json.cpp
@@ -18,12 +17,12 @@ Language: Cpp
 BasedOnStyle: LLVM
 
 # --- Indentation ------------------------------------------------------------
-UseTab: ForIndentation
-TabWidth: 2
-IndentWidth: 2
-ContinuationIndentWidth: 2
+UseTab: Never
+TabWidth: 4
+IndentWidth: 4
+ContinuationIndentWidth: 4
 NamespaceIndentation: None
-AccessModifierOffset: -2
+AccessModifierOffset: -4
 IndentPPDirectives: AfterHash
 IndentCaseLabels: false
 AlignAfterOpenBracket: DontAlign
@@ -37,7 +36,7 @@ ReferenceAlignment: Left
 DerivePointerAlignment: false
 
 # --- Line width -------------------------------------------------------------
-ColumnLimit: 0
+ColumnLimit: 100
 ReflowComments: false
 
 # --- Includes ---------------------------------------------------------------

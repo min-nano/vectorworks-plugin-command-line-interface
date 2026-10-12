@@ -3,8 +3,8 @@
 #
 # It makes `cmake-format` the single source of truth for how the CMakeLists.txt
 # files are laid out, following gofmt like .clang-format does:
-#   * tabs for indentation (shown 2 columns wide, .editorconfig),
-#   * wrap at 100 columns (cmake-format cannot leave line breaks to the author),
+#   * 4 spaces for indentation, like the C/C++ sources,
+#   * wrap at 100 columns,
 #   * hand-written comments are left ALONE (never reflowed).
 #
 # Format a file in place:            cmake-format -i CMakeLists.txt
@@ -14,13 +14,9 @@
 format:
   # Wrap at 100 columns.
   line_width: 100
-  # Tabs for indentation (width 2), matching UseTab/TabWidth in .clang-format.
-  tab_size: 2
-  use_tabchars: true
-  # Indent with tabs, but use spaces for the fractional alignment cmake-format
-  # adds after an open paren, so aligned arguments line up regardless of how wide
-  # an editor renders a tab (the same split clang-format uses for C/C++).
-  fractional_tab_policy: use-space
+  # 4 spaces for indentation, matching IndentWidth in .clang-format.
+  tab_size: 4
+  use_tabchars: false
   # Keep a command and its first argument together where they fit; only wrap when
   # the line would otherwise exceed line_width.
   dangle_parens: false

@@ -60,9 +60,10 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 
 - `src/core/` は SDK に依らない（SDK のヘッダを読まない。OS の呼び出しと標準ライブラリだけ）。
   プラグインとテストが同じ `VwCliCore` をリンクする。SDK に依る処理は `src/tools/` などに置く。
-- 体裁は Go（gofmt）に合わせる（`.clang-format`）: インデントはタブ（幅 2）、揃えは空白、波括弧は
-  同じ行、行の長さの上限なし。CMake・シェル・Python も同じくタブ（幅 2）、YAML・JSON は空白 2 つ
-  （`.editorconfig`）。名前は元のプラグインに合わせる（`VwCli::core` の名前空間・メンバは `f` で
+- 体裁（`.clang-format`・`.editorconfig`）: C++・CMake・シェル・Python はインデントを空白 4 つ、
+  行は 100 桁まで。波括弧は同じ行・括弧の後で揃えないなど、ほかは Go（gofmt）に合わせる。Go は
+  gofmt が設定を持たないのでタブのまま（幅 4 で表示）、行の長さも gofmt は確かめない。YAML・JSON は
+  空白 2 つ。名前は元のプラグインに合わせる（`VwCli::core` の名前空間・メンバは `f` で
   始める）。`clang-format`・`clang-tidy`（`src/core/`）・警告をエラーにしたビルド（MSVC も）を通す。
   手元では `scripts/lint.sh`（`--fix` で整形）。
 - テストは `tests/` に、標準ライブラリだけの小さな枠（`tests/TestFramework.h`）で書く。CI は

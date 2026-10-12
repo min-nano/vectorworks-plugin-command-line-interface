@@ -37,35 +37,35 @@ option(VW_ENABLE_COVERAGE "Instrument the tests for code coverage (gcov)" OFF)
 option(VW_BUILD_FUZZERS "Build the libFuzzer entry points (Clang only)" OFF)
 
 if((VW_ENABLE_SANITIZERS OR VW_ENABLE_COVERAGE) AND NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-	message(FATAL_ERROR "VW_ENABLE_SANITIZERS / VW_ENABLE_COVERAGE require GCC or Clang.")
+    message(FATAL_ERROR "VW_ENABLE_SANITIZERS / VW_ENABLE_COVERAGE require GCC or Clang.")
 endif()
 if(VW_BUILD_FUZZERS AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	message(FATAL_ERROR "VW_BUILD_FUZZERS requires Clang (libFuzzer).")
+    message(FATAL_ERROR "VW_BUILD_FUZZERS requires Clang (libFuzzer).")
 endif()
 
 # Flags shared by every SDK-free target, so that the library is checked / measured
 # exactly like the tests that link it.
 set(VW_SANITIZER_FLAGS -g -fno-omit-frame-pointer -fsanitize=address,undefined
-											 -fno-sanitize-recover=all)
+                       -fno-sanitize-recover=all)
 set(VW_COVERAGE_FLAGS -O0 -g --coverage)
 
 # vw_sdk_free_flags(<target>): warnings as errors plus the optional instrumentation.
 function(vw_sdk_free_flags target)
-	target_compile_features(${target} PUBLIC cxx_std_20)
-	if(MSVC)
-		# /utf-8: the sources are UTF-8 (Japanese comments and messages).
-		target_compile_options(${target} PRIVATE /W4 /WX /utf-8)
-	else()
-		target_compile_options(${target} PRIVATE -Wall -Wextra -Werror)
-	endif()
-	if(VW_ENABLE_SANITIZERS)
-		target_compile_options(${target} PRIVATE ${VW_SANITIZER_FLAGS})
-		target_link_options(${target} PRIVATE -fsanitize=address,undefined)
-	endif()
-	if(VW_ENABLE_COVERAGE)
-		target_compile_options(${target} PRIVATE ${VW_COVERAGE_FLAGS})
-		target_link_options(${target} PRIVATE --coverage)
-	endif()
+    target_compile_features(${target} PUBLIC cxx_std_20)
+    if(MSVC)
+        # /utf-8: the sources are UTF-8 (Japanese comments and messages).
+        target_compile_options(${target} PRIVATE /W4 /WX /utf-8)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Werror)
+    endif()
+    if(VW_ENABLE_SANITIZERS)
+        target_compile_options(${target} PRIVATE ${VW_SANITIZER_FLAGS})
+        target_link_options(${target} PRIVATE -fsanitize=address,undefined)
+    endif()
+    if(VW_ENABLE_COVERAGE)
+        target_compile_options(${target} PRIVATE ${VW_COVERAGE_FLAGS})
+        target_link_options(${target} PRIVATE --coverage)
+    endif()
 endfunction()
 
 # --- SDK-free core -------------------------------------------------------------
@@ -75,15 +75,15 @@ add_library(VwCliCore STATIC src/core/Bridge.cpp src/core/Json.cpp src/core/Serv
 target_include_directories(VwCliCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 vw_sdk_free_flags(VwCliCore)
 if(WIN32)
-	# SHGetKnownFolderPath (shell32) and CoTaskMemFree (ole32) for the spool location.
-	target_link_libraries(VwCliCore PUBLIC shell32 ole32)
+    # SHGetKnownFolderPath (shell32) and CoTaskMemFree (ole32) for the spool location.
+    target_link_libraries(VwCliCore PUBLIC shell32 ole32)
 endif()
 
 if(VW_BUILD_TESTS)
-	enable_testing()
-	add_subdirectory(tests)
+    enable_testing()
+    add_subdirectory(tests)
 endif()
 
 if(VW_BUILD_FUZZERS)
-	add_subdirectory(tests/fuzz)
+    add_subdirectory(tests/fuzz)
 endif()

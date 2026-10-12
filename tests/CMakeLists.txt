@@ -5,13 +5,13 @@
 # vw_add_test(<name> <sources...>): one test executable linking VwCliCore. The
 # protocol fixtures (protocol/fixtures/) are passed in as VW_PROTOCOL_FIXTURES_DIR.
 function(vw_add_test name)
-	add_executable(${name} ${ARGN})
-	target_include_directories(${name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-	target_link_libraries(${name} PRIVATE VwCliCore)
-	vw_sdk_free_flags(${name})
-	target_compile_definitions(
-		${name} PRIVATE "VW_PROTOCOL_FIXTURES_DIR=\"${CMAKE_SOURCE_DIR}/protocol/fixtures\"")
-	add_test(NAME ${name} COMMAND ${name})
+    add_executable(${name} ${ARGN})
+    target_include_directories(${name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(${name} PRIVATE VwCliCore)
+    vw_sdk_free_flags(${name})
+    target_compile_definitions(
+        ${name} PRIVATE "VW_PROTOCOL_FIXTURES_DIR=\"${CMAKE_SOURCE_DIR}/protocol/fixtures\"")
+    add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
 # core/Json: round trips, the strict grammar, the nesting limit and UTF-8.
