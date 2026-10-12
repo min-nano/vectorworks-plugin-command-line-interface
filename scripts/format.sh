@@ -1,7 +1,7 @@
 #!/bin/sh
 # 整形を確かめる。書き換えず、整形が要るファイルを並べて 1 で終わる（CI も同じ）。
 # --fix を付けたときだけ書き換えて整形する。
-# 道具と対象は docs/format.md。
+# ツールと対象は docs/format.md。
 set -eu
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,7 +17,7 @@ case "$#:${1-}" in
 	;;
 esac
 
-# 道具は go.mod の無いリポジトリの根では動かないので、tools/ で動かして絶対パスを渡す。
+# ツールは go.mod の無いリポジトリの根では動かないので、tools/ で動かして絶対パスを渡す。
 shfmt() {
 	go -C tools tool shfmt "$@"
 }

@@ -1,36 +1,36 @@
 # 検査
 
-検査は指摘することだけを行い、ファイルを書き換えません（整形は[整形](format.md)）。道具は言語ごとに
+検査は指摘することだけを行い、ファイルを書き換えません（整形は[整形](format.md)）。ツールは言語ごとに
 標準のものを使い、指摘の種類を絞り込みすぎず、既定に近いまま使います。
 
 ## 入口
 
 | 使い方 | 中身 |
 | --- | --- |
-| `scripts/lint.sh` | すべての検査を走らせ（1 つが指摘を出しても残りを走らせる）、1 つでも指摘があれば 1 で終わる。CI（`lint.yml`）はこれを走らせる |
+| `scripts/lint.sh` | 指摘の有無に関わらず全ての検査を実行し、指摘があればコード 1 で終了する。CI（`lint.yml`）はこれを実行する |
 
-`lint.yml` は ubuntu の 1 ジョブです。OS ごとの違いは、道具に対象の OS を渡して見ます（`go vet` の
-`GOOS`）。テストは `cli.yml` が OS ごとに走らせます。`lint.yml` は必須のチェックなので、変えたパスで
-絞らず、すべての push（main）・PR・マージキューで走ります（[CI](plugin/build-and-release.md#ci)）。
+`lint.yml` は ubuntu の 1 ジョブです。OS ごとの違いは、ツールに対象の OS を渡して見ます（`go vet` の
+`GOOS`）。テストは `cli.yml` が OS ごとに実行します。`lint.yml` は必須のチェックなので、変えたパスで
+絞らず、すべての push（main）・PR・マージキューで実行されます（[CI](plugin/build-and-release.md#ci)）。
 
-## 言語ごとの道具
+## 言語ごとのツール
 
-| 言語 | 道具 | 版の固定 | 時期 |
+| 言語 | ツール | 版の固定 | 時期 |
 | --- | --- | --- | --- |
-| Go | `go vet`（`GOOS` を darwin・windows に替えて 2 回） | `cli/go.mod` の Go（ビルドと同じ検査器） | いま |
+| Go | `go vet`（`GOOS` を darwin・windows に替えて 2 回） | `cli/go.mod` の Go（ビルドと同じ検査ツール） | いま |
 | GitHub Actions | actionlint（`run:` の中も shellcheck で検査する） | `tools/go.mod` | いま |
 | sh | shellcheck（shfmt が整形するのと同じ、`scripts/` の下のシェルスクリプト） | `lint.yml` の `SHELLCHECK_VERSION`（リリースのバイナリを取り、`SHELLCHECK_SHA256` で照合する） | いま |
 | C++ | clang-tidy（SDK に依らない部分。チェックは少なく始める） | clang-format と同じ版 | 段 1 |
 | PowerShell | PSScriptAnalyzer | `Install-Module -RequiredVersion` | 段 1 |
 
 依存を足すときの `govulncheck` は `CLAUDE.md` の手順で行い、ここには入れません（依存を足すときだけ
-走らせればよいため）。
+実行すればよいため）。
 
 ## 検査しないもの
 
 CMake・Markdown・JSON の見本は検査しません。見本は C++ と Go のテストが読むことで確かめます。
 
-## 手元で走らせる
+## 手元で実行する
 
 Go のほかに shellcheck が要ります（mac は `brew install shellcheck`）。段 1 からは clang-tidy と
 PowerShell（`pwsh`）も要ります。版は CI のものに合わせます。
