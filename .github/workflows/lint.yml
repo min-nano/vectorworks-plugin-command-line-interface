@@ -1,15 +1,17 @@
 name: lint
 
 # Style and static checks. scripts/lint.sh runs the same checks locally.
-#   * clang-format        - C/C++ formatting (src/, tests/)
+#   * format              - treefmt --ci: every formatter (treefmt.toml: clang-format,
+#                           cmake-format, gofmt, shfmt, ruff format) must leave the
+#                           tree unchanged
 #   * clang-tidy          - static analysis of the SDK-free code (src/core/)
-#   * cmake-format / lint - CMakeLists.txt layout and bug-prone patterns
+#   * cmake-lint          - bug-prone CMake patterns
 #   * actionlint          - the workflows (and shellcheck on their run: scripts)
 #   * shellcheck          - scripts/*.sh
 #   * yamllint            - YAML structure (.yamllint.yaml)
 #   * editorconfig        - final newline, trailing whitespace, UTF-8, LF, line length
 # PSScriptAnalyzer joins when the first PowerShell script does
-# (docs/plugin/plan.md, step 5). Go is checked by cli.yml (gofmt, go vet).
+# (docs/plugin/plan.md, step 5). go vet and the Go tests run in cli.yml.
 
 on:
   push:
@@ -26,23 +28,49 @@ concurrency:
 env:
   CLANG_VERSION: "18"
   CMAKELANG_VERSION: "0.6.13"
+  TREEFMT_VERSION: "2.6.0"
+  # sha256 of treefmt_${TREEFMT_VERSION}_linux_amd64.tar.gz (the release's checksums.txt)
+  TREEFMT_SHA256: "2deff4c0f381d560784c5632cf5860da712891ccd9185306e73d8ba37778ab7f"
+  SHFMT_VERSION: "v3.14.1"
+  RUFF_VERSION: "0.16.10"
   YAMLLINT_VERSION: "1.38.0"
   ACTIONLINT_VERSION: "v1.7.12"
   EDITORCONFIG_CHECKER_VERSION: "v3.8.0"
 
 jobs:
-  clang-format:
+  format:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The formatters, at the versions this repository is formatted with.
       - name: Install clang-format
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends "clang-format-${CLANG_VERSION}"
-      - name: Check formatting
+          mkdir -p "$RUNNER_TEMP/bin"
+          ln -s "$(command -v "clang-format-${CLANG_VERSION}")" "$RUNNER_TEMP/bin/clang-format"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "cmakelang==${CMAKELANG_VERSION}" pyyaml "ruff==${RUFF_VERSION}"
+      # gofmt comes with Go: the version cli.yml builds with.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+      - name: Install shfmt
         run: |
-          mapfile -t files < <(find src tests \( -name '*.cpp' -o -name '*.h' \) | sort)
-          "clang-format-${CLANG_VERSION}" --dry-run --Werror "${files[@]}"
+          go install "mvdan.cc/sh/v3/cmd/shfmt@${SHFMT_VERSION}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Install treefmt
+        run: |
+          archive="treefmt_${TREEFMT_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/numtide/treefmt/releases/download/v${TREEFMT_VERSION}/$archive"
+          echo "${TREEFMT_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/bin" treefmt
+      - name: Check formatting
+        run: treefmt --ci
 
   clang-tidy:
     runs-on: ubuntu-latest
@@ -58,7 +86,7 @@ jobs:
         run: |
           "clang-tidy-${CLANG_VERSION}" -p build --warnings-as-errors='*' src/core/*.cpp
 
-  cmake-format:
+  cmake-lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -66,7 +94,6 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install "cmakelang==${CMAKELANG_VERSION}" pyyaml
-      - run: cmake-format --check CMakeLists.txt tests/CMakeLists.txt tests/fuzz/CMakeLists.txt
       - run: cmake-lint CMakeLists.txt tests/CMakeLists.txt tests/fuzz/CMakeLists.txt
 
   actionlint:

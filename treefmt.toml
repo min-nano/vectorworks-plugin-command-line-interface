@@ -1,0 +1,59 @@
+# treefmt configuration - which formatter formats which files.
+# https://treefmt.com
+#
+# One command formats the whole repository:
+#   treefmt          # format in place
+#   treefmt --ci     # check only; fails if a file would change (lint.yml)
+#
+# The layout rules live in each formatter's own file, so that editors and the
+# formatters run by hand agree with treefmt:
+#   * .editorconfig      - tabs (4 columns), 100 columns; shfmt reads it directly
+#   * .clang-format      - C/C++
+#   * .cmake-format.yaml - CMake
+#   * ruff.toml          - Python
+#   * gofmt              - has no settings (tabs, no line-length limit)
+#
+# The versions are pinned in .github/workflows/lint.yml (formatter job).
+
+# Files without a formatter: documents, data and settings. JSON is written by hand
+# (protocol/fixtures/), YAML is checked by yamllint, Markdown is prose.
+excludes = [
+	"*.md",
+	"*.json",
+	"*.yml",
+	"*.yaml",
+	"*.toml",
+	".clang-format",
+	".clang-tidy",
+	".editorconfig",
+	".editorconfig-checker.json",
+	".gitignore",
+	"cli/go.mod",
+	"cli/go.sum",
+]
+
+[formatter.clang-format]
+command = "clang-format"
+options = ["-i"]
+includes = ["*.c", "*.cpp", "*.h", "*.hpp"]
+
+[formatter.cmake-format]
+command = "cmake-format"
+options = ["-i"]
+includes = ["CMakeLists.txt", "*.cmake"]
+
+[formatter.gofmt]
+command = "gofmt"
+options = ["-w"]
+includes = ["*.go"]
+
+[formatter.shfmt]
+command = "shfmt"
+# No layout flags: shfmt then reads .editorconfig.
+options = ["-w"]
+includes = ["*.sh"]
+
+[formatter.ruff-format]
+command = "ruff"
+options = ["format"]
+includes = ["*.py"]

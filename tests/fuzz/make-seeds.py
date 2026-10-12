@@ -47,14 +47,12 @@ def edge_cases():
 	yield "invalid-utf8", b'{"tool":"echo","args":{"s":"\xff\xc0\xaf\xed\xa0\x80\xf4\x90\x80\x80"}}'
 	yield "truncated-utf8", b'"\xe3\x81'
 	u = lambda code: b"\\u" + code.encode()
-	yield "escapes", (
-		b'"' + u("d83d") + u("de00") + b" " + u("d83d") + u("0041") + b" "
-		+ u("de00") + b" " + u("0000") + rb' \/\b\f\n\r\t\"\\"'
-	)
-	yield "numbers", (
-		b"[0,-0,1e-400,-1e-400,1e308,1.7976931348623157e308,4.9e-324,"
-		b"123456789012345678901234567890,0.1]"
-	)
+	escapes = [u("d83d") + u("de00"), u("d83d") + u("0041"), u("de00"), u("0000")]
+	escapes.append(rb"\/\b\f\n\r\t\"\\")
+	yield "escapes", b'"' + b" ".join(escapes) + b'"'
+	numbers = ["0", "-0", "1e-400", "-1e-400", "1e308", "1.7976931348623157e308", "4.9e-324"]
+	numbers += ["123456789012345678901234567890", "0.1"]
+	yield "numbers", ("[" + ",".join(numbers) + "]").encode()
 	yield "number-overflow", b"[1e309]"
 	yield "values", '{"a":[1,-2.5e-3,true,false,null,"あ"],"b":{}}'.encode()
 

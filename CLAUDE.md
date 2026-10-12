@@ -60,11 +60,16 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 
 - `src/core/` は SDK に依らない（SDK のヘッダを読まない。OS の呼び出しと標準ライブラリだけ）。
   プラグインとテストが同じ `VwCliCore` をリンクする。SDK に依る処理は `src/tools/` などに置く。
-- 体裁（`.clang-format`・`.editorconfig`）: インデントはどの言語もタブ（幅 4）、揃えは空白
+- 整形は treefmt（`treefmt.toml`）にまとめる: どのファイルをどのフォーマッタ（clang-format・
+  cmake-format・gofmt・shfmt・ruff format）で整えるかはそこだけに書き、`treefmt` で整え、CI は
+  `treefmt --ci` で確かめる。フォーマッタの版は `lint.yml` で固定する。フォーマッタを足すときも
+  `treefmt.toml` に足す。
+- 体裁（`.editorconfig`・`.clang-format`・`.cmake-format.yaml`・`ruff.toml`。shfmt は `.editorconfig` を
+  読む）: インデントはどの言語もタブ（幅 4）、揃えは空白
   （Go の gofmt が必ずタブで書くので、ほかを合わせる。タブを使えない YAML だけ空白 2 つ）。
   C++・CMake・シェル・Python の行は 100 桁まで（タブは 4 桁と数える）。波括弧は同じ行・括弧の後で
   揃えないなど、ほかも Go に合わせる。Go の行の長さは gofmt が確かめない。名前は元のプラグインに合わせる（`VwCli::core` の名前空間・メンバは `f` で
-  始める）。`clang-format`・`clang-tidy`（`src/core/`）・警告をエラーにしたビルド（MSVC も）を通す。
+  始める）。treefmt・`clang-tidy`（`src/core/`）・警告をエラーにしたビルド（MSVC も）を通す。
   手元では `scripts/lint.sh`（`--fix` で整形）。
 - テストは `tests/` に、標準ライブラリだけの小さな枠（`tests/TestFramework.h`）で書く。CI は
   Linux・mac で ASan・UBSan を、Windows で MSVC を使う。外から来たテキストを読む処理（`core/Json`）は

@@ -1,0 +1,8 @@
+# ruff configuration (Python: tests/fuzz/make-seeds.py). treefmt runs `ruff format`
+# (treefmt.toml). The layout follows .editorconfig: tabs shown 4 columns wide,
+# lines up to 100 columns.
+line-length = 100
+indent-width = 4
+
+[format]
+indent-style = "tab"

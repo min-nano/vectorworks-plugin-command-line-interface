@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 #
 # lint.sh - run locally the checks that .github/workflows/lint.yml enforces:
-# clang-format, clang-tidy (src/core/), cmake-format / cmake-lint, actionlint,
-# yamllint, editorconfig-checker and the shell script checker.
+# treefmt (every formatter in treefmt.toml), clang-tidy (src/core/), cmake-lint,
+# actionlint, yamllint, editorconfig-checker and the shell script checker.
 #
-#   scripts/lint.sh          # check only; non-zero exit if anything is off
-#   scripts/lint.sh --fix    # format in place (clang-format, clang-tidy, cmake-format),
-#                            # then check the rest
+#   scripts/lint.sh          # check; non-zero exit if anything is off (treefmt still
+#                            # writes the formatted files: see them with git diff)
+#   scripts/lint.sh --fix    # format in place (treefmt, clang-tidy), then check the rest
 #
 # A tool that is not installed is reported and skipped, so a partial local run
-# still works; CI remains the complete gate. Pin clang with CLANG_SUFFIX, e.g.
+# still works; CI remains the complete gate. treefmt runs the formatters by their
+# plain names (clang-format, cmake-format, gofmt, shfmt, ruff) found on PATH; the
+# versions CI uses are pinned in lint.yml. Pin clang-tidy with CLANG_SUFFIX, e.g.
 #   CLANG_SUFFIX=-18 scripts/lint.sh
 
 set -uo pipefail
@@ -17,7 +19,6 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
 SUFFIX="${CLANG_SUFFIX:-}"
-CLANG_FORMAT="clang-format${SUFFIX}"
 CLANG_TIDY="clang-tidy${SUFFIX}"
 FIX=0
 [ "${1:-}" = "--fix" ] && FIX=1
@@ -45,18 +46,18 @@ report() {
 
 CMAKE_FILES=(CMakeLists.txt tests/CMakeLists.txt tests/fuzz/CMakeLists.txt)
 
-if have "$CLANG_FORMAT"; then
-	mapfile -t CXX_FILES < <(find src tests \( -name '*.cpp' -o -name '*.h' \) | sort)
-	echo "==> clang-format (${#CXX_FILES[@]} files)"
+# treefmt fails on the first formatter it cannot find, so it needs all of them.
+if have treefmt; then
+	echo "==> treefmt (treefmt.toml)"
 	if [ "$FIX" -eq 1 ]; then
-		"$CLANG_FORMAT" -i "${CXX_FILES[@]}"
-		echo "    formatted in place"
+		treefmt
+		report "treefmt"
 	else
-		"$CLANG_FORMAT" --dry-run --Werror "${CXX_FILES[@]}"
-		report "clang-format"
+		treefmt --ci
+		report "treefmt"
 	fi
 else
-	skip "$CLANG_FORMAT" "apt-get install clang-format, or set CLANG_SUFFIX"
+	skip "treefmt" "https://github.com/numtide/treefmt/releases (and the formatters in treefmt.toml)"
 fi
 
 # The file list must stay identical to the one in lint.yml: every SDK-free
@@ -76,19 +77,6 @@ if have "$CLANG_TIDY" && have cmake; then
 	fi
 else
 	skip "$CLANG_TIDY" "apt-get install clang-tidy cmake"
-fi
-
-if have cmake-format; then
-	echo "==> cmake-format (${#CMAKE_FILES[@]} files)"
-	if [ "$FIX" -eq 1 ]; then
-		cmake-format -i "${CMAKE_FILES[@]}"
-		echo "    formatted in place"
-	else
-		cmake-format --check "${CMAKE_FILES[@]}"
-		report "cmake-format"
-	fi
-else
-	skip "cmake-format" "pip install cmakelang pyyaml"
 fi
 
 if have cmake-lint; then
