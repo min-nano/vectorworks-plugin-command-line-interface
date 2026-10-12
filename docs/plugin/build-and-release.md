@@ -1,6 +1,6 @@
 # ビルドとリリース
 
-元:`CMakeLists.txt` と元:`.github/workflows/build.yml` を移し、IFC の部分を除きます。
+1 から書きます。SDK のリンクとバンドルの形は、SDK リファレンスの実機確認プラグイン（[`plugin/`](https://github.com/min-nano/vectorworks-developer-sdk-reference/tree/main/plugin)）の `CMakeLists.txt` で実機に読み込まれている形を見本にします（[プラグインの設計「根拠」](README.md#根拠)）。
 
 ## CMake
 
@@ -16,10 +16,8 @@
 | Windows | `.vlb`・隣に `.vwr` |
 | ターゲット | `add_vw_plugin(VwCli "cli" io.github.min-nano.cli)` の 1 つだけ（安定版と開発版を区別しない） |
 
-`add_vw_plugin` は元の関数（元:`CMakeLists.txt` L565-756）から、本体のターゲット・殻の ID・
-同梱スクリプト・系列（`VW_DEV_BUILD`）の切り替え・版のファイル（`.commit` / `.branch`・
-plist の `VWBuildBranch` / `VWBuildCommit`）を除いて使います。版の情報が `build.json` と
-コンパイル時の定義の 2 つに散らばらないようにするためです。
+`add_vw_plugin` は、見本にある殻と本体の分割・同梱スクリプト・版のファイル（plist の版の鍵など）を
+持ちません。版の情報が `build.json` とコンパイル時の定義の 2 つ以外に散らばらないようにするためです。
 
 ## CI
 
@@ -37,17 +35,18 @@ plist の `VWBuildBranch` / `VWBuildCommit`）を除いて使います。版の�
 必須かどうかを分けられないため、絞ると対象外の変更だけの PR（文書だけ等）でチェックが報告されず、
 マージできなくなります。
 
-- **移さないもの**（要ると分かってから足す）: SDK に依存する clang-tidy とそのキャッシュ
-  （元:`scripts/clang-tidy-sdk.sh`・`tidy-cache-key.py`）、`ci-debug.yml`、
-  `stable-release-healthcheck.yml`。
+- **持たないもの**（要ると分かってから足す）: SDK に依存する clang-tidy とそのキャッシュ、
+  CI の上で調べるためのワークフロー、リリースの定期的な確認。
 
-- **SDK の取得に Secrets は要りません。** 元:`scripts/fetch-vw-sdk.sh` は公開の URL
+- **SDK の取得に Secrets は要りません。** SDK リファレンスの [`scripts/fetch-vw-sdk.sh`](https://github.com/min-nano/vectorworks-developer-sdk-reference/tree/main/scripts) と同じく、公開の URL
   （`https://release.vectorworks.net/latest/Vectorworks/2026-NNA-eng-{mac,win}-SDK.zip`）から
-  取ります。キャッシュのキーは `vw-sdk-2026-NNA-{mac,win}-v3`。
+  取ります。
+- **SDK のキャッシュのキーは、配布されている SDK の版から決めます**（SDK リファレンスの
+  `scripts/vw-sdk-cache-key.sh` と同じく、HEAD の `ETag` か `Last-Modified` を混ぜる）。URL は
+  `latest` で、SDK が差し替わっても同じなので、固定のキーでは古い SDK でビルドし続けます。
 - リリースは `GITHUB_TOKEN`（`contents: write`）で行います。
-- 自動レビュー（元の `pr-review.yml`）は差し当たり移しません（移すなら Secrets に
-  `CLAUDE_CODE_OAUTH_TOKEN` が要る）。
-- 署名は元と同じくアドホック（`codesign --force --deep --sign -`）。Developer ID と公証はしません。
+- 自動レビューは差し当たり持ちません（持つなら Secrets に `CLAUDE_CODE_OAUTH_TOKEN` が要る）。
+- 署名はアドホック（`codesign --force --deep --sign -`）。Developer ID と公証はしません。
 
 ## 梱包
 

@@ -59,7 +59,7 @@ Go で書かれた道具は `tools/go.mod` に `tool` で書き、`go -C tools t
 
 | 対象 | 理由 |
 | --- | --- |
-| CMake | 元のリポジトリの cmake-format（cmakelang）は保守が止まっている。`CMakeLists.txt` は 1 つだけで、`.editorconfig` の決まりで足りる |
+| CMake | cmake-format（cmakelang）は保守が止まっている。`CMakeLists.txt` は 1 つだけで、`.editorconfig` の決まりで足りる |
 | Markdown | 整形の道具が日本語の段落と長い表をうまく扱えない |
 | YAML | actionlint の検査で足りる（[検査](lint.md)） |
 | `protocol/fixtures/` の JSON | 壊れた要求をわざと含む。整形すると見本の意味が変わる |
