@@ -128,6 +128,9 @@ type Bridge struct {
 	Running bool
 	// 動いていない理由
 	Reason string
+	// newID は Call が要求の id を作る関数。nil なら NewID（テストが決まった id に替える。
+	// パッケージの変数にしないのは、並行するテストどうしで書き換えが競合しないため）。
+	newID func(time.Time) string
 }
 
 // Open はその場所のブリッジの状態を判定する（docs/protocol.md「生存の判定」）。
@@ -142,9 +145,6 @@ func Open(dir string) *Bridge {
 	}
 	return &Bridge{Dir: dir, Running: true}
 }
-
-// newID は Call が要求の id を作る関数（テストが決まった id に替える）。
-var newID = NewID
 
 // NewID は要求の id を作る。名前の昇順がおおむね送った順になるように時刻を先頭へ置く
 // （プラグイン側は名前の昇順で取り出す）。順序を保証するのは応答を受け取ってから次を送った
@@ -190,7 +190,11 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		return nil, fmt.Errorf("request is nested too deeply (depth %d, limit %d)", depth, MaxNestingDepth)
 	}
 
-	id := newID(time.Now())
+	makeID := b.newID
+	if makeID == nil {
+		makeID = NewID
+	}
+	id := makeID(time.Now())
 	requestPath := filepath.Join(b.Dir, id+RequestSuffix)
 	responsePath := filepath.Join(b.Dir, id+ResponseSuffix)
 	waitPath := filepath.Join(b.Dir, id+WaitSuffix)
@@ -337,11 +341,11 @@ func NestingDepth(data []byte) int {
 func WriteAtomically(path string, data []byte) error {
 	temp := path + TempSuffix
 	if err := writeNew(temp, data); err != nil {
-		return fmt.Errorf("write: %w", err)
+		return err
 	}
 	if err := os.Rename(temp, path); err != nil {
 		_ = os.Remove(temp)
-		return fmt.Errorf("rename: %w", err)
+		return err
 	}
 	return nil
 }

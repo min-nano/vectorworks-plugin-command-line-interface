@@ -5,11 +5,10 @@ import (
 	"time"
 )
 
-// SetNewID はテストの間だけ、Call が作る要求の id を id に固定する。
-func SetNewID(t *testing.T, id string) {
-	old := newID
-	newID = func(time.Time) string { return id }
-	t.Cleanup(func() { newID = old })
+// WithNewID は、b の Call が作る要求の id を id に固定する。
+func WithNewID(b *Bridge, id string) *Bridge {
+	b.newID = func(time.Time) string { return id }
+	return b
 }
 
 // SetTakenGrace はテストの間だけ takenGrace を縮める。

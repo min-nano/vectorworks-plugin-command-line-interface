@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | `src/core/Protocol.h` | 依らない | 作法の定数（ファイルの綴り・上限・予約された道具・`code`）と id の検査。`protocol/fixtures/constants.json` と対（[作法の見本](../fixtures.md)） |
 | `src/core/Json.{h,cpp}` | 依らない | 小さな JSON（入れ子の深さに上限を設ける。読み方は Go の `encoding/json` に合わせる。[受け付け 1 回](#受け付け-1-回coreserverserve)の 3） |
-| `src/core/Files.h`・`FilesPosix.cpp`・`FilesWindows.cpp` | 依らない | スプールに使う OS の呼び出し（ロック・待つ印・読み書き・`<CLI>` の親の場所）。開くファイルは子プロセスに受け継がせない。開いて待たない（POSIX は `O_NONBLOCK` で開き、通常のファイルだけを読み書きする。リンクはたどらない。Windows は `\\?\` を付けて開くので、パスは絶対パスに限る）。書きかけは消してから新しく作る（リンクの先を壊さない。[作法「プラグイン側の義務」](../protocol.md#プラグイン側の義務)） |
+| `src/core/Files.h`・`FilesPosix.cpp`・`FilesWindows.cpp` | 依らない | スプールに使う OS の呼び出し（ロック・待つ印・読み書き・`<CLI>` の親の場所）。開くファイルは子プロセスに受け継がせない。開いて待たない（通常のファイルだけを読み書きし、リンクはたどらない。POSIX は `O_NONBLOCK`・`O_NOFOLLOW` で開く。Windows は `\\?\` と `FILE_FLAG_OPEN_REPARSE_POINT` で開き（パスは絶対パスに限る）、reparse point（OneDrive などのクラウドのファイル・重複除去を含む）と中身がローカルにないファイルを断る）。書きかけは消してから新しく作る（リンクの先を壊さない。[作法「プラグイン側の義務」](../protocol.md#プラグイン側の義務)） |
 | `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つ（`prepare` / `lock` / `sweep` / `poll` / `take` / `waitState` / `reply`）と、スプールの場所（`defaultSpoolDir`）。場所は引数で受ける（テストは一時ディレクトリを渡す） |
 | `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（`core::Server::serve`。下記）と、占有の印（`Server` が発行した 1 つをメモリに持つ）。道具の表と時刻を引数で受けるので無 SDK でテストできる |
 | `src/tools/ToolTable.cpp` | 依る | 道具の表 |

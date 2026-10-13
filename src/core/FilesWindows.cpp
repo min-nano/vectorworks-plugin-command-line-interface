@@ -82,8 +82,8 @@ enum class Refusal {
 	None,
 	// 通常のファイルでない（reparse point・ディレクトリ・ディスクにないもの）
 	NotRegular,
-	// 通常のファイルだが、中身がローカルにない（クラウド・オフラインファイル・HSM などから
-	// 取り寄せる）
+	// reparse point ではないが、中身がローカルにない（オフラインファイル・HSM などから取り寄せる。
+	// クラウドのファイルは reparse point なので NotRegular になる）
 	NotLocal,
 };
 
@@ -105,8 +105,8 @@ struct Opened {
 #define FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000
 #endif
 
-// 中身がローカルにない（クラウド・オフラインファイル・HSM などから取り寄せる）ことを示す
-// 属性。読むと取り寄せる処理がメインスレッドで走り、ネットワークを待って止まりうるので断る。
+// 中身がローカルにない（オフラインファイル・HSM などから取り寄せる）ことを示す属性。読むと
+// 取り寄せる処理がメインスレッドで走り、ネットワークを待って止まりうるので断る。
 constexpr DWORD kNotLocal =
     FILE_ATTRIBUTE_OFFLINE | FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS;
 
@@ -289,11 +289,13 @@ Lock::Result Lock::take(const std::string &path, std::string &error) {
 	Opened opened = openFile(path, GENERIC_READ | GENERIC_WRITE, 0, OPEN_ALWAYS);
 	if (opened.handle == INVALID_HANDLE_VALUE) {
 		if (opened.refused == Refusal::NotRegular) {
-			error = "CreateFile " + path + ": 通常のファイルではありません";
+			error = "CreateFile " + path +
+			        ": 通常のファイルではありません（bridge.lock を消せば作り直します）";
 			return Result::Failed;
 		}
 		if (opened.refused == Refusal::NotLocal) {
-			error = "CreateFile " + path + ": 中身がローカルにありません（取り寄せる必要がある）";
+			error = "CreateFile " + path +
+			        ": 中身がローカルにありません（bridge.lock を消せば作り直します）";
 			return Result::Failed;
 		}
 		if (opened.error == ERROR_SHARING_VIOLATION) {

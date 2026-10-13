@@ -512,10 +512,11 @@ func TestWriteAtomicallyRemovesTheTempWhenItCannotPublish(t *testing.T) {
 	}
 }
 
-// 要求を公開できなければ、どの要求かと、どの段（書きかけを書く write・rename）で失敗したかを返す。
+// 要求を公開できなければ、どの要求かと、どの段（書きかけを開く・rename）で失敗したかを返す
+// （段は os のエラーの文言が示す）。
 func TestCallNamesTheRequestItCannotPublish(t *testing.T) {
 	for _, c := range []struct{ blocked, stage string }{
-		{"x" + RequestSuffix + TempSuffix, "write"},
+		{"x" + RequestSuffix + TempSuffix, "open"},
 		{"x" + RequestSuffix, "rename"},
 	} {
 		t.Run(c.stage, func(t *testing.T) {
@@ -523,9 +524,8 @@ func TestCallNamesTheRequestItCannotPublish(t *testing.T) {
 			if err := os.MkdirAll(filepath.Join(dir, c.blocked, "keep"), 0o700); err != nil {
 				t.Fatal(err)
 			}
-			SetNewID(t, "x")
-			_, err := (&Bridge{Dir: dir}).Call("ping", nil, "", time.Second)
-			want := "publish x" + RequestSuffix + ": " + c.stage + ": "
+			_, err := WithNewID(&Bridge{Dir: dir}, "x").Call("ping", nil, "", time.Second)
+			want := "publish x" + RequestSuffix + ": " + c.stage + " "
 			if err == nil || !strings.HasPrefix(err.Error(), want) {
 				t.Fatalf("Call = %v, want an error starting with %q", err, want)
 			}

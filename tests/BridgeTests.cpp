@@ -13,6 +13,16 @@
 #ifndef _WIN32
 #include <sys/stat.h>
 #include <unistd.h>
+#else
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+
+#include <winioctl.h>
 #endif
 
 using VwCli::core::Bridge;
@@ -42,6 +52,35 @@ bool inCi() {
 bool exists(const TempDir &dir, const std::string &name) {
 	return std::filesystem::exists(dir.path() / name);
 }
+
+#ifdef _WIN32
+// setForeignReparsePoint は path（既にあるファイル）に、名前の代わりにならない独自の reparse
+// point を付ける（OneDrive などのクラウドのファイルにあたるものを、テストで作るため）。付けられ
+// なければ、その理由（0 なら付けた）。
+DWORD setForeignReparsePoint(const std::filesystem::path &path) {
+	HANDLE file = ::CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+	                            FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+	if (file == INVALID_HANDLE_VALUE) {
+		return ::GetLastError();
+	}
+	constexpr DWORD kData = 4;
+	std::vector<BYTE> buffer(REPARSE_GUID_DATA_BUFFER_HEADER_SIZE + kData);
+	auto *reparse = reinterpret_cast<REPARSE_GUID_DATA_BUFFER *>(buffer.data());
+	// Microsoft のものでも名前の代わりでもない tag（上位のビットを立てない）。
+	reparse->ReparseTag = 0x00001234;
+	reparse->ReparseDataLength = kData;
+	reparse->ReparseGuid =
+	    GUID{0x6f1d3c2a, 0x8b4e, 0x4f7a, {0x9c, 0x1d, 0x2e, 0x3f, 0x4a, 0x5b, 0x6c, 0x7d}};
+	DWORD returned = 0;
+	DWORD failure = 0;
+	if (!::DeviceIoControl(file, FSCTL_SET_REPARSE_POINT, buffer.data(),
+	                       static_cast<DWORD>(buffer.size()), nullptr, 0, &returned, nullptr)) {
+		failure = ::GetLastError();
+	}
+	::CloseHandle(file);
+	return failure;
+}
+#endif
 
 }
 
@@ -267,6 +306,28 @@ TEST(BridgeTreatsReservedNamesAsFiles) {
 	CHECK(files::remove(dir.sub("NUL")));
 	std::optional<std::vector<std::string>> names = files::list(dir.utf8Path());
 	CHECK(names && names->empty());
+}
+
+// リンクでない reparse point（OneDrive などのクラウドのファイルにあたる）も、開き直さずに断る。
+TEST(BridgeRejectsReparsePointsThatAreNotLinks) {
+	TempDir dir;
+	for (const char *name : {"r.req.json", "r.wait", "bridge.lock"}) {
+		put(dir, name, R"({"tool":"ping"})");
+		if (DWORD failure = setForeignReparsePoint(dir.path() / name); failure != 0) {
+			// 作れなければ確かめようがない。黙って通らないよう、CI では失敗にする。
+			REQUIRE(!inCi());
+			std::fprintf(stderr, "skip BridgeRejectsReparsePointsThatAreNotLinks: error %lu\n",
+			             failure);
+			return;
+		}
+	}
+	Bridge bridge(dir.utf8Path());
+	CHECK(!bridge.take("r"));
+	CHECK(bridge.waitState("r") == files::WaitState::Missing);
+	std::string error;
+	CHECK(bridge.lock(error) == files::Lock::Result::Failed);
+	// 消せば直ることを示す。
+	CHECK(error.find("bridge.lock を消せば作り直します") != std::string::npos);
 }
 
 // 絶対パスでないパスは開かない（\\?\ を付けられず、予約された名前がデバイスを指すため）。

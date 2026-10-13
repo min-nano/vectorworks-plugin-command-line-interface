@@ -212,8 +212,10 @@ Lock::Result Lock::take(const std::string &path, std::string &error) {
 	release();
 	Opened opened = openRegular(path, O_RDWR | O_CREAT, 0600);
 	if (opened.fd < 0) {
-		error = opened.notRegular ? "open " + path + ": 通常のファイルではありません"
-		                          : describe("open", path, opened.error);
+		error = opened.notRegular
+		            ? "open " + path +
+		                  ": 通常のファイルではありません（bridge.lock を消せば作り直します）"
+		            : describe("open", path, opened.error);
 		return Result::Failed;
 	}
 	int fd = opened.fd;
