@@ -511,3 +511,16 @@ func TestWriteAtomicallyRemovesTheTempWhenItCannotPublish(t *testing.T) {
 		t.Errorf("the temp was left: %v", err)
 	}
 }
+
+// 要求を公開できなければ、どの要求かと、どの段（write・publish）で失敗したかを返す。
+func TestPublishRequestNamesTheRequest(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "x"+RequestSuffix)
+	if err := os.MkdirAll(filepath.Join(path+TempSuffix, "keep"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	err := PublishRequest(path, []byte("{}"))
+	if err == nil || !strings.HasPrefix(err.Error(), "publish request x"+RequestSuffix+": write: ") {
+		t.Fatalf("PublishRequest = %v, want the request name and the stage", err)
+	}
+}

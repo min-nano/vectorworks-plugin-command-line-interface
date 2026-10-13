@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+// PublishRequest は要求を公開する手順をテストから呼ぶ。
+var PublishRequest = publishRequest
+
 // SetTakenGrace はテストの間だけ takenGrace を縮める。
 func SetTakenGrace(t *testing.T, d time.Duration) {
 	old := takenGrace

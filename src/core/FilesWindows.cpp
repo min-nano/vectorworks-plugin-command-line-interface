@@ -13,8 +13,6 @@
 #include <shlobj.h>
 
 #include <algorithm>
-#include <cstring>
-#include <initializer_list>
 
 namespace VwCli::core::files {
 
@@ -79,13 +77,23 @@ bool isDirectory(const std::wstring &path) {
 	return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY);
 }
 
+// Refusal は openFile が断った理由。
+enum class Refusal {
+	None,
+	// 通常のファイルでない（リンク・AF_UNIX のソケット・WSL の FIFO とデバイス・ディレクトリ・
+	// ディスクにないもの）
+	NotRegular,
+	// 通常のファイルだが、中身がローカルにない（クラウドなどから取り寄せる）
+	NotLocal,
+};
+
 // Opened は openFile の結果。
 struct Opened {
 	// 開けなければ INVALID_HANDLE_VALUE。
 	HANDLE handle = INVALID_HANDLE_VALUE;
-	// 通常のファイルでない（リンク・AF_UNIX のソケット・ディレクトリ・ディスクにないもの）。
-	bool notRegular = false;
-	// 開けなかった理由（notRegular のときは 0）。
+	// 断ったなら、その理由。
+	Refusal refused = Refusal::None;
+	// 開けなかった理由（断ったときは 0）。
 	DWORD error = 0;
 };
 
@@ -114,37 +122,36 @@ struct Opened {
 constexpr DWORD kNotLocal =
     FILE_ATTRIBUTE_OFFLINE | FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS;
 
-// rejected はハンドルの指すものを断るか。断るのは、ディスクにないもの・ディレクトリ・中身が
-// ローカルにないもの・リンク（名前の代わりになる reparse point）・AF_UNIX のソケット・WSL の
-// FIFO とデバイス。断らないときは tag に属性と reparse tag を残す。
-bool rejected(HANDLE file, FILE_ATTRIBUTE_TAG_INFO &tag) {
+// rejected はハンドルの指すものを断るか、その理由を返す（断らなければ None）。断るのは、ディスクに
+// ないもの・ディレクトリ・リンク（名前の代わりになる reparse point）・AF_UNIX のソケット・WSL の
+// FIFO とデバイス（NotRegular）と、中身がローカルにないもの（NotLocal）。tag に属性と reparse tag
+// を残す。
+Refusal rejected(HANDLE file, FILE_ATTRIBUTE_TAG_INFO &tag) {
 	if (::GetFileType(file) != FILE_TYPE_DISK ||
 	    !::GetFileInformationByHandleEx(file, FileAttributeTagInfo, &tag, sizeof tag) ||
-	    (tag.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | kNotLocal)) != 0) {
-		return true;
+	    (tag.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+		return Refusal::NotRegular;
 	}
-	if ((tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0) {
-		return false;
+	if ((tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+		switch (tag.ReparseTag) {
+		case IO_REPARSE_TAG_AF_UNIX:
+		case IO_REPARSE_TAG_LX_FIFO:
+		case IO_REPARSE_TAG_LX_CHR:
+		case IO_REPARSE_TAG_LX_BLK:
+			return Refusal::NotRegular;
+		default:
+			if (IsReparseTagNameSurrogate(tag.ReparseTag)) {
+				return Refusal::NotRegular;
+			}
+		}
 	}
-	switch (tag.ReparseTag) {
-	case IO_REPARSE_TAG_AF_UNIX:
-	case IO_REPARSE_TAG_LX_FIFO:
-	case IO_REPARSE_TAG_LX_CHR:
-	case IO_REPARSE_TAG_LX_BLK:
-		return true;
-	default:
-		return IsReparseTagNameSurrogate(tag.ReparseTag);
-	}
+	return (tag.FileAttributes & kNotLocal) != 0 ? Refusal::NotLocal : Refusal::None;
 }
 
-// sameFile は 2 つのハンドルが同じファイル（ボリュームとファイル ID が同じ）を指すか。
-bool sameFile(HANDLE a, HANDLE b) {
-	FILE_ID_INFO left{};
-	FILE_ID_INFO right{};
-	return ::GetFileInformationByHandleEx(a, FileIdInfo, &left, sizeof left) &&
-	       ::GetFileInformationByHandleEx(b, FileIdInfo, &right, sizeof right) &&
-	       left.VolumeSerialNumber == right.VolumeSerialNumber &&
-	       std::memcmp(&left.FileId, &right.FileId, sizeof left.FileId) == 0;
+// parentOf は path の親のディレクトリ（最後の \ より前）。
+std::wstring parentOf(const std::wstring &path) {
+	std::size_t at = path.find_last_of(L'\\');
+	return at == std::wstring::npos ? std::wstring() : path.substr(0, at);
 }
 
 // openFile はディスクの通常のファイルだけを、継承できないハンドルで開く（lpSecurityAttributes に
@@ -155,17 +162,17 @@ bool sameFile(HANDLE a, HANDLE b) {
 // 止まる（POSIX の O_NOFOLLOW にあたる）。
 //
 // リンクでない reparse point（OneDrive などのクラウドのファイル・重複除去）は中身を持つふつうの
-// ファイルなので、たどって開き直す。開き直す間に名前をリンクへ差し替えられても、たどった先を
-// 受け入れないよう、属性だけを読むハンドル（共有を妨げない）でリンクをたどらずに名前を押さえて
-// おき、開き直したハンドルと同じファイルを指すときだけ受け入れる。
+// ファイルなので、たどって開き直す。開き直すのは名前ではなく、1 回目に開いたファイルの ID
+// （OpenFileById）で行う。名前を解き直さないので、その間に名前をリンクへ差し替えられても、リンクを
+// たどらない（たどった先を開く副作用も起きない）。1 回目のハンドルは共有を妨げうる（share が 0 なら
+// 開き直しが共有違反になる）ので、ID を読んでから閉じる。ID で開くのは既にあるファイルだけだが、
+// reparse point は既にあるファイルなので disposition は要らない。
 Opened openFile(const std::string &path, DWORD access, DWORD share, DWORD disposition) {
 	std::wstring wide = extended(path);
-	auto failed = [] { return Opened{INVALID_HANDLE_VALUE, false, ::GetLastError()}; };
-	auto refuse = [](std::initializer_list<HANDLE> handles) {
-		for (HANDLE handle : handles) {
-			::CloseHandle(handle);
-		}
-		return Opened{INVALID_HANDLE_VALUE, true, 0};
+	auto failed = [] { return Opened{INVALID_HANDLE_VALUE, Refusal::None, ::GetLastError()}; };
+	auto refuse = [](HANDLE handle, Refusal reason) {
+		::CloseHandle(handle);
+		return Opened{INVALID_HANDLE_VALUE, reason, 0};
 	};
 	HANDLE file = ::CreateFileW(wide.c_str(), access, share, nullptr, disposition,
 	                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
@@ -173,35 +180,41 @@ Opened openFile(const std::string &path, DWORD access, DWORD share, DWORD dispos
 		return failed();
 	}
 	FILE_ATTRIBUTE_TAG_INFO tag{};
-	if (rejected(file, tag)) {
-		return refuse({file});
+	if (Refusal reason = rejected(file, tag); reason != Refusal::None) {
+		return refuse(file, reason);
 	}
 	if ((tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0) {
-		return {file, false, 0};
+		return {file, Refusal::None, 0};
 	}
-	// 1 回目のハンドルは共有を妨げうる（share が 0 なら 2 回目が共有違反になる）ので閉じる。
-	::CloseHandle(file);
-	HANDLE anchor = ::CreateFileW(wide.c_str(), FILE_READ_ATTRIBUTES,
-	                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-	                              OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-	if (anchor == INVALID_HANDLE_VALUE) {
-		return failed();
-	}
-	if (rejected(anchor, tag)) {
-		return refuse({anchor});
-	}
-	file = ::CreateFileW(wide.c_str(), access, share, nullptr, disposition, FILE_ATTRIBUTE_NORMAL,
-	                     nullptr);
-	if (file == INVALID_HANDLE_VALUE) {
+	FILE_ID_INFO id{};
+	if (!::GetFileInformationByHandleEx(file, FileIdInfo, &id, sizeof id)) {
 		Opened opened = failed();
-		::CloseHandle(anchor);
+		::CloseHandle(file);
 		return opened;
 	}
-	if (rejected(file, tag) || !sameFile(anchor, file)) {
-		return refuse({anchor, file});
+	::CloseHandle(file);
+	// OpenFileById は同じボリュームのハンドルを要る。スプールのディレクトリを属性だけで開く。
+	HANDLE volume = ::CreateFileW(parentOf(wide).c_str(), FILE_READ_ATTRIBUTES,
+	                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+	                              OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+	if (volume == INVALID_HANDLE_VALUE) {
+		return failed();
 	}
-	::CloseHandle(anchor);
-	return {file, false, 0};
+	FILE_ID_DESCRIPTOR descriptor{};
+	descriptor.dwSize = sizeof descriptor;
+	descriptor.Type = ExtendedFileIdType;
+	descriptor.ExtendedFileId = id.FileId;
+	file = ::OpenFileById(volume, &descriptor, access, share, nullptr, 0);
+	if (file == INVALID_HANDLE_VALUE) {
+		Opened opened = failed();
+		::CloseHandle(volume);
+		return opened;
+	}
+	::CloseHandle(volume);
+	if (Refusal reason = rejected(file, tag); reason != Refusal::None) {
+		return refuse(file, reason);
+	}
+	return {file, Refusal::None, 0};
 }
 
 }
@@ -350,8 +363,13 @@ Lock::Result Lock::take(const std::string &path, std::string &error) {
 	release();
 	Opened opened = openFile(path, GENERIC_READ | GENERIC_WRITE, 0, OPEN_ALWAYS);
 	if (opened.handle == INVALID_HANDLE_VALUE) {
-		if (opened.notRegular) {
+		if (opened.refused == Refusal::NotRegular) {
 			error = "CreateFile " + path + ": 通常のファイルではありません";
+			return Result::Failed;
+		}
+		if (opened.refused == Refusal::NotLocal) {
+			error = "CreateFile " + path +
+			        ": 中身がローカルにありません（クラウドから取り寄せる必要がある）";
 			return Result::Failed;
 		}
 		if (opened.error == ERROR_SHARING_VIOLATION) {

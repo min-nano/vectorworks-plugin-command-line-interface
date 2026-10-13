@@ -208,7 +208,7 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		}
 	}
 	defer stopWaiting()
-	if err := WriteAtomically(requestPath, payload); err != nil {
+	if err := publishRequest(requestPath, payload); err != nil {
 		return nil, err
 	}
 
@@ -323,6 +323,15 @@ func NestingDepth(data []byte) int {
 		}
 	}
 	return deepest
+}
+
+// publishRequest は要求を公開する。失敗の理由には、要求のファイル名を付ける（待つ印の失敗の
+// hold <id>.wait と揃える）。
+func publishRequest(path string, payload []byte) error {
+	if err := WriteAtomically(path, payload); err != nil {
+		return fmt.Errorf("publish request %s: %w", filepath.Base(path), err)
+	}
+	return nil
 }
 
 // WriteAtomically は同じディレクトリへ書いてから rename する（読み手に書きかけを見せない）。
