@@ -496,3 +496,18 @@ func TestWriteAtomicallyFailsWhenTheTempCannotBeCreated(t *testing.T) {
 		t.Errorf("request was published: %v", err)
 	}
 }
+
+// 公開（rename）できなければ、書きかけを残さない。
+func TestWriteAtomicallyRemovesTheTempWhenItCannotPublish(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "x"+RequestSuffix)
+	if err := os.MkdirAll(filepath.Join(path, "keep"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteAtomically(path, []byte("{}")); err == nil {
+		t.Fatal("WriteAtomically succeeded, want an error")
+	}
+	if _, err := os.Stat(path + TempSuffix); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the temp was left: %v", err)
+	}
+}

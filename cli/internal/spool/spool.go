@@ -209,7 +209,7 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 	}
 	defer stopWaiting()
 	if err := WriteAtomically(requestPath, payload); err != nil {
-		return nil, fmt.Errorf("publish request: %w", err)
+		return nil, err
 	}
 
 	deadline := time.Now().Add(timeout)
