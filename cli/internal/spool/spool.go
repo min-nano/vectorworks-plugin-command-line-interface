@@ -349,9 +349,6 @@ func writeNew(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	if _, err := file.Write(data); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
+	_, err = file.Write(data)
+	return errors.Join(err, file.Close())
 }

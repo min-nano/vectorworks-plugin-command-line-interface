@@ -481,3 +481,18 @@ func TestWriteAtomicallyDoesNotWriteThroughLinks(t *testing.T) {
 		t.Errorf("request = %q, want %q", got, "{}")
 	}
 }
+
+// 書きかけを作れなければ（同じ名前の空でないディレクトリがある）、要求を公開しない。
+func TestWriteAtomicallyFailsWhenTheTempCannotBeCreated(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "x"+RequestSuffix)
+	if err := os.MkdirAll(filepath.Join(path+TempSuffix, "keep"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteAtomically(path, []byte("{}")); err == nil {
+		t.Fatal("WriteAtomically succeeded, want an error")
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("request was published: %v", err)
+	}
+}
