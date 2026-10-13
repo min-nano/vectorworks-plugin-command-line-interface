@@ -25,6 +25,20 @@ void put(const TempDir &dir, const std::string &name, const std::string &text = 
 	CHECK(files::write(dir.sub(name), text));
 }
 
+// inCi は CI の環境変数があるか（MSVC は std::getenv を非推奨とし、警告をエラーにするので
+// _dupenv_s を使う）。
+bool inCi() {
+#ifdef _WIN32
+	char *value = nullptr;
+	std::size_t size = 0;
+	bool set = _dupenv_s(&value, &size, "CI") == 0 && value != nullptr;
+	std::free(value);
+	return set;
+#else
+	return std::getenv("CI") != nullptr;
+#endif
+}
+
 bool exists(const TempDir &dir, const std::string &name) {
 	return std::filesystem::exists(dir.path() / name);
 }
@@ -195,7 +209,7 @@ TEST(BridgeDoesNotFollowSymlinks) {
 	// Windows でシンボリックリンクを作る権限が無ければ確かめようがない。黙って通らないよう、
 	// 飛ばしたことを出力に残し、CI（runner は作れる）では失敗にする。
 	if (linked) {
-		REQUIRE(std::getenv("CI") == nullptr);
+		REQUIRE(!inCi());
 		std::fprintf(stderr, "skip BridgeDoesNotFollowSymlinks: %s\n", linked.message().c_str());
 		return;
 	}
