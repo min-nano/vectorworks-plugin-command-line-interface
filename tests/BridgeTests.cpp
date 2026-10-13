@@ -183,6 +183,29 @@ TEST(BridgeReplyDoesNotFollowSymlinks) {
 }
 #endif
 
+// スプールのファイルがシンボリックリンクなら、たどらずに断る（リンクの先がデバイスや名前付き
+// パイプだと、開くだけで副作用が起きる・止まるため）。
+TEST(BridgeDoesNotFollowSymlinks) {
+	TempDir dir;
+	put(dir, "target", R"({"tool":"ping"})");
+	std::error_code linked;
+	std::filesystem::create_symlink(dir.path() / "target", dir.path() / "s.req.json", linked);
+	// Windows でシンボリックリンクを作る権限が無ければ確かめようがない（CI の runner は作れる）。
+	if (linked) {
+		return;
+	}
+	std::filesystem::create_symlink(dir.path() / "target", dir.path() / "s.wait", linked);
+	REQUIRE(!linked);
+	std::filesystem::create_symlink(dir.path() / "target", dir.path() / "bridge.lock", linked);
+	REQUIRE(!linked);
+	Bridge bridge(dir.utf8Path());
+	CHECK(!bridge.take("s"));
+	CHECK(bridge.waitState("s") == files::WaitState::Missing);
+	std::string error;
+	CHECK(bridge.lock(error) == files::Lock::Result::Failed);
+	CHECK(!error.empty());
+}
+
 // 書きかけが hard link でも、リンクの先（スプールの外のファイル）は変えない。
 TEST(BridgeReplyDoesNotWriteThroughHardLinks) {
 	TempDir dir;

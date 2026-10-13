@@ -169,17 +169,22 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos) {
 		}
 		// 要求はもう消したので、ここで投げると誰も応えない（呼ぶ側は「実行されたかもしれない」で
 		// 終わる）。道具の外（印の乱数・メモリが足りないなど）で投げた例外も internal で応える。
-		// catch の中では確保しない（前もって書き出した応答を指すだけ）。
+		// catch の中では確保しない（前もって書き出した応答を指すだけ）。応答を書く reply はパスを
+		// 組み立てるので確保する。そこでも確保できなければ、例外は serve の外（Clock）へ出て、
+		// この要求には応えない。
 		Outcome outcome;
 		const std::string *body = nullptr;
 		try {
 			outcome = answer(*text, tools, nowNanos);
 			body = &outcome.body;
 		} catch (...) {
-			// answer は投げるとき状態を変えていない（Serve.h）。outcome も代入されていない。
+			// answer は状態を変えない（Serve.h）。outcome も代入されていない。
 			body = &internalFailure_;
 		}
-		bridge_.reply(id, *body);
+		// 占有の印は、応答を書けたときだけ変える（Serve.h）。
+		if (bridge_.reply(id, *body) && outcome.session) {
+			session_ = std::move(*outcome.session);
+		}
 		if (outcome.quit) {
 			result.quit = true;
 			break;
@@ -191,7 +196,10 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos) {
 Server::Outcome Server::answer(const std::string &text, std::span<const Tool> tools,
                                std::int64_t nowNanos) {
 	auto respond = [](const Json &response, bool quit = false) {
-		return Outcome{response.dump(), quit};
+		Outcome outcome;
+		outcome.body = response.dump();
+		outcome.quit = quit;
+		return outcome;
 	};
 	std::string reason;
 	std::optional<Request> request = readRequest(text, reason);
@@ -236,7 +244,7 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		}
 		std::string session = newSession(nowNanos);
 		Outcome outcome = respond(success(Json::object({{"session", Json::string(session)}})));
-		session_ = std::move(session);
+		outcome.session = std::move(session);
 		return outcome;
 	}
 	if (name == protocol::kToolSessionEnd) {
@@ -244,7 +252,7 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 			return respond(*refusal);
 		}
 		Outcome outcome = respond(success(Json::object({{"ended", Json::boolean(true)}})));
-		session_.clear();
+		outcome.session = std::string();
 		return outcome;
 	}
 

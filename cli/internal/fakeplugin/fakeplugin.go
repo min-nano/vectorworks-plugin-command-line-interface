@@ -49,6 +49,7 @@ func NewDir(t *testing.T) string {
 // テストの終わりにも放す。
 func HoldLock(t *testing.T, dir string) (release func()) {
 	t.Helper()
+	dir = extendedPath(dir)
 	unlock, err := lock(filepath.Join(dir, spool.LockFile))
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +70,8 @@ func HoldLock(t *testing.T, dir string) (release func()) {
 // 持つ（Vectorworks を起動し直すと消えるのと同じ）。
 func Start(t *testing.T, dir string, handle Handler) (stop func()) {
 	t.Helper()
-	s := &server{dir: dir, handle: handle}
+	// プラグインと同じく、予約された名前（NUL など）の要求もファイルとして開く（docs/protocol.md「id」）。
+	s := &server{dir: extendedPath(dir), handle: handle}
 	if !s.take() {
 		t.Fatalf("cannot take %s", spool.LockFile)
 	}
@@ -193,8 +195,13 @@ func (s *server) serveOnce() (serving, quit bool) {
 			response = s.answer(tool, args, session)
 		}
 		out, _ := json.Marshal(response)
+		// 書きかけは消してから新しく作る（リンクの先を壊さない。docs/protocol.md「ファイル」）。
 		temp := filepath.Join(s.dir, id+spool.ResponseSuffix+spool.TempSuffix)
-		_ = os.WriteFile(temp, out, 0o600)
+		_ = os.Remove(temp)
+		if file, err := os.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600); err == nil {
+			_, _ = file.Write(out)
+			_ = file.Close()
+		}
 		_ = os.Rename(temp, filepath.Join(s.dir, id+spool.ResponseSuffix))
 		// 終了したら応えられないので、残りは置いたままにする。
 		if tool == "quit" && response.OK {

@@ -23,24 +23,44 @@ std::string describe(const char *what, const std::string &path, int error) {
 
 // スプールのファイルを開くときに必ず付ける。O_NONBLOCK は、FIFO を置かれても読み手・書き手を
 // 待って止まらないため（止まるのは Vectorworks のメインスレッドで、利用者の未保存の作業が
-// 失われる）。通常のファイルの読み書きには効かない。O_NOCTTY は端末を開いても制御端末にしない
-// ため。
-constexpr int kOpenFlags = O_CLOEXEC | O_NONBLOCK | O_NOCTTY;
+// 失われる）。通常のファイルの読み書きには効かない。O_NOFOLLOW は、最後の名前がシンボリック
+// リンクなら開かないため。開いてから断るのでは、リンクの先がデバイスならそのドライバの open が
+// 先に走ってしまう（シリアルポートの信号線が上がるなど）。スプールのファイルをリンク越しに開く
+// 理由は無い。O_NOCTTY は端末を開いても制御端末にしないため。
+constexpr int kOpenFlags = O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW | O_NOCTTY;
 
-// openRegular は通常のファイルだけを開く。開けない・通常のファイルでない（FIFO・デバイス・
-// ディレクトリ）なら -1。通常のファイルでないときは errno を 0 にする（開けなかったときと分ける）。
-int openRegular(const std::string &path, int flags, mode_t mode = 0) {
+// Opened は openRegular の結果。
+struct Opened {
+	// 開けなければ -1。
+	int fd = -1;
+	// 通常のファイルでない（FIFO・デバイス・ディレクトリ・シンボリックリンク）。
+	bool notRegular = false;
+	// 開けなかった理由（notRegular のときは 0）。
+	int error = 0;
+};
+
+// openRegular は通常のファイルだけを開く。
+Opened openRegular(const std::string &path, int flags, mode_t mode = 0) {
 	int fd = ::open(path.c_str(), flags | kOpenFlags, mode);
 	if (fd < 0) {
-		return -1;
+		int failure = errno;
+		// O_NOFOLLOW でシンボリックリンクを断ると ELOOP（FreeBSD 系は EMLINK）。
+		if (failure == ELOOP || failure == EMLINK) {
+			return {-1, true, 0};
+		}
+		return {-1, false, failure};
 	}
 	struct stat info{};
-	if (::fstat(fd, &info) != 0 || !S_ISREG(info.st_mode)) {
+	if (::fstat(fd, &info) != 0) {
+		int failure = errno;
 		closeQuietly(fd);
-		errno = 0;
-		return -1;
+		return {-1, false, failure};
 	}
-	return fd;
+	if (!S_ISREG(info.st_mode)) {
+		closeQuietly(fd);
+		return {-1, true, 0};
+	}
+	return {fd, false, 0};
 }
 
 }
@@ -105,7 +125,7 @@ std::optional<std::vector<std::string>> list(const std::string &dir) {
 }
 
 std::optional<std::string> read(const std::string &path, std::size_t limit) {
-	int fd = openRegular(path, O_RDONLY);
+	int fd = openRegular(path, O_RDONLY).fd;
 	if (fd < 0) {
 		return std::nullopt;
 	}
@@ -135,7 +155,7 @@ bool write(const std::string &path, std::string_view data) {
 	// 切り詰めると、置かれたリンク（シンボリックリンクでも hard link でも）の先、つまりスプールの
 	// 外のファイルを壊してしまう。消すのは名前だけで、リンクの先は残る。
 	(void)::unlink(path.c_str());
-	int fd = openRegular(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
+	int fd = openRegular(path, O_WRONLY | O_CREAT | O_EXCL, 0600).fd;
 	if (fd < 0) {
 		return false;
 	}
@@ -161,7 +181,7 @@ bool remove(const std::string &path) { return ::unlink(path.c_str()) == 0; }
 
 WaitState probe(const std::string &path) {
 	// 通常のファイルでない待つ印は無いものとする（実行しない側に倒す）。
-	int fd = openRegular(path, O_RDONLY);
+	int fd = openRegular(path, O_RDONLY).fd;
 	if (fd < 0) {
 		return WaitState::Missing;
 	}
@@ -180,12 +200,13 @@ Lock::~Lock() { release(); }
 
 Lock::Result Lock::take(const std::string &path, std::string &error) {
 	release();
-	int fd = openRegular(path, O_RDWR | O_CREAT, 0600);
-	if (fd < 0) {
-		error = errno == 0 ? "open " + path + ": 通常のファイルではありません"
-		                   : describe("open", path, errno);
+	Opened opened = openRegular(path, O_RDWR | O_CREAT, 0600);
+	if (opened.fd < 0) {
+		error = opened.notRegular ? "open " + path + ": 通常のファイルではありません"
+		                          : describe("open", path, opened.error);
 		return Result::Failed;
 	}
+	int fd = opened.fd;
 	if (::flock(fd, LOCK_EX | LOCK_NB) != 0) {
 		int failure = errno;
 		closeQuietly(fd);

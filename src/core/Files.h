@@ -6,11 +6,12 @@
 // パスは UTF-8。開くファイルは子プロセスに受け継がせない（POSIX は O_CLOEXEC、Windows は
 // 継承できないハンドル）。受け継がれると、Vectorworks が終わってもロックが放されないため。
 //
-// 開いて待たない（作法「プラグイン側の義務」）。POSIX は O_NONBLOCK
-// で開き、read・write・probe・Lock は 通常のファイルだけを扱う（FIFO
-// を置かれても、メインスレッドを止めない）。Windows は \\?\ を 付けて開く（CON・NUL
-// などの名前をデバイスとして開かない）。そのため Windows のパスは 絶対パス（C:\… か
-// UNC）に限り、それ以外は開けない。
+// 開いて待たない（作法「プラグイン側の義務」）。開くのは通常のファイルだけで、リンクは
+// たどらない（POSIX は O_NONBLOCK と O_NOFOLLOW、Windows は FILE_FLAG_OPEN_REPARSE_POINT）。
+// FIFO・デバイス・名前付きパイプを置かれても、メインスレッドを止めない。
+//
+// Windows は \\?\ を付けて開く（CON・NUL などの名前をデバイスとして開かない）。そのため Windows の
+// パスは絶対パス（C:\… か UNC）に限り、それ以外は開けない。
 
 #include <cstddef>
 #include <cstdint>

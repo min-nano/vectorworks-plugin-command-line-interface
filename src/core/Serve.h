@@ -7,6 +7,7 @@
 #include "core/Json.h"
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 
@@ -82,14 +83,17 @@ private:
 		// 書き出した応答。
 		std::string body;
 		bool quit = false;
+		// 応答を書けたら置く、新しい占有の印（空の文字列なら占有を終える）。無ければ変えない。
+		std::optional<std::string> session;
 	};
 
-	// answer は応答を書き出し終えてから状態（占有の印）を変える。例外で戻るときは状態を変えない。
+	// answer は状態（占有の印）を変えない。変えるのは serve で、応答を書けたときだけ（書けないと
+	// 呼ぶ側は印を受け取れないのに、占有だけが残る・消えるため）。
 	Outcome answer(const std::string &text, std::span<const Tool> tools, std::int64_t nowNanos);
 
 	Bridge bridge_;
 	std::string session_;
-	// answer が投げたときの応答。前もって書き出しておき、例外の中では確保しない（メモリが足りない
+	// answer が投げたときの応答。前もって書き出しておき、catch の中では確保しない（メモリが足りない
 	// ときにまた投げて、応えられなくならないように）。
 	std::string internalFailure_;
 };

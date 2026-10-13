@@ -194,6 +194,24 @@ TEST(ServeIssuesSessionsSpelledLikeIds) {
 	CHECK(startSession(server, caller, "3") != session);
 }
 
+// 応答を書けなければ、占有の印を変えない（呼ぶ側が受け取れない印で占有が残る・応答が届かないのに
+// 占有だけが消える、を避ける）。書きかけの名前にディレクトリを置くと、応答を書けない。
+TEST(ServeKeepsTheSessionWhenTheReplyCannotBeWritten) {
+	TempDir dir;
+	Server server(dir.utf8Path());
+	Caller caller(dir);
+	std::filesystem::create_directory(dir.path() / "1.res.json.tmp");
+	caller.put("1", R"({"tool":"session_start"})");
+	server.serve(kTools, kNow);
+	CHECK(!server.inSession());
+	std::string session = startSession(server, caller, "2");
+	CHECK(server.inSession());
+	std::filesystem::create_directory(dir.path() / "3.res.json.tmp");
+	caller.put("3", R"({"tool":"session_end","session":")" + session + R"("})");
+	server.serve(kTools, kNow);
+	CHECK(server.inSession());
+}
+
 TEST(ServeAnswersInternalForABrokenInputSchema) {
 	const Tool broken[] = {{"bad", "", "{", ToolKind::Read, first}};
 	TempDir dir;

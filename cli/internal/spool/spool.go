@@ -326,9 +326,13 @@ func NestingDepth(data []byte) int {
 }
 
 // writeAtomically は同じディレクトリへ書いてから rename する（読み手に書きかけを見せない）。
+//
+// 書きかけは、あれば消してから新しく作る（O_EXCL。docs/protocol.md「ファイル」）。あるものを
+// 開いて切り詰めると（os.WriteFile）、置かれたリンク（シンボリックリンクでも hard link でも）の先、
+// つまりスプールの外のファイルを壊してしまう。消すのは名前だけで、リンクの先は残る。
 func writeAtomically(path string, data []byte) error {
 	temp := path + TempSuffix
-	if err := os.WriteFile(temp, data, 0o600); err != nil {
+	if err := writeNew(temp, data); err != nil {
 		return fmt.Errorf("write request: %w", err)
 	}
 	if err := os.Rename(temp, path); err != nil {
@@ -336,4 +340,18 @@ func writeAtomically(path string, data []byte) error {
 		return fmt.Errorf("publish request: %w", err)
 	}
 	return nil
+}
+
+// writeNew は path を消してから新しく作り、data を書く。
+func writeNew(path string, data []byte) error {
+	_ = os.Remove(path)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
 }

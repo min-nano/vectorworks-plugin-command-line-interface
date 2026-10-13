@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+// WriteAtomically は要求を公開する手順（書きかけを書いてから rename）をテストから呼ぶ。
+var WriteAtomically = writeAtomically
+
 // SetTakenGrace はテストの間だけ takenGrace を縮める。
 func SetTakenGrace(t *testing.T, d time.Duration) {
 	old := takenGrace

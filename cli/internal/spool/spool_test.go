@@ -458,3 +458,26 @@ func TestNestingDepth(t *testing.T) {
 		}
 	}
 }
+
+// 書きかけの名前に hard link が置かれていても、リンクの先（スプールの外のファイル）を変えない
+// （docs/protocol.md「ファイル」）。
+func TestWriteAtomicallyDoesNotWriteThroughLinks(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "x"+RequestSuffix)
+	if err := os.Link(target, path+TempSuffix); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteAtomically(path, []byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(target); string(got) != "keep" {
+		t.Errorf("target = %q, want %q", got, "keep")
+	}
+	if got, _ := os.ReadFile(path); string(got) != "{}" {
+		t.Errorf("request = %q, want %q", got, "{}")
+	}
+}
