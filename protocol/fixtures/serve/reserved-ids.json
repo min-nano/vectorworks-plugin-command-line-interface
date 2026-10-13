@@ -1,0 +1,34 @@
+{
+	"description": "Windows の予約されたデバイス名（NUL・CON・COM1 など）も正しい id で、デバイスではなくファイルとして読み書きする",
+	"steps": [
+		{"description": "ロックを取る（空のスプールなので何も消さない）", "expect": {"files": ["bridge.lock"]}},
+		{
+			"requests": {
+				"CON": "ping.json",
+				"NUL": "echo.json",
+				"com1": "echo-no-args.json"
+			},
+			"expect": {
+				"calls": [
+					{"tool": "ping", "args": {}},
+					{"tool": "echo", "args": {"include_sheets": false, "limit": 50, "layer": "1F"}},
+					{"tool": "echo", "args": {}}
+				],
+				"responses": {
+					"CON": {"ok": true, "result": {}},
+					"NUL": {"ok": true, "result": {"include_sheets": false, "limit": 50, "layer": "1F"}},
+					"com1": {"ok": true, "result": {}}
+				},
+				"files": [
+					"CON.res.json",
+					"CON.wait",
+					"NUL.res.json",
+					"NUL.wait",
+					"bridge.lock",
+					"com1.res.json",
+					"com1.wait"
+				]
+			}
+		}
+	]
+}

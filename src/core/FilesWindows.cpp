@@ -81,29 +81,61 @@ bool isDirectory(const std::wstring &path) {
 struct Opened {
 	// 開けなければ INVALID_HANDLE_VALUE。
 	HANDLE handle = INVALID_HANDLE_VALUE;
-	// 通常のファイルでない（リンクなどの reparse point・ディレクトリ・ディスクにないもの）。
+	// 通常のファイルでない（リンク・AF_UNIX のソケット・ディレクトリ・ディスクにないもの）。
 	bool notRegular = false;
 	// 開けなかった理由（notRegular のときは 0）。
 	DWORD error = 0;
 };
 
+// IO_REPARSE_TAG_AF_UNIX は古い SDK の winnt.h に無い。
+#ifndef IO_REPARSE_TAG_AF_UNIX
+#define IO_REPARSE_TAG_AF_UNIX 0x80000023L
+#endif
+
+// rejected はハンドルの指すものを断るか（ディスクにないもの・ディレクトリ・リンク・AF_UNIX の
+// ソケット）。断らないときは tag に属性と reparse tag を残す。
+bool rejected(HANDLE file, FILE_ATTRIBUTE_TAG_INFO &tag) {
+	if (::GetFileType(file) != FILE_TYPE_DISK ||
+	    !::GetFileInformationByHandleEx(file, FileAttributeTagInfo, &tag, sizeof tag) ||
+	    (tag.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+		return true;
+	}
+	return (tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 &&
+	       (IsReparseTagNameSurrogate(tag.ReparseTag) || tag.ReparseTag == IO_REPARSE_TAG_AF_UNIX);
+}
+
 // openFile はディスクの通常のファイルだけを、継承できないハンドルで開く（lpSecurityAttributes に
 // null を渡す）。
 //
-// FILE_FLAG_OPEN_REPARSE_POINT で、リンク（シンボリックリンク・ジャンクションなどの reparse
-// point）をたどらずにリンクそのものを開き、断る。たどると、名前付きパイプへのリンクを置かれた
-// とき、パイプにつないで ReadFile でメインスレッドが止まる（POSIX の O_NOFOLLOW にあたる）。
+// まず FILE_FLAG_OPEN_REPARSE_POINT で、リンク（シンボリックリンク・ジャンクションなど、名前の
+// 代わりになる reparse point）をたどらずにリンクそのものを開き、断る。たどると、名前付きパイプへの
+// リンクを置かれたとき、パイプにつないで ReadFile でメインスレッドが止まる（POSIX の O_NOFOLLOW に
+// あたる）。リンクでない reparse point（OneDrive などのクラウドのファイル・重複除去）は中身を持つ
+// ふつうのファイルなので、たどって開き直す。
 Opened openFile(const std::string &path, DWORD access, DWORD share, DWORD disposition) {
-	HANDLE file = ::CreateFileW(extended(path).c_str(), access, share, nullptr, disposition,
-	                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+	std::wstring wide = extended(path);
+	auto create = [&](DWORD flags) {
+		return ::CreateFileW(wide.c_str(), access, share, nullptr, disposition, flags, nullptr);
+	};
+	HANDLE file = create(FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT);
 	if (file == INVALID_HANDLE_VALUE) {
 		return {INVALID_HANDLE_VALUE, false, ::GetLastError()};
 	}
-	BY_HANDLE_FILE_INFORMATION info{};
-	if (::GetFileType(file) != FILE_TYPE_DISK || !::GetFileInformationByHandle(file, &info) ||
-	    (info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)) != 0) {
+	FILE_ATTRIBUTE_TAG_INFO tag{};
+	if (rejected(file, tag)) {
 		::CloseHandle(file);
 		return {INVALID_HANDLE_VALUE, true, 0};
+	}
+	if ((tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+		::CloseHandle(file);
+		file = create(FILE_ATTRIBUTE_NORMAL);
+		if (file == INVALID_HANDLE_VALUE) {
+			return {INVALID_HANDLE_VALUE, false, ::GetLastError()};
+		}
+		if (rejected(file, tag)) {
+			::CloseHandle(file);
+			return {INVALID_HANDLE_VALUE, true, 0};
+		}
 	}
 	return {file, false, 0};
 }
@@ -133,12 +165,16 @@ std::optional<std::string> appRoot() {
 }
 
 bool makeDirectories(const std::string &path, std::string &error) {
-	// ルート（\\?\C:\ か \\?\UNC\server\share\）の後から、区切りごとに作る。ルートには
+	// 既にあれば何もしない。無ければ、ルート（\\?\C:\ か \\?\UNC\server\share\）の後から、区切り
+	// ごとに作る。ルートには
 	// 作りに行かない。prepare は受け付けのたびに呼ばれうるので、毎回失敗する呼び出しを
 	// メインスレッドに載せないため（UNC ではネットワークに触れることもある）。既にあるものは
 	// 失敗するが、構わない。最後に path がディレクトリかで成否を決める。区切りは extended が
 	// \ に揃えてある。
 	std::wstring wide = extended(path);
+	if (isDirectory(wide)) {
+		return true;
+	}
 	std::size_t root = 0;
 	if (wide.starts_with(L"\\\\?\\UNC\\")) {
 		std::size_t server = wide.find(L'\\', 8);
@@ -208,7 +244,9 @@ std::optional<std::string> read(const std::string &path, std::size_t limit) {
 bool write(const std::string &path, std::string_view data) {
 	// 先に消してから新しく作る（CREATE_NEW）。あるものを開いて切り詰めると（CREATE_ALWAYS）、
 	// 置かれたリンク（シンボリックリンクでも hard link でも）の先、つまりスプールの外のファイルを
-	// 壊してしまう。消すのは名前だけで、リンクの先は残る。
+	// 壊してしまう。消すのは名前だけで、リンクの先は残る。読み取り専用の書きかけが残っていると
+	// 消せず、その id には応えられない（読み取り専用の属性を外すのはリンクの先に効きうるので、
+	// しない。スプールに書けるのは同じ利用者だけで、作法どおりの呼ぶ側はそうしたファイルを作らない）。
 	(void)::DeleteFileW(extended(path).c_str());
 	HANDLE file = openFile(path, GENERIC_WRITE, 0, CREATE_NEW).handle;
 	if (file == INVALID_HANDLE_VALUE) {

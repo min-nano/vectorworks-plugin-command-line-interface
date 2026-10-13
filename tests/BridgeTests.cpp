@@ -4,6 +4,8 @@
 #include "core/Files.h"
 #include "core/Protocol.h"
 
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -190,8 +192,11 @@ TEST(BridgeDoesNotFollowSymlinks) {
 	put(dir, "target", R"({"tool":"ping"})");
 	std::error_code linked;
 	std::filesystem::create_symlink(dir.path() / "target", dir.path() / "s.req.json", linked);
-	// Windows でシンボリックリンクを作る権限が無ければ確かめようがない（CI の runner は作れる）。
+	// Windows でシンボリックリンクを作る権限が無ければ確かめようがない。黙って通らないよう、
+	// 飛ばしたことを出力に残し、CI（runner は作れる）では失敗にする。
 	if (linked) {
+		REQUIRE(std::getenv("CI") == nullptr);
+		std::fprintf(stderr, "skip BridgeDoesNotFollowSymlinks: %s\n", linked.message().c_str());
 		return;
 	}
 	std::filesystem::create_symlink(dir.path() / "target", dir.path() / "s.wait", linked);

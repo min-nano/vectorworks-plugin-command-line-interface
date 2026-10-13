@@ -44,8 +44,12 @@ Opened openRegular(const std::string &path, int flags, mode_t mode = 0) {
 	int fd = ::open(path.c_str(), flags | kOpenFlags, mode);
 	if (fd < 0) {
 		int failure = errno;
-		// O_NOFOLLOW でシンボリックリンクを断ると ELOOP（FreeBSD 系は EMLINK）。
-		if (failure == ELOOP || failure == EMLINK) {
+		// O_NOFOLLOW でシンボリックリンクを断ると ELOOP（FreeBSD 系は EMLINK）。ELOOP は親の
+		// ディレクトリでリンクが循環しているときにも返るので、最後の名前がリンクのときだけ
+		// 「通常のファイルでない」とし、それ以外は本当の原因を返す。
+		struct stat link{};
+		if ((failure == ELOOP || failure == EMLINK) && ::lstat(path.c_str(), &link) == 0 &&
+		    S_ISLNK(link.st_mode)) {
 			return {-1, true, 0};
 		}
 		return {-1, false, failure};
@@ -91,6 +95,12 @@ std::optional<std::string> appRoot() {
 }
 
 bool makeDirectories(const std::string &path, std::string &error) {
+	// 既にあれば何もしない（prepare は受け付けのたびに呼ばれうるので、毎回失敗する mkdir を
+	// メインスレッドに載せない）。
+	struct stat existing{};
+	if (::stat(path.c_str(), &existing) == 0 && S_ISDIR(existing.st_mode)) {
+		return true;
+	}
 	// 区切りごとに作る。途中が既にあれば EEXIST で、それは構わない。最後に path が
 	// ディレクトリかで成否を決める。
 	for (std::size_t at = path.find('/', 1); at != std::string::npos; at = path.find('/', at + 1)) {

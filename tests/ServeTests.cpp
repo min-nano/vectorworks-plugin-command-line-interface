@@ -90,6 +90,8 @@ Json appFails(const Json &, const ToolContext &, ToolError &error) {
 	return Json();
 }
 
+Json appSucceeds(const Json &, const ToolContext &, ToolError &) { return record("app_succeeds"); }
+
 Json throwsInt(const Json &, const ToolContext &, ToolError &) {
 	record("throws_int");
 	throw 42;
@@ -104,6 +106,7 @@ const Tool kTools[] = {
     {"first", "", "{}", ToolKind::Read, first},
     {"put_later", "", "{}", ToolKind::Read, putLater},
     {"app_fails", "", "{}", ToolKind::App, appFails},
+    {"app_succeeds", "", "{}", ToolKind::App, appSucceeds},
     {"throws_int", "", "{}", ToolKind::Read, throwsInt},
     {"context", "", "{}", ToolKind::Read, readContext},
 };
@@ -210,6 +213,26 @@ TEST(ServeKeepsTheSessionWhenTheReplyCannotBeWritten) {
 	caller.put("3", R"({"tool":"session_end","session":")" + session + R"("})");
 	server.serve(kTools, kNow);
 	CHECK(server.inSession());
+}
+
+// 終了の依頼も、応答を書けたときだけ出す（応答が届かないまま Vectorworks を終わらせない）。
+TEST(ServeDoesNotQuitWhenTheReplyCannotBeWritten) {
+	TempDir dir;
+	gCalls.clear();
+	Server server(dir.utf8Path());
+	Caller caller(dir);
+	std::string session = startSession(server, caller, "0");
+	std::filesystem::create_directory(dir.path() / "1.res.json.tmp");
+	caller.put("1", R"({"tool":"app_succeeds","session":")" + session + R"("})");
+	caller.put("2", R"({"tool":"first","session":")" + session + R"("})");
+	CHECK(!server.serve(kTools, kNow).quit);
+	CHECK_EQ(gCalls, (std::vector<std::string>{"app_succeeds", "first"}));
+	// 書ければ終了を頼み、その回の残りは取り出さない。
+	caller.put("3", R"({"tool":"app_succeeds","session":")" + session + R"("})");
+	caller.put("4", R"({"tool":"first","session":")" + session + R"("})");
+	CHECK(server.serve(kTools, kNow).quit);
+	CHECK(caller.ok("3"));
+	CHECK(std::filesystem::exists(dir.path() / "4.req.json"));
 }
 
 TEST(ServeAnswersInternalForABrokenInputSchema) {

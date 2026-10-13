@@ -181,8 +181,11 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos) {
 			// answer は状態を変えない（Serve.h）。outcome も代入されていない。
 			body = &internalFailure_;
 		}
-		// 占有の印は、応答を書けたときだけ変える（Serve.h）。
-		if (bridge_.reply(id, *body) && outcome.session) {
+		// 占有の印と終了の依頼は、応答を書けたときだけ反映する（Serve.h。作法「占有」）。
+		if (!bridge_.reply(id, *body)) {
+			continue;
+		}
+		if (outcome.session) {
 			session_ = std::move(*outcome.session);
 		}
 		if (outcome.quit) {

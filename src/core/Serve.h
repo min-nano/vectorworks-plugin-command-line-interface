@@ -59,7 +59,7 @@ struct ServeResult {
 	Phase phase = Phase::Serving;
 	// Error の理由。
 	std::string message;
-	// 種類 App の道具が成功した（終了の依頼）。受け付けの外で終了を頼む。
+	// 種類 App の道具が成功し、その応答を書けた（終了の依頼）。受け付けの外で終了を頼む。
 	bool quit = false;
 };
 
@@ -72,8 +72,8 @@ public:
 	//
 	// ロックを掴んでいなければ用意（prepare → lock → sweep）をし、取れなければ何もせずに戻る。
 	// 回の始めに並べた要求を名前の昇順ですべて処理し、取り出した要求には同じ回の中で応える。
-	// 種類 App の道具が成功したら、その回の残りの要求を取り出さずに戻る（終了したら応えられない
-	// ので、残りは置いたままにする）。
+	// 種類 App の道具が成功して応答を書けたら、その回の残りの要求を取り出さずに戻る（終了したら
+	// 応えられないので、残りは置いたままにする）。
 	ServeResult serve(std::span<const Tool> tools, std::int64_t nowNanos);
 
 	bool inSession() const { return !session_.empty(); }
@@ -87,8 +87,8 @@ private:
 		std::optional<std::string> session;
 	};
 
-	// answer は状態（占有の印）を変えない。変えるのは serve で、応答を書けたときだけ（書けないと
-	// 呼ぶ側は印を受け取れないのに、占有だけが残る・消えるため）。
+	// answer は状態（占有の印・終了の依頼）を変えない。反映するのは serve で、応答を書けたときだけ
+	// （書けないと呼ぶ側は結果を受け取れないのに、占有だけが残る・消える、Vectorworks が終わる）。
 	Outcome answer(const std::string &text, std::span<const Tool> tools, std::int64_t nowNanos);
 
 	Bridge bridge_;

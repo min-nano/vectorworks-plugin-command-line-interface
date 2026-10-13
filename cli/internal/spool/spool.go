@@ -208,8 +208,8 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		}
 	}
 	defer stopWaiting()
-	if err := writeAtomically(requestPath, payload); err != nil {
-		return nil, err
+	if err := WriteAtomically(requestPath, payload); err != nil {
+		return nil, fmt.Errorf("publish request: %w", err)
 	}
 
 	deadline := time.Now().Add(timeout)
@@ -325,19 +325,20 @@ func NestingDepth(data []byte) int {
 	return deepest
 }
 
-// writeAtomically は同じディレクトリへ書いてから rename する（読み手に書きかけを見せない）。
+// WriteAtomically は同じディレクトリへ書いてから rename する（読み手に書きかけを見せない）。
+// 要求を書く CLI と、応答を書く偽のプラグイン（fakeplugin）が共に使う。
 //
 // 書きかけは、あれば消してから新しく作る（O_EXCL。docs/protocol.md「ファイル」）。あるものを
 // 開いて切り詰めると（os.WriteFile）、置かれたリンク（シンボリックリンクでも hard link でも）の先、
 // つまりスプールの外のファイルを壊してしまう。消すのは名前だけで、リンクの先は残る。
-func writeAtomically(path string, data []byte) error {
+func WriteAtomically(path string, data []byte) error {
 	temp := path + TempSuffix
 	if err := writeNew(temp, data); err != nil {
-		return fmt.Errorf("write request: %w", err)
+		return err
 	}
 	if err := os.Rename(temp, path); err != nil {
 		_ = os.Remove(temp)
-		return fmt.Errorf("publish request: %w", err)
+		return err
 	}
 	return nil
 }
