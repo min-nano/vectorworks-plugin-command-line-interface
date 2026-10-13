@@ -13,6 +13,7 @@
 #include <shlobj.h>
 
 #include <algorithm>
+#include <cstring>
 
 namespace VwCli::core::files {
 
@@ -83,7 +84,8 @@ enum class Refusal {
 	// 通常のファイルでない（リンク・AF_UNIX のソケット・WSL の FIFO とデバイス・ディレクトリ・
 	// ディスクにないもの）
 	NotRegular,
-	// 通常のファイルだが、中身がローカルにない（クラウドなどから取り寄せる）
+	// 通常のファイルだが、中身がローカルにない（クラウド・オフラインファイル・HSM などから
+	// 取り寄せる）
 	NotLocal,
 };
 
@@ -117,8 +119,8 @@ struct Opened {
 #define FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000
 #endif
 
-// 中身がローカルにない（クラウドなどから取り寄せる）ことを示す属性。読むと取り寄せる処理が
-// メインスレッドで走り、ネットワークを待って止まりうるので断る。
+// 中身がローカルにない（クラウド・オフラインファイル・HSM などから取り寄せる）ことを示す
+// 属性。読むと取り寄せる処理がメインスレッドで走り、ネットワークを待って止まりうるので断る。
 constexpr DWORD kNotLocal =
     FILE_ATTRIBUTE_OFFLINE | FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS;
 
@@ -148,10 +150,39 @@ Refusal rejected(HANDLE file, FILE_ATTRIBUTE_TAG_INFO &tag) {
 	return (tag.FileAttributes & kNotLocal) != 0 ? Refusal::NotLocal : Refusal::None;
 }
 
-// parentOf は path の親のディレクトリ（最後の \ より前）。
-std::wstring parentOf(const std::wstring &path) {
+// directoryOf は path を含むディレクトリ（最後の \\ まで。ドライブの直下なら \\?\C:\ のような
+// ルート）。
+std::wstring directoryOf(const std::wstring &path) {
 	std::size_t at = path.find_last_of(L'\\');
-	return at == std::wstring::npos ? std::wstring() : path.substr(0, at);
+	return at == std::wstring::npos ? std::wstring() : path.substr(0, at + 1);
+}
+
+// sameId は handle が、id の指すファイル（ボリュームとファイル ID が同じ）か。
+bool sameId(HANDLE handle, const FILE_ID_INFO &id) {
+	FILE_ID_INFO other{};
+	return ::GetFileInformationByHandleEx(handle, FileIdInfo, &other, sizeof other) &&
+	       other.VolumeSerialNumber == id.VolumeSerialNumber &&
+	       std::memcmp(&other.FileId, &id.FileId, sizeof id.FileId) == 0;
+}
+
+// openById は id のファイルを、名前を解き直さずに開く（OpenFileById）。同じボリュームの
+// ハンドルとして、path のディレクトリをリンクをたどらずに開く。使えなければ（SMB の共有など）
+// INVALID_HANDLE_VALUE。
+HANDLE openById(const std::wstring &path, const FILE_ID_INFO &id, DWORD access, DWORD share) {
+	HANDLE volume = ::CreateFileW(
+	    directoryOf(path).c_str(), FILE_READ_ATTRIBUTES,
+	    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+	    FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+	if (volume == INVALID_HANDLE_VALUE) {
+		return INVALID_HANDLE_VALUE;
+	}
+	FILE_ID_DESCRIPTOR descriptor{};
+	descriptor.dwSize = sizeof descriptor;
+	descriptor.Type = ExtendedFileIdType;
+	descriptor.ExtendedFileId = id.FileId;
+	HANDLE file = ::OpenFileById(volume, &descriptor, access, share, nullptr, 0);
+	::CloseHandle(volume);
+	return file;
 }
 
 // openFile はディスクの通常のファイルだけを、継承できないハンドルで開く（lpSecurityAttributes に
@@ -162,11 +193,13 @@ std::wstring parentOf(const std::wstring &path) {
 // 止まる（POSIX の O_NOFOLLOW にあたる）。
 //
 // リンクでない reparse point（OneDrive などのクラウドのファイル・重複除去）は中身を持つふつうの
-// ファイルなので、たどって開き直す。開き直すのは名前ではなく、1 回目に開いたファイルの ID
-// （OpenFileById）で行う。名前を解き直さないので、その間に名前をリンクへ差し替えられても、リンクを
-// たどらない（たどった先を開く副作用も起きない）。1 回目のハンドルは共有を妨げうる（share が 0 なら
-// 開き直しが共有違反になる）ので、ID を読んでから閉じる。ID で開くのは既にあるファイルだけだが、
-// reparse point は既にあるファイルなので disposition は要らない。
+// ファイルなので、たどって開き直す。開き直すのは、できればファイルの ID で（OpenFileById。名前を
+// 解き直さない）、できなければ（SMB の共有など）名前で行い、どちらも 1 回目と同じボリュームと
+// ファイル ID のときだけ受け入れる。開き直す間に名前やその reparse point を差し替えられると、
+// 差し替えた先を開くこと（その副作用）までは防げないが、受け入れて読み書きはしない。
+//
+// 1 回目のハンドルは、開き直すまで開いたままにする（その間、呼ぶ側の取り下げで消されない）。
+// ただし共有を許さない開き方（share が 0）では開き直しが共有違反になるので、先に閉じる。
 Opened openFile(const std::string &path, DWORD access, DWORD share, DWORD disposition) {
 	std::wstring wide = extended(path);
 	auto failed = [] { return Opened{INVALID_HANDLE_VALUE, Refusal::None, ::GetLastError()}; };
@@ -174,47 +207,47 @@ Opened openFile(const std::string &path, DWORD access, DWORD share, DWORD dispos
 		::CloseHandle(handle);
 		return Opened{INVALID_HANDLE_VALUE, reason, 0};
 	};
-	HANDLE file = ::CreateFileW(wide.c_str(), access, share, nullptr, disposition,
-	                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-	if (file == INVALID_HANDLE_VALUE) {
+	HANDLE first = ::CreateFileW(wide.c_str(), access, share, nullptr, disposition,
+	                             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+	if (first == INVALID_HANDLE_VALUE) {
 		return failed();
 	}
 	FILE_ATTRIBUTE_TAG_INFO tag{};
-	if (Refusal reason = rejected(file, tag); reason != Refusal::None) {
-		return refuse(file, reason);
+	if (Refusal reason = rejected(first, tag); reason != Refusal::None) {
+		return refuse(first, reason);
 	}
 	if ((tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0) {
-		return {file, Refusal::None, 0};
+		return {first, Refusal::None, 0};
 	}
 	FILE_ID_INFO id{};
-	if (!::GetFileInformationByHandleEx(file, FileIdInfo, &id, sizeof id)) {
+	if (!::GetFileInformationByHandleEx(first, FileIdInfo, &id, sizeof id)) {
 		Opened opened = failed();
-		::CloseHandle(file);
+		::CloseHandle(first);
 		return opened;
 	}
-	::CloseHandle(file);
-	// OpenFileById は同じボリュームのハンドルを要る。スプールのディレクトリを属性だけで開く。
-	HANDLE volume = ::CreateFileW(parentOf(wide).c_str(), FILE_READ_ATTRIBUTES,
-	                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-	                              OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
-	if (volume == INVALID_HANDLE_VALUE) {
-		return failed();
+	if (share == 0) {
+		::CloseHandle(first);
+		first = INVALID_HANDLE_VALUE;
 	}
-	FILE_ID_DESCRIPTOR descriptor{};
-	descriptor.dwSize = sizeof descriptor;
-	descriptor.Type = ExtendedFileIdType;
-	descriptor.ExtendedFileId = id.FileId;
-	file = ::OpenFileById(volume, &descriptor, access, share, nullptr, 0);
+	HANDLE file = openById(wide, id, access, share);
 	if (file == INVALID_HANDLE_VALUE) {
-		Opened opened = failed();
-		::CloseHandle(volume);
+		file = ::CreateFileW(wide.c_str(), access, share, nullptr, OPEN_EXISTING,
+		                     FILE_ATTRIBUTE_NORMAL, nullptr);
+	}
+	Opened opened = file == INVALID_HANDLE_VALUE ? failed() : Opened{file, Refusal::None, 0};
+	if (first != INVALID_HANDLE_VALUE) {
+		::CloseHandle(first);
+	}
+	if (file == INVALID_HANDLE_VALUE) {
 		return opened;
 	}
-	::CloseHandle(volume);
 	if (Refusal reason = rejected(file, tag); reason != Refusal::None) {
 		return refuse(file, reason);
 	}
-	return {file, Refusal::None, 0};
+	if (!sameId(file, id)) {
+		return refuse(file, Refusal::NotRegular);
+	}
+	return opened;
 }
 
 }
@@ -368,8 +401,7 @@ Lock::Result Lock::take(const std::string &path, std::string &error) {
 			return Result::Failed;
 		}
 		if (opened.refused == Refusal::NotLocal) {
-			error = "CreateFile " + path +
-			        ": 中身がローカルにありません（クラウドから取り寄せる必要がある）";
+			error = "CreateFile " + path + ": 中身がローカルにありません（取り寄せる必要がある）";
 			return Result::Failed;
 		}
 		if (opened.error == ERROR_SHARING_VIOLATION) {

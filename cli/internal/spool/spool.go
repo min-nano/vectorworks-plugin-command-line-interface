@@ -143,6 +143,9 @@ func Open(dir string) *Bridge {
 	return &Bridge{Dir: dir, Running: true}
 }
 
+// newID は Call が要求の id を作る関数（テストが決まった id に替える）。
+var newID = NewID
+
 // NewID は要求の id を作る。名前の昇順がおおむね送った順になるように時刻を先頭へ置く
 // （プラグイン側は名前の昇順で取り出す）。順序を保証するのは応答を受け取ってから次を送った
 // 要求だけである（同じ刻みの id は乱数の部分で並び、時計の調整で時刻は前後し、公開も遅れうる。
@@ -187,7 +190,7 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		return nil, fmt.Errorf("request is nested too deeply (depth %d, limit %d)", depth, MaxNestingDepth)
 	}
 
-	id := NewID(time.Now())
+	id := newID(time.Now())
 	requestPath := filepath.Join(b.Dir, id+RequestSuffix)
 	responsePath := filepath.Join(b.Dir, id+ResponseSuffix)
 	waitPath := filepath.Join(b.Dir, id+WaitSuffix)
@@ -208,8 +211,8 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		}
 	}
 	defer stopWaiting()
-	if err := publishRequest(requestPath, payload); err != nil {
-		return nil, err
+	if err := WriteAtomically(requestPath, payload); err != nil {
+		return nil, fmt.Errorf("publish %s: %w", id+RequestSuffix, err)
 	}
 
 	deadline := time.Now().Add(timeout)
@@ -325,15 +328,6 @@ func NestingDepth(data []byte) int {
 	return deepest
 }
 
-// publishRequest は要求を公開する。失敗の理由には、要求のファイル名を付ける（待つ印の失敗の
-// hold <id>.wait と揃える）。
-func publishRequest(path string, payload []byte) error {
-	if err := WriteAtomically(path, payload); err != nil {
-		return fmt.Errorf("publish request %s: %w", filepath.Base(path), err)
-	}
-	return nil
-}
-
 // WriteAtomically は同じディレクトリへ書いてから rename する（読み手に書きかけを見せない）。
 // 要求を書く CLI と、応答を書く偽のプラグイン（fakeplugin）が共に使う。
 //
@@ -347,7 +341,7 @@ func WriteAtomically(path string, data []byte) error {
 	}
 	if err := os.Rename(temp, path); err != nil {
 		_ = os.Remove(temp)
-		return fmt.Errorf("publish: %w", err)
+		return fmt.Errorf("rename: %w", err)
 	}
 	return nil
 }

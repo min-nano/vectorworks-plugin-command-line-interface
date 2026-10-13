@@ -512,15 +512,23 @@ func TestWriteAtomicallyRemovesTheTempWhenItCannotPublish(t *testing.T) {
 	}
 }
 
-// 要求を公開できなければ、どの要求かと、どの段（write・publish）で失敗したかを返す。
-func TestPublishRequestNamesTheRequest(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "x"+RequestSuffix)
-	if err := os.MkdirAll(filepath.Join(path+TempSuffix, "keep"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	err := PublishRequest(path, []byte("{}"))
-	if err == nil || !strings.HasPrefix(err.Error(), "publish request x"+RequestSuffix+": write: ") {
-		t.Fatalf("PublishRequest = %v, want the request name and the stage", err)
+// 要求を公開できなければ、どの要求かと、どの段（書きかけを書く write・rename）で失敗したかを返す。
+func TestCallNamesTheRequestItCannotPublish(t *testing.T) {
+	for _, c := range []struct{ blocked, stage string }{
+		{"x" + RequestSuffix + TempSuffix, "write"},
+		{"x" + RequestSuffix, "rename"},
+	} {
+		t.Run(c.stage, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(dir, c.blocked, "keep"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			SetNewID(t, "x")
+			_, err := (&Bridge{Dir: dir}).Call("ping", nil, "", time.Second)
+			want := "publish x" + RequestSuffix + ": " + c.stage + ": "
+			if err == nil || !strings.HasPrefix(err.Error(), want) {
+				t.Fatalf("Call = %v, want an error starting with %q", err, want)
+			}
+		})
 	}
 }

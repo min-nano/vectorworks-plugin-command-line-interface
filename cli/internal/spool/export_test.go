@@ -5,8 +5,12 @@ import (
 	"time"
 )
 
-// PublishRequest は要求を公開する手順をテストから呼ぶ。
-var PublishRequest = publishRequest
+// SetNewID はテストの間だけ、Call が作る要求の id を id に固定する。
+func SetNewID(t *testing.T, id string) {
+	old := newID
+	newID = func(time.Time) string { return id }
+	t.Cleanup(func() { newID = old })
+}
 
 // SetTakenGrace はテストの間だけ takenGrace を縮める。
 func SetTakenGrace(t *testing.T, d time.Duration) {
