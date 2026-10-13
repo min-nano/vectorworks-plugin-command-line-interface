@@ -10,6 +10,7 @@
 
 #ifndef _WIN32
 #include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 using VwCli::core::Bridge;
@@ -139,6 +140,62 @@ TEST(BridgeReplyPublishesWithoutLeavingTemp) {
 	CHECK(bridge.reply("r", R"({"ok":false})"));
 	CHECK_EQ(VwCli::test::readFile(dir.path() / "r.res.json"), std::string(R"({"ok":false})"));
 }
+
+#ifndef _WIN32
+// FIFO などの通常のファイルでないものを置かれても、開いて待たない（待つとメインスレッドが止まる）。
+// 待てばこのテストが終わらない。
+TEST(BridgeDoesNotWaitOnFifos) {
+	TempDir dir;
+	for (const char *name : {"f.req.json", "f.wait", "g.res.json.tmp"}) {
+		REQUIRE(::mkfifo(dir.sub(name).c_str(), 0600) == 0);
+	}
+	Bridge bridge(dir.utf8Path());
+	// 読めない要求として飛ばし、消さない。
+	CHECK(!bridge.take("f"));
+	CHECK(exists(dir, "f.req.json"));
+	// 通常のファイルでない待つ印は無いものとする（実行しない）。
+	CHECK(bridge.waitState("f") == files::WaitState::Missing);
+	// 書きかけに FIFO があれば応答を書けない。
+	CHECK(!bridge.reply("g", R"({"ok":true})"));
+	CHECK(!exists(dir, "g.res.json"));
+}
+
+// 書きかけのシンボリックリンクはたどらない（たどると、リンクの先を切り詰めてしまう）。
+TEST(BridgeReplyDoesNotFollowSymlinks) {
+	TempDir dir;
+	put(dir, "target", "keep");
+	REQUIRE(::symlink(dir.sub("target").c_str(), dir.sub("s.res.json.tmp").c_str()) == 0);
+	Bridge bridge(dir.utf8Path());
+	CHECK(!bridge.reply("s", R"({"ok":true})"));
+	CHECK_EQ(VwCli::test::readFile(dir.path() / "target"), std::string("keep"));
+	CHECK(!exists(dir, "s.res.json"));
+}
+#endif
+
+#ifdef _WIN32
+// CON・NUL などの名前も、デバイスではなくスプールのファイルとして扱う（\\?\ を付けて開く）。
+TEST(BridgeTreatsReservedNamesAsFiles) {
+	TempDir dir;
+	Bridge bridge(dir.utf8Path());
+	put(dir, "NUL.req.json", R"({"tool":"ping"})");
+	CHECK_EQ(bridge.poll(), (std::vector<std::string>{"NUL"}));
+	std::optional<std::string> text = bridge.take("NUL");
+	CHECK(text && *text == R"({"tool":"ping"})");
+	CHECK(bridge.poll().empty());
+	// 無い待つ印は、開けてしまう NUL デバイスではなく、無いと分かる。
+	CHECK(bridge.waitState("NUL") == files::WaitState::Missing);
+	put(dir, "CON.wait");
+	CHECK(bridge.waitState("CON") == files::WaitState::Released);
+	bridge.removeWait("CON");
+	CHECK(bridge.reply("AUX", R"({"ok":true})"));
+	std::optional<std::string> response = files::read(dir.sub("AUX.res.json"), 1024);
+	CHECK(response && *response == R"({"ok":true})");
+	// 一時ディレクトリを消す std::filesystem が予約された名前を消せるとは限らないので、ここで消す。
+	CHECK(files::remove(dir.sub("AUX.res.json")));
+	std::optional<std::vector<std::string>> names = files::list(dir.utf8Path());
+	CHECK(names && names->empty());
+}
+#endif
 
 TEST(BridgeDefaultSpoolDirIsUnderTheAppDir) {
 	std::optional<std::string> dir = VwCli::core::defaultSpoolDir();

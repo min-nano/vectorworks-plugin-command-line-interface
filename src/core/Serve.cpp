@@ -162,7 +162,18 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos) {
 		case files::WaitState::Held:
 			break;
 		}
-		Outcome outcome = answer(*text, tools, nowNanos);
+		// 要求はもう消したので、ここで投げると誰も応えない（呼ぶ側は「実行されたかもしれない」で
+		// 終わる）。道具の外（印の乱数・メモリが足りないなど）で投げた例外も internal で応える。
+		Outcome outcome;
+		try {
+			outcome = answer(*text, tools, nowNanos);
+		} catch (const std::exception &exception) {
+			std::string message =
+			    std::string("要求の処理の中で例外が起きました: ") + exception.what();
+			outcome = {failure(protocol::kCodeInternal, std::move(message))};
+		} catch (...) {
+			outcome = {failure(protocol::kCodeInternal, "要求の処理の中で例外が起きました")};
+		}
 		bridge_.reply(id, outcome.response.dump());
 		if (outcome.quit) {
 			result.quit = true;

@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | `src/core/Protocol.h` | 依らない | 作法の定数（ファイルの綴り・上限・予約された道具・`code`）と id の検査。`protocol/fixtures/constants.json` と対（[作法の見本](../fixtures.md)） |
 | `src/core/Json.{h,cpp}` | 依らない | 小さな JSON（入れ子の深さに上限を設ける。読み方は Go の `encoding/json` に合わせる。[受け付け 1 回](#受け付け-1-回coreserverserve)の 3） |
-| `src/core/Files.h`・`FilesPosix.cpp`・`FilesWindows.cpp` | 依らない | スプールに使う OS の呼び出し（ロック・待つ印・読み書き・`<CLI>` の親の場所）。開くファイルは子プロセスに受け継がせない |
+| `src/core/Files.h`・`FilesPosix.cpp`・`FilesWindows.cpp` | 依らない | スプールに使う OS の呼び出し（ロック・待つ印・読み書き・`<CLI>` の親の場所）。開くファイルは子プロセスに受け継がせない。開いて待たない（POSIX は `O_NONBLOCK` で開き、通常のファイルだけを読み書きする。Windows は `\\?\` を付けて開く。[作法「プラグイン側の義務」](../protocol.md#プラグイン側の義務)） |
 | `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つ（`prepare` / `lock` / `sweep` / `poll` / `take` / `waitState` / `reply`）と、スプールの場所（`defaultSpoolDir`）。場所は引数で受ける（テストは一時ディレクトリを渡す） |
 | `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（`core::Server::serve`。下記）と、占有の印（`Server` が発行した 1 つをメモリに持つ）。道具の表と時刻を引数で受けるので無 SDK でテストできる |
 | `src/tools/ToolTable.cpp` | 依る | 道具の表 |
@@ -70,12 +70,14 @@
      失敗したら、ほかの道具と同じく失敗で応えて続ける。
    - それ以外 → 実行して応答を書く。
    - 表に無い道具 → `unknown_tool` で応える。
-   - **道具 1 つの例外はここで受けて `internal` の応答にする**（橋を止めない）。
+   - **道具 1 つの例外はここで受けて `internal` の応答にする**（橋を止めない）。道具の外（占有の印を
+     作るときなど）で要求 1 件の処理の中で起きた例外も、`serve` が受けて `internal` で応える。
 5. 結果（終了の依頼の有無と、受け付けの状態）を返す。
 
 - 終了の依頼はタイマーが `serve` から戻ってから行います（[構成「受け付けの流れ」](architecture.md#受け付けの流れ)）。
-- 道具の例外は `serve` が受けます。メモリが足りないときなどに `serve` そのものが投げた例外は、
-  呼ぶタイマー（`Clock`）が受け、Vectorworks へ通しません。
+- 要求 1 件の処理（解析・占有・道具）の例外は `serve` が受けます。それ以外（スプールの一覧を読む
+  ときにメモリが足りないなど）で `serve` そのものが投げた例外は、呼ぶタイマー（`Clock`）が受け、
+  Vectorworks へ通しません。
 - 解析は要求の大きさに対して線形の時間で終えます（同じキーは、キーが増えたら索引で探す）。1 MiB の
   要求で受け付けの 1 回が長引き、図面の操作を止めないためです。
 

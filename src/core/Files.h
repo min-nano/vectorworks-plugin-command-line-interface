@@ -5,6 +5,10 @@
 //
 // パスは UTF-8。開くファイルは子プロセスに受け継がせない（POSIX は O_CLOEXEC、Windows は
 // 継承できないハンドル）。受け継がれると、Vectorworks が終わってもロックが放されないため。
+//
+// 開いて待たない（作法「プラグイン側の義務」）。POSIX は O_NONBLOCK で開き、read・write・probe は
+// 通常のファイルだけを扱う（FIFO を置かれても、メインスレッドを止めない）。Windows は \\?\ を
+// 付けて開く（CON・NUL などの名前をデバイスとして開かない）。
 
 #include <cstddef>
 #include <cstdint>
@@ -30,10 +34,11 @@ bool makeDirectories(const std::string &path, std::string &error);
 // list はディレクトリの中の名前を返す（. と .. を除く）。読めなければ空。
 std::optional<std::vector<std::string>> list(const std::string &dir);
 
-// read はファイルの先頭から limit バイトまでを読む。開けない・読めなければ空。
+// read はファイルの先頭から limit バイトまでを読む。開けない・通常のファイルでない・読めなければ
+// 空。
 std::optional<std::string> read(const std::string &path, std::size_t limit);
 
-// write はファイルを作り直して data を書く（POSIX は 0600）。
+// write はファイルを作り直して data を書く（POSIX は 0600。シンボリックリンクはたどらず失敗する）。
 bool write(const std::string &path, std::string_view data);
 
 // rename は from を to へ移す（to があれば置き換える）。
@@ -48,7 +53,7 @@ enum class WaitState {
 	Held,
 	// 掴めた（呼ぶ側が放した・死んだ）
 	Released,
-	// 無い（開けないときも。実行しない側に倒す）
+	// 無い（開けない・通常のファイルでないときも。実行しない側に倒す）
 	Missing,
 };
 

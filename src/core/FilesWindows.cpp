@@ -40,6 +40,30 @@ std::string narrow(std::wstring_view wide) {
 	return text;
 }
 
+// extended はパスを \\?\ を付けた UTF-16 にする（スプールのファイルはすべてこれで開く）。
+//
+// 付けないと、CON・NUL・AUX・COM1 などの名前は（Windows 10 までは拡張子があっても）ファイルでは
+// なくデバイスを指す。id の綴りはそうした名前を除かないので、\\?\ を付けて作られた NUL.req.json
+// を読むつもりで、NUL デバイスを開くことになる。付けると名前を解釈せずにそのまま使う。
+//
+// \\?\ のパスは / を区切りとして読まず、. と .. も解かないので、/ を区切りに直す。スプールの場所は
+// SHGetKnownFolderPath の返す絶対パスで、. と .. を含まない。相対パスには付けられないので、
+// そのまま返す。
+std::wstring extended(std::string_view path) {
+	std::wstring wide = widen(path);
+	std::replace(wide.begin(), wide.end(), L'/', L'\\');
+	if (wide.starts_with(L"\\\\?\\")) {
+		return wide;
+	}
+	if (wide.size() >= 3 && wide[1] == L':' && wide[2] == L'\\') {
+		return L"\\\\?\\" + wide;
+	}
+	if (wide.starts_with(L"\\\\")) {
+		return L"\\\\?\\UNC\\" + wide.substr(2);
+	}
+	return wide;
+}
+
 std::string describe(const char *what, const std::string &path, DWORD error) {
 	return std::string(what) + " " + path + ": error " + std::to_string(error);
 }
@@ -51,7 +75,7 @@ bool isDirectory(const std::wstring &path) {
 
 // openFile は継承できないハンドルで開く（lpSecurityAttributes に null を渡す）。
 HANDLE openFile(const std::string &path, DWORD access, DWORD share, DWORD disposition) {
-	return ::CreateFileW(widen(path).c_str(), access, share, nullptr, disposition,
+	return ::CreateFileW(extended(path).c_str(), access, share, nullptr, disposition,
 	                     FILE_ATTRIBUTE_NORMAL, nullptr);
 }
 
@@ -80,9 +104,9 @@ std::optional<std::string> appRoot() {
 }
 
 bool makeDirectories(const std::string &path, std::string &error) {
-	// 区切りごとに作る。ドライブ（C:）や既にあるものは失敗するが、構わない。最後に path が
-	// ディレクトリかで成否を決める。
-	std::wstring wide = widen(path);
+	// 区切りごとに作る。\\?\ の部分・ドライブ（C:）・既にあるものは失敗するが、構わない。最後に
+	// path がディレクトリかで成否を決める。
+	std::wstring wide = extended(path);
 	for (std::size_t at = wide.find_first_of(L"\\/", 1); at != std::wstring::npos;
 	     at = wide.find_first_of(L"\\/", at + 1)) {
 		(void)::CreateDirectoryW(wide.substr(0, at).c_str(), nullptr);
@@ -101,7 +125,7 @@ bool makeDirectories(const std::string &path, std::string &error) {
 
 std::optional<std::vector<std::string>> list(const std::string &dir) {
 	WIN32_FIND_DATAW entry{};
-	HANDLE find = ::FindFirstFileExW(widen(join(dir, "*")).c_str(), FindExInfoBasic, &entry,
+	HANDLE find = ::FindFirstFileExW(extended(join(dir, "*")).c_str(), FindExInfoBasic, &entry,
 	                                 FindExSearchNameMatch, nullptr, 0);
 	if (find == INVALID_HANDLE_VALUE) {
 		return std::nullopt;
@@ -158,10 +182,12 @@ bool write(const std::string &path, std::string_view data) {
 }
 
 bool rename(const std::string &from, const std::string &to) {
-	return ::MoveFileExW(widen(from).c_str(), widen(to).c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
+	std::wstring source = extended(from);
+	std::wstring target = extended(to);
+	return ::MoveFileExW(source.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
 }
 
-bool remove(const std::string &path) { return ::DeleteFileW(widen(path).c_str()) != 0; }
+bool remove(const std::string &path) { return ::DeleteFileW(extended(path).c_str()) != 0; }
 
 WaitState probe(const std::string &path) {
 	// 共有なしで開ければ、呼ぶ側は放している。共有違反なら掴んでいる。

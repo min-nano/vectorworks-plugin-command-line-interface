@@ -21,6 +21,27 @@ std::string describe(const char *what, const std::string &path, int error) {
 	return std::string(what) + " " + path + ": " + std::strerror(error);
 }
 
+// スプールのファイルを開くときに必ず付ける。O_NONBLOCK は、FIFO を置かれても読み手・書き手を
+// 待って止まらないため（止まるのは Vectorworks のメインスレッドで、利用者の未保存の作業が
+// 失われる）。通常のファイルの読み書きには効かない。O_NOCTTY は端末を開いても制御端末にしない
+// ため。
+constexpr int kOpenFlags = O_CLOEXEC | O_NONBLOCK | O_NOCTTY;
+
+// openRegular は通常のファイルだけを開く。開けない・通常のファイルでない（FIFO・デバイス・
+// ディレクトリ）なら -1。
+int openRegular(const std::string &path, int flags, mode_t mode = 0) {
+	int fd = ::open(path.c_str(), flags | kOpenFlags, mode);
+	if (fd < 0) {
+		return -1;
+	}
+	struct stat info{};
+	if (::fstat(fd, &info) != 0 || !S_ISREG(info.st_mode)) {
+		closeQuietly(fd);
+		return -1;
+	}
+	return fd;
+}
+
 }
 
 std::string join(const std::string &dir, std::string_view name) {
@@ -83,7 +104,7 @@ std::optional<std::vector<std::string>> list(const std::string &dir) {
 }
 
 std::optional<std::string> read(const std::string &path, std::size_t limit) {
-	int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+	int fd = openRegular(path, O_RDONLY);
 	if (fd < 0) {
 		return std::nullopt;
 	}
@@ -109,7 +130,9 @@ std::optional<std::string> read(const std::string &path, std::size_t limit) {
 }
 
 bool write(const std::string &path, std::string_view data) {
-	int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+	// 書きかけはプラグインが作るもので、シンボリックリンクであるはずがない。たどると、置かれた
+	// リンクの先（スプールの外）を切り詰めてしまう。
+	int fd = openRegular(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600);
 	if (fd < 0) {
 		return false;
 	}
@@ -134,7 +157,8 @@ bool rename(const std::string &from, const std::string &to) {
 bool remove(const std::string &path) { return ::unlink(path.c_str()) == 0; }
 
 WaitState probe(const std::string &path) {
-	int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+	// 通常のファイルでない待つ印は無いものとする（実行しない側に倒す）。
+	int fd = openRegular(path, O_RDONLY);
 	if (fd < 0) {
 		return WaitState::Missing;
 	}
@@ -153,7 +177,7 @@ Lock::~Lock() { release(); }
 
 Lock::Result Lock::take(const std::string &path, std::string &error) {
 	release();
-	int fd = ::open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+	int fd = ::open(path.c_str(), O_RDWR | O_CREAT | kOpenFlags, 0600);
 	if (fd < 0) {
 		error = describe("open", path, errno);
 		return Result::Failed;
