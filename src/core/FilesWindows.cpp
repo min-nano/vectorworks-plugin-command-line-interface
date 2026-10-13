@@ -287,15 +287,25 @@ Lock::~Lock() { release(); }
 Lock::Result Lock::take(const std::string &path, std::string &error) {
 	release();
 	Opened opened = openFile(path, GENERIC_READ | GENERIC_WRITE, 0, OPEN_ALWAYS);
+	if (opened.refused != Refusal::None) {
+		// ロックのファイルはプラグインのもので中身を持たないので、断ったら消して作り直す
+		// （重複除去・WOF の圧縮・同期が外れていれば、それで直る）。断れたのは共有なしで
+		// 開けたからで、ほかの Vectorworks は掴んでいない。消すのは名前だけで、reparse point は
+		// たどらない。
+		(void)::DeleteFileW(extended(path).c_str());
+		opened = openFile(path, GENERIC_READ | GENERIC_WRITE, 0, OPEN_ALWAYS);
+	}
 	if (opened.handle == INVALID_HANDLE_VALUE) {
 		if (opened.refused == Refusal::NotRegular) {
 			error = "CreateFile " + path +
-			        ": 通常のファイルではありません（bridge.lock を消せば作り直します）";
+			        ": 作り直しても通常のファイルになりません（スプールを同期・WOF の圧縮・"
+			        "重複除去の対象から外してください）";
 			return Result::Failed;
 		}
 		if (opened.refused == Refusal::NotLocal) {
 			error = "CreateFile " + path +
-			        ": 中身がローカルにありません（bridge.lock を消せば作り直します）";
+			        ": 作り直しても中身がローカルにありません（スプールをオフラインファイル・HSM "
+			        "の対象から外してください）";
 			return Result::Failed;
 		}
 		if (opened.error == ERROR_SHARING_VIOLATION) {

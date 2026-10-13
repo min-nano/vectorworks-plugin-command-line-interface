@@ -215,15 +215,15 @@ TEST(BridgeDoesNotWaitOnFifos) {
 	CHECK_EQ(VwCli::test::readFile(dir.path() / "g.res.json"), std::string(R"({"ok":true})"));
 }
 
-// bridge.lock が通常のファイルでなければ、ロックを取れない（開いて待たない）。
-TEST(BridgeLockFailsOnAFifo) {
+// bridge.lock が通常のファイルでなければ、開いて待たずに、消して作り直してから掴む。
+TEST(BridgeLockRecreatesAFifo) {
 	TempDir dir;
 	REQUIRE(::mkfifo(dir.sub("bridge.lock").c_str(), 0600) == 0);
 	Bridge bridge(dir.utf8Path());
 	std::string error;
-	CHECK(bridge.lock(error) == files::Lock::Result::Failed);
-	CHECK(!error.empty());
-	CHECK(!bridge.locked());
+	CHECK(bridge.lock(error) == files::Lock::Result::Taken);
+	CHECK(std::filesystem::is_regular_file(
+	    std::filesystem::symlink_status(dir.path() / "bridge.lock")));
 }
 
 // 書きかけのシンボリックリンクはたどらない（たどると、リンクの先を切り詰めてしまう）。
@@ -259,9 +259,12 @@ TEST(BridgeDoesNotFollowSymlinks) {
 	Bridge bridge(dir.utf8Path());
 	CHECK(!bridge.take("s"));
 	CHECK(bridge.waitState("s") == files::WaitState::Missing);
+	// bridge.lock のリンクは、たどらずに名前を消して作り直す（リンクの先は残る）。
 	std::string error;
-	CHECK(bridge.lock(error) == files::Lock::Result::Failed);
-	CHECK(!error.empty());
+	CHECK(bridge.lock(error) == files::Lock::Result::Taken);
+	CHECK(std::filesystem::is_regular_file(
+	    std::filesystem::symlink_status(dir.path() / "bridge.lock")));
+	CHECK_EQ(VwCli::test::readFile(dir.path() / "target"), std::string(R"({"tool":"ping"})"));
 }
 
 // 書きかけが hard link でも、リンクの先（スプールの外のファイル）は変えない。
@@ -309,6 +312,7 @@ TEST(BridgeTreatsReservedNamesAsFiles) {
 }
 
 // リンクでない reparse point（OneDrive などのクラウドのファイルにあたる）も、開き直さずに断る。
+// bridge.lock だけは、消して作り直す。
 TEST(BridgeRejectsReparsePointsThatAreNotLinks) {
 	TempDir dir;
 	for (const char *name : {"r.req.json", "r.wait", "bridge.lock"}) {
@@ -321,13 +325,26 @@ TEST(BridgeRejectsReparsePointsThatAreNotLinks) {
 			return;
 		}
 	}
-	Bridge bridge(dir.utf8Path());
-	CHECK(!bridge.take("r"));
-	CHECK(bridge.waitState("r") == files::WaitState::Missing);
-	std::string error;
-	CHECK(bridge.lock(error) == files::Lock::Result::Failed);
-	// 消せば直ることを示す。
-	CHECK(error.find("bridge.lock を消せば作り直します") != std::string::npos);
+	{
+		Bridge bridge(dir.utf8Path());
+		CHECK(!bridge.take("r"));
+		CHECK(bridge.waitState("r") == files::WaitState::Missing);
+		// bridge.lock は消して作り直してから掴む。
+		std::string error;
+		CHECK(bridge.lock(error) == files::Lock::Result::Taken);
+	}
+	// 要求と待つ印は、開き直さずに断るので、reparse point のまま残る（取り出していない）。
+	for (const char *name : {"r.req.json", "r.wait"}) {
+		DWORD attributes = ::GetFileAttributesW((dir.path() / name).c_str());
+		CHECK(attributes != INVALID_FILE_ATTRIBUTES &&
+		      (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0);
+	}
+	DWORD lock = ::GetFileAttributesW((dir.path() / "bridge.lock").c_str());
+	CHECK(lock != INVALID_FILE_ATTRIBUTES && (lock & FILE_ATTRIBUTE_REPARSE_POINT) == 0);
+	// 一時ディレクトリを消す std::filesystem が未知の tag の reparse point を消せるとは限らない
+	// ので、ここで消す（DeleteFileW は reparse point そのものを消す）。
+	CHECK(files::remove(dir.sub("r.req.json")));
+	CHECK(files::remove(dir.sub("r.wait")));
 }
 
 // 絶対パスでないパスは開かない（\\?\ を付けられず、予約された名前がデバイスを指すため）。

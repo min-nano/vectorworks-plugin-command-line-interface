@@ -31,7 +31,9 @@
 - `lock`: `bridge.lock` を掴む（POSIX は `flock(LOCK_EX|LOCK_NB)`、Windows は共有なしで開く。
   [作法「ロック」](../protocol.md#ロックbridgelock)）。取れたら終了まで放さない。POSIX は
   `O_CLOEXEC` を付けて開き、Windows は `lpSecurityAttributes` に null を渡して、子プロセスに
-  受け継がせない（受け継がれると Vectorworks が終わってもロックが放されない）。
+  受け継がせない（受け継がれると Vectorworks が終わってもロックが放されない）。`bridge.lock` が
+  通常のファイルでない・中身がローカルにないとして断ったら、1 度だけ消して作り直す
+  （[作法「ロック」](../protocol.md#ロックbridgelock)の例外）。
 - `sweep`: **ロックを取れた直後に 1 度だけ**、`*.req.json`・`*.res.json`・`*.wait`・`*.tmp` の
   うち、**`<id>.wait` を掴める・無い id のものだけ**を消す（id はファイル名の最初の `.` より前）。
   待つ印が掴まれている id のファイルは残す（[作法「ロック」](../protocol.md#ロックbridgelock)）。

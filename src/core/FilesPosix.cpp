@@ -211,11 +211,16 @@ Lock::~Lock() { release(); }
 Lock::Result Lock::take(const std::string &path, std::string &error) {
 	release();
 	Opened opened = openRegular(path, O_RDWR | O_CREAT, 0600);
+	if (opened.notRegular) {
+		// ロックのファイルはプラグインのもので中身を持たないので、通常のファイルでなければ消して
+		// 作り直す（FIFO・リンクは、ほかの Vectorworks も掴めない）。消すのは名前だけで、リンクは
+		// たどらない。
+		(void)::unlink(path.c_str());
+		opened = openRegular(path, O_RDWR | O_CREAT, 0600);
+	}
 	if (opened.fd < 0) {
-		error = opened.notRegular
-		            ? "open " + path +
-		                  ": 通常のファイルではありません（bridge.lock を消せば作り直します）"
-		            : describe("open", path, opened.error);
+		error = opened.notRegular ? "open " + path + ": 作り直しても通常のファイルになりません"
+		                          : describe("open", path, opened.error);
 		return Result::Failed;
 	}
 	int fd = opened.fd;
