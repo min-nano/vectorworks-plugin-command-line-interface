@@ -125,6 +125,11 @@ std::string_view kindName(ToolKind kind) {
 	return protocol::kKindWrite;
 }
 
+Server::Server(std::string spoolDir)
+    : bridge_(std::move(spoolDir)),
+      internalFailure_(
+          failure(protocol::kCodeInternal, "要求の処理の中で例外が起きました").dump()) {}
+
 ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos) {
 	ServeResult result;
 	if (!bridge_.locked()) {
@@ -164,17 +169,17 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos) {
 		}
 		// 要求はもう消したので、ここで投げると誰も応えない（呼ぶ側は「実行されたかもしれない」で
 		// 終わる）。道具の外（印の乱数・メモリが足りないなど）で投げた例外も internal で応える。
+		// catch の中では確保しない（前もって書き出した応答を指すだけ）。
 		Outcome outcome;
+		const std::string *body = nullptr;
 		try {
 			outcome = answer(*text, tools, nowNanos);
-		} catch (const std::exception &exception) {
-			std::string message =
-			    std::string("要求の処理の中で例外が起きました: ") + exception.what();
-			outcome = {failure(protocol::kCodeInternal, std::move(message))};
+			body = &outcome.body;
 		} catch (...) {
-			outcome = {failure(protocol::kCodeInternal, "要求の処理の中で例外が起きました")};
+			// answer は投げるとき状態を変えていない（Serve.h）。outcome も代入されていない。
+			body = &internalFailure_;
 		}
-		bridge_.reply(id, outcome.response.dump());
+		bridge_.reply(id, *body);
 		if (outcome.quit) {
 			result.quit = true;
 			break;
@@ -185,10 +190,13 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos) {
 
 Server::Outcome Server::answer(const std::string &text, std::span<const Tool> tools,
                                std::int64_t nowNanos) {
+	auto respond = [](const Json &response, bool quit = false) {
+		return Outcome{response.dump(), quit};
+	};
 	std::string reason;
 	std::optional<Request> request = readRequest(text, reason);
 	if (!request) {
-		return {failure(protocol::kCodeInvalidRequest, reason)};
+		return respond(failure(protocol::kCodeInvalidRequest, reason));
 	}
 
 	// 占有に照らす（作法「占有」の表）。断るなら応答を返す。
@@ -215,26 +223,29 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 	if (name == protocol::kToolTools) {
 		std::optional<Json> list = toolsList(tools, reason);
 		if (!list) {
-			return {failure(protocol::kCodeInternal, reason)};
+			return respond(failure(protocol::kCodeInternal, reason));
 		}
-		return {success(std::move(*list))};
+		return respond(success(std::move(*list)));
 	}
 	if (name == protocol::kToolSessionStart) {
 		if (!session_.empty()) {
-			return {failure(protocol::kCodeBusy, "ほかの呼ぶ側が占有しています")};
+			return respond(failure(protocol::kCodeBusy, "ほかの呼ぶ側が占有しています"));
 		}
 		if (std::optional<Json> refusal = check(false)) {
-			return {std::move(*refusal)};
+			return respond(*refusal);
 		}
-		session_ = newSession(nowNanos);
-		return {success(Json::object({{"session", Json::string(session_)}}))};
+		std::string session = newSession(nowNanos);
+		Outcome outcome = respond(success(Json::object({{"session", Json::string(session)}})));
+		session_ = std::move(session);
+		return outcome;
 	}
 	if (name == protocol::kToolSessionEnd) {
 		if (std::optional<Json> refusal = check(true)) {
-			return {std::move(*refusal)};
+			return respond(*refusal);
 		}
+		Outcome outcome = respond(success(Json::object({{"ended", Json::boolean(true)}})));
 		session_.clear();
-		return {success(Json::object({{"ended", Json::boolean(true)}}))};
+		return outcome;
 	}
 
 	const Tool *tool = findTool(tools, name);
@@ -242,11 +253,11 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 	// 照らしてから知らないと答える。
 	if (name != protocol::kToolPing) {
 		if (std::optional<Json> refusal = check(tool && tool->kind == ToolKind::App)) {
-			return {std::move(*refusal)};
+			return respond(*refusal);
 		}
 	}
 	if (!tool) {
-		return {failure(protocol::kCodeUnknownTool, "知らない道具です: " + name)};
+		return respond(failure(protocol::kCodeUnknownTool, "知らない道具です: " + name));
 	}
 
 	// 道具 1 つの失敗で橋を止めない。例外はここで受ける。
@@ -255,20 +266,22 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 	try {
 		result = tool->run(request->args, ToolContext{inSession()}, error);
 	} catch (const std::exception &exception) {
-		return {failure(protocol::kCodeInternal,
-		                std::string("道具の中で例外が起きました: ") + exception.what())};
+		return respond(failure(protocol::kCodeInternal,
+		                       std::string("道具の中で例外が起きました: ") + exception.what()));
 	} catch (...) {
-		return {failure(protocol::kCodeInternal, "道具の中で例外が起きました")};
+		return respond(failure(protocol::kCodeInternal, "道具の中で例外が起きました"));
 	}
 	switch (error.code) {
 	case ErrorCode::None:
 		break;
 	case ErrorCode::InvalidArgs:
-		return {failure(protocol::kCodeInvalidArgs, error.message)};
+		return respond(failure(protocol::kCodeInvalidArgs, error.message));
 	case ErrorCode::Internal:
-		return {failure(protocol::kCodeInternal, error.message)};
+		return respond(failure(protocol::kCodeInternal, error.message));
 	}
-	return {success(std::move(result)), tool->kind == ToolKind::App};
+	// 道具はもう実行したので、ここで投げると、実行した要求に internal で応えることになる（避け
+	// られない。応答を書き出すための確保だけが残る）。
+	return respond(success(std::move(result)), tool->kind == ToolKind::App);
 }
 
 }

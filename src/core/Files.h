@@ -6,9 +6,11 @@
 // パスは UTF-8。開くファイルは子プロセスに受け継がせない（POSIX は O_CLOEXEC、Windows は
 // 継承できないハンドル）。受け継がれると、Vectorworks が終わってもロックが放されないため。
 //
-// 開いて待たない（作法「プラグイン側の義務」）。POSIX は O_NONBLOCK で開き、read・write・probe は
-// 通常のファイルだけを扱う（FIFO を置かれても、メインスレッドを止めない）。Windows は \\?\ を
-// 付けて開く（CON・NUL などの名前をデバイスとして開かない）。
+// 開いて待たない（作法「プラグイン側の義務」）。POSIX は O_NONBLOCK
+// で開き、read・write・probe・Lock は 通常のファイルだけを扱う（FIFO
+// を置かれても、メインスレッドを止めない）。Windows は \\?\ を 付けて開く（CON・NUL
+// などの名前をデバイスとして開かない）。そのため Windows のパスは 絶対パス（C:\… か
+// UNC）に限り、それ以外は開けない。
 
 #include <cstddef>
 #include <cstdint>
@@ -38,7 +40,8 @@ std::optional<std::vector<std::string>> list(const std::string &dir);
 // 空。
 std::optional<std::string> read(const std::string &path, std::size_t limit);
 
-// write はファイルを作り直して data を書く（POSIX は 0600。シンボリックリンクはたどらず失敗する）。
+// write はファイルを消してから新しく作り、data を書く（POSIX は 0600）。あったものがリンク
+// （シンボリックリンクでも hard link でも）でも、リンクの先は変えない。
 bool write(const std::string &path, std::string_view data);
 
 // rename は from を to へ移す（to があれば置き換える）。

@@ -47,13 +47,17 @@ std::string narrow(std::wstring_view wide) {
 // を読むつもりで、NUL デバイスを開くことになる。付けると名前を解釈せずにそのまま使う。
 //
 // \\?\ のパスは / を区切りとして読まず、. と .. も解かないので、/ を区切りに直す。スプールの場所は
-// SHGetKnownFolderPath の返す絶対パスで、. と .. を含まない。相対パスには付けられないので、
-// そのまま返す。
+// SHGetKnownFolderPath の返す絶対パスで、. と .. を含まない。受け付けるのはドライブからの絶対パス
+// （C:\…）・UNC（\\server\…）・\\?\ 付きのパスだけで、それ以外（ルート相対・ドライブ相対・
+// \\.\ のデバイス名前空間）は空を返して開かせない（予約された名前をデバイスとして開かないため）。
 std::wstring extended(std::string_view path) {
 	std::wstring wide = widen(path);
 	std::replace(wide.begin(), wide.end(), L'/', L'\\');
 	if (wide.starts_with(L"\\\\?\\")) {
 		return wide;
+	}
+	if (wide.starts_with(L"\\\\.\\")) {
+		return {};
 	}
 	if (wide.size() >= 3 && wide[1] == L':' && wide[2] == L'\\') {
 		return L"\\\\?\\" + wide;
@@ -61,7 +65,7 @@ std::wstring extended(std::string_view path) {
 	if (wide.starts_with(L"\\\\")) {
 		return L"\\\\?\\UNC\\" + wide.substr(2);
 	}
-	return wide;
+	return {};
 }
 
 std::string describe(const char *what, const std::string &path, DWORD error) {
@@ -167,7 +171,11 @@ std::optional<std::string> read(const std::string &path, std::size_t limit) {
 }
 
 bool write(const std::string &path, std::string_view data) {
-	HANDLE file = openFile(path, GENERIC_WRITE, 0, CREATE_ALWAYS);
+	// 先に消してから新しく作る（CREATE_NEW）。あるものを開いて切り詰めると（CREATE_ALWAYS）、
+	// 置かれたリンク（シンボリックリンクでも hard link でも）の先、つまりスプールの外のファイルを
+	// 壊してしまう。消すのは名前だけで、リンクの先は残る。
+	(void)::DeleteFileW(extended(path).c_str());
+	HANDLE file = openFile(path, GENERIC_WRITE, 0, CREATE_NEW);
 	if (file == INVALID_HANDLE_VALUE) {
 		return false;
 	}

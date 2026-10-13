@@ -65,7 +65,7 @@ struct ServeResult {
 // Server はスプール 1 つの受け付けと、発行した占有の印（1 つだけ。メモリだけに持つ）。
 class Server {
 public:
-	explicit Server(std::string spoolDir) : bridge_(std::move(spoolDir)) {}
+	explicit Server(std::string spoolDir);
 
 	// serve は受け付け 1 回。nowNanos は Unix 時刻のナノ秒で、占有の印の先頭に使う。
 	//
@@ -79,14 +79,19 @@ public:
 
 private:
 	struct Outcome {
-		Json response;
+		// 書き出した応答。
+		std::string body;
 		bool quit = false;
 	};
 
+	// answer は応答を書き出し終えてから状態（占有の印）を変える。例外で戻るときは状態を変えない。
 	Outcome answer(const std::string &text, std::span<const Tool> tools, std::int64_t nowNanos);
 
 	Bridge bridge_;
 	std::string session_;
+	// answer が投げたときの応答。前もって書き出しておき、例外の中では確保しない（メモリが足りない
+	// ときにまた投げて、応えられなくならないように）。
+	std::string internalFailure_;
 };
 
 // kindName は tools の結果に載せる種類の綴り。

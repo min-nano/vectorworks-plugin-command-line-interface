@@ -155,9 +155,20 @@ TEST(BridgeDoesNotWaitOnFifos) {
 	CHECK(exists(dir, "f.req.json"));
 	// 通常のファイルでない待つ印は無いものとする（実行しない）。
 	CHECK(bridge.waitState("f") == files::WaitState::Missing);
-	// 書きかけに FIFO があれば応答を書けない。
-	CHECK(!bridge.reply("g", R"({"ok":true})"));
-	CHECK(!exists(dir, "g.res.json"));
+	// 書きかけの FIFO は消して作り直すので、応答を書ける。
+	CHECK(bridge.reply("g", R"({"ok":true})"));
+	CHECK_EQ(VwCli::test::readFile(dir.path() / "g.res.json"), std::string(R"({"ok":true})"));
+}
+
+// bridge.lock が通常のファイルでなければ、ロックを取れない（開いて待たない）。
+TEST(BridgeLockFailsOnAFifo) {
+	TempDir dir;
+	REQUIRE(::mkfifo(dir.sub("bridge.lock").c_str(), 0600) == 0);
+	Bridge bridge(dir.utf8Path());
+	std::string error;
+	CHECK(bridge.lock(error) == files::Lock::Result::Failed);
+	CHECK(!error.empty());
+	CHECK(!bridge.locked());
 }
 
 // 書きかけのシンボリックリンクはたどらない（たどると、リンクの先を切り詰めてしまう）。
@@ -166,11 +177,24 @@ TEST(BridgeReplyDoesNotFollowSymlinks) {
 	put(dir, "target", "keep");
 	REQUIRE(::symlink(dir.sub("target").c_str(), dir.sub("s.res.json.tmp").c_str()) == 0);
 	Bridge bridge(dir.utf8Path());
-	CHECK(!bridge.reply("s", R"({"ok":true})"));
+	CHECK(bridge.reply("s", R"({"ok":true})"));
 	CHECK_EQ(VwCli::test::readFile(dir.path() / "target"), std::string("keep"));
-	CHECK(!exists(dir, "s.res.json"));
+	CHECK_EQ(VwCli::test::readFile(dir.path() / "s.res.json"), std::string(R"({"ok":true})"));
 }
 #endif
+
+// 書きかけが hard link でも、リンクの先（スプールの外のファイル）は変えない。
+TEST(BridgeReplyDoesNotWriteThroughHardLinks) {
+	TempDir dir;
+	put(dir, "target", "keep");
+	std::error_code linked;
+	std::filesystem::create_hard_link(dir.path() / "target", dir.path() / "h.res.json.tmp", linked);
+	REQUIRE(!linked);
+	Bridge bridge(dir.utf8Path());
+	CHECK(bridge.reply("h", R"({"ok":true})"));
+	CHECK_EQ(VwCli::test::readFile(dir.path() / "target"), std::string("keep"));
+	CHECK_EQ(VwCli::test::readFile(dir.path() / "h.res.json"), std::string(R"({"ok":true})"));
+}
 
 #ifdef _WIN32
 // CON・NUL などの名前も、デバイスではなくスプールのファイルとして扱う（\\?\ を付けて開く）。
@@ -190,10 +214,26 @@ TEST(BridgeTreatsReservedNamesAsFiles) {
 	CHECK(bridge.reply("AUX", R"({"ok":true})"));
 	std::optional<std::string> response = files::read(dir.sub("AUX.res.json"), 1024);
 	CHECK(response && *response == R"({"ok":true})");
+	// 拡張子の無い名前は、Windows 11 でもデバイスを指す（\\?\ を付けなければ、NUL へ書いても
+	// 捨てられ、読んでも空になる）。
+	CHECK(files::write(dir.sub("NUL"), "file"));
+	std::optional<std::string> bare = files::read(dir.sub("NUL"), 1024);
+	CHECK(bare && *bare == "file");
+	CHECK(files::probe(dir.sub("NUL")) == files::WaitState::Released);
 	// 一時ディレクトリを消す std::filesystem が予約された名前を消せるとは限らないので、ここで消す。
 	CHECK(files::remove(dir.sub("AUX.res.json")));
+	CHECK(files::remove(dir.sub("NUL")));
 	std::optional<std::vector<std::string>> names = files::list(dir.utf8Path());
 	CHECK(names && names->empty());
+}
+
+// 絶対パスでないパスは開かない（\\?\ を付けられず、予約された名前がデバイスを指すため）。
+TEST(FilesRejectRelativePathsOnWindows) {
+	CHECK(!files::read("NUL", 1024));
+	CHECK(!files::read("\\\\.\\NUL", 1024));
+	CHECK(files::probe("NUL") == files::WaitState::Missing);
+	std::string error;
+	CHECK(!files::makeDirectories("relative-spool", error));
 }
 #endif
 

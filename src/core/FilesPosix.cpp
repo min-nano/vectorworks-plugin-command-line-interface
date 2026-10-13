@@ -28,7 +28,7 @@ std::string describe(const char *what, const std::string &path, int error) {
 constexpr int kOpenFlags = O_CLOEXEC | O_NONBLOCK | O_NOCTTY;
 
 // openRegular は通常のファイルだけを開く。開けない・通常のファイルでない（FIFO・デバイス・
-// ディレクトリ）なら -1。
+// ディレクトリ）なら -1。通常のファイルでないときは errno を 0 にする（開けなかったときと分ける）。
 int openRegular(const std::string &path, int flags, mode_t mode = 0) {
 	int fd = ::open(path.c_str(), flags | kOpenFlags, mode);
 	if (fd < 0) {
@@ -37,6 +37,7 @@ int openRegular(const std::string &path, int flags, mode_t mode = 0) {
 	struct stat info{};
 	if (::fstat(fd, &info) != 0 || !S_ISREG(info.st_mode)) {
 		closeQuietly(fd);
+		errno = 0;
 		return -1;
 	}
 	return fd;
@@ -130,9 +131,11 @@ std::optional<std::string> read(const std::string &path, std::size_t limit) {
 }
 
 bool write(const std::string &path, std::string_view data) {
-	// 書きかけはプラグインが作るもので、シンボリックリンクであるはずがない。たどると、置かれた
-	// リンクの先（スプールの外）を切り詰めてしまう。
-	int fd = openRegular(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600);
+	// 先に消してから新しく作る（O_EXCL。シンボリックリンクもたどらない）。あるものを開いて
+	// 切り詰めると、置かれたリンク（シンボリックリンクでも hard link でも）の先、つまりスプールの
+	// 外のファイルを壊してしまう。消すのは名前だけで、リンクの先は残る。
+	(void)::unlink(path.c_str());
+	int fd = openRegular(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
 	if (fd < 0) {
 		return false;
 	}
@@ -177,9 +180,10 @@ Lock::~Lock() { release(); }
 
 Lock::Result Lock::take(const std::string &path, std::string &error) {
 	release();
-	int fd = ::open(path.c_str(), O_RDWR | O_CREAT | kOpenFlags, 0600);
+	int fd = openRegular(path, O_RDWR | O_CREAT, 0600);
 	if (fd < 0) {
-		error = describe("open", path, errno);
+		error = errno == 0 ? "open " + path + ": 通常のファイルではありません"
+		                   : describe("open", path, errno);
 		return Result::Failed;
 	}
 	if (::flock(fd, LOCK_EX | LOCK_NB) != 0) {
