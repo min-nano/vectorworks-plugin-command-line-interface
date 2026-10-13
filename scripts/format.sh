@@ -33,6 +33,12 @@ if ! clang-format --version 2>/dev/null | grep -qF "version $want"; then
 	exit 1
 fi
 
+# PowerShell の整形は pwsh で行うので、無ければ何も整形・確認せずに止める（途中で失敗させない）。
+if ! command -v pwsh >/dev/null 2>&1; then
+	echo "pwsh is required: see docs/lint.md" >&2
+	exit 1
+fi
+
 # 対象は git が追う・無視しないファイル（ビルドの出力や SDK の写しを含めない）。ファイル名に
 # 空白を含めない前提で、行ごとに引数へ分ける。
 cpp="$(git ls-files -co --exclude-standard -- '*.cpp' '*.h' '*.mm')"
