@@ -97,8 +97,13 @@ func TestServeAppliesSessionAndQuitOnlyWhenTheResponseIsWritten(t *testing.T) {
 	session := s.session
 	blockResponse(t, dir, "3")
 	put(t, dir, "3", fmt.Sprintf(`{"tool":"quit","session":%q}`, session))
+	put(t, dir, "3a", fmt.Sprintf(`{"tool":"ping","session":%q}`, session))
 	if _, quit := s.serveOnce(); quit {
 		t.Fatal("quit although its response could not be written")
+	}
+	// 終了しないので、同じ回の残りの要求も処理する。
+	if !exists(dir, "3a"+spool.ResponseSuffix) {
+		t.Fatal("the request after the unanswered quit was not served")
 	}
 	blockResponse(t, dir, "4")
 	put(t, dir, "4", fmt.Sprintf(`{"tool":"session_end","session":%q}`, session))

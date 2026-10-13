@@ -13,6 +13,8 @@
 #include <shlobj.h>
 
 #include <algorithm>
+#include <cstring>
+#include <initializer_list>
 
 namespace VwCli::core::files {
 
@@ -87,56 +89,118 @@ struct Opened {
 	DWORD error = 0;
 };
 
-// IO_REPARSE_TAG_AF_UNIX は古い SDK の winnt.h に無い。
+// 古い SDK の winnt.h に無い綴り。
 #ifndef IO_REPARSE_TAG_AF_UNIX
 #define IO_REPARSE_TAG_AF_UNIX 0x80000023L
 #endif
+#ifndef IO_REPARSE_TAG_LX_FIFO
+#define IO_REPARSE_TAG_LX_FIFO 0x80000024L
+#endif
+#ifndef IO_REPARSE_TAG_LX_CHR
+#define IO_REPARSE_TAG_LX_CHR 0x80000025L
+#endif
+#ifndef IO_REPARSE_TAG_LX_BLK
+#define IO_REPARSE_TAG_LX_BLK 0x80000026L
+#endif
+#ifndef FILE_ATTRIBUTE_RECALL_ON_OPEN
+#define FILE_ATTRIBUTE_RECALL_ON_OPEN 0x00040000
+#endif
+#ifndef FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS
+#define FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000
+#endif
 
-// rejected はハンドルの指すものを断るか（ディスクにないもの・ディレクトリ・リンク・AF_UNIX の
-// ソケット）。断らないときは tag に属性と reparse tag を残す。
+// 中身がローカルにない（クラウドなどから取り寄せる）ことを示す属性。読むと取り寄せる処理が
+// メインスレッドで走り、ネットワークを待って止まりうるので断る。
+constexpr DWORD kNotLocal =
+    FILE_ATTRIBUTE_OFFLINE | FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS;
+
+// rejected はハンドルの指すものを断るか。断るのは、ディスクにないもの・ディレクトリ・中身が
+// ローカルにないもの・リンク（名前の代わりになる reparse point）・AF_UNIX のソケット・WSL の
+// FIFO とデバイス。断らないときは tag に属性と reparse tag を残す。
 bool rejected(HANDLE file, FILE_ATTRIBUTE_TAG_INFO &tag) {
 	if (::GetFileType(file) != FILE_TYPE_DISK ||
 	    !::GetFileInformationByHandleEx(file, FileAttributeTagInfo, &tag, sizeof tag) ||
-	    (tag.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+	    (tag.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | kNotLocal)) != 0) {
 		return true;
 	}
-	return (tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 &&
-	       (IsReparseTagNameSurrogate(tag.ReparseTag) || tag.ReparseTag == IO_REPARSE_TAG_AF_UNIX);
+	if ((tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0) {
+		return false;
+	}
+	switch (tag.ReparseTag) {
+	case IO_REPARSE_TAG_AF_UNIX:
+	case IO_REPARSE_TAG_LX_FIFO:
+	case IO_REPARSE_TAG_LX_CHR:
+	case IO_REPARSE_TAG_LX_BLK:
+		return true;
+	default:
+		return IsReparseTagNameSurrogate(tag.ReparseTag);
+	}
+}
+
+// sameFile は 2 つのハンドルが同じファイル（ボリュームとファイル ID が同じ）を指すか。
+bool sameFile(HANDLE a, HANDLE b) {
+	FILE_ID_INFO left{};
+	FILE_ID_INFO right{};
+	return ::GetFileInformationByHandleEx(a, FileIdInfo, &left, sizeof left) &&
+	       ::GetFileInformationByHandleEx(b, FileIdInfo, &right, sizeof right) &&
+	       left.VolumeSerialNumber == right.VolumeSerialNumber &&
+	       std::memcmp(&left.FileId, &right.FileId, sizeof left.FileId) == 0;
 }
 
 // openFile はディスクの通常のファイルだけを、継承できないハンドルで開く（lpSecurityAttributes に
 // null を渡す）。
 //
-// まず FILE_FLAG_OPEN_REPARSE_POINT で、リンク（シンボリックリンク・ジャンクションなど、名前の
-// 代わりになる reparse point）をたどらずにリンクそのものを開き、断る。たどると、名前付きパイプへの
-// リンクを置かれたとき、パイプにつないで ReadFile でメインスレッドが止まる（POSIX の O_NOFOLLOW に
-// あたる）。リンクでない reparse point（OneDrive などのクラウドのファイル・重複除去）は中身を持つ
-// ふつうのファイルなので、たどって開き直す。
+// まず FILE_FLAG_OPEN_REPARSE_POINT で、リンクをたどらずにリンクそのものを開き、断る（rejected）。
+// たどると、名前付きパイプへのリンクを置かれたとき、パイプにつないで ReadFile でメインスレッドが
+// 止まる（POSIX の O_NOFOLLOW にあたる）。
+//
+// リンクでない reparse point（OneDrive などのクラウドのファイル・重複除去）は中身を持つふつうの
+// ファイルなので、たどって開き直す。開き直す間に名前をリンクへ差し替えられても、たどった先を
+// 受け入れないよう、属性だけを読むハンドル（共有を妨げない）でリンクをたどらずに名前を押さえて
+// おき、開き直したハンドルと同じファイルを指すときだけ受け入れる。
 Opened openFile(const std::string &path, DWORD access, DWORD share, DWORD disposition) {
 	std::wstring wide = extended(path);
-	auto create = [&](DWORD flags) {
-		return ::CreateFileW(wide.c_str(), access, share, nullptr, disposition, flags, nullptr);
+	auto failed = [] { return Opened{INVALID_HANDLE_VALUE, false, ::GetLastError()}; };
+	auto refuse = [](std::initializer_list<HANDLE> handles) {
+		for (HANDLE handle : handles) {
+			::CloseHandle(handle);
+		}
+		return Opened{INVALID_HANDLE_VALUE, true, 0};
 	};
-	HANDLE file = create(FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT);
+	HANDLE file = ::CreateFileW(wide.c_str(), access, share, nullptr, disposition,
+	                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
 	if (file == INVALID_HANDLE_VALUE) {
-		return {INVALID_HANDLE_VALUE, false, ::GetLastError()};
+		return failed();
 	}
 	FILE_ATTRIBUTE_TAG_INFO tag{};
 	if (rejected(file, tag)) {
-		::CloseHandle(file);
-		return {INVALID_HANDLE_VALUE, true, 0};
+		return refuse({file});
 	}
-	if ((tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
-		::CloseHandle(file);
-		file = create(FILE_ATTRIBUTE_NORMAL);
-		if (file == INVALID_HANDLE_VALUE) {
-			return {INVALID_HANDLE_VALUE, false, ::GetLastError()};
-		}
-		if (rejected(file, tag)) {
-			::CloseHandle(file);
-			return {INVALID_HANDLE_VALUE, true, 0};
-		}
+	if ((tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0) {
+		return {file, false, 0};
 	}
+	// 1 回目のハンドルは共有を妨げうる（share が 0 なら 2 回目が共有違反になる）ので閉じる。
+	::CloseHandle(file);
+	HANDLE anchor = ::CreateFileW(wide.c_str(), FILE_READ_ATTRIBUTES,
+	                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+	                              OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+	if (anchor == INVALID_HANDLE_VALUE) {
+		return failed();
+	}
+	if (rejected(anchor, tag)) {
+		return refuse({anchor});
+	}
+	file = ::CreateFileW(wide.c_str(), access, share, nullptr, disposition, FILE_ATTRIBUTE_NORMAL,
+	                     nullptr);
+	if (file == INVALID_HANDLE_VALUE) {
+		Opened opened = failed();
+		::CloseHandle(anchor);
+		return opened;
+	}
+	if (rejected(file, tag) || !sameFile(anchor, file)) {
+		return refuse({anchor, file});
+	}
+	::CloseHandle(anchor);
 	return {file, false, 0};
 }
 
@@ -165,12 +229,11 @@ std::optional<std::string> appRoot() {
 }
 
 bool makeDirectories(const std::string &path, std::string &error) {
-	// 既にあれば何もしない。無ければ、ルート（\\?\C:\ か \\?\UNC\server\share\）の後から、区切り
-	// ごとに作る。ルートには
-	// 作りに行かない。prepare は受け付けのたびに呼ばれうるので、毎回失敗する呼び出しを
-	// メインスレッドに載せないため（UNC ではネットワークに触れることもある）。既にあるものは
-	// 失敗するが、構わない。最後に path がディレクトリかで成否を決める。区切りは extended が
-	// \ に揃えてある。
+	// 既にあれば何もしない。無ければ、ルート（\\?\C:\ か \\?\UNC\server\share\）の後から、
+	// 区切りごとに作り、ルートには作りに行かない。prepare は受け付けのたびに呼ばれうるので、毎回
+	// 失敗する呼び出しをメインスレッドに載せないため（UNC ではネットワークに触れることもある）。
+	// 途中で既にあるものは失敗するが、構わない。最後に path がディレクトリかで成否を決める。
+	// 区切りは extended が \ に揃えてある。
 	std::wstring wide = extended(path);
 	if (isDirectory(wide)) {
 		return true;

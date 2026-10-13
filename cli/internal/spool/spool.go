@@ -334,11 +334,11 @@ func NestingDepth(data []byte) int {
 func WriteAtomically(path string, data []byte) error {
 	temp := path + TempSuffix
 	if err := writeNew(temp, data); err != nil {
-		return err
+		return fmt.Errorf("write: %w", err)
 	}
 	if err := os.Rename(temp, path); err != nil {
 		_ = os.Remove(temp)
-		return err
+		return fmt.Errorf("publish: %w", err)
 	}
 	return nil
 }
