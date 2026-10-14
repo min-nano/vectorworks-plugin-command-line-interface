@@ -163,7 +163,7 @@ struct Tool {
   載せます（[通信規則「応答」](../protocol.md#応答idresjson)）。`invalid_request`・`unknown_tool`・`no_wait`・`busy`・`no_session` は
   `core::Server::serve` が付けます（`busy`・`no_session` は占有に照らした結果。道具は付けない）。図面が開かれていないなど、道具によって失敗になるかが違う理由は
   `internal` とし、`error` に書きます。
-- **種類 `write` の道具は、undo の作法を通すまで表に載せません**（[未決 1](open-questions.md)）。
+- **種類 `write` の道具は、undo の手順に対応するまで表に載せません**（[未決 1](open-questions.md)）。
 
 ## 受け付けの結果
 
