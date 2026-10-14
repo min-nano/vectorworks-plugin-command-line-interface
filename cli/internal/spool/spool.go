@@ -1,7 +1,7 @@
-// Package spool は、プラグイン側のブリッジとファイルで受け渡しをする作法（docs/protocol.md）の
+// Package spool は、プラグイン側のブリッジとファイルで受け渡しをする通信規則（docs/protocol.md）の
 // CLI 側の実装である。
 //
-// 作法の真実は docs/protocol.md で、プラグイン側（C++）とこのパッケージはその対になる。
+// 通信規則の真実は docs/protocol.md で、プラグイン側（C++）とこのパッケージはその対になる。
 // どちらかを変えたら仕様書と両方を直す。ProtocolVersion を上げるかは docs/protocol.md「互換性」に従う。
 //
 // このパッケージは排他を持たない。排他はプラグインの占有（docs/protocol.md「占有」）だけで、
@@ -70,7 +70,7 @@ type Response struct {
 	Result json.RawMessage `json:"result,omitempty"`
 }
 
-// 失敗の種別（Response.Code）。綴りは作法で固定する（docs/protocol.md「応答」）。CLI は
+// 失敗の種別（Response.Code）。綴りは通信規則で固定する（docs/protocol.md「応答」）。CLI は
 // これを解釈せず、そのまま呼ぶ側へ渡す。
 const (
 	// 要求が読めない（JSON として壊れている・大きすぎる・tool が無い）
@@ -167,7 +167,7 @@ func NewID(now time.Time) string {
 //     受け取っていれば実行される。takenGrace だけ応答を待ち、届かなければ ErrNoResponse
 //     （実行されたかは分からない）。
 //
-// no_wait の応答は作法の種別で「実行しなかった」を意味するので、道具の失敗ではなく ErrNoWait
+// no_wait の応答は通信規則の種別で「実行しなかった」を意味するので、道具の失敗ではなく ErrNoWait
 // として返す（やめたあとにプラグインが受け取ったときや、.wait が想定外に消えたときに届く）。busy / no_session も「実行しなかった」なので、ErrBusy /
 // ErrNoSession として返す。
 func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout time.Duration) (*Response, error) {

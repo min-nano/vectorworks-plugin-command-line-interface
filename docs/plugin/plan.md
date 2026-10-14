@@ -16,14 +16,14 @@
 
 - **`core/Json` の入れ子の深さの上限。** 64 を超えたら再帰を降りずに失敗させ、`core::Server::serve` は
   「読めない要求」（`invalid_request`）で応える。1 MiB の `[[[[…` で Vectorworks ごと落ちて、利用者の
-  未保存の作業が失われないため（[作法「要求」](../protocol.md#要求idreqjson)・[ブリッジ「受け付け 1 回」](bridge.md#受け付け-1-回coreserverserve)）。
+  未保存の作業が失われないため（[通信規則「要求」](../protocol.md#要求idreqjson)・[ブリッジ「受け付け 1 回」](bridge.md#受け付け-1-回coreserverserve)）。
   JSON の読み方は Go の `encoding/json` に合わせる。
 - **`core/Json` のファジング。** ASan・UBSan と libFuzzer（clang の `-fsanitize=fuzzer`）でビルドした
   入口（`tests/JsonFuzzer.cpp`）を、`test.yml` が決まった時間だけ回す。種は要求の見本
   （`protocol/fixtures/requests/`。深い入れ子・長い文字列・不正な UTF-8 を含む）（[ビルド「CI」](build-and-release.md#ci)）。
-- **`protocol/fixtures/` の中身。** 作法の定数・id の見本・要求の見本・受け付け 1 回の見本（置いた
+- **`protocol/fixtures/` の中身。** 通信規則の定数・id の見本・要求の見本・受け付け 1 回の見本（置いた
   ファイル → 残るファイルと応答）。C++ のテストと Go の `cli/internal/spool`・`cli/internal/fakeplugin`
-  のテストが同じものを読む（[作法の見本](../fixtures.md)）。
+  のテストが同じものを読む（[通信規則の見本](../fixtures.md)）。
 
 その先（順序は未定）:
 
@@ -39,7 +39,7 @@
 
 | 作るもの | 根拠 |
 | --- | --- |
-| `src/core/*`（Protocol・Json・Files・Bridge・Serve） | [受け渡しの作法](../protocol.md)・[ブリッジ](bridge.md)。SDK に依らない |
+| `src/core/*`（Protocol・Json・Files・Bridge・Serve） | [通信規則](../protocol.md)・[ブリッジ](bridge.md)。SDK に依らない |
 | `src/ModuleMain.cpp`・`PluginPrefix.h`・`Module-Info.plist.in`・`resources/cli.vwr`・`CMakeLists.txt` | SDK リファレンスの `plugin/`（実機で読み込まれている形）・[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)（VCOM の初期化・SDK の静的ライブラリをリンクするモジュールが定義するもの） |
 | `src/Clock.{h,cpp}` | [Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4・6・7（[構成](architecture.md#受け付けの流れ)） |
 | `src/tools/*` | [SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し) |

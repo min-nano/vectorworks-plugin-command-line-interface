@@ -1,14 +1,14 @@
 # 受け付け（ブリッジ）
 
-受け渡しの形は[受け渡しの作法](../protocol.md)が真実で、ここはプラグイン側の作りです。
+受け渡しの形は[通信規則](../protocol.md)が真実で、ここはプラグイン側の作りです。
 
 ## 分け方
 
 | ファイル | SDK | 中身 |
 | --- | --- | --- |
-| `src/core/Protocol.h` | 依らない | 作法の定数（ファイルの綴り・上限・予約された道具・`code`）と id の検査。`protocol/fixtures/constants.json` と対（[作法の見本](../fixtures.md)） |
+| `src/core/Protocol.h` | 依らない | 通信規則の定数（ファイルの綴り・上限・予約された道具・`code`）と id の検査。`protocol/fixtures/constants.json` と対（[通信規則の見本](../fixtures.md)） |
 | `src/core/Json.{h,cpp}` | 依らない | 小さな JSON（入れ子の深さに上限を設ける。読み方は Go の `encoding/json` に合わせる。[受け付け 1 回](#受け付け-1-回coreserverserve)の 3） |
-| `src/core/Files.h`・`FilesPosix.cpp`・`FilesWindows.cpp` | 依らない | スプールに使う OS の呼び出し（ロック・待つ印・読み書き・`<CLI>` の親の場所）。開くファイルは子プロセスに受け継がせない。開いて待たない（通常のファイルだけを読み書きし、リンクはたどらない。POSIX は `O_NONBLOCK`・`O_NOFOLLOW` で開く。Windows は `\\?\` と `FILE_FLAG_OPEN_REPARSE_POINT` で開き（パスは絶対パスに限る）、reparse point（OneDrive などのクラウドのファイル・重複除去を含む）と中身がローカルにないファイルを断る）。書きかけは消してから新しく作る（リンクの先を壊さない。[作法「プラグイン側の義務」](../protocol.md#プラグイン側の義務)） |
+| `src/core/Files.h`・`FilesPosix.cpp`・`FilesWindows.cpp` | 依らない | スプールに使う OS の呼び出し（ロック・待つ印・読み書き・`<CLI>` の親の場所）。開くファイルは子プロセスに受け継がせない。開いて待たない（通常のファイルだけを読み書きし、リンクはたどらない。POSIX は `O_NONBLOCK`・`O_NOFOLLOW` で開く。Windows は `\\?\` と `FILE_FLAG_OPEN_REPARSE_POINT` で開き（パスは絶対パスに限る）、reparse point（OneDrive などのクラウドのファイル・重複除去を含む）と中身がローカルにないファイルを断る）。書きかけは消してから新しく作る（リンクの先を壊さない。[通信規則「プラグイン側の義務」](../protocol.md#プラグイン側の義務)） |
 | `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つ（`prepare` / `lock` / `sweep` / `poll` / `take` / `waitState` / `reply`）と、スプールの場所（`defaultSpoolDir`）。場所は引数で受ける（テストは一時ディレクトリを渡す） |
 | `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（`core::Server::serve`。下記）と、占有の印（`Server` が発行した 1 つをメモリに持つ）。道具の表と時刻を引数で受けるので無 SDK でテストできる |
 | `src/tools/ToolTable.cpp` | 依る | 道具の表 |
@@ -19,25 +19,25 @@
 返し方・壊れた要求・ロックを取れたときに 1 度だけ残骸を消すこと・ロックを取れないときに何も
 しないこと・無くなっていた要求を飛ばすこと・待つ者の居ない要求と待つ印の無い要求を実行しないこと・失敗の `code`・
 回の始めに並べた要求だけを処理すること・綴りを満たさない id を取り出さないこと・大きすぎる要求と入れ子の深すぎる要求・
-占有に照らすこと）。表せるものは[作法の見本](../fixtures.md)に置き、CLI の偽のプラグイン
+占有に照らすこと）。表せるものは[通信規則の見本](../fixtures.md)に置き、CLI の偽のプラグイン
 （`cli/internal/fakeplugin`）も同じ見本で確かめます。
 
 ## スプールの用意
 
-- 場所は `<CLI>/spool`（[作法「スプールの場所」](../protocol.md#スプールの場所)）。環境変数は
+- 場所は `<CLI>/spool`（[通信規則「スプールの場所」](../protocol.md#スプールの場所)）。環境変数は
   読まず、**探索しません**。
 - `prepare`: 無ければ 0700 で作る（親も無ければ作る）。持ち主と権限は確かめない。失敗したら
   次の回にやり直す（理由は受け付けの結果に載せる）。
 - `lock`: `bridge.lock` を掴む（POSIX は `flock(LOCK_EX|LOCK_NB)`、Windows は共有なしで開く。
-  [作法「ロック」](../protocol.md#ロックbridgelock)）。取れたら終了まで放さない。POSIX は
+  [通信規則「ロック」](../protocol.md#ロックbridgelock)）。取れたら終了まで放さない。POSIX は
   `O_CLOEXEC` を付けて開き、Windows は `lpSecurityAttributes` に null を渡して、子プロセスに
   受け継がせない（受け継がれると Vectorworks が終わってもロックが放されない）。`bridge.lock` が
   通常のファイルでない・中身がローカルにないとして断ったら、消して作り直す。作り直すのは
   1 つの Vectorworks（`Lock`）につき 1 度だけで、2 度目からは理由を返して失敗する（受け付けの
-  たびに消して作るのを繰り返さない。[作法「ロック」](../protocol.md#ロックbridgelock)の例外）。
+  たびに消して作るのを繰り返さない。[通信規則「ロック」](../protocol.md#ロックbridgelock)の例外）。
 - `sweep`: **ロックを取れた直後に 1 度だけ**、`*.req.json`・`*.res.json`・`*.wait`・`*.tmp` の
   うち、**`<id>.wait` を掴める・無い id のものだけ**を消す（id はファイル名の最初の `.` より前）。
-  待つ印が掴まれている id のファイルは残す（[作法「ロック」](../protocol.md#ロックbridgelock)）。
+  待つ印が掴まれている id のファイルは残す（[通信規則「ロック」](../protocol.md#ロックbridgelock)）。
 
 ## 受け付け 1 回（`core::Server::serve`）
 
@@ -47,9 +47,9 @@
    消さず・応えない）。1 件ずつ読み、**読めたら消し、消せたものだけを実行する**。読めない
    （無くなっていた）・消せない（ほかのプロセスが一時的に掴んでいる）要求は黙って飛ばす。
    - **並べるのは回の始めに 1 度だけ**で、並べた要求をすべて処理する（件数と時間の上限は設けない。
-     [作法「プラグイン側の義務」](../protocol.md#プラグイン側の義務)）。その後に置かれた要求は次の回に
+     [通信規則「プラグイン側の義務」](../protocol.md#プラグイン側の義務)）。その後に置かれた要求は次の回に
      回る。取り出した要求は同じ回の中で応えるまで処理する。
-   - 消した直後、実行する前に `<id>.wait` を掴めるか試す（`waitState`。[作法「待つ印」](../protocol.md#待つ印idwait)）。
+   - 消した直後、実行する前に `<id>.wait` を掴めるか試す（`waitState`。[通信規則「待つ印」](../protocol.md#待つ印idwait)）。
      掴めたら呼ぶ側は居ないので、`<id>.wait` を消し、**実行も応答もしない**。無ければ実行せずに
      `no_wait` で応える。掴めない（呼ぶ側が待っている）なら次へ進む。
 3. 読めたが壊れている要求には `invalid_request` で応える（id は 2 で確かめてある）。壊れている
@@ -57,12 +57,12 @@
    `tool`・`args`・`session` の型が違うこと（`tool` の `null`・空の文字列も壊れている。キーは大文字と
    小文字を区別して照合する）。`args` が無い・`null`
    なら既定値の `{}` を道具へ渡し、`session` の `null` と空の文字列は無いものとして扱う
-   （[作法「要求」](../protocol.md#要求idreqjson)）。**深さは `core/Json` が解析の中で数え、上限を
+   （[通信規則「要求」](../protocol.md#要求idreqjson)）。**深さは `core/Json` が解析の中で数え、上限を
    超えたら再帰を降りずに失敗する**（解析の前に別に数える必要はない。スタックを溢れさせない
    ことが目的）。文字列の不正な UTF-8 と対にならないサロゲートは U+FFFD に置き換えて読み、
    書き出すときも同じにする（応答を常に UTF-8 にする。道具が返す例外の文言が UTF-8 でなくてもよい）。
 4. 要求ごとに:
-   - `tools`・`ping` 以外は、まず占有に照らす（[作法「占有」](../protocol.md#占有セッション)の表）。
+   - `tools`・`ping` 以外は、まず占有に照らす（[通信規則「占有」](../protocol.md#占有セッション)の表）。
      占有の印は `core::Server` が持つ状態（1 つだけ。メモリだけで、ファイルに書かない）で、
      Vectorworks が終われば消える。印は `<時刻のナノ秒 19 桁>-<乱数 16 桁の 16 進>` で、乱数は
      `std::random_device` から作る。
@@ -85,7 +85,7 @@
   応えることになります（避けられない）。
 - それ以外（スプールの一覧を読むときにメモリが足りないなど）で `serve` そのものが投げた例外は、
   呼ぶタイマー（`Clock`）が受け、Vectorworks へ通しません。
-- **占有の印の発行・終了と終了の依頼は、応答を書けたときだけ反映します**（[作法「占有」](../protocol.md#占有セッション)）。
+- **占有の印の発行・終了と終了の依頼は、応答を書けたときだけ反映します**（[通信規則「占有」](../protocol.md#占有セッション)）。
   `answer` は状態を変えずに、変えるものを `Outcome` で返し、`serve` が `reply` に成功してから
   反映します。
 - 解析は要求の大きさに対して線形の時間で終えます（同じキーは、キーが増えたら索引で探す）。1 MiB の
@@ -93,8 +93,8 @@
 
 ## 版の情報
 
-**スプールに版の情報（印）を書きません。** 生死はロックで判定され（[作法「生存の判定」](../protocol.md#生存の判定)）、
-作法の版は実行時に照合しない（[作法「版」](../protocol.md#版)）ので、ファイルとして置く理由が
+**スプールに版の情報（印）を書きません。** 生死はロックで判定され（[通信規則「生存の判定」](../protocol.md#生存の判定)）、
+通信規則の版は実行時に照合しない（[通信規則「版」](../protocol.md#版)）ので、ファイルとして置く理由が
 ありません。版の情報は `ping` の結果で返します（[道具「ping」](tools.md#ping)）。
 
 ## 同じスプールを見る 2 つの Vectorworks
@@ -154,13 +154,13 @@ struct Tool {
 - `tools` の結果は `{"protocol":5,"tools":[{"name","description","inputSchema","kind"}]}`。
   `kind` は `read` / `write` / `app` を小文字で載せます（呼ぶ側が「図面を変えるか」を
   判定できるように）。予約された道具のうち `tools`・`session_start`・`session_end` は表に載せず、
-  `tools` の結果にも出しません。`ping` と `quit` は表に載せます（[作法「予約された道具」](../protocol.md#予約された道具)）。
+  `tools` の結果にも出しません。`ping` と `quit` は表に載せます（[通信規則「予約された道具」](../protocol.md#予約された道具)）。
 - 道具が受け付けの状態を知るのは `ToolContext` からだけです（`ping` の `session`）。
 - 引数の検査は道具の中で行います（JSON Schema の検証器は持たない）。省略できる引数には
   既定値を設け（`inputSchema` の `default` にも書く）、知らない引数・知っている引数の未知の値は
-  `invalid_args` で返します（[作法「互換性」](../protocol.md#互換性)）。
+  `invalid_args` で返します（[通信規則「互換性」](../protocol.md#互換性)）。
 - 失敗の種別は応答の `code` に小文字の綴り（`invalid_args` / `internal`）で
-  載せます（[作法「応答」](../protocol.md#応答idresjson)）。`invalid_request`・`unknown_tool`・`no_wait`・`busy`・`no_session` は
+  載せます（[通信規則「応答」](../protocol.md#応答idresjson)）。`invalid_request`・`unknown_tool`・`no_wait`・`busy`・`no_session` は
   `core::Server::serve` が付けます（`busy`・`no_session` は占有に照らした結果。道具は付けない）。図面が開かれていないなど、道具によって失敗になるかが違う理由は
   `internal` とし、`error` に書きます。
 - **種類 `write` の道具は、undo の作法を通すまで表に載せません**（[未決 1](open-questions.md)）。

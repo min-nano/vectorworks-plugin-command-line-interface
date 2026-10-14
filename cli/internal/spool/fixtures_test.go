@@ -12,10 +12,10 @@ import (
 	. "github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// 作法の見本（protocol/fixtures。形は docs/fixtures.md）の定数と id の綴りに照らす。プラグイン側
+// 通信規則の見本（protocol/fixtures。形は docs/fixtures.md）の定数と id の綴りに照らす。プラグイン側
 // （src/core/Protocol.h）も同じ見本に照らすので、両側の綴りが揃う。
 
-// fixtures は作法の見本の場所（go test はパッケージのディレクトリで走る）。
+// fixtures は通信規則の見本の場所（go test はパッケージのディレクトリで走る）。
 const fixtures = "../../../protocol/fixtures"
 
 // readFixture は見本のファイルを、知らないキーを誤りとして読む（綴りを誤った確かめが黙って

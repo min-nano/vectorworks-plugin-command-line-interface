@@ -1,5 +1,5 @@
 {
-	"description": "占有（作法「占有」の表）。$session は発行された印に置き換える",
+	"description": "占有（通信規則「占有」の表）。$session は発行された印に置き換える",
 	"steps": [
 		{"description": "ロックを取る（空のスプールなので何も消さない）", "expect": {"files": ["bridge.lock"]}},
 		{

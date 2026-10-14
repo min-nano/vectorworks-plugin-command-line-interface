@@ -61,7 +61,7 @@ std::vector<std::string> Bridge::poll() const {
 			}
 		}
 	}
-	// 作法はファイル名の昇順で処理する（id の昇順ではない。綴りに . より小さい - があるため）。
+	// 通信規則はファイル名の昇順で処理する（id の昇順ではない。綴りに . より小さい - があるため）。
 	std::sort(requests.begin(), requests.end());
 	for (std::string &name : requests) {
 		name.resize(name.size() - protocol::kRequestSuffix.size());

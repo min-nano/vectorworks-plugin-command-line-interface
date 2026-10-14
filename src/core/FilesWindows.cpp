@@ -218,7 +218,7 @@ std::optional<std::vector<std::string>> list(const std::string &dir) {
 }
 
 std::optional<std::string> read(const std::string &path, std::size_t limit) {
-	// 読む間は消させない（呼ぶ側の取り下げは、消せないことでプラグインが受け取ったと分かる。作法
+	// 読む間は消させない（呼ぶ側の取り下げは、消せないことでプラグインが受け取ったと分かる。通信規則
 	// 「待つのをやめる」）。
 	HANDLE file = openFile(path, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING).handle;
 	if (file == INVALID_HANDLE_VALUE) {
@@ -247,7 +247,7 @@ bool write(const std::string &path, std::string_view data) {
 	// 置かれたリンク（シンボリックリンクでも hard link でも）の先、つまりスプールの外のファイルを
 	// 壊してしまう。消すのは名前だけで、リンクの先は残る。読み取り専用の書きかけが残っていると
 	// 消せず、その id には応えられない（読み取り専用の属性を外すのはリンクの先に効きうるので、
-	// しない。スプールに書けるのは同じ利用者だけで、作法どおりの呼ぶ側はそうしたファイルを作らない）。
+	// しない。スプールに書けるのは同じ利用者だけで、通信規則どおりの呼ぶ側はそうしたファイルを作らない）。
 	(void)::DeleteFileW(extended(path).c_str());
 	HANDLE file = openFile(path, GENERIC_WRITE, 0, CREATE_NEW).handle;
 	if (file == INVALID_HANDLE_VALUE) {

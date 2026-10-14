@@ -16,8 +16,9 @@
 #include <utility>
 #include <vector>
 
-// 作法の見本（protocol/fixtures。形は docs/fixtures.md）を読み、共通部がそのとおりに振る舞うかを
-// 確かめる。CLI 側（cli/internal/spool・cli/internal/fakeplugin）のテストも同じ見本を読む。
+// 通信規則の見本（protocol/fixtures。形は docs/fixtures.md）を読み、共通部がそのとおりに
+// 振る舞うかを確かめる。CLI 側（cli/internal/spool・cli/internal/fakeplugin）のテストも
+// 同じ見本を読む。
 
 namespace protocol = VwCli::core::protocol;
 namespace files = VwCli::core::files;

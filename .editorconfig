@@ -31,7 +31,7 @@ end_of_line = crlf
 insert_final_newline = unset
 trim_trailing_whitespace = unset
 
-# 作法の見本。壊れた要求をわざと含むので、エディタに中身を変えさせない。
+# 通信規則の見本。壊れた要求をわざと含むので、エディタに中身を変えさせない。
 [protocol/fixtures/**]
 charset = unset
 end_of_line = unset

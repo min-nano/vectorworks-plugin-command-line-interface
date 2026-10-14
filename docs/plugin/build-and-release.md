@@ -26,7 +26,7 @@
 | --- | --- | --- |
 | `cli.yml`（既存） | push / PR・マージキュー | Go のテスト（macOS・Windows）とビルド |
 | `format.yml`（既存） | push / PR・マージキュー | `scripts/format.sh`（[整形](../format.md)。gofmt・shfmt・clang-format・PSScriptAnalyzer） |
-| `test.yml` | push / PR・マージキュー | 無 SDK の単体テストと作法の見本の照合（macOS は ASan・UBSan 付き、Windows は MSVC で付けない）。ubuntu の clang で同じテストを ASan・UBSan 付きで走らせ、`core/Json` のファジングを 120 秒回す |
+| `test.yml` | push / PR・マージキュー | 無 SDK の単体テストと通信規則の見本の照合（macOS は ASan・UBSan 付き、Windows は MSVC で付けない）。ubuntu の clang で同じテストを ASan・UBSan 付きで走らせ、`core/Json` のファジングを 120 秒回す |
 | `lint.yml`（既存） | push / PR・マージキュー | `scripts/lint.sh`（[検査](../lint.md)。go vet・actionlint・shellcheck・clang-tidy（無 SDK）・PSScriptAnalyzer） |
 | `build.yml` | push（main）/ PR / 手動 | mac と Windows のビルド・梱包・リリース |
 | `cleanup-dev-release.yml` | PR が閉じたとき | `dev-<slug>` を消す |

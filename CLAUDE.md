@@ -5,16 +5,16 @@
 ## このリポジトリについて
 
 Vectorworks 2026 を外部から操作するための**プラグイン（C++・VW SDK）と CLI（Go）**です。
-目的・決めたこと・構成は `docs/design.md`、受け渡しの作法は `docs/protocol.md` が真実です。
+目的・決めたこと・構成は `docs/design.md`、通信規則は `docs/protocol.md` が真実です。
 
 ## 守ること
 
-1. **作法の真実は `docs/protocol.md` だけ。** プラグイン側と `cli/internal/spool` はその対。
-   どちらかを変えたら文書と両方を直す。両側のテストが読む作法の見本（`protocol/fixtures`。
+1. **通信規則の真実は `docs/protocol.md` だけ。** プラグイン側と `cli/internal/spool` はその対。
+   どちらかを変えたら文書と両方を直す。両側のテストが読む通信規則の見本（`protocol/fixtures`。
    `docs/fixtures.md`）も合わせて直す。`protocol` の版を上げるかは `docs/protocol.md「互換性」`
    に従う。
 2. **CLI はプリミティブに保つ。** 再試行・占有を待つこと・道具ごとの解釈を入れない（呼ぶ側の
-   責任）。排他はプラグインの占有（作法の「占有」。CLI は印を受け取って載せるだけ）だけで持ち、
+   責任）。排他はプラグインの占有（通信規則の「占有」。CLI は印を受け取って載せるだけ）だけで持ち、
    CLI に足さない（`docs/design.md「CLI はプリミティブに保つ」`）。
 3. **プラグインは単純に保つ。** 配置と更新は CLI（`vw2026 install`）が Vectorworks の終了後に行う。
    プラグインのフォルダは CLI の場所と同じドライブにある前提で、その外の場合の扱いを足さない
@@ -78,7 +78,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 
 - **SDK に依らない部分は `src/core` に置き、無 SDK の単体テスト（`tests/`）で確かめる。** 受け付けの
   手順・JSON・スプールの OS の呼び出しはここ。SDK を呼ぶのは `src/core` の外だけ。
-- **作法に関わる振る舞いは作法の見本（`protocol/fixtures`。`docs/fixtures.md`）に置く。** C++ と Go の
+- **通信規則に関わる振る舞いは通信規則の見本（`protocol/fixtures`。`docs/fixtures.md`）に置く。** C++ と Go の
   両方のテストが同じ見本を読むので、片側だけを直すと落ちる。見本で表しにくいことだけを、各言語の
   テストに書く。
 - 手元のテスト（CI の `test.yml` と同じ指定）:

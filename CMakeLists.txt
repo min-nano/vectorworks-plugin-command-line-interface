@@ -59,7 +59,7 @@ if(VW_BUILD_TESTS)
 	add_executable(VwCliTests tests/BridgeTests.cpp tests/FixtureTests.cpp tests/JsonTests.cpp
 							  tests/ServeTests.cpp tests/TestMain.cpp tests/TestSupport.cpp)
 	target_link_libraries(VwCliTests PRIVATE VwCliCore)
-	# 作法の見本（C++ と Go のテストが同じものを読む）。
+	# 通信規則の見本（C++ と Go のテストが同じものを読む）。
 	target_compile_definitions(VwCliTests
 							   PRIVATE VWCLI_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/protocol/fixtures")
 	add_test(NAME VwCliTests COMMAND VwCliTests)

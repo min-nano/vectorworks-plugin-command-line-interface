@@ -1,7 +1,7 @@
 #pragma once
 
 // スプール 1 つ（docs/plugin/bridge.md「スプールの用意」）。SDK に依らない。場所は引数で受ける
-// （テストは一時ディレクトリを渡す）。作法の真実は docs/protocol.md。
+// （テストは一時ディレクトリを渡す）。通信規則の真実は docs/protocol.md。
 
 #include "core/Files.h"
 
@@ -11,7 +11,7 @@
 
 namespace VwCli::core {
 
-// defaultSpoolDir は <CLI>/spool を返す（作法「スプールの場所」）。環境変数は読まず、探索
+// defaultSpoolDir は <CLI>/spool を返す（通信規則「スプールの場所」）。環境変数は読まず、探索
 // しない。求められなければ空。
 std::optional<std::string> defaultSpoolDir();
 
@@ -41,7 +41,7 @@ public:
 	// その要求は実行しない（消さずに実行すると、次の回にまた実行してしまう）。
 	std::optional<std::string> take(const std::string &id);
 
-	// waitState は呼ぶ側の待つ印を掴めるか試す（作法「待つ印」）。
+	// waitState は呼ぶ側の待つ印を掴めるか試す（通信規則「待つ印」）。
 	files::WaitState waitState(const std::string &id) const;
 	void removeWait(const std::string &id);
 

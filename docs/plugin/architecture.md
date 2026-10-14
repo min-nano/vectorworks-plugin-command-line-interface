@@ -37,7 +37,7 @@ OS タイマー
 
 - **SDK 呼び出しはメインスレッドからだけ**行います。受け付け用のスレッドは持ちません。
 - **受け付けの中にループを書きません**（図面が操作できなくなる）。長く走る道具は持ちません
-  （[作法「予約された道具」](../protocol.md#予約された道具)）。
+  （[通信規則「予約された道具」](../protocol.md#予約された道具)）。
 - **終了の依頼は受け付けの外で行います。** `CloseAllFilesAndQuitVectorworks` は保存の確認を
   出すので、応答を書き終え、受け付けから戻ってからタイマーが呼びます（[道具「quit」](tools.md#quit)）。
 - タイマーは、mac は `CFRunLoopTimer` を **`kCFRunLoopCommonModes` に**登録し、Windows は
@@ -64,8 +64,8 @@ Vectorworks の処理の妨げにならないよう、次のときはその回�
   見送りを担います（VW のモーダルの最中は、刻みの中の `IsCurrentlyBuildingAnUndoEvent()` が
   真を返すことを確かめてある。同 Findings の 6）。
 - 見送った要求は消さずに残るので、次に受け付けたときに処理されます（呼ぶ側の待ち時間の内なら
-  応答が届く。過ぎた・呼ぶ側が強制終了された要求は、待つ印を掴める（または無い）ので実行しない。[作法「待つ印」](../protocol.md#待つ印idwait)）。
-- 見送りの間もロックは掴んだままです（呼ぶ側から見た扱いは[作法「生存の判定」](../protocol.md#生存の判定)）。
+  応答が届く。過ぎた・呼ぶ側が強制終了された要求は、待つ印を掴める（または無い）ので実行しない。[通信規則「待つ印」](../protocol.md#待つ印idwait)）。
+- 見送りの間もロックは掴んだままです（呼ぶ側から見た扱いは[通信規則「生存の判定」](../protocol.md#生存の判定)）。
 
 ## 拡張機能を登録しない
 
@@ -93,7 +93,7 @@ src/
 scripts/                                   … 整形と検査（format.sh・lint.sh・powershell.ps1）・get-vw2026（.sh / .ps1。CLI を取って install を走らせるだけ）
 resources/                                 … cli.vwr（拡張機能を登録しないので最小限）
 tests/                                     … 無 SDK の単体テスト・ファジングの入口・スクリプトのテスト
-protocol/fixtures/                         … 作法の見本（C++ と Go の両方のテストが読む。docs/fixtures.md）
+protocol/fixtures/                         … 通信規則の見本（C++ と Go の両方のテストが読む。docs/fixtures.md）
 cli/                                       … vw2026（Go）。インストールと更新（install）・アンインストール（uninstall）もここ
 ```
 

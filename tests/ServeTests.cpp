@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-// 受け付け 1 回のうち、作法の見本（FixtureTests.cpp）で表しにくいもの。
+// 受け付け 1 回のうち、通信規則の見本（FixtureTests.cpp）で表しにくいもの。
 
 using VwCli::core::ErrorCode;
 using VwCli::core::Json;
