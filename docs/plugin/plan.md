@@ -7,10 +7,25 @@
 | 段 | 中身 | 確かめ方 | 実機 |
 | --- | --- | --- | --- |
 | 1 | **SDK に依らない共通部**: `core/Json`（入れ子の深さに上限を設ける）・`core/Bridge`・`core/Serve`（偽の道具の表・占有）・CMake（共通部・テスト・ファジングだけ）・`protocol/fixtures/`・`cpp.yml`（`core/Json` のファジングを含む）・`format.sh` / `lint.sh` に C++ と PowerShell を足す（[整形](../format.md)・[検査](../lint.md)）・`CLAUDE.md` の追記（PR の進め方） | CI（ASan・UBSan）。Go 側のテストも同じ見本を読む | 不要 |
-| 2 | **骨格**: CMake にプラグインを足す・`BuildConfig`・`ModuleMain`・`Clock`・道具 `tools` / `ping` / `quit`・リソース・`build.yml`（ビルドと PR のプレリリースまで） | CI。実機で zip を手で置き、`vw2026 status` が `running:true` になり `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。`session start` のあと `call quit` で保存の確認が出て、取り消すと `call ping` がまた応え、保存すると `status` が止まっていると答える | 要 |
-| 3 | **読む道具**: `layers` / `classes` / `layer_objects` / `object_counts`（使う SDK 呼び出しが SDK リファレンスで確かめられてから。[SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)） | 実機で、レイヤ・クラス・オブジェクトの数と名前を用意した見本の図面に対して、結果が Vectorworks の画面（オーガナイザ・情報パレット）の表示と一致する | 要 |
-| 4 | **配布**: 梱包（`bin/vw2026`）・main のリリース・`cleanup-dev-release.yml` | CI。リリースの資産を取ってきて、zip の形（直下に `build.json` と `bin/`）と `bin/vw2026 version` が動くことを確かめる | 不要 |
-| 5 | **インストールと更新・アンインストール**: `vw2026 install` / `uninstall`（資産の取得・新しいビルドの判定・付け替え・CLI の入れ替え・PATH）・初回のスクリプト（`get-vw2026.sh` / `.ps1`）・`CLAUDE.md` に消すコードの歯止めを写す | CI（Go の単体テスト。偽の HTTP サーバー。動いている CLI の入れ替えを Windows で押さえる。shellcheck・PSScriptAnalyzer）。実機で、初回のスクリプトを curl からパイプで実行 → 新しい端末で `vw2026 status` が動き、起動して `call ping` が応える。動いている間は「Vectorworks が動いている」終了コードで何も変わらず、`session start` → `call quit` → 止まるのを待つ → `install` → `launch` → 動き出すのを待つ（待つのは `status` の繰り返し）で `call ping` の `version` が変わる。`--tag dev-<slug>` で PR のプレリリースに入れ替わり、`install` で main に戻る。`--plugins-dir` で既定以外へ入れられる。`uninstall` でリンクと PATH の項目だけが消える | 要 |
+| 2 | **骨格と配布**: CMake にプラグインを足す・`BuildConfig`・`ModuleMain`・`Clock`（見送りの判定と受け付けまで。終了の依頼は段 5）・道具 `ping`（表に載せるのはこれだけ）・リソース・`build.yml`（mac と Windows のビルド・梱包（`bin/vw2026`）・main のリリース・PR のプレリリース）・`cleanup-dev-release.yml` | CI。リリースの資産を取ってきて、zip の形（直下に `build.json` と `bin/`）と `bin/vw2026 version` が動くことを確かめる。実機で、PR のプレリリースの zip を手で取ってきて `bin/` 以外を `<Plug-Ins>/cli/` に置き、zip の `bin/vw2026` で `status` が `running:true` になり `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。`ping` の `version` が PR の head の sha、`branch` がその PR のブランチ。`call tools` に `ping` だけが載る。図面を 1 枚も開いていないときの `ping` の `document_open` | 要 |
+| 3 | **インストール・アンインストール**: `vw2026 install` / `uninstall`（資産の取得・新しいビルドの判定・付け替え・CLI の入れ替え・PATH）・初回のスクリプト（`get-vw2026.sh` / `.ps1`）・`CLAUDE.md` に消すコードの歯止めを写す | CI（Go の単体テスト。偽の HTTP サーバー。動いている CLI の入れ替えを Windows で押さえる。shellcheck・PSScriptAnalyzer）。実機で、PR のプレリリースの初回のスクリプトを `--tag dev-<slug>` を付けて curl からパイプで実行 → 新しい端末で `vw2026 status` が動き、起動して `call ping` が応える。動いている間は「Vectorworks が動いている」終了コードで何も変わらない。Vectorworks を手で終了 → もう一度 `install --tag dev-<slug>` で `up_to_date` → `install` で main の版に入れ替わり、`launch` のあと `call ping` の `version` が変わる。`--plugins-dir` で既定以外へ入れられる。`uninstall` でリンクと PATH の項目だけが消える | 要 |
+| 4 | **読む道具**: `layers` / `classes` / `layer_objects` / `object_counts`（使う SDK 呼び出しが SDK リファレンスで確かめられてから。[SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)） | 実機で、レイヤ・クラス・オブジェクトの数と名前を用意した見本の図面に対して、結果が Vectorworks の画面（オーガナイザ・情報パレット）の表示と一致する | 要 |
+| 5 | **終了の依頼と占有**: 道具 `quit`・`Clock` の終了の依頼（使う SDK 呼び出しが SDK リファレンスで確かめられてから。[SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)） | CI。実機で、`session start` のあと `call quit` で保存の確認が出て、取り消すと `call ping` がまた応え、`session end` で占有が解ける。保存すると `status` が止まっていると答える。[インストール「流れ」](install-and-update.md#流れ)の組み合わせ（`session start` → `call quit` → 止まるのを待つ → `install` → `launch` → 動き出すのを待つ。待つのは `status` の繰り返し）で `call ping` の `version` が変わる | 要 |
+
+**段 2・3 を先に置く理由。** 最小限のプラグイン（`ping` だけ）をリリースし、`vw2026 install` で
+入れられるようにしてから道具を足します。段 4 以降の実機確認は PR のプレリリースを `install` で
+入れて行えるので、手で zip を置く手間が段 2 だけで済みます。`quit` が入る段 5 までは、更新の前に
+利用者が Vectorworks を手で終了します。占有（`session_start` / `session_end`）は段 1 の共通部に
+あり段 2 から応えますが、実機で確かめるのは、占有の中でだけ呼べる `quit` と合わせて段 5 で行います。
+
+**各段の前に片付けるレビューの項目**（[設計のレビュー](../design-review.md)）:
+
+| 段 | 項目 |
+| --- | --- |
+| 2 | A2（`ping` の `GetCurrentLayer()`）・A3（`Clock` の見送り）・B3（最初の配布の前）・C3（PR のプレリリースの sha） |
+| 3 | B2（Windows の PATH） |
+| 4 | C1（読む道具の結果） |
+| 5 | A1・A2（`quit`）・A4・B1・C3（終了の処理中のタイマー） |
 
 段 1 で決めたこと（真実は各ページ）:
 
@@ -52,3 +67,10 @@
 このプラグインの実機確認は `vw2026` で行います。ローカルの
 Claude Code セッションから `vw2026` を呼び、結果の JSON を読みます。図面に何かが起きたかは
 人に確かめてもらいます。PR の確認は、その PR のプレリリースを入れて行います（同じ名前で入れ替わる）。
+
+- **段 2**: `install` がまだ無いので、PR のプレリリースの zip を手で取ってきて、`bin/` 以外を
+  `<Plug-Ins>/cli/` に置き、`vw2026` は zip の `bin/` のものを使います。スプールの場所は CLI の
+  置き場所に依らないので、どこに置いた CLI でも同じスプールを使います。
+- **段 3**: PR のプレリリースの初回のスクリプトに `--tag dev-<slug>` を付けて入れます。
+- **段 4 以降**: `vw2026 install --tag dev-<slug>` で入れます（Vectorworks を終了してから。段 5 の
+  あとは `quit` で終了させてもよい）。戻すときは `vw2026 install`（main の最新）。
