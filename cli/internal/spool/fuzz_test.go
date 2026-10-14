@@ -7,15 +7,19 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	. "github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// NestingDepth は手書きの字句処理で、プラグインの入れ子の上限（MaxNestingDepth）と食い違うと、
-// 断るべき要求を置く・置ける要求を断る。encoding/json が数えた深さと比べて確かめる。
-// 種はプラグイン側のファジング（tests/JsonFuzzer.cpp）と同じ要求の見本（docs/fixtures.md）。
-// go test では種だけを確かめ、CI（go.yml）が -fuzz で決まった時間だけ回す。
+// NestingDepth は手書きの字句処理なので、encoding/json と同じ深さを返すことをファジングで
+// 確かめる。プラグイン（src/core）の数え方との一致は、通信規則の見本の depth-64・depth-65 で
+// 確かめる（docs/fixtures.md）。go test では種だけを確かめ、CI（go.yml）が -fuzz で決まった
+// 時間だけ回す。
+
+// FuzzNestingDepth は任意のバイト列を与える。種はプラグイン側のファジング
+// （tests/JsonFuzzer.cpp）と同じ要求の見本。
 func FuzzNestingDepth(f *testing.F) {
 	paths, err := filepath.Glob(filepath.Join(fixtures, "requests", "*"))
 	if err != nil {
@@ -33,16 +37,48 @@ func FuzzNestingDepth(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, data []byte) {
 		got := NestingDepth(data)
-		if got < 0 {
-			t.Fatalf("negative depth %d", got)
+		// 正しくない入力の深さは決めていない（解析する前に深さを見るため）が、開く括弧の数は
+		// 超えない。
+		if opens := bytes.Count(data, []byte("{")) + bytes.Count(data, []byte("[")); got > opens {
+			t.Fatalf("depth %d exceeds %d opening brackets", got, opens)
 		}
-		// JSON として正しくないものは、落ちないことだけを確かめる（解析する前に深さを見るので、
-		// 正しくない入力の深さは決めていない）。
 		if !json.Valid(data) {
 			return
 		}
 		if want := tokenDepth(t, data); got != want {
 			t.Fatalf("want %d, got %d", want, got)
+		}
+	})
+}
+
+// FuzzNestingDepthOfRequest は Call が NestingDepth に渡す形（json.Marshal した要求）を組み立てて
+// 与える。バイト列を変えるファジングは大半が正しくない JSON になり比較まで届かないので、
+// 正しい JSON だけを多く試すために分ける。text には引用符・\・括弧を含む文字列が入る。
+func FuzzNestingDepthOfRequest(f *testing.F) {
+	f.Add(uint8(0), "")
+	f.Add(uint8(3), `[{"\]`)
+	f.Add(uint8(MaxNestingDepth), strings.Repeat("[", MaxNestingDepth))
+	f.Fuzz(func(t *testing.T, depth uint8, text string) {
+		// 入れ子を depth 段にする。オブジェクトと配列を交互に使い、キーと要素にも text を置く。
+		var value any = text
+		for i := range int(depth) {
+			if i%2 == 0 {
+				value = map[string]any{text: value}
+			} else {
+				value = []any{text, value}
+			}
+		}
+		args, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, err := json.Marshal(Request{Tool: text, Args: args, Session: text})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// 外側の要求のオブジェクトの 1 段を足す。
+		if got, want := NestingDepth(payload), int(depth)+1; got != want {
+			t.Fatalf("want %d, got %d: %s", want, got, payload)
 		}
 	})
 }

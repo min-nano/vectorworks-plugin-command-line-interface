@@ -54,7 +54,9 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: cli/go.mod
-      - run: go test -run '^$' -fuzz '^FuzzNestingDepth$' -fuzztime 60s ./internal/spool
+      # -fuzz は 1 回に 1 つの対象しか回せないので、対象ごとに分けて 30 秒ずつ回す。
+      - run: go test -run '^$' -fuzz '^FuzzNestingDepth$' -fuzztime 30s ./internal/spool
+      - run: go test -run '^$' -fuzz '^FuzzNestingDepthOfRequest$' -fuzztime 30s ./internal/spool
       # 落ちた入力は testdata/fuzz に書かれる。手元で go test -run で再現できるように残す。
       - if: failure()
         uses: actions/upload-artifact@v7
