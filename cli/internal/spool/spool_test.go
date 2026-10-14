@@ -95,7 +95,7 @@ func TestCallNoWaitDuringGrace(t *testing.T) {
 		id := <-taken
 		// 締切（200 ms）を過ぎ、.wait が消えてから断る
 		time.Sleep(400 * time.Millisecond)
-		_ = os.WriteFile(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":false,"code":"no_wait","error":"no wait file"}`), 0o600)
+		_ = WriteAtomically(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":false,"code":"no_wait","error":"no wait file"}`))
 	}()
 	_, err := Open(dir).Call("ping", nil, "", 200*time.Millisecond)
 	if !errors.Is(err, ErrNoWait) {
@@ -209,6 +209,29 @@ func assertNoFiles(t *testing.T, dir, suffix string) {
 	}
 }
 
+// 読めない（まだ無い・開けない）応答は「まだ無い」とみなして読み直す（docs/protocol.md「ファイル」）。
+// 応答の名前に開けないもの（ディレクトリ）がある間も壊れた応答とせず、あとから公開された応答を返す。
+func TestCallRereadsUnreadableResponse(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	taken := takeRequest(t, dir)
+	go func() {
+		id := <-taken
+		response := filepath.Join(dir, id+ResponseSuffix)
+		_ = os.Mkdir(response, 0o700)
+		time.Sleep(300 * time.Millisecond)
+		_ = os.Remove(response)
+		_ = WriteAtomically(response, []byte(`{"ok":true,"result":{"done":1}}`))
+	}()
+	response, err := Open(dir).Call("ping", nil, "", 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !response.OK || string(response.Result) != `{"done":1}` {
+		t.Fatalf("unexpected response: %+v", response)
+	}
+}
+
 // 上限を超える要求は、スプールに置く前に断る。
 func TestCallRejectsOversizedRequest(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
@@ -252,7 +275,7 @@ func answer(t *testing.T, dir, text string) {
 	taken := takeRequest(t, dir)
 	go func() {
 		if id, ok := <-taken; ok {
-			_ = os.WriteFile(filepath.Join(dir, id+ResponseSuffix), []byte(text), 0o600)
+			_ = WriteAtomically(filepath.Join(dir, id+ResponseSuffix), []byte(text))
 		}
 	}()
 }
@@ -281,7 +304,7 @@ func TestCallTakenThenAnswered(t *testing.T) {
 		id := <-taken
 		// 締切（200 ms）を過ぎてから応える
 		time.Sleep(400 * time.Millisecond)
-		_ = os.WriteFile(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":true,"result":{"late":1}}`), 0o600)
+		_ = WriteAtomically(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":true,"result":{"late":1}}`))
 	}()
 	response, err := Open(dir).Call("ping", nil, "", 200*time.Millisecond)
 	if err != nil || !response.OK || string(response.Result) != `{"late":1}` {

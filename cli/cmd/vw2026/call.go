@@ -40,7 +40,8 @@ mean the tool did not run are not tool failures: call exits with 3 for no_wait
 and 23 for busy and no_session, as described below, and prints nothing to the
 standard output even with --raw. A failure with a missing or unknown code is
 a malformed response, so call exits with 1 for it. So does a response file
-that is not JSON; call removes it without waiting for --timeout.
+that is not a valid response object (not JSON, or JSON of the wrong shape);
+call removes it without waiting for --timeout.
 
 When --timeout runs out, call stops waiting, withdraws the request, and
 exits with 3: the tool did not run. If the plug-in had already taken the
