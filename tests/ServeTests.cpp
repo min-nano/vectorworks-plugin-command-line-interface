@@ -265,6 +265,7 @@ TEST(ServeReportsAnErrorAndRetries) {
 }
 
 // ロックのファイルを開けなければ（名前にディレクトリがある）、誤りを返し、次の回にやり直す。
+// ディレクトリは開けないので、断ったことにならず、作り直さない（通信規則「ロック」）。
 TEST(ServeReportsAnErrorWhenTheLockCannotBeOpened) {
 	TempDir dir;
 	std::filesystem::create_directory(dir.path() / "bridge.lock");
@@ -272,11 +273,14 @@ TEST(ServeReportsAnErrorWhenTheLockCannotBeOpened) {
 	VwCli::core::ServeResult result = server.serve(kTools, kNow);
 	CHECK(result.phase == Phase::Error);
 	CHECK(result.message.find("bridge.lock") != std::string::npos);
+	CHECK(result.message.find("通常のファイルではありません") == std::string::npos);
+	CHECK(std::filesystem::is_directory(dir.path() / "bridge.lock"));
 	CHECK(std::filesystem::remove(dir.path() / "bridge.lock"));
 	CHECK(server.serve(kTools, kNow).phase == Phase::Serving);
 }
 
-// 読めない要求（名前にディレクトリがある）は飛ばして、残りに応える。飛ばしたものには応えない。
+// 読めない要求（名前にディレクトリがある）は黙って飛ばし（応答しない）、残りに応える
+// （通信規則「プラグイン側の義務」）。
 TEST(ServeSkipsRequestsItCannotRead) {
 	TempDir dir;
 	gCalls.clear();
