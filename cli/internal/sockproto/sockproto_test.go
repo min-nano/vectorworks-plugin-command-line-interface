@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -155,4 +156,132 @@ func TestSocketPathLength(t *testing.T) {
 	}
 	path := filepath.Join(dir, SocketFile)
 	t.Logf("spool socket path is %d bytes: %s", len(path), path)
+}
+
+// rawServer は 1 つだけ受け取り、serve に渡す（手順に従わないプラグインを作るため）。
+func rawServer(t *testing.T, dir string, serve func(conn net.Conn, r *lines)) {
+	t.Helper()
+	listener, err := net.Listen("unix", filepath.Join(dir, SocketFile))
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { listener.Close() })
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		r := &lines{conn: conn}
+		if line, _ := r.next(time.Now().Add(5 * time.Second)); line != nil {
+			serve(conn, r)
+		}
+	}()
+}
+
+// readCancel は呼ぶ側が待つのをやめた 1 バイトを待つ。
+func readCancel(conn net.Conn) bool {
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	n, _ := conn.Read(make([]byte, 1))
+	return n == 1
+}
+
+// 受け取りの行の前にプラグインが閉じたら（Vectorworks が終わったなど）、実行されていない。
+func TestCallClosedWithoutTaken(t *testing.T) {
+	dir := t.TempDir()
+	rawServer(t, dir, func(net.Conn, *lines) {})
+	_, err := Call(dir, []byte(`{"tool":"ping"}`), 5*time.Second, time.Second)
+	if !errors.Is(err, spool.ErrNotRunning) {
+		t.Fatalf("err = %v, want ErrNotRunning", err)
+	}
+}
+
+// 受け取りの行のあとにプラグインが閉じたら、実行されたかもしれない。
+func TestCallClosedAfterTaken(t *testing.T) {
+	dir := t.TempDir()
+	rawServer(t, dir, func(conn net.Conn, _ *lines) {
+		_, _ = conn.Write(append(TakenLine, '\n'))
+	})
+	_, err := Call(dir, []byte(`{"tool":"ping"}`), 5*time.Second, time.Second)
+	if !errors.Is(err, spool.ErrNoResponse) {
+		t.Fatalf("err = %v, want ErrNoResponse", err)
+	}
+}
+
+// 待つのをやめた 1 バイトと入れ違いに受け取りの行が届いたら、猶予の間に応答を受け取る。
+func TestCallTakenAfterCancel(t *testing.T) {
+	dir := t.TempDir()
+	rawServer(t, dir, func(conn net.Conn, _ *lines) {
+		if readCancel(conn) {
+			_, _ = conn.Write([]byte(string(TakenLine) + "\n" + `{"ok":true,"result":{}}` + "\n"))
+		}
+	})
+	response, err := Call(dir, []byte(`{"tool":"ping"}`), 100*time.Millisecond, 5*time.Second)
+	if err != nil || !response.OK {
+		t.Fatalf("Call = %+v, %v", response, err)
+	}
+}
+
+// 待つのをやめた 1 バイトを、受け取りの行より前にプラグインが見たら no_wait で応える。
+func TestCallNoWaitAfterCancel(t *testing.T) {
+	dir := t.TempDir()
+	rawServer(t, dir, func(conn net.Conn, _ *lines) {
+		if readCancel(conn) {
+			_, _ = conn.Write([]byte(`{"ok":false,"code":"no_wait","error":"cancelled"}` + "\n"))
+		}
+	})
+	_, err := Call(dir, []byte(`{"tool":"ping"}`), 100*time.Millisecond, 5*time.Second)
+	if !errors.Is(err, spool.ErrNoWait) {
+		t.Fatalf("err = %v, want ErrNoWait", err)
+	}
+}
+
+// 受け付けが見送られていると、ソケットの受け取り口を超える要求は送り切れずに締切が来る。改行まで
+// 届かないので実行されない。
+func TestCallRequestNotSent(t *testing.T) {
+	dir := t.TempDir()
+	hold := make(chan struct{})
+	f := startFake(t, dir, hold, true)
+	request := []byte(`{"tool":"ping","args":{"pad":"` + strings.Repeat("x", 8<<20) + `"}}`)
+	_, err := Call(dir, request, 200*time.Millisecond, time.Second)
+	if !errors.Is(err, spool.ErrTimeout) {
+		t.Fatalf("err = %v, want ErrTimeout", err)
+	}
+	close(hold)
+	select {
+	case <-f.handled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the fake did not handle the connection")
+	}
+	if f.calls.Load() != 0 {
+		t.Fatalf("calls = %d, want 0", f.calls.Load())
+	}
+}
+
+func TestDecode(t *testing.T) {
+	tests := []struct {
+		line string
+		ok   bool
+		err  error
+	}{
+		{`{"ok":true,"result":{}}`, true, nil},
+		{`{"ok":false,"code":"internal","error":"x"}`, false, nil},
+		{`{"ok":false,"code":"no_wait","error":"x"}`, false, spool.ErrNoWait},
+		{`{"ok":false,"code":"busy","error":"x"}`, false, spool.ErrBusy},
+		{`{"ok":false,"code":"no_session","error":"x"}`, false, spool.ErrNoSession},
+		{`{"ok":false,"code":"nope","error":"x"}`, false, spool.ErrMalformedResponse},
+		{`{"ok":`, false, spool.ErrMalformedResponse},
+	}
+	for _, test := range tests {
+		response, err := decode([]byte(test.line))
+		if test.err != nil {
+			if !errors.Is(err, test.err) {
+				t.Errorf("decode(%s) err = %v, want %v", test.line, err, test.err)
+			}
+			continue
+		}
+		if err != nil || response.OK != test.ok {
+			t.Errorf("decode(%s) = %+v, %v", test.line, response, err)
+		}
+	}
 }
