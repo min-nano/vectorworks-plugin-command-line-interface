@@ -5,6 +5,14 @@
 //
 // パスは UTF-8。開くファイルは子プロセスに受け継がせない（POSIX は O_CLOEXEC、Windows は
 // 継承できないハンドル）。受け継がれると、Vectorworks が終わってもロックが放されないため。
+//
+// 開いて待たない（作法「プラグイン側の義務」）。開くのは通常のファイルだけで、リンクは
+// たどらない（POSIX は O_NONBLOCK と O_NOFOLLOW、Windows は FILE_FLAG_OPEN_REPARSE_POINT）。
+// FIFO・デバイス・名前付きパイプを置かれても、メインスレッドを止めない。Windows は reparse
+// point（OneDrive などのクラウドのファイルを含む）と、中身がローカルにないファイルも断る。
+//
+// Windows は \\?\ を付けて開く（CON・NUL などの名前をデバイスとして開かない）。そのため Windows の
+// パスは絶対パス（C:\… か UNC）に限り、それ以外は開けない。
 
 #include <cstddef>
 #include <cstdint>
@@ -30,10 +38,12 @@ bool makeDirectories(const std::string &path, std::string &error);
 // list はディレクトリの中の名前を返す（. と .. を除く）。読めなければ空。
 std::optional<std::vector<std::string>> list(const std::string &dir);
 
-// read はファイルの先頭から limit バイトまでを読む。開けない・読めなければ空。
+// read はファイルの先頭から limit バイトまでを読む。開けない・通常のファイルでない・読めなければ
+// 空。
 std::optional<std::string> read(const std::string &path, std::size_t limit);
 
-// write はファイルを作り直して data を書く（POSIX は 0600）。
+// write はファイルを消してから新しく作り、data を書く（POSIX は 0600）。あったものがリンク
+// （シンボリックリンクでも hard link でも）でも、リンクの先は変えない。
 bool write(const std::string &path, std::string_view data);
 
 // rename は from を to へ移す（to があれば置き換える）。
@@ -48,7 +58,7 @@ enum class WaitState {
 	Held,
 	// 掴めた（呼ぶ側が放した・死んだ）
 	Released,
-	// 無い（開けないときも。実行しない側に倒す）
+	// 無い（開けない・通常のファイルでないときも。実行しない側に倒す）
 	Missing,
 };
 
@@ -73,6 +83,10 @@ public:
 	Lock &operator=(const Lock &) = delete;
 
 	// take は path を作って（あれば開いて）排他で掴む。Failed なら error に理由を書く。
+	//
+	// path が通常のファイルでない・中身がローカルにない（Windows）として断ったら、名前を消して
+	// 作り直す。ただし 1 つの Lock につき 1 度だけ（受け付けのたびに消して作るのを繰り返さない。
+	// 同期のサービスなどが、そのたびに動かないように）。
 	Result take(const std::string &path, std::string &error);
 	bool held() const { return handle_ != kNone; }
 	void release();
@@ -81,6 +95,8 @@ private:
 	// POSIX はファイル記述子、Windows は HANDLE（INVALID_HANDLE_VALUE は -1）。
 	static constexpr std::intptr_t kNone = -1;
 	std::intptr_t handle_ = kNone;
+	// 断った path を、もう作り直したか。
+	bool recreated_ = false;
 };
 
 }

@@ -128,6 +128,9 @@ type Bridge struct {
 	Running bool
 	// 動いていない理由
 	Reason string
+	// newID は Call が要求の id を作る関数。nil なら NewID（テストが決まった id に替える。
+	// パッケージの変数にしないのは、並行するテストどうしで書き換えが競合しないため）。
+	newID func(time.Time) string
 }
 
 // Open はその場所のブリッジの状態を判定する（docs/protocol.md「生存の判定」）。
@@ -187,7 +190,11 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		return nil, fmt.Errorf("request is nested too deeply (depth %d, limit %d)", depth, MaxNestingDepth)
 	}
 
-	id := NewID(time.Now())
+	makeID := b.newID
+	if makeID == nil {
+		makeID = NewID
+	}
+	id := makeID(time.Now())
 	requestPath := filepath.Join(b.Dir, id+RequestSuffix)
 	responsePath := filepath.Join(b.Dir, id+ResponseSuffix)
 	waitPath := filepath.Join(b.Dir, id+WaitSuffix)
@@ -208,8 +215,8 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		}
 	}
 	defer stopWaiting()
-	if err := writeAtomically(requestPath, payload); err != nil {
-		return nil, err
+	if err := WriteAtomically(requestPath, payload); err != nil {
+		return nil, fmt.Errorf("publish %s: %w", id+RequestSuffix, err)
 	}
 
 	deadline := time.Now().Add(timeout)
@@ -325,15 +332,31 @@ func NestingDepth(data []byte) int {
 	return deepest
 }
 
-// writeAtomically は同じディレクトリへ書いてから rename する（読み手に書きかけを見せない）。
-func writeAtomically(path string, data []byte) error {
+// WriteAtomically は同じディレクトリへ書いてから rename する（読み手に書きかけを見せない）。
+// 要求を書く CLI と、応答を書く偽のプラグイン（fakeplugin）が共に使う。
+//
+// 書きかけは、あれば消してから新しく作る（O_EXCL。docs/protocol.md「ファイル」）。あるものを
+// 開いて切り詰めると（os.WriteFile）、置かれたリンク（シンボリックリンクでも hard link でも）の先、
+// つまりスプールの外のファイルを壊してしまう。消すのは名前だけで、リンクの先は残る。
+func WriteAtomically(path string, data []byte) error {
 	temp := path + TempSuffix
-	if err := os.WriteFile(temp, data, 0o600); err != nil {
-		return fmt.Errorf("write request: %w", err)
+	if err := writeNew(temp, data); err != nil {
+		return err
 	}
 	if err := os.Rename(temp, path); err != nil {
 		_ = os.Remove(temp)
-		return fmt.Errorf("publish request: %w", err)
+		return err
 	}
 	return nil
+}
+
+// writeNew は path を消してから新しく作り、data を書く。
+func writeNew(path string, data []byte) error {
+	_ = os.Remove(path)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	_, err = file.Write(data)
+	return errors.Join(err, file.Close())
 }

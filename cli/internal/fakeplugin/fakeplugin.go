@@ -49,6 +49,7 @@ func NewDir(t *testing.T) string {
 // テストの終わりにも放す。
 func HoldLock(t *testing.T, dir string) (release func()) {
 	t.Helper()
+	dir = extendedPath(dir)
 	unlock, err := lock(filepath.Join(dir, spool.LockFile))
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +70,9 @@ func HoldLock(t *testing.T, dir string) (release func()) {
 // 持つ（Vectorworks を起動し直すと消えるのと同じ）。
 func Start(t *testing.T, dir string, handle Handler) (stop func()) {
 	t.Helper()
-	s := &server{dir: dir, handle: handle}
+	// プラグインと同じく、予約された名前（NUL など）の要求もファイルとして開く
+	// （docs/protocol.md「id」）。
+	s := &server{dir: extendedPath(dir), handle: handle}
 	if !s.take() {
 		t.Fatalf("cannot take %s", spool.LockFile)
 	}
@@ -184,18 +187,23 @@ func (s *server) serveOnce() (serving, quit bool) {
 		}
 		var response spool.Response
 		var tool string
+		var session *string
 		if state == waitMissing {
 			response = spool.Response{OK: false, Code: spool.CodeNoWait, Error: "no wait file"}
-		} else if name, args, session, ok := parseRequest(data); !ok {
+		} else if name, args, held, ok := parseRequest(data); !ok {
 			response = spool.Response{OK: false, Code: spool.CodeInvalidRequest, Error: "unreadable request"}
 		} else {
 			tool = name
-			response = s.answer(tool, args, session)
+			response, session = s.answer(tool, args, held)
 		}
 		out, _ := json.Marshal(response)
-		temp := filepath.Join(s.dir, id+spool.ResponseSuffix+spool.TempSuffix)
-		_ = os.WriteFile(temp, out, 0o600)
-		_ = os.Rename(temp, filepath.Join(s.dir, id+spool.ResponseSuffix))
+		// 占有の印と終了は、応答を書けたときだけ反映する（docs/protocol.md「占有」）。
+		if spool.WriteAtomically(filepath.Join(s.dir, id+spool.ResponseSuffix), out) != nil {
+			continue
+		}
+		if session != nil {
+			s.session = *session
+		}
 		// 終了したら応えられないので、残りは置いたままにする。
 		if tool == "quit" && response.OK {
 			return true, true
@@ -210,32 +218,34 @@ func (s *server) serveOnce() (serving, quit bool) {
 //   - session_start は占有されていなければ印を発行し、されていれば busy。
 //   - session_end と quit は占有の中でだけ呼べる。
 //   - そのほかは、占有されていなければ印の無い要求を、されていれば同じ印の要求だけを実行する。
-func (s *server) answer(tool string, args json.RawMessage, session string) spool.Response {
+//
+// 占有の印は変えず、新しい印（空なら占有の終わり）を返す。反映するのは応答を書けたときだけ。
+func (s *server) answer(tool string, args json.RawMessage, session string) (spool.Response, *string) {
 	switch tool {
 	case spool.ToolTools, spool.ToolPing:
-		return s.handle(tool, args)
+		return s.handle(tool, args), nil
 	case spool.ToolSessionStart:
 		if s.session != "" {
-			return refuse(spool.CodeBusy)
+			return refuse(spool.CodeBusy), nil
 		}
 		if code := s.check(session, false); code != "" {
-			return refuse(code)
+			return refuse(code), nil
 		}
-		s.session = spool.NewID(time.Now())
-		result, _ := json.Marshal(map[string]string{"session": s.session})
-		return spool.Response{OK: true, Result: result}
+		issued := spool.NewID(time.Now())
+		result, _ := json.Marshal(map[string]string{"session": issued})
+		return spool.Response{OK: true, Result: result}, &issued
 	case spool.ToolSessionEnd:
 		if code := s.check(session, true); code != "" {
-			return refuse(code)
+			return refuse(code), nil
 		}
-		s.session = ""
-		return spool.Response{OK: true, Result: json.RawMessage(`{"ended":true}`)}
+		ended := ""
+		return spool.Response{OK: true, Result: json.RawMessage(`{"ended":true}`)}, &ended
 	}
 	// quit は種類 app。Vectorworks を終わらせるので、占有している呼ぶ側だけに認める。
 	if code := s.check(session, tool == "quit"); code != "" {
-		return refuse(code)
+		return refuse(code), nil
 	}
-	return s.handle(tool, args)
+	return s.handle(tool, args), nil
 }
 
 // check は要求の印を占有に照らす。実行してよければ空、断るならその code。needSession は占有の

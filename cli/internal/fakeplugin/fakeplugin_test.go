@@ -66,3 +66,49 @@ func TestServeTakesOnlyRequestsListedAtStart(t *testing.T) {
 		t.Fatal("a request put during the round should wait for the next one")
 	}
 }
+
+// blockResponse は id の応答の書きかけの名前に、空でないディレクトリを置く（応答を書けなくする）。
+func blockResponse(t *testing.T, dir, id string) {
+	t.Helper()
+	temp := filepath.Join(dir, id+spool.ResponseSuffix+spool.TempSuffix)
+	if err := os.MkdirAll(filepath.Join(temp, "keep"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// 占有の印と終了は、応答を書けたときだけ反映する（docs/protocol.md「占有」）。
+func TestServeAppliesSessionAndQuitOnlyWhenTheResponseIsWritten(t *testing.T) {
+	dir := NewDir(t)
+	s := &server{dir: dir, handle: func(string, json.RawMessage) spool.Response {
+		return spool.Response{OK: true}
+	}}
+	t.Cleanup(s.release)
+	blockResponse(t, dir, "1")
+	put(t, dir, "1", `{"tool":"session_start"}`)
+	s.serveOnce()
+	if s.session != "" {
+		t.Fatal("a session was issued although its response could not be written")
+	}
+	put(t, dir, "2", `{"tool":"session_start"}`)
+	s.serveOnce()
+	if s.session == "" {
+		t.Fatal("no session was issued")
+	}
+	session := s.session
+	blockResponse(t, dir, "3")
+	put(t, dir, "3", fmt.Sprintf(`{"tool":"quit","session":%q}`, session))
+	put(t, dir, "3a", fmt.Sprintf(`{"tool":"ping","session":%q}`, session))
+	if _, quit := s.serveOnce(); quit {
+		t.Fatal("quit although its response could not be written")
+	}
+	// 終了しないので、同じ回の残りの要求も処理する。
+	if !exists(dir, "3a"+spool.ResponseSuffix) {
+		t.Fatal("the request after the unanswered quit was not served")
+	}
+	blockResponse(t, dir, "4")
+	put(t, dir, "4", fmt.Sprintf(`{"tool":"session_end","session":%q}`, session))
+	s.serveOnce()
+	if s.session != session {
+		t.Fatal("the session ended although its response could not be written")
+	}
+}

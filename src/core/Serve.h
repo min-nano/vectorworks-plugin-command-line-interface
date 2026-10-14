@@ -7,6 +7,7 @@
 #include "core/Json.h"
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 
@@ -58,35 +59,43 @@ struct ServeResult {
 	Phase phase = Phase::Serving;
 	// Error の理由。
 	std::string message;
-	// 種類 App の道具が成功した（終了の依頼）。受け付けの外で終了を頼む。
+	// 種類 App の道具が成功し、その応答を書けた（終了の依頼）。受け付けの外で終了を頼む。
 	bool quit = false;
 };
 
 // Server はスプール 1 つの受け付けと、発行した占有の印（1 つだけ。メモリだけに持つ）。
 class Server {
 public:
-	explicit Server(std::string spoolDir) : bridge_(std::move(spoolDir)) {}
+	explicit Server(std::string spoolDir);
 
 	// serve は受け付け 1 回。nowNanos は Unix 時刻のナノ秒で、占有の印の先頭に使う。
 	//
 	// ロックを掴んでいなければ用意（prepare → lock → sweep）をし、取れなければ何もせずに戻る。
 	// 回の始めに並べた要求を名前の昇順ですべて処理し、取り出した要求には同じ回の中で応える。
-	// 種類 App の道具が成功したら、その回の残りの要求を取り出さずに戻る（終了したら応えられない
-	// ので、残りは置いたままにする）。
+	// 種類 App の道具が成功して応答を書けたら、その回の残りの要求を取り出さずに戻る（終了したら
+	// 応えられないので、残りは置いたままにする）。
 	ServeResult serve(std::span<const Tool> tools, std::int64_t nowNanos);
 
 	bool inSession() const { return !session_.empty(); }
 
 private:
 	struct Outcome {
-		Json response;
+		// 書き出した応答。
+		std::string body;
 		bool quit = false;
+		// 応答を書けたら置く、新しい占有の印（空の文字列なら占有を終える）。無ければ変えない。
+		std::optional<std::string> session;
 	};
 
+	// answer は状態（占有の印・終了の依頼）を変えない。反映するのは serve で、応答を書けたときだけ
+	// （書けないと呼ぶ側は結果を受け取れないのに、占有だけが残る・消える、Vectorworks が終わる）。
 	Outcome answer(const std::string &text, std::span<const Tool> tools, std::int64_t nowNanos);
 
 	Bridge bridge_;
 	std::string session_;
+	// answer が投げたときの応答。前もって書き出しておき、catch の中では確保しない（メモリが足りない
+	// ときにまた投げて、応えられなくならないように）。
+	std::string internalFailure_;
 };
 
 // kindName は tools の結果に載せる種類の綴り。

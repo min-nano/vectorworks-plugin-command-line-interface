@@ -40,6 +40,34 @@ std::string narrow(std::wstring_view wide) {
 	return text;
 }
 
+// extended はパスを \\?\ を付けた UTF-16 にする（スプールのファイルはすべてこれで開く）。
+//
+// 付けないと、CON・NUL・AUX・COM1 などの名前は（Windows 10 までは拡張子があっても）ファイルでは
+// なくデバイスを指す。id の綴りはそうした名前を除かないので、\\?\ を付けて作られた NUL.req.json
+// を読むつもりで、NUL デバイスを開くことになる。付けると名前を解釈せずにそのまま使う。
+//
+// \\?\ のパスは / を区切りとして読まず、. と .. も解かないので、/ を区切りに直す。スプールの場所は
+// SHGetKnownFolderPath の返す絶対パスで、. と .. を含まない。受け付けるのはドライブからの絶対パス
+// （C:\…）・UNC（\\server\…）・\\?\ 付きのパスだけで、それ以外（ルート相対・ドライブ相対・
+// \\.\ のデバイス名前空間）は空を返して開かせない（予約された名前をデバイスとして開かないため）。
+std::wstring extended(std::string_view path) {
+	std::wstring wide = widen(path);
+	std::replace(wide.begin(), wide.end(), L'/', L'\\');
+	if (wide.starts_with(L"\\\\?\\")) {
+		return wide;
+	}
+	if (wide.starts_with(L"\\\\.\\")) {
+		return {};
+	}
+	if (wide.size() >= 3 && wide[1] == L':' && wide[2] == L'\\') {
+		return L"\\\\?\\" + wide;
+	}
+	if (wide.starts_with(L"\\\\")) {
+		return L"\\\\?\\UNC\\" + wide.substr(2);
+	}
+	return {};
+}
+
 std::string describe(const char *what, const std::string &path, DWORD error) {
 	return std::string(what) + " " + path + ": error " + std::to_string(error);
 }
@@ -49,10 +77,69 @@ bool isDirectory(const std::wstring &path) {
 	return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-// openFile は継承できないハンドルで開く（lpSecurityAttributes に null を渡す）。
-HANDLE openFile(const std::string &path, DWORD access, DWORD share, DWORD disposition) {
-	return ::CreateFileW(widen(path).c_str(), access, share, nullptr, disposition,
-	                     FILE_ATTRIBUTE_NORMAL, nullptr);
+// Refusal は openFile が断った理由。
+enum class Refusal {
+	None,
+	// 通常のファイルでない（reparse point・ディレクトリ・ディスクにないもの）
+	NotRegular,
+	// reparse point ではないが、中身がローカルにない（オフラインファイル・HSM などから取り寄せる。
+	// クラウドのファイルは reparse point なので NotRegular になる）
+	NotLocal,
+};
+
+// Opened は openFile の結果。
+struct Opened {
+	// 開けなければ INVALID_HANDLE_VALUE。
+	HANDLE handle = INVALID_HANDLE_VALUE;
+	// 断ったなら、その理由。
+	Refusal refused = Refusal::None;
+	// 開けなかった理由（断ったときは 0）。
+	DWORD error = 0;
+};
+
+// 古い SDK の winnt.h に無い綴り。
+#ifndef FILE_ATTRIBUTE_RECALL_ON_OPEN
+#define FILE_ATTRIBUTE_RECALL_ON_OPEN 0x00040000
+#endif
+#ifndef FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS
+#define FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000
+#endif
+
+// 中身がローカルにない（オフラインファイル・HSM などから取り寄せる）ことを示す属性。読むと
+// 取り寄せる処理がメインスレッドで走り、ネットワークを待って止まりうるので断る。
+constexpr DWORD kNotLocal =
+    FILE_ATTRIBUTE_OFFLINE | FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS;
+
+// rejected はハンドルの指すものを断るか、その理由を返す（断らなければ None）。
+Refusal rejected(HANDLE file) {
+	FILE_ATTRIBUTE_TAG_INFO tag{};
+	if (::GetFileType(file) != FILE_TYPE_DISK ||
+	    !::GetFileInformationByHandleEx(file, FileAttributeTagInfo, &tag, sizeof tag) ||
+	    (tag.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0) {
+		return Refusal::NotRegular;
+	}
+	return (tag.FileAttributes & kNotLocal) != 0 ? Refusal::NotLocal : Refusal::None;
+}
+
+// openFile はディスクの通常のファイルだけを、継承できないハンドルで開く（lpSecurityAttributes に
+// null を渡す）。
+//
+// FILE_FLAG_OPEN_REPARSE_POINT で、reparse point をたどらずにそれ自体を開き、断る（rejected）。
+// たどると、名前付きパイプへのリンクを置かれたとき、パイプにつないで ReadFile でメインスレッドが
+// 止まる（POSIX の O_NOFOLLOW にあたる）。リンクでない reparse point（OneDrive などのクラウドの
+// ファイル・重複除去）も断る。中身を読むにはたどって開き直すしかなく、その間の差し替えへの
+// 備えが、スプール（%LOCALAPPDATA% の下）に置かれる見込みの低さに見合わないため。
+Opened openFile(const std::string &path, DWORD access, DWORD share, DWORD disposition) {
+	HANDLE file = ::CreateFileW(extended(path).c_str(), access, share, nullptr, disposition,
+	                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+	if (file == INVALID_HANDLE_VALUE) {
+		return {INVALID_HANDLE_VALUE, Refusal::None, ::GetLastError()};
+	}
+	if (Refusal reason = rejected(file); reason != Refusal::None) {
+		::CloseHandle(file);
+		return {INVALID_HANDLE_VALUE, reason, 0};
+	}
+	return {file, Refusal::None, 0};
 }
 
 }
@@ -80,11 +167,24 @@ std::optional<std::string> appRoot() {
 }
 
 bool makeDirectories(const std::string &path, std::string &error) {
-	// 区切りごとに作る。ドライブ（C:）や既にあるものは失敗するが、構わない。最後に path が
-	// ディレクトリかで成否を決める。
-	std::wstring wide = widen(path);
-	for (std::size_t at = wide.find_first_of(L"\\/", 1); at != std::wstring::npos;
-	     at = wide.find_first_of(L"\\/", at + 1)) {
+	// 既にあれば何もしない。無ければ、ルート（\\?\C:\ か \\?\UNC\server\share\）の後から、
+	// 区切りごとに作り、ルートには作りに行かない。prepare は受け付けのたびに呼ばれうるので、毎回
+	// 失敗する呼び出しをメインスレッドに載せないため（UNC ではネットワークに触れることもある）。
+	// 途中で既にあるものは失敗するが、構わない。最後に path がディレクトリかで成否を決める。
+	// 区切りは extended が \ に揃えてある。
+	std::wstring wide = extended(path);
+	if (isDirectory(wide)) {
+		return true;
+	}
+	std::size_t root = 0;
+	if (wide.starts_with(L"\\\\?\\UNC\\")) {
+		std::size_t server = wide.find(L'\\', 8);
+		root = server == std::wstring::npos ? server : wide.find(L'\\', server + 1);
+	} else if (wide.size() >= 7 && wide[5] == L':') {
+		root = 6;
+	}
+	for (std::size_t at = root == std::wstring::npos ? root : wide.find(L'\\', root + 1);
+	     at != std::wstring::npos; at = wide.find(L'\\', at + 1)) {
 		(void)::CreateDirectoryW(wide.substr(0, at).c_str(), nullptr);
 	}
 	if (::CreateDirectoryW(wide.c_str(), nullptr)) {
@@ -101,7 +201,7 @@ bool makeDirectories(const std::string &path, std::string &error) {
 
 std::optional<std::vector<std::string>> list(const std::string &dir) {
 	WIN32_FIND_DATAW entry{};
-	HANDLE find = ::FindFirstFileExW(widen(join(dir, "*")).c_str(), FindExInfoBasic, &entry,
+	HANDLE find = ::FindFirstFileExW(extended(join(dir, "*")).c_str(), FindExInfoBasic, &entry,
 	                                 FindExSearchNameMatch, nullptr, 0);
 	if (find == INVALID_HANDLE_VALUE) {
 		return std::nullopt;
@@ -120,7 +220,7 @@ std::optional<std::vector<std::string>> list(const std::string &dir) {
 std::optional<std::string> read(const std::string &path, std::size_t limit) {
 	// 読む間は消させない（呼ぶ側の取り下げは、消せないことでプラグインが受け取ったと分かる。作法
 	// 「待つのをやめる」）。
-	HANDLE file = openFile(path, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING);
+	HANDLE file = openFile(path, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING).handle;
 	if (file == INVALID_HANDLE_VALUE) {
 		return std::nullopt;
 	}
@@ -143,7 +243,13 @@ std::optional<std::string> read(const std::string &path, std::size_t limit) {
 }
 
 bool write(const std::string &path, std::string_view data) {
-	HANDLE file = openFile(path, GENERIC_WRITE, 0, CREATE_ALWAYS);
+	// 先に消してから新しく作る（CREATE_NEW）。あるものを開いて切り詰めると（CREATE_ALWAYS）、
+	// 置かれたリンク（シンボリックリンクでも hard link でも）の先、つまりスプールの外のファイルを
+	// 壊してしまう。消すのは名前だけで、リンクの先は残る。読み取り専用の書きかけが残っていると
+	// 消せず、その id には応えられない（読み取り専用の属性を外すのはリンクの先に効きうるので、
+	// しない。スプールに書けるのは同じ利用者だけで、作法どおりの呼ぶ側はそうしたファイルを作らない）。
+	(void)::DeleteFileW(extended(path).c_str());
+	HANDLE file = openFile(path, GENERIC_WRITE, 0, CREATE_NEW).handle;
 	if (file == INVALID_HANDLE_VALUE) {
 		return false;
 	}
@@ -158,35 +264,62 @@ bool write(const std::string &path, std::string_view data) {
 }
 
 bool rename(const std::string &from, const std::string &to) {
-	return ::MoveFileExW(widen(from).c_str(), widen(to).c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
+	std::wstring source = extended(from);
+	std::wstring target = extended(to);
+	return ::MoveFileExW(source.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
 }
 
-bool remove(const std::string &path) { return ::DeleteFileW(widen(path).c_str()) != 0; }
+bool remove(const std::string &path) { return ::DeleteFileW(extended(path).c_str()) != 0; }
 
 WaitState probe(const std::string &path) {
-	// 共有なしで開ければ、呼ぶ側は放している。共有違反なら掴んでいる。
-	HANDLE file = openFile(path, GENERIC_READ, 0, OPEN_EXISTING);
-	if (file != INVALID_HANDLE_VALUE) {
-		::CloseHandle(file);
+	// 共有なしで開ければ、呼ぶ側は放している。共有違反なら掴んでいる。通常のファイルでない待つ印は
+	// 無いものとする（実行しない側に倒す）。
+	Opened opened = openFile(path, GENERIC_READ, 0, OPEN_EXISTING);
+	if (opened.handle != INVALID_HANDLE_VALUE) {
+		::CloseHandle(opened.handle);
 		return WaitState::Released;
 	}
-	return ::GetLastError() == ERROR_SHARING_VIOLATION ? WaitState::Held : WaitState::Missing;
+	return opened.error == ERROR_SHARING_VIOLATION ? WaitState::Held : WaitState::Missing;
 }
 
 Lock::~Lock() { release(); }
 
 Lock::Result Lock::take(const std::string &path, std::string &error) {
 	release();
-	HANDLE file = openFile(path, GENERIC_READ | GENERIC_WRITE, 0, OPEN_ALWAYS);
-	if (file == INVALID_HANDLE_VALUE) {
-		DWORD failure = ::GetLastError();
-		if (failure == ERROR_SHARING_VIOLATION) {
+	Opened opened = openFile(path, GENERIC_READ | GENERIC_WRITE, 0, OPEN_ALWAYS);
+	if (opened.refused != Refusal::None && !recreated_) {
+		// ロックのファイルはプラグインのもので中身を持たないので、断ったら消して作り直す
+		// （重複除去・WOF の圧縮・同期が外れていれば、それで直る）。断れたのは共有なしで
+		// 開けたからで、ほかの Vectorworks は掴んでいない。消すのは名前だけで、reparse point は
+		// たどらない（クラウドのファイルなら、消すときに同期のサービスを待つことがある）。
+		// 作り直すのは 1 度だけ（Files.h）。
+		recreated_ = true;
+		if (!remove(path)) {
+			error = describe("DeleteFile", path, ::GetLastError());
+			return Result::Failed;
+		}
+		opened = openFile(path, GENERIC_READ | GENERIC_WRITE, 0, OPEN_ALWAYS);
+	}
+	if (opened.handle == INVALID_HANDLE_VALUE) {
+		if (opened.refused == Refusal::NotRegular) {
+			error = "CreateFile " + path +
+			        ": 通常のファイルではありません（スプールを同期・WOF の圧縮・重複除去の対象から"
+			        "外し、Vectorworks を起動し直してください）";
+			return Result::Failed;
+		}
+		if (opened.refused == Refusal::NotLocal) {
+			error = "CreateFile " + path +
+			        ": 中身がローカルにありません（スプールをオフラインファイル・HSM の対象から"
+			        "外し、Vectorworks を起動し直してください）";
+			return Result::Failed;
+		}
+		if (opened.error == ERROR_SHARING_VIOLATION) {
 			return Result::Busy;
 		}
-		error = describe("CreateFile", path, failure);
+		error = describe("CreateFile", path, opened.error);
 		return Result::Failed;
 	}
-	handle_ = reinterpret_cast<std::intptr_t>(file);
+	handle_ = reinterpret_cast<std::intptr_t>(opened.handle);
 	return Result::Taken;
 }
 

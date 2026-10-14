@@ -21,6 +21,52 @@ std::string describe(const char *what, const std::string &path, int error) {
 	return std::string(what) + " " + path + ": " + std::strerror(error);
 }
 
+// スプールのファイルを開くときに必ず付ける。O_NONBLOCK は、FIFO を置かれても読み手・書き手を
+// 待って止まらないため（止まるのは Vectorworks のメインスレッドで、利用者の未保存の作業が
+// 失われる）。通常のファイルの読み書きには効かない。O_NOFOLLOW は、最後の名前がシンボリック
+// リンクなら開かないため。開いてから断るのでは、リンクの先がデバイスならそのドライバの open が
+// 先に走ってしまう（シリアルポートの信号線が上がるなど）。スプールのファイルをリンク越しに開く
+// 理由は無い。O_NOCTTY は端末を開いても制御端末にしないため。
+constexpr int kOpenFlags = O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW | O_NOCTTY;
+
+// Opened は openRegular の結果。
+struct Opened {
+	// 開けなければ -1。
+	int fd = -1;
+	// 通常のファイルでない（FIFO・デバイス・ディレクトリ・シンボリックリンク）。
+	bool notRegular = false;
+	// 開けなかった理由（notRegular のときは 0）。
+	int error = 0;
+};
+
+// openRegular は通常のファイルだけを開く。
+Opened openRegular(const std::string &path, int flags, mode_t mode = 0) {
+	int fd = ::open(path.c_str(), flags | kOpenFlags, mode);
+	if (fd < 0) {
+		int failure = errno;
+		// O_NOFOLLOW でシンボリックリンクを断ると ELOOP（FreeBSD 系は EMLINK）。ELOOP は親の
+		// ディレクトリでリンクが循環しているときにも返るので、最後の名前がリンクのときだけ
+		// 「通常のファイルでない」とし、それ以外は本当の原因を返す。
+		struct stat link{};
+		if ((failure == ELOOP || failure == EMLINK) && ::lstat(path.c_str(), &link) == 0 &&
+		    S_ISLNK(link.st_mode)) {
+			return {-1, true, 0};
+		}
+		return {-1, false, failure};
+	}
+	struct stat info{};
+	if (::fstat(fd, &info) != 0) {
+		int failure = errno;
+		closeQuietly(fd);
+		return {-1, false, failure};
+	}
+	if (!S_ISREG(info.st_mode)) {
+		closeQuietly(fd);
+		return {-1, true, 0};
+	}
+	return {fd, false, 0};
+}
+
 }
 
 std::string join(const std::string &dir, std::string_view name) {
@@ -49,6 +95,12 @@ std::optional<std::string> appRoot() {
 }
 
 bool makeDirectories(const std::string &path, std::string &error) {
+	// 既にあれば何もしない（prepare は受け付けのたびに呼ばれうるので、毎回失敗する mkdir を
+	// メインスレッドに載せない）。
+	struct stat existing{};
+	if (::stat(path.c_str(), &existing) == 0 && S_ISDIR(existing.st_mode)) {
+		return true;
+	}
 	// 区切りごとに作る。途中が既にあれば EEXIST で、それは構わない。最後に path が
 	// ディレクトリかで成否を決める。
 	for (std::size_t at = path.find('/', 1); at != std::string::npos; at = path.find('/', at + 1)) {
@@ -83,7 +135,7 @@ std::optional<std::vector<std::string>> list(const std::string &dir) {
 }
 
 std::optional<std::string> read(const std::string &path, std::size_t limit) {
-	int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+	int fd = openRegular(path, O_RDONLY).fd;
 	if (fd < 0) {
 		return std::nullopt;
 	}
@@ -109,7 +161,11 @@ std::optional<std::string> read(const std::string &path, std::size_t limit) {
 }
 
 bool write(const std::string &path, std::string_view data) {
-	int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+	// 先に消してから新しく作る（O_EXCL。シンボリックリンクもたどらない）。あるものを開いて
+	// 切り詰めると、置かれたリンク（シンボリックリンクでも hard link でも）の先、つまりスプールの
+	// 外のファイルを壊してしまう。消すのは名前だけで、リンクの先は残る。
+	(void)::unlink(path.c_str());
+	int fd = openRegular(path, O_WRONLY | O_CREAT | O_EXCL, 0600).fd;
 	if (fd < 0) {
 		return false;
 	}
@@ -134,7 +190,8 @@ bool rename(const std::string &from, const std::string &to) {
 bool remove(const std::string &path) { return ::unlink(path.c_str()) == 0; }
 
 WaitState probe(const std::string &path) {
-	int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+	// 通常のファイルでない待つ印は無いものとする（実行しない側に倒す）。
+	int fd = openRegular(path, O_RDONLY).fd;
 	if (fd < 0) {
 		return WaitState::Missing;
 	}
@@ -153,11 +210,26 @@ Lock::~Lock() { release(); }
 
 Lock::Result Lock::take(const std::string &path, std::string &error) {
 	release();
-	int fd = ::open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
-	if (fd < 0) {
-		error = describe("open", path, errno);
+	Opened opened = openRegular(path, O_RDWR | O_CREAT, 0600);
+	if (opened.notRegular && !recreated_) {
+		// ロックのファイルはプラグインのもので中身を持たないので、通常のファイルでなければ消して
+		// 作り直す（FIFO・リンクは、ほかの Vectorworks も掴めない）。消すのは名前だけで、リンクは
+		// たどらない。作り直すのは 1 度だけ（Files.h）。
+		recreated_ = true;
+		if (::unlink(path.c_str()) != 0) {
+			error = describe("unlink", path, errno);
+			return Result::Failed;
+		}
+		opened = openRegular(path, O_RDWR | O_CREAT, 0600);
+	}
+	if (opened.fd < 0) {
+		error = opened.notRegular ? "open " + path +
+		                                ": 通常のファイルではありません（消して、Vectorworks を"
+		                                "起動し直してください）"
+		                          : describe("open", path, opened.error);
 		return Result::Failed;
 	}
+	int fd = opened.fd;
 	if (::flock(fd, LOCK_EX | LOCK_NB) != 0) {
 		int failure = errno;
 		closeQuietly(fd);

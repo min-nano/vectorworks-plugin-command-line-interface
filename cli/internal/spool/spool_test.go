@@ -458,3 +458,77 @@ func TestNestingDepth(t *testing.T) {
 		}
 	}
 }
+
+// 書きかけの名前に hard link が置かれていても、リンクの先（スプールの外のファイル）を変えない
+// （docs/protocol.md「ファイル」）。
+func TestWriteAtomicallyDoesNotWriteThroughLinks(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "x"+RequestSuffix)
+	if err := os.Link(target, path+TempSuffix); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteAtomically(path, []byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(target); string(got) != "keep" {
+		t.Errorf("target = %q, want %q", got, "keep")
+	}
+	if got, _ := os.ReadFile(path); string(got) != "{}" {
+		t.Errorf("request = %q, want %q", got, "{}")
+	}
+}
+
+// 書きかけを作れなければ（同じ名前の空でないディレクトリがある）、要求を公開しない。
+func TestWriteAtomicallyFailsWhenTheTempCannotBeCreated(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "x"+RequestSuffix)
+	if err := os.MkdirAll(filepath.Join(path+TempSuffix, "keep"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteAtomically(path, []byte("{}")); err == nil {
+		t.Fatal("WriteAtomically succeeded, want an error")
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("request was published: %v", err)
+	}
+}
+
+// 公開（rename）できなければ、書きかけを残さない。
+func TestWriteAtomicallyRemovesTheTempWhenItCannotPublish(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "x"+RequestSuffix)
+	if err := os.MkdirAll(filepath.Join(path, "keep"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteAtomically(path, []byte("{}")); err == nil {
+		t.Fatal("WriteAtomically succeeded, want an error")
+	}
+	if _, err := os.Stat(path + TempSuffix); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the temp was left: %v", err)
+	}
+}
+
+// 要求を公開できなければ、どの要求かと、どの段（書きかけを開く・rename）で失敗したかを返す
+// （段は os のエラーの文言が示す）。
+func TestCallNamesTheRequestItCannotPublish(t *testing.T) {
+	for _, c := range []struct{ blocked, stage string }{
+		{"x" + RequestSuffix + TempSuffix, "open"},
+		{"x" + RequestSuffix, "rename"},
+	} {
+		t.Run(c.stage, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(dir, c.blocked, "keep"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			_, err := WithNewID(&Bridge{Dir: dir}, "x").Call("ping", nil, "", time.Second)
+			want := "publish x" + RequestSuffix + ": " + c.stage + " "
+			if err == nil || !strings.HasPrefix(err.Error(), want) {
+				t.Fatalf("Call = %v, want an error starting with %q", err, want)
+			}
+		})
+	}
+}

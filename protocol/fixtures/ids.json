@@ -5,6 +5,9 @@
 		"1760000000000000000-0a1b2c3d",
 		"-",
 		"_",
+		"NUL",
+		"CON",
+		"com1",
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	],
 	"invalid": [

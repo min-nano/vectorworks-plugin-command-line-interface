@@ -383,7 +383,8 @@ func TestFixtureServeCases(t *testing.T) {
 			if len(fixture.Steps) == 0 {
 				t.Fatalf("%s: no steps", name)
 			}
-			r := &caseRunner{t: t, dir: NewDir(t), held: map[string]func(){}}
+			// 予約された名前の id（reserved-ids.json）もファイルとして置けるように、\\?\ を付ける。
+			r := &caseRunner{t: t, dir: extendedPath(NewDir(t)), held: map[string]func(){}}
 			r.server = &server{dir: r.dir, handle: fakeHandler(t, table.Tools, &r.calls)}
 			// 一時ディレクトリを消す前に、ロックと待つ印を放す（Windows は開いたままでは消せない）。
 			t.Cleanup(func() {
