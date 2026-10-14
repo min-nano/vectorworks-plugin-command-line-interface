@@ -64,7 +64,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (Test-Path build/Testing/Temporary/LastTestsFailed.log) { throw 'tests failed' }
           if (-not (Test-Path build/coverage.cobertura.xml)) { throw 'no coverage report' }
-      # Go（cli.yml）と分けて見られるように、フラグを cpp にする（llvm と msvc は同じフラグに合わせる）。
+      # Go（cli.yml の go）と分けて見られるように、フラグを cpp にする（llvm と msvc は同じフラグに合わせる）。
       # cli.yml と同じコミットに固定する。
       - if: matrix.coverage != ''
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5

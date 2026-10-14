@@ -30,13 +30,14 @@ jobs:
       # PowerShell は「.」を区切り文字として解釈し -coverprofile=coverage.out が 2 つの引数として入力されるため、bash で実行する。
       - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
         shell: bash
-      # OS ごとに分岐するコード（launch 等）があるので、全 OS の結果をフラグ付きで送る。
+      # OS ごとに分岐するコード（launch 等）があるので、全 OS の結果を送る（Codecov で重なる）。
+      # C++（test.yml の cpp）と分けて見られるように、go のフラグを付ける。
       # 第三者の Action なのでコミットに固定する（上げるのは Dependabot）。
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: cli/coverage.out
-          flags: ${{ runner.os }}
+          flags: go
           fail_ci_if_error: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
 
   build:
