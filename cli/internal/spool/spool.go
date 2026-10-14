@@ -265,9 +265,9 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 // pollResponse は until まで応答のファイルを読み直す。届けば読んで消して返す。届かなければ nil。
 //
 // 読めない（まだ無い・開けない）応答は「まだ無い」とみなして読み直す。応答として読めない
-// （JSON として壊れている・形が合わない）応答は待たずに消して ErrMalformedResponse を返す。応答は rename で公開されるので、読めた
-// 応答は書き終えたもので、壊れていれば書き手の不具合であり、待っても直らない
-// （docs/protocol.md「ファイル」）。
+// （JSON として壊れている・形が合わない）応答は待たずに消して ErrMalformedResponse を返す。
+// 応答は rename で公開されるので、読めた応答は書き終えたもので、壊れていれば書き手の不具合で
+// あり、待っても直らない（docs/protocol.md「ファイル」）。
 func pollResponse(path string, until time.Time) (*Response, error) {
 	for {
 		if text, err := os.ReadFile(path); err == nil {
