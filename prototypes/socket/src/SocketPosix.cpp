@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -141,10 +142,20 @@ Handle connectTo(const std::string &path) {
 	if (fd < 0) {
 		return kNone;
 	}
-	if (::connect(fd, reinterpret_cast<const sockaddr *>(&addr), sizeof addr) != 0 ||
-	    !prepare(fd)) {
+	// 待ち受けていない相手で止まらないよう、ノンブロッキングでつなぎ、2 秒まで待つ。
+	if (!prepare(fd)) {
 		::close(fd);
 		return kNone;
+	}
+	if (::connect(fd, reinterpret_cast<const sockaddr *>(&addr), sizeof addr) != 0) {
+		pollfd poll{fd, POLLOUT, 0};
+		int error = 0;
+		socklen_t size = sizeof error;
+		if ((errno != EINPROGRESS && errno != EAGAIN) || ::poll(&poll, 1, 2000) != 1 ||
+		    ::getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &size) != 0 || error != 0) {
+			::close(fd);
+			return kNone;
+		}
 	}
 	return fd;
 }

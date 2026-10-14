@@ -12,6 +12,7 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <string>
 
@@ -150,10 +151,27 @@ Handle connectTo(const std::string &path) {
 	if (socket == INVALID_SOCKET) {
 		return kNone;
 	}
-	if (::connect(socket, reinterpret_cast<const sockaddr *>(&addr), sizeof addr) != 0 ||
-	    !prepare(socket)) {
+	// 待ち受けていない相手で止まらないよう、ノンブロッキングでつなぎ、2 秒まで待つ。
+	if (!prepare(socket)) {
 		::closesocket(socket);
 		return kNone;
+	}
+	if (::connect(socket, reinterpret_cast<const sockaddr *>(&addr), sizeof addr) != 0) {
+		int error = ::WSAGetLastError();
+		fd_set writable;
+		fd_set failed;
+		FD_ZERO(&writable);
+		FD_ZERO(&failed);
+		FD_SET(socket, &writable);
+		FD_SET(socket, &failed);
+		timeval wait{2, 0};
+		if (error != WSAEWOULDBLOCK || ::select(0, nullptr, &writable, &failed, &wait) != 1 ||
+		    !FD_ISSET(socket, &writable)) {
+			std::printf("connect %s: error %d\n", path.c_str(), error);
+			std::fflush(stdout);
+			::closesocket(socket);
+			return kNone;
+		}
 	}
 	return static_cast<Handle>(socket);
 }

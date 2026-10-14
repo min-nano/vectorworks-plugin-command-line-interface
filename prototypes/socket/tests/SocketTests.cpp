@@ -108,6 +108,7 @@ void listen(SocketServer &server) {
 	CHECK(server.listen(error) == files::Lock::Result::Taken);
 	if (!error.empty()) {
 		std::printf("listen: %s\n", error.c_str());
+		std::fflush(stdout);
 	}
 }
 
