@@ -81,7 +81,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 - **通信規則に関わる振る舞いは通信規則の見本（`protocol/fixtures`。`docs/fixtures.md`）に置く。** C++ と Go の
   両方のテストが同じ見本を読むので、片側だけを直すと落ちる。見本で表しにくいことだけを、各言語の
   テストに書く。
-- 手元のテスト（CI の `test.yml` と同じ指定）:
+- 手元のテスト（CI の `cpp.yml` と同じ指定）:
   `cmake -S . -B build -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug && cmake --build build && ctest --test-dir build --output-on-failure`。
   ファジングは clang（Apple の clang は不可）で `-DVW_BUILD_FUZZERS=ON` を足し、
   `mkdir -p corpus crashes && build/JsonFuzzer -max_total_time=120 -artifact_prefix=crashes/ corpus protocol/fixtures/requests`

@@ -1,4 +1,4 @@
-name: cli
+name: go
 
 on:
   push:
@@ -9,9 +9,11 @@ on:
 permissions:
   contents: read
 
+# CLI（cli/）の Go のテストとビルド。C++ のテストは cpp.yml が走らせる。
 # 整形と go vet は format.yml・lint.yml が行う（docs/format.md・docs/lint.md）。
 jobs:
   test:
+    name: test (${{ matrix.os }})
     strategy:
       fail-fast: false
       # Vectorworks の対応 OS (darwin・windows) でのみテストする。
@@ -31,7 +33,7 @@ jobs:
       - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
         shell: bash
       # OS ごとに分岐するコード（launch 等）があるので、全 OS の結果を送る（Codecov で重なる）。
-      # C++（test.yml の cpp）と分けて見られるように、go のフラグを付ける。
+      # C++（cpp.yml の cpp）と分けて見られるように、go のフラグを付ける。
       # 第三者の Action なのでコミットに固定する（上げるのは Dependabot）。
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:

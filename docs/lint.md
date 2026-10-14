@@ -10,8 +10,8 @@
 | `scripts/lint.sh` | 指摘の有無に関わらず全ての検査を実行し、指摘があればコード 1 で終了する。CI（`lint.yml`）はこれを実行する |
 
 `lint.yml` は ubuntu の 1 ジョブです。OS ごとの違いは、ツールに対象の OS を渡して見ます（`go vet` の
-`GOOS`）。テストは `cli.yml` が OS ごとに実行します。`lint.yml` は必須のチェックなので、変えたパスで
-絞らず、すべての push（main）・PR・マージキューで実行されます（[CI](plugin/build-and-release.md#ci)）。
+`GOOS`）。テストは `go.yml`（Go）と `cpp.yml`（C++）が OS ごとに実行します。`lint.yml` は必須の
+チェックなので、変えたパスで絞らず、すべての push（main）・PR・マージキューで実行されます（[CI](plugin/build-and-release.md#ci)）。
 
 ## 言語ごとのツール
 

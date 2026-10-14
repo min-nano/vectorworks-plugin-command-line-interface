@@ -6,7 +6,7 @@
 
 | 段 | 中身 | 確かめ方 | 実機 |
 | --- | --- | --- | --- |
-| 1 | **SDK に依らない共通部**: `core/Json`（入れ子の深さに上限を設ける）・`core/Bridge`・`core/Serve`（偽の道具の表・占有）・CMake（共通部・テスト・ファジングだけ）・`protocol/fixtures/`・`test.yml`（`core/Json` のファジングを含む）・`format.sh` / `lint.sh` に C++ と PowerShell を足す（[整形](../format.md)・[検査](../lint.md)）・`CLAUDE.md` の追記（PR の進め方） | CI（ASan・UBSan）。Go 側のテストも同じ見本を読む | 不要 |
+| 1 | **SDK に依らない共通部**: `core/Json`（入れ子の深さに上限を設ける）・`core/Bridge`・`core/Serve`（偽の道具の表・占有）・CMake（共通部・テスト・ファジングだけ）・`protocol/fixtures/`・`cpp.yml`（`core/Json` のファジングを含む）・`format.sh` / `lint.sh` に C++ と PowerShell を足す（[整形](../format.md)・[検査](../lint.md)）・`CLAUDE.md` の追記（PR の進め方） | CI（ASan・UBSan）。Go 側のテストも同じ見本を読む | 不要 |
 | 2 | **骨格**: CMake にプラグインを足す・`BuildConfig`・`ModuleMain`・`Clock`・道具 `tools` / `ping` / `quit`・リソース・`build.yml`（ビルドと PR のプレリリースまで） | CI。実機で zip を手で置き、`vw2026 status` が `running:true` になり `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。`session start` のあと `call quit` で保存の確認が出て、取り消すと `call ping` がまた応え、保存すると `status` が止まっていると答える | 要 |
 | 3 | **読む道具**: `layers` / `classes` / `layer_objects` / `object_counts`（使う SDK 呼び出しが SDK リファレンスで確かめられてから。[SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)） | 実機で、レイヤ・クラス・オブジェクトの数と名前を用意した見本の図面に対して、結果が Vectorworks の画面（オーガナイザ・情報パレット）の表示と一致する | 要 |
 | 4 | **配布**: 梱包（`bin/vw2026`）・main のリリース・`cleanup-dev-release.yml` | CI。リリースの資産を取ってきて、zip の形（直下に `build.json` と `bin/`）と `bin/vw2026 version` が動くことを確かめる | 不要 |
@@ -19,7 +19,7 @@
   未保存の作業が失われないため（[通信規則「要求」](../protocol.md#要求idreqjson)・[ブリッジ「受け付け 1 回」](bridge.md#受け付け-1-回coreserverserve)）。
   JSON の読み方は Go の `encoding/json` に合わせる。
 - **`core/Json` のファジング。** ASan・UBSan と libFuzzer（clang の `-fsanitize=fuzzer`）でビルドした
-  入口（`tests/JsonFuzzer.cpp`）を、`test.yml` が決まった時間だけ回す。種は要求の見本
+  入口（`tests/JsonFuzzer.cpp`）を、`cpp.yml` が決まった時間だけ回す。種は要求の見本
   （`protocol/fixtures/requests/`。深い入れ子・長い文字列・不正な UTF-8 を含む）（[ビルド「CI」](build-and-release.md#ci)）。
 - **`protocol/fixtures/` の中身。** 通信規則の定数・id の見本・要求の見本・受け付け 1 回の見本（置いた
   ファイル → 残るファイルと応答）。C++ のテストと Go の `cli/internal/spool`・`cli/internal/fakeplugin`
