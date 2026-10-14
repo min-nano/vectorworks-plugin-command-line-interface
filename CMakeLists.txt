@@ -12,7 +12,7 @@ project(VwCli LANGUAGES CXX)
 option(VW_BUILD_TESTS "Build the SDK-free unit tests" OFF)
 option(VW_BUILD_FUZZERS "Build the libFuzzer targets (clang only)" OFF)
 option(VW_ENABLE_SANITIZERS "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
-option(VW_ENABLE_COVERAGE "Build with LLVM source-based coverage (clang only)" OFF)
+option(VW_ENABLE_COVERAGE "Build for coverage (clang source-based coverage, or MSVC with /PROFILE)" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -39,10 +39,15 @@ endif()
 # カバレッジ（test.yml が集めて Codecov へ送る）。clang（Apple の clang を含む）は source-based
 # coverage で、llvm-cov で集める。MSVC は Visual Studio の Microsoft.CodeCoverage.Console が
 # 実行ファイルを PDB から計装して集めるので、コンパイルは変えず、計装に要る /PROFILE を付けて
-# リンクするだけ。clang-cl はリンカーが link.exe・lld-link で clang の指定を受け付けないので弾く。
+# リンクするだけ（/PROFILE は /INCREMENTAL と両立しないので、Debug の既定の /INCREMENTAL を
+# 明示して止め、LNK4075 を出さない）。ASan の付いた実行ファイルの計装は確かめていないので、
+# 併用は止める。clang-cl はリンカーが link.exe・lld-link で clang の指定を受け付けないので弾く。
 if(VW_ENABLE_COVERAGE)
 	if(MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-		add_link_options(/PROFILE)
+		if(VW_ENABLE_SANITIZERS)
+			message(FATAL_ERROR "VW_ENABLE_COVERAGE with MSVC cannot be combined with VW_ENABLE_SANITIZERS")
+		endif()
+		add_link_options(/PROFILE /INCREMENTAL:NO)
 	elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT MSVC)
 		add_compile_options(-fprofile-instr-generate -fcoverage-mapping)
 		add_link_options(-fprofile-instr-generate)
