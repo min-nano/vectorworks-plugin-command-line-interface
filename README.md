@@ -30,3 +30,4 @@ vw2026 call layers '{"include_sheets":false}'
 | [docs/format.md](docs/format.md) | 整形の決まりとツール（`scripts/format.sh`） |
 | [docs/lint.md](docs/lint.md) | 検査のツール（`scripts/lint.sh`） |
 | [docs/sdk-research.md](docs/sdk-research.md) | SDK リファレンスでの調査を待っているもの |
+| [docs/design-review.md](docs/design-review.md) | 設計のレビューの指摘（項目ごとに検討中） |
