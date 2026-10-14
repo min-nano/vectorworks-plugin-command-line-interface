@@ -12,6 +12,7 @@ project(VwCli LANGUAGES CXX)
 option(VW_BUILD_TESTS "Build the SDK-free unit tests" OFF)
 option(VW_BUILD_FUZZERS "Build the libFuzzer targets (clang only)" OFF)
 option(VW_ENABLE_SANITIZERS "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(VW_ENABLE_COVERAGE "Build with LLVM source-based coverage (clang only)" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,6 +34,16 @@ if(VW_ENABLE_SANITIZERS)
 							-fno-omit-frame-pointer)
 		add_link_options(-fsanitize=address,undefined)
 	endif()
+endif()
+
+# clang の source-based coverage（test.yml が llvm-cov で集めて Codecov へ送る）。MSVC には
+# 同じものが無いので、clang（Apple の clang を含む）に限る。
+if(VW_ENABLE_COVERAGE)
+	if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+		message(FATAL_ERROR "VW_ENABLE_COVERAGE needs clang")
+	endif()
+	add_compile_options(-fprofile-instr-generate -fcoverage-mapping)
+	add_link_options(-fprofile-instr-generate)
 endif()
 
 if(VW_BUILD_FUZZERS)
@@ -66,6 +77,11 @@ if(VW_BUILD_TESTS)
 	# 開いて待たないことのテスト（FIFO）は、退行すると失敗ではなく止まって現れる。CI のジョブの
 	# 上限まで待たないよう、上限を付ける（ふだんは数秒で終わる）。
 	set_tests_properties(VwCliTests PROPERTIES TIMEOUT 120)
+	if(VW_ENABLE_COVERAGE)
+		# 測った結果を決まった場所に集める（%p はプロセスごとに分ける）。
+		set_tests_properties(VwCliTests PROPERTIES ENVIRONMENT
+								 "LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/coverage/%p.profraw")
+	endif()
 endif()
 
 # --- ファジング -----------------------------------------------------------------------------
