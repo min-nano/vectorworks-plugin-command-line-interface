@@ -102,8 +102,8 @@ var ErrTimeout = errors.New("timed out waiting for the response")
 // 締切の前に届く）ので、待ちきれなかったとは言わない。
 var ErrNoWait = errors.New("the bridge did not run the request, as its wait file was missing")
 
-// ErrMalformedResponse は、応答のファイルが JSON として壊れたまま malformedGrace を過ぎた
-// （docs/protocol.md「ファイル」）か、失敗の応答の code が無い・知らない値だった
+// ErrMalformedResponse は、応答のファイルが JSON として壊れていた（docs/protocol.md「ファイル」）か、
+// 失敗の応答の code が無い・知らない値だった
 // （docs/protocol.md「互換性」: 知っているフィールドの未知の値はエラー）。
 var ErrMalformedResponse = errors.New("malformed response")
 
@@ -115,11 +115,6 @@ var ErrNoResponse = errors.New("the bridge took the request but no response came
 // 応答は受け付けの同じ回の中で書かれ、受け付け 1 回の中で数秒を超える道具は持たない
 // （docs/protocol.md「応答」）。テストが縮める。
 var takenGrace = 5 * time.Second
-
-// malformedGrace は、応答のファイルが JSON として壊れたままなら、壊れた応答とみなすまでの時間。
-// rename で公開する作法なので、壊れて見えるのは書き手の不具合のときだけで、締切まで待っても
-// 直らない（docs/protocol.md「ファイル」）。テストが縮める。
-var malformedGrace = time.Second
 
 // Bridge はスプール 1 つと、その状態。
 type Bridge struct {
@@ -244,11 +239,10 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		}
 	}
 
-	poll := &poller{path: responsePath}
 	malformed := func() error {
-		return fmt.Errorf("%w (%s; the response file stayed broken for %s)", ErrMalformedResponse, tool, malformedGrace)
+		return fmt.Errorf("%w (%s; the response file is not JSON)", ErrMalformedResponse, tool)
 	}
-	if response, err := poll.until(deadline); err != nil {
+	if response, err := pollResponse(responsePath, deadline); err != nil {
 		return nil, malformed()
 	} else if response != nil {
 		return received(response)
@@ -260,7 +254,7 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 	if os.Remove(requestPath) == nil {
 		return nil, notRun("a dialog may be open")
 	}
-	if response, err := poll.until(time.Now().Add(takenGrace)); err != nil {
+	if response, err := pollResponse(responsePath, time.Now().Add(takenGrace)); err != nil {
 		return nil, malformed()
 	} else if response != nil {
 		return received(response)
@@ -268,35 +262,22 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 	return nil, fmt.Errorf("%w (%s, %s; it may have run)", ErrNoResponse, tool, timeout)
 }
 
-// poller は応答のファイルを読み直す。壊れたままの応答を見分けるため、壊れていると最初に
-// 見た時刻を、締切の前と猶予の間を通して持つ。
-type poller struct {
-	path        string
-	brokenSince time.Time
-}
-
-// until は until まで応答を読み直す。届けば読んで消して返す。届かなければ nil。
+// pollResponse は until まで応答のファイルを読み直す。届けば読んで消して返す。届かなければ nil。
 //
-// 読めない（まだ無い・Windows で書き手が開いている）・JSON として壊れている応答は「まだ無い」と
-// みなして読み直すが、壊れたまま malformedGrace を過ぎたら、消して ErrMalformedResponse を返す。
-func (p *poller) until(until time.Time) (*Response, error) {
+// 読めない（まだ無い・開けない）応答は「まだ無い」とみなして読み直す。JSON として壊れている
+// 応答は待たずに消して ErrMalformedResponse を返す。応答は rename で公開されるので、読めた
+// 応答は書き終えたもので、壊れていれば書き手の不具合であり、待っても直らない
+// （docs/protocol.md「ファイル」）。
+func pollResponse(path string, until time.Time) (*Response, error) {
 	for {
-		text, err := os.ReadFile(p.path)
-		if err != nil {
-			p.brokenSince = time.Time{}
-		} else {
+		if text, err := os.ReadFile(path); err == nil {
+			// 消せなくても応答は取得できている。残骸はプラグイン側が開始時に掃除する。
+			_ = os.Remove(path)
 			var response Response
-			if json.Unmarshal(text, &response) == nil {
-				// 消せなくても応答は取得できている。残骸はプラグイン側が開始時に掃除する。
-				_ = os.Remove(p.path)
-				return &response, nil
-			}
-			if p.brokenSince.IsZero() {
-				p.brokenSince = time.Now()
-			} else if time.Since(p.brokenSince) >= malformedGrace {
-				_ = os.Remove(p.path)
+			if json.Unmarshal(text, &response) != nil {
 				return nil, ErrMalformedResponse
 			}
+			return &response, nil
 		}
 		if time.Now().After(until) {
 			return nil, nil
