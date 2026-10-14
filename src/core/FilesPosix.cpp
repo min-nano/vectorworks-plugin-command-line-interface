@@ -33,7 +33,8 @@ constexpr int kOpenFlags = O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW | O_NOCTTY;
 struct Opened {
 	// 開けなければ -1。
 	int fd = -1;
-	// 通常のファイルでない（FIFO・デバイス・ディレクトリ・シンボリックリンク）。
+	// 通常のファイルでない（FIFO・デバイス・シンボリックリンク。ディレクトリは読むときだけで、
+	// 書くために開くと open が EISDIR で先に失敗し、error に入る）。
 	bool notRegular = false;
 	// 開けなかった理由（notRegular のときは 0）。
 	int error = 0;

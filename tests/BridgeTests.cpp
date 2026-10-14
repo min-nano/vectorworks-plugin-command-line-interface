@@ -196,6 +196,19 @@ TEST(BridgeReplyPublishesWithoutLeavingTemp) {
 	CHECK_EQ(VwCli::test::readFile(dir.path() / "r.res.json"), std::string(R"({"ok":false})"));
 }
 
+// 応答の名前にディレクトリがあると付け替えられない。失敗を返し、書きかけを残さない。
+TEST(BridgeReplyFailsWithoutLeavingTempWhenItCannotRename) {
+	TempDir dir;
+	Bridge bridge(dir.utf8Path());
+	std::filesystem::create_directory(dir.path() / "r.res.json");
+	put(dir, "r.res.json/inside");
+	// 書きかけの名前には書ける（失敗するのは書き込みではなく付け替え）。
+	put(dir, "r.res.json.tmp", "old");
+	CHECK(!bridge.reply("r", R"({"ok":true})"));
+	CHECK(!exists(dir, "r.res.json.tmp"));
+	CHECK(std::filesystem::is_directory(dir.path() / "r.res.json"));
+}
+
 #ifndef _WIN32
 // FIFO などの通常のファイルでないものを置かれても、開いて待たない（待つとメインスレッドが止まる）。
 // 待てばこのテストが終わらない。
