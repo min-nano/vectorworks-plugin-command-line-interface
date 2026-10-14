@@ -44,6 +44,7 @@ jobs:
       # 計装したものが読む static_covrun64.dll を Path に足す）。テストの成否は上の ctest で決め、
       # ここは数えるだけ。数える範囲は tests/MsvcCoverage.xml。
       - if: matrix.coverage == 'msvc'
+        shell: pwsh
         env:
           DOTNET_COVERAGE_TELEMETRY_OPTOUT: "1"
           DOTNET_COVERAGE_NOLOGO: "1"
