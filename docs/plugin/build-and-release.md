@@ -80,6 +80,8 @@ cli.vwlibrary.zip                       cli.vlb.zip
   `--prerelease`。中身は main のものと**同じ名前のプラグイン**で、入れると入れ替わる
   （`vw2026 install --tag dev-<slug>`）。戻すときは `vw2026 install`（main の最新）。
 - 資産: `cli.vwlibrary.zip` / `cli.vlb.zip` / `get-vw2026.{sh,ps1}`（初回のスクリプト。
-  利用者は `stable` のものを使う）。本文に機械が読む情報は載せません（版は zip の中の
+  利用者は `stable` のものを使う）。スクリプトの資産は、スクリプトを足す段 3 から上げる
+  （[実装の順序](plan.md)。段 2 の `build.yml` は zip だけを上げ、段 2 から段 3 までは
+  `stable` にスクリプトが無い）。本文に機械が読む情報は載せません（版は zip の中の
   `build.json` が持つ）。CLI 単体の資産は持ちません（zip の `bin/` にあり、初回の
   スクリプトもそこから取り出す）。

@@ -43,8 +43,8 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
 **CLI を取ってきて `install` を走らせるだけ**です。配置の手順・PATH・判断はすべて `install` が
 持ち、スクリプトは持ちません（配置の知識を Go の 1 か所に置き、単体テストで確かめるため）。
 
-1. `stable` の zip（mac は `cli.vwlibrary.zip`、Windows は `cli.vlb.zip`。引数に `--tag <tag>` が
-   あればそのタグのもの）を一時フォルダへ取ってきて、中の `bin/vw2026`（Windows は
+1. `stable` の zip（mac は `cli.vwlibrary.zip`、Windows は `cli.vlb.zip`。タグが指定されていれば
+   そのタグのもの）を一時フォルダへ取ってきて、中の `bin/vw2026`（Windows は
    `bin\vw2026.exe`）だけを取り出す。
 2. 取り出した CLI で `install` を走らせる（スクリプトの引数をそのまま渡す）。
 3. 一時フォルダを消し、`install` の終了コードで終わる。「Vectorworks が動いている」終了コード
@@ -55,7 +55,10 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
   置きます（スクリプトが取った zip は渡さない。指定を増やさないため。zip は小さい）。
 - PR のプレリリースを試すときも同じスクリプトに `--tag dev-<slug>` を渡します（スクリプトが
   取る zip もそのタグのものになり、`install` へもそのまま渡る）。CLI もそのビルドのものになります。
-  スクリプトが読む引数は `--tag` だけで、ほかは解釈せずに渡します。
+  スクリプトが読むのはタグだけで、`install` と同じ与え方（`--tag <tag>`・`--tag=<tag>`・環境変数
+  `VW2026_INSTALL_TAG`。両方あれば引数が勝つ）をすべて読みます。スクリプトが取る zip と `install` が
+  受け取るタグを食い違わせないためです（食い違うと、別のビルドの CLI で入れることになる）。ほかの
+  引数は解釈せずに渡します。
 
 ## インストールと更新（`vw2026 install`）
 
