@@ -287,25 +287,30 @@ Lock::~Lock() { release(); }
 Lock::Result Lock::take(const std::string &path, std::string &error) {
 	release();
 	Opened opened = openFile(path, GENERIC_READ | GENERIC_WRITE, 0, OPEN_ALWAYS);
-	if (opened.refused != Refusal::None) {
+	if (opened.refused != Refusal::None && !recreated_) {
 		// ロックのファイルはプラグインのもので中身を持たないので、断ったら消して作り直す
 		// （重複除去・WOF の圧縮・同期が外れていれば、それで直る）。断れたのは共有なしで
 		// 開けたからで、ほかの Vectorworks は掴んでいない。消すのは名前だけで、reparse point は
-		// たどらない。
-		(void)::DeleteFileW(extended(path).c_str());
+		// たどらない（クラウドのファイルなら、消すときに同期のサービスを待つことがある）。
+		// 作り直すのは 1 度だけ（Files.h）。
+		recreated_ = true;
+		if (!remove(path)) {
+			error = describe("DeleteFile", path, ::GetLastError());
+			return Result::Failed;
+		}
 		opened = openFile(path, GENERIC_READ | GENERIC_WRITE, 0, OPEN_ALWAYS);
 	}
 	if (opened.handle == INVALID_HANDLE_VALUE) {
 		if (opened.refused == Refusal::NotRegular) {
 			error = "CreateFile " + path +
-			        ": 作り直しても通常のファイルになりません（スプールを同期・WOF の圧縮・"
-			        "重複除去の対象から外してください）";
+			        ": 通常のファイルではありません（スプールを同期・WOF の圧縮・重複除去の対象から"
+			        "外し、Vectorworks を起動し直してください）";
 			return Result::Failed;
 		}
 		if (opened.refused == Refusal::NotLocal) {
 			error = "CreateFile " + path +
-			        ": 作り直しても中身がローカルにありません（スプールをオフラインファイル・HSM "
-			        "の対象から外してください）";
+			        ": 中身がローカルにありません（スプールをオフラインファイル・HSM の対象から"
+			        "外し、Vectorworks を起動し直してください）";
 			return Result::Failed;
 		}
 		if (opened.error == ERROR_SHARING_VIOLATION) {

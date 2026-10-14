@@ -215,15 +215,22 @@ TEST(BridgeDoesNotWaitOnFifos) {
 	CHECK_EQ(VwCli::test::readFile(dir.path() / "g.res.json"), std::string(R"({"ok":true})"));
 }
 
-// bridge.lock が通常のファイルでなければ、開いて待たずに、消して作り直してから掴む。
-TEST(BridgeLockRecreatesAFifo) {
+// bridge.lock が通常のファイルでなければ、開いて待たずに、消して作り直してから掴む。作り直すのは
+// 1 つの Lock につき 1 度だけで、2 度目は断った理由を返す（受け付けのたびに繰り返さない）。
+TEST(BridgeLockRecreatesAFifoOnce) {
 	TempDir dir;
-	REQUIRE(::mkfifo(dir.sub("bridge.lock").c_str(), 0600) == 0);
-	Bridge bridge(dir.utf8Path());
+	std::string lockPath = dir.sub("bridge.lock");
+	REQUIRE(::mkfifo(lockPath.c_str(), 0600) == 0);
+	files::Lock lock;
 	std::string error;
-	CHECK(bridge.lock(error) == files::Lock::Result::Taken);
-	CHECK(std::filesystem::is_regular_file(
-	    std::filesystem::symlink_status(dir.path() / "bridge.lock")));
+	CHECK(lock.take(lockPath, error) == files::Lock::Result::Taken);
+	CHECK(std::filesystem::is_regular_file(std::filesystem::symlink_status(lockPath)));
+	lock.release();
+	REQUIRE(::unlink(lockPath.c_str()) == 0);
+	REQUIRE(::mkfifo(lockPath.c_str(), 0600) == 0);
+	CHECK(lock.take(lockPath, error) == files::Lock::Result::Failed);
+	CHECK(error.find("通常のファイルではありません") != std::string::npos);
+	CHECK(!lock.held());
 }
 
 // 書きかけのシンボリックリンクはたどらない（たどると、リンクの先を切り詰めてしまう）。
@@ -312,39 +319,53 @@ TEST(BridgeTreatsReservedNamesAsFiles) {
 }
 
 // リンクでない reparse point（OneDrive などのクラウドのファイルにあたる）も、開き直さずに断る。
-// bridge.lock だけは、消して作り直す。
+// bridge.lock だけは、1 度だけ消して作り直す。
 TEST(BridgeRejectsReparsePointsThatAreNotLinks) {
 	TempDir dir;
+	std::vector<std::string> made;
+	// 作ったものは、テストの終わりに消す（一時ディレクトリを消す std::filesystem が未知の tag の
+	// reparse point を消せるとは限らない。DeleteFileW は reparse point そのものを消す）。
+	auto cleanUp = [&] {
+		for (const std::string &name : made) {
+			CHECK(files::remove(dir.sub(name)));
+		}
+	};
 	for (const char *name : {"r.req.json", "r.wait", "bridge.lock"}) {
 		put(dir, name, R"({"tool":"ping"})");
 		if (DWORD failure = setForeignReparsePoint(dir.path() / name); failure != 0) {
+			cleanUp();
 			// 作れなければ確かめようがない。黙って通らないよう、CI では失敗にする。
 			REQUIRE(!inCi());
 			std::fprintf(stderr, "skip BridgeRejectsReparsePointsThatAreNotLinks: error %lu\n",
 			             failure);
 			return;
 		}
+		made.emplace_back(name);
 	}
-	{
-		Bridge bridge(dir.utf8Path());
-		CHECK(!bridge.take("r"));
-		CHECK(bridge.waitState("r") == files::WaitState::Missing);
-		// bridge.lock は消して作り直してから掴む。
-		std::string error;
-		CHECK(bridge.lock(error) == files::Lock::Result::Taken);
-	}
+	Bridge bridge(dir.utf8Path());
+	CHECK(!bridge.take("r"));
+	CHECK(bridge.waitState("r") == files::WaitState::Missing);
 	// 要求と待つ印は、開き直さずに断るので、reparse point のまま残る（取り出していない）。
 	for (const char *name : {"r.req.json", "r.wait"}) {
 		DWORD attributes = ::GetFileAttributesW((dir.path() / name).c_str());
 		CHECK(attributes != INVALID_FILE_ATTRIBUTES &&
 		      (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0);
 	}
-	DWORD lock = ::GetFileAttributesW((dir.path() / "bridge.lock").c_str());
-	CHECK(lock != INVALID_FILE_ATTRIBUTES && (lock & FILE_ATTRIBUTE_REPARSE_POINT) == 0);
-	// 一時ディレクトリを消す std::filesystem が未知の tag の reparse point を消せるとは限らない
-	// ので、ここで消す（DeleteFileW は reparse point そのものを消す）。
-	CHECK(files::remove(dir.sub("r.req.json")));
-	CHECK(files::remove(dir.sub("r.wait")));
+	// bridge.lock は消して作り直してから掴む。
+	std::string lockPath = dir.sub("bridge.lock");
+	files::Lock lock;
+	std::string error;
+	CHECK(lock.take(lockPath, error) == files::Lock::Result::Taken);
+	DWORD attributes = ::GetFileAttributesW((dir.path() / "bridge.lock").c_str());
+	CHECK(attributes != INVALID_FILE_ATTRIBUTES &&
+	      (attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0);
+	// 2 度目は作り直さず、reparse point を「通常のファイルでない」として断ったことを返す
+	// （開き直して開けなかったのなら、CreateFile の error の番号になる）。
+	lock.release();
+	REQUIRE(setForeignReparsePoint(dir.path() / "bridge.lock") == 0);
+	CHECK(lock.take(lockPath, error) == files::Lock::Result::Failed);
+	CHECK(error.find("通常のファイルではありません") != std::string::npos);
+	cleanUp();
 }
 
 // 絶対パスでないパスは開かない（\\?\ を付けられず、予約された名前がデバイスを指すため）。

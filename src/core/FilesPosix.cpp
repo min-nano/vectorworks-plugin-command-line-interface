@@ -211,15 +211,21 @@ Lock::~Lock() { release(); }
 Lock::Result Lock::take(const std::string &path, std::string &error) {
 	release();
 	Opened opened = openRegular(path, O_RDWR | O_CREAT, 0600);
-	if (opened.notRegular) {
+	if (opened.notRegular && !recreated_) {
 		// ロックのファイルはプラグインのもので中身を持たないので、通常のファイルでなければ消して
 		// 作り直す（FIFO・リンクは、ほかの Vectorworks も掴めない）。消すのは名前だけで、リンクは
-		// たどらない。
-		(void)::unlink(path.c_str());
+		// たどらない。作り直すのは 1 度だけ（Files.h）。
+		recreated_ = true;
+		if (::unlink(path.c_str()) != 0) {
+			error = describe("unlink", path, errno);
+			return Result::Failed;
+		}
 		opened = openRegular(path, O_RDWR | O_CREAT, 0600);
 	}
 	if (opened.fd < 0) {
-		error = opened.notRegular ? "open " + path + ": 作り直しても通常のファイルになりません"
+		error = opened.notRegular ? "open " + path +
+		                                ": 通常のファイルではありません（消して、Vectorworks を"
+		                                "起動し直してください）"
 		                          : describe("open", path, opened.error);
 		return Result::Failed;
 	}

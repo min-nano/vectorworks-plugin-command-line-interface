@@ -83,6 +83,10 @@ public:
 	Lock &operator=(const Lock &) = delete;
 
 	// take は path を作って（あれば開いて）排他で掴む。Failed なら error に理由を書く。
+	//
+	// path が通常のファイルでない・中身がローカルにない（Windows）として断ったら、名前を消して
+	// 作り直す。ただし 1 つの Lock につき 1 度だけ（受け付けのたびに消して作るのを繰り返さない。
+	// 同期のサービスなどが、そのたびに動かないように）。
 	Result take(const std::string &path, std::string &error);
 	bool held() const { return handle_ != kNone; }
 	void release();
@@ -91,6 +95,8 @@ private:
 	// POSIX はファイル記述子、Windows は HANDLE（INVALID_HANDLE_VALUE は -1）。
 	static constexpr std::intptr_t kNone = -1;
 	std::intptr_t handle_ = kNone;
+	// 断った path を、もう作り直したか。
+	bool recreated_ = false;
 };
 
 }
