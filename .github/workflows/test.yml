@@ -17,32 +17,60 @@ jobs:
       fail-fast: false
       # Vectorworks の対応 OS（darwin・windows）でテストする。MSVC には UndefinedBehaviorSanitizer が
       # 無いので、Windows はサニタイザを付けない（ASan と UBSan は macOS と fuzz のジョブが受け持つ）。
-      # カバレッジは clang の source-based coverage で測るので macOS だけで測る（MSVC には同じものが無い）。
+      # カバレッジは両方で測る。macOS は clang の source-based coverage（llvm）、Windows は MSVC の
+      # ビルドを Visual Studio の Microsoft.CodeCoverage.Console（msvc）で測る。Windows でしか
+      # ビルドしない FilesWindows.cpp は msvc の分にだけ入る。
       matrix:
         include:
           - os: macos-latest
             sanitizers: "ON"
-            coverage: "ON"
+            coverage: llvm
           - os: windows-latest
             sanitizers: "OFF"
-            coverage: "OFF"
+            coverage: msvc
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - run: cmake -S . -B build -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=${{ matrix.sanitizers }} -DVW_ENABLE_COVERAGE=${{ matrix.coverage }} -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
+      - run: cmake -S . -B build -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=${{ matrix.sanitizers }} -DVW_ENABLE_COVERAGE=${{ matrix.coverage != '' && 'ON' || 'OFF' }} -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
       - run: cmake --build build --config Debug
-      - run: ctest --test-dir build --build-config Debug --output-on-failure
+      # msvc はテストを計測の下で 1 回だけ走らせる（下のステップ）。
+      - if: matrix.coverage != 'msvc'
+        run: ctest --test-dir build --build-config Debug --output-on-failure
       # 共通部（src/core）だけを lcov にする（テストのコードと標準ライブラリのヘッダは数えない）。
-      - if: matrix.coverage == 'ON'
+      - if: matrix.coverage == 'llvm'
         run: |
           xcrun llvm-profdata merge -sparse build/coverage/*.profraw -o build/coverage.profdata
           xcrun llvm-cov export build/VwCliTests -instr-profile=build/coverage.profdata -format=lcov src/core > build/coverage.lcov
-      # Go（cli.yml）と分けて見られるように、フラグを cpp にする。cli.yml と同じコミットに固定する。
-      - if: matrix.coverage == 'ON'
+      # ランナーの Visual Studio に付いているものを使う（版はランナーのイメージの Visual Studio に
+      # 従う。MSVC と同じ。docs/plugin/build-and-release.md「CI」）。テストの実行ファイルをその場で
+      # 計装し、ctest を collect の下で走らせる（collect は子のプロセスも数え、計装したものが読む
+      # static_covrun64.dll を Path に足す）。ctest を通すので、テストの TIMEOUT がここでも効く。
+      # collect が ctest の終了コードを返すかに頼らず、ctest が残す失敗の記録でも成否を決める。
+      # 数える範囲は tests/MsvcCoverage.xml。
+      - if: matrix.coverage == 'msvc'
+        shell: pwsh
+        timeout-minutes: 10
+        env:
+          DOTNET_COVERAGE_TELEMETRY_OPTOUT: "1"
+          DOTNET_COVERAGE_NOLOGO: "1"
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $tool = & $vswhere -latest -products * -find 'Common7\IDE\Extensions\Microsoft\CodeCoverage.Console\Microsoft.CodeCoverage.Console.exe' | Select-Object -First 1
+          if (-not $tool) { throw 'Microsoft.CodeCoverage.Console.exe not found' }
+          & $tool --version
+          & $tool instrument --settings tests/MsvcCoverage.xml build/Debug/VwCliTests.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $tool collect --settings tests/MsvcCoverage.xml -f cobertura -o build/coverage.cobertura.xml ctest --test-dir build --build-config Debug --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (Test-Path build/Testing/Temporary/LastTestsFailed.log) { throw 'tests failed' }
+          if (-not (Test-Path build/coverage.cobertura.xml)) { throw 'no coverage report' }
+      # Go（cli.yml）と分けて見られるように、フラグを cpp にする（llvm と msvc は同じフラグに合わせる）。
+      # cli.yml と同じコミットに固定する。
+      - if: matrix.coverage != ''
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: build/coverage.lcov
+          files: ${{ matrix.coverage == 'llvm' && 'build/coverage.lcov' || 'build/coverage.cobertura.xml' }}
           flags: cpp
           fail_ci_if_error: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
 

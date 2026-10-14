@@ -92,6 +92,12 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   で見る（macOS は `xcrun` を前に付ける。CI は同じものを lcov にして Codecov へ送る）。
   `llvm-profdata`・`llvm-cov` はビルドに使った clang と同じ版を使う（版が違うと結果を読めない
   ことがある。Linux では `llvm-profdata-18` のように版の付いた名前で入っていることが多い）。
+  Windows（MSVC）は `-DVW_ENABLE_COVERAGE=ON`（`/PROFILE` を付けてリンクする。
+  `VW_ENABLE_SANITIZERS` とは併用できない）でビルドし、Developer PowerShell で
+  `Remove-Item build/Debug/VwCliTests.exe -ErrorAction Ignore; cmake --build build --config Debug; Microsoft.CodeCoverage.Console instrument --settings tests/MsvcCoverage.xml build/Debug/VwCliTests.exe; Microsoft.CodeCoverage.Console collect --settings tests/MsvcCoverage.xml -f cobertura -o build/coverage.cobertura.xml ctest --test-dir build --build-config Debug --output-on-failure`
+  で集める（Visual Studio に付属。2022 は Enterprise だけ）。計装は実行ファイルをその場で
+  書き換え、ソースが変わらなければ `cmake --build` は再リンクしないので、毎回 exe を消して
+  リンクし直してから計装する（計装済みのものを重ねて計装しない）。
 - 外部のライブラリ（テストの枠組みを含む）は足さない。標準ライブラリと OS の呼び出しで書く。
 
 ## 文書

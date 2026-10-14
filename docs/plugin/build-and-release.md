@@ -7,7 +7,7 @@
 | 項目 | 内容 |
 | --- | --- |
 | プロジェクト | `project(VwCli CXX)`（Apple では OBJCXX も） |
-| 選択肢 | `VW_BUILD_PLUGIN`（ON）・`VW_BUILD_TESTS`（OFF）・`VW_BUILD_FUZZERS`（OFF。clang の libFuzzer が要る）・`VW_ENABLE_SANITIZERS`（OFF。ASan と UBSan。MSVC は ASan だけ）・`VW_ENABLE_COVERAGE`（OFF。clang の source-based coverage。MSVC は不可）・`VW_ENABLE_PCH`（ON）。段 1 にあるのは `VW_BUILD_TESTS`・`VW_BUILD_FUZZERS`・`VW_ENABLE_SANITIZERS`・`VW_ENABLE_COVERAGE` だけで、ほかはプラグインを足す段 2 から |
+| 選択肢 | `VW_BUILD_PLUGIN`（ON）・`VW_BUILD_TESTS`（OFF）・`VW_BUILD_FUZZERS`（OFF。clang の libFuzzer が要る）・`VW_ENABLE_SANITIZERS`（OFF。ASan と UBSan。MSVC は ASan だけ）・`VW_ENABLE_COVERAGE`（OFF。clang は source-based coverage、MSVC は `/PROFILE` を付けてリンクし Visual Studio の `Microsoft.CodeCoverage.Console` で測る。clang-cl は不可）・`VW_ENABLE_PCH`（ON）。段 1 にあるのは `VW_BUILD_TESTS`・`VW_BUILD_FUZZERS`・`VW_ENABLE_SANITIZERS`・`VW_ENABLE_COVERAGE` だけで、ほかはプラグインを足す段 2 から |
 | SDK | `VW_SDK_DIR`（`SDKLib` を含む）。mac は `libVWSDK.a`＋VWMM・`BuildVWR`、Windows は x64 だけ（`VWSDK.lib`・`VWMM.lib`・`buildvwr.exe`） |
 | 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。プラグインとテストがリンク。OS ごとの呼び出しは `FilesPosix.cpp` / `FilesWindows.cpp` の片方） |
 | テスト | `VwCliTests`（`tests/*Tests.cpp`。外部のテストの枠組みに依らない）・`JsonFuzzer`（`tests/JsonFuzzer.cpp`）。テストは `protocol/fixtures` を読む |
@@ -26,7 +26,7 @@
 | --- | --- | --- |
 | `cli.yml`（既存） | push / PR・マージキュー | Go のテスト（macOS・Windows）とビルド |
 | `format.yml`（既存） | push / PR・マージキュー | `scripts/format.sh`（[整形](../format.md)。gofmt・shfmt・clang-format・PSScriptAnalyzer） |
-| `test.yml` | push / PR・マージキュー | 無 SDK の単体テストと通信規則の見本の照合（macOS は ASan・UBSan 付き、Windows は MSVC で付けない）。macOS の単体テストでカバレッジを測り、共通部（`src/core`）の分を Codecov へ送る（フラグ `cpp`。Windows では測らないので `FilesWindows.cpp` は数に入らない）。ubuntu の clang で同じテストを ASan・UBSan 付きで走らせ、`core/Json` のファジングを 120 秒回す |
+| `test.yml` | push / PR・マージキュー | 無 SDK の単体テストと通信規則の見本の照合（macOS は ASan・UBSan 付き、Windows は MSVC で付けない）。macOS（clang の source-based coverage）と Windows（MSVC のビルドを `Microsoft.CodeCoverage.Console` で）の単体テストでカバレッジを測り、共通部（`src/core`）の分を Codecov へ送る（どちらもフラグ `cpp`。`FilesWindows.cpp` は Windows の分にだけ入る。Windows の範囲は `tests/MsvcCoverage.xml`。Windows はテストを計測の下で 1 回だけ走らせる）。ubuntu の clang で同じテストを ASan・UBSan 付きで走らせ、`core/Json` のファジングを 120 秒回す |
 | `lint.yml`（既存） | push / PR・マージキュー | `scripts/lint.sh`（[検査](../lint.md)。go vet・actionlint・shellcheck・clang-tidy（無 SDK）・PSScriptAnalyzer） |
 | `build.yml` | push（main）/ PR / 手動 | mac と Windows のビルド・梱包・リリース |
 | `cleanup-dev-release.yml` | PR が閉じたとき | `dev-<slug>` を消す |
@@ -36,6 +36,10 @@
 必須かどうかを分けられないため、絞ると対象外の変更だけの PR（文書だけ等）でチェックが報告されず、
 マージできなくなります。
 
+- **Windows のカバレッジの道具の版は固定しない。** `Microsoft.CodeCoverage.Console` は単独で
+  配られず、ランナーのイメージの Visual Studio に付属するものだけを使える。MSVC と同じく
+  イメージに従い、使った版はジョブのログ（`--version` の出力）で確かめる。イメージの更新で
+  Codecov の `cpp` の数値が、このリポジトリのコミット無しに動くことがある。
 - **持たないもの**（要ると分かってから足す）: SDK に依存する clang-tidy とそのキャッシュ、
   CI の上で調べるためのワークフロー、リリースの定期的な確認。
 
