@@ -36,15 +36,15 @@ macOS と Windows の CI で確かめ、置き換わる範囲の行数を比べ�
 
 | 前提 | テスト | Linux | macOS | Windows |
 | --- | --- | --- | --- | --- |
-| 閉じた呼ぶ側へ送ると失敗し、SIGPIPE で落ちない | `SocketClosedClientIsNotRun` | 確かめた | CI | CI |
-| 止まらずに数回へ分けて送る（8 MiB） | `SocketLargeResponseSpansTicks` | 40 回 | CI | CI |
-| 要求が数回に分かれて届いても読める | `SocketPartialRequestWaitsForNewline` | 確かめた | CI | CI |
-| やめた呼ぶ側を実行しない | `SocketCancelBeforeTakenIsNotRun`・Go `TestCallDeferredIsNotRun` | 確かめた | CI | CI |
-| 送る側だけを閉じた呼ぶ側も、やめたものとして実行しない | `SocketHalfClosedClientIsNotRun` | 確かめた | CI | CI |
-| つないだ順に実行する | `SocketRunsInConnectOrder` | 確かめた | CI | CI |
-| 残ったソケットを次の側が作り直せる・ロックの無い側は触らない | `SocketStaleSocketIsReplaced`・`SocketSecondServerLeavesSocketAlone` | 確かめた | CI | CI |
-| パスに ASCII でない文字があってもよい（Windows が `sun_path` を UTF-8 で読むか） | `SocketNonAsciiPath`・Go `TestCallNonASCIIPath` | 確かめた | CI | CI |
-| パスの長さの上限と、スプールの余裕 | `SocketPathLimit`・Go `TestSocketPathLength`（ログに出す） | 107 バイト | CI | CI |
+| 閉じた呼ぶ側を実行しない・SIGPIPE で落ちない | `SocketClosedClientIsNotRun` | 確かめた | 確かめた | 確かめた（送りは失敗しない。EOF で知る） |
+| 止まらずに数回へ分けて送る（8 MiB） | `SocketLargeResponseSpansTicks` | 40 回 | 確かめた | 1 回で送り切る |
+| 要求が数回に分かれて届いても読める | `SocketPartialRequestWaitsForNewline` | 確かめた | 確かめた | 確かめた |
+| やめた呼ぶ側を実行しない | `SocketCancelBeforeTakenIsNotRun`・Go `TestCallDeferredIsNotRun` など | 確かめた | 確かめた | 確かめた |
+| 送る側だけを閉じた呼ぶ側も、やめたものとして実行しない | `SocketHalfClosedClientIsNotRun` | 確かめた | 確かめた | 確かめた |
+| つないだ順に実行する | `SocketRunsInConnectOrder` | 確かめた | 確かめた | 確かめた |
+| 残ったソケットを次の側が作り直せる・ロックの無い側は触らない | `SocketStaleSocketIsReplaced`・`SocketSecondServerLeavesSocketAlone` | 確かめた | 確かめた | 確かめた |
+| パスに ASCII でない文字があってもよい（Windows が `sun_path` を UTF-8 で読むか） | `SocketNonAsciiPath`・Go `TestCallNonASCIIPath` | 確かめた | 確かめた | 確かめた（UTF-8 で読む） |
+| パスの長さの上限 | `SocketPathLimit` | 107 バイト | 103 バイト | 107 バイト |
 
 確かめていないこと:
 
@@ -55,4 +55,42 @@ macOS と Windows の CI で確かめ、置き換わる範囲の行数を比べ�
 
 ## 結果
 
-CI の結果を待って書く。
+### Windows で分かったこと
+
+- **閉じた呼ぶ側へ送っても失敗しない。** 呼ぶ側が居ないことは、受け取りの EOF（切断）で知るしか
+  ない。そのため、送る側だけを閉じた呼ぶ側（`echo … | nc -U` の形）は、閉じた呼ぶ側と見分けられず、
+  実行しない。
+- **8 MiB の応答を 1 回の送りで受け取る。** 数回に分けて送る状態は POSIX だけで生じる。「応答を
+  書けたときだけ占有などを反映する」は、Windows では OS に渡せたときになる（作法 5 で応答の
+  ファイルを書けたときと同じ強さ）。
+- **`std::filesystem::exists` でソケットのファイルを確かめると止まる**（たどって開くため）。
+  スプールのファイルを、たどらずに開く作法（作法 5「プラグイン側の義務」）はソケットにしても要る。
+- `sun_path` は UTF-8 で読まれる（C++ も Go も、ASCII でないディレクトリでつなげた）。
+
+### パスの長さ
+
+ソケットのパスは、mac で `73 + 利用者名のバイト数`（上限 103）、Windows で `61 + プロファイルの
+フォルダ名のバイト数`（上限 107）。mac の利用者名は ASCII なので 30 文字まで、Windows は日本語の
+名前なら 15 文字（45 バイト）までで、ローカルアカウントの名前の上限（20 文字）に届かない。超える
+ときに備えて、ソケットの名前を短くするか、別の置き場所を決める必要がある。
+
+### 行数（空行とコメントを除く。テストのためだけのコードを除く）
+
+| | 消える | 足す | 差 |
+| --- | --- | --- | --- |
+| C++（`Files*` の list〜probe・`Bridge` の sweep〜reply → `Socket*`・`SocketServe`） | 約 240 | 約 410 | **約 170 増える** |
+| Go（`spool` の `Call`・`poller`・`WriteAtomically`・`holdWait` → `sockproto`） | 約 170 | 約 110 | **約 60 減る** |
+
+`bridge.lock` と、そのファイルをたどらずに開く防御（`Files*` の大半）は残る。偽のプラグイン
+（`fakeplugin`）と作法の見本（`protocol/fixtures` の受け付け 1 回）は作り直しになる（数えていない）。
+
+作法の文書は、id の綴り・書きかけと rename・待つ印・掃除が無くなる代わりに、受け取りの行と
+やめる 1 バイトの手順、OS ごとの違い（上の 2 つ）、パスの長さが加わる。
+
+### 判断の材料
+
+- コードは減らない（C++ が増え、Go が少し減る）。
+- 決めごとは種類が入れ替わる。ファイルの決めごと（id・rename・待つ印・掃除）は消えるが、OS ごとの
+  ソケットの振る舞いの違いとパスの長さという、新しい決めごとが入る。
+- 試作で確かめられないこと（受け取りの行とやめる 1 バイトの競合、実機の OS タイマーの刻みからの
+  扱い）が残る。
