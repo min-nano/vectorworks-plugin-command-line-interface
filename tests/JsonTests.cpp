@@ -56,6 +56,9 @@ TEST(JsonParsesEveryType) {
 	CHECK_EQ(value->find("a")->items().size(), std::size_t{2});
 	CHECK(value->find("o")->isObject() && value->find("o")->members().empty());
 	CHECK(value->find("missing") == nullptr);
+	// オブジェクトでない値には、キーが無いのと同じに答える。
+	CHECK(value->find("a")->find("0") == nullptr);
+	CHECK(value->find("s")->find("x") == nullptr);
 }
 
 TEST(JsonDepthLimitCountsTheOutermostAsOne) {
@@ -82,6 +85,7 @@ TEST(JsonRejectsWhatEncodingJsonRejects) {
 	                         " ",
 	                         "{",
 	                         "{\"a\"}",
+	                         "{\"\\x\":1}",
 	                         "{\"a\":}",
 	                         "{\"a\":1,}",
 	                         "[1,]",
@@ -99,6 +103,7 @@ TEST(JsonRejectsWhatEncodingJsonRejects) {
 	                         "True",
 	                         "nul",
 	                         "\"\\x\"",
+	                         "\"\\",
 	                         "\"\\u12\"",
 	                         "\"\\u12g4\"",
 	                         "\"a\nb\"",
@@ -125,6 +130,8 @@ TEST(JsonDecodesEscapes) {
 	REQUIRE(value);
 	CHECK_EQ(value->asString(),
 	         std::string("\"\\/\b\f\n\r\tA\xc3\xa9\xe3\x81\x82\xf0\x9f\x98\x80"));
+	// 16 進の大文字も小文字と同じに読む。
+	CHECK_EQ(must(R"("\u00E9\uD83D\uDE00")").asString(), std::string("\xc3\xa9\xf0\x9f\x98\x80"));
 }
 
 TEST(JsonReplacesLoneSurrogates) {
@@ -244,6 +251,9 @@ TEST(JsonRoundTrips) {
 TEST(JsonComparesObjectsIgnoringOrder) {
 	CHECK_EQ(must(R"({"a":1,"b":[1,2]})"), must(R"({"b":[1,2],"a":1})"));
 	CHECK(!(must(R"({"a":1})") == must(R"({"a":1,"b":2})")));
+	// キーの数が同じでも、キーか値が違えば違う。
+	CHECK(!(must(R"({"a":1})") == must(R"({"b":1})")));
+	CHECK(!(must(R"({"a":1})") == must(R"({"a":2})")));
 	CHECK(!(must("[1,2]") == must("[2,1]")));
 	CHECK(!(must("1") == must("1.0")));
 	CHECK(!(must("null") == must("false")));
