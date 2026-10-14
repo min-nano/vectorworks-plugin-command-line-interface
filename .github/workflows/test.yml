@@ -37,9 +37,9 @@ jobs:
         run: |
           xcrun llvm-profdata merge -sparse build/coverage/*.profraw -o build/coverage.profdata
           xcrun llvm-cov export build/VwCliTests -instr-profile=build/coverage.profdata -format=lcov src/core > build/coverage.lcov
-      # Go（cli.yml）と分けて見られるように、フラグを cpp にする。
+      # Go（cli.yml）と分けて見られるように、フラグを cpp にする。cli.yml と同じコミットに固定する。
       - if: matrix.coverage == 'ON'
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: build/coverage.lcov
