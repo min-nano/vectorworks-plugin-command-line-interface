@@ -7,7 +7,7 @@
 | 読む側 | テスト |
 | --- | --- |
 | プラグイン（`src/core`） | `tests/FixtureTests.cpp`（定数・id・受け付け）。ファジング（`tests/JsonFuzzer.cpp`）は `requests/` を種にする |
-| CLI | `cli/internal/spool/fixtures_test.go`（定数・id）・`cli/internal/fakeplugin/fixtures_test.go`（受け付け） |
+| CLI | `cli/internal/spool/fixtures_test.go`（定数・id）・`cli/internal/fakeplugin/fixtures_test.go`（受け付け）。ファジング（`cli/internal/spool/fuzz_test.go`）は `requests/` を種にする |
 
 ## 置き場所
 

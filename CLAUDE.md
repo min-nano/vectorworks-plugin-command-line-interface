@@ -62,6 +62,11 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 - いま入っている依存は [kong](https://github.com/alecthomas/kong)（コマンドラインの解析。MIT。
   実行ファイルに入る推移的な依存なし）だけ。
 - 受け渡しは偽のプラグインに対する単体テストで確かめる（`cli/internal/fakeplugin`）。
+- 手書きの字句処理（`spool.NestingDepth`）は Go の標準のファジングで確かめる（`cli/internal/spool/fuzz_test.go`。
+  `go test` は種だけを走らせ、CI の `go.yml` が 60 秒回す）。手元では `cli/` で
+  `go test -run '^$' -fuzz '^FuzzNestingDepth$' -fuzztime 60s ./internal/spool`。落ちた入力は
+  `internal/spool/testdata/fuzz/` に書かれ、`go test -run` で再現できる。JSON の解析そのものは
+  `encoding/json` に任せていて、ファジングしない。
 - **CLI の使い方（コマンド・指定・出力・終了コード）は、コマンドの定義に英語で書く。**
   1 コマンド 1 ファイル（`cli/cmd/vw2026/call.go` 等）の構造体で、kong のタグ（`help`）と
   `Help()`（詳しい説明）を `run` の隣に書く。全体の説明と終了コードは `main.go` の `cli.Help()`。

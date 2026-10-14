@@ -42,6 +42,26 @@ jobs:
           flags: go
           fail_ci_if_error: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
 
+  # NestingDepth のファジング（cli/internal/spool/fuzz_test.go）。OS に依らない純粋な関数なので
+  # ubuntu だけで回す。test の go test は種だけを確かめる。
+  fuzz:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: cli/go.mod
+      - run: go test -run '^$' -fuzz '^FuzzNestingDepth$' -fuzztime 60s ./internal/spool
+      # 落ちた入力は testdata/fuzz に書かれる。手元で go test -run で再現できるように残す。
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-crashers
+          path: cli/internal/spool/testdata/fuzz/
+
   build:
     needs: test
     runs-on: ubuntu-latest
