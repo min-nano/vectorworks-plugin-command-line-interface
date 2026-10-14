@@ -101,6 +101,12 @@ void settle(SocketServer &server, const Handler &handler, std::vector<Client *> 
 	}
 }
 
+// present はパスに何かあるか。たどらずに確かめる（std::filesystem::exists は Windows で AF_UNIX の
+// ソケット（reparse point）をたどって開こうとし、止まる）。
+bool present(const std::filesystem::path &path) {
+	return std::filesystem::exists(std::filesystem::symlink_status(path));
+}
+
 std::string socketPath(const TempDir &dir) { return dir.sub(std::string(kSocketFile)); }
 
 void listen(SocketServer &server) {
@@ -299,7 +305,7 @@ TEST(SocketStaleSocketIsReplaced) {
 		SocketServer first(dir.utf8Path());
 		listen(first);
 	}
-	CHECK(std::filesystem::exists(dir.path() / std::string(kSocketFile)));
+	CHECK(present(dir.path() / std::string(kSocketFile)));
 	{
 		// 残ったソケットへつないでも、待ち受けている者は居ない。
 		Client client(socketPath(dir));
@@ -339,7 +345,7 @@ TEST(SocketNonAsciiPath) {
 	std::string subUtf8 = VwCli::test::utf8(sub);
 	SocketServer server(subUtf8);
 	listen(server);
-	CHECK(std::filesystem::exists(sub / std::string(kSocketFile)));
+	CHECK(present(sub / std::string(kSocketFile)));
 	Client client(files::join(subUtf8, kSocketFile));
 	REQUIRE(client.connected());
 	client.put("x\n");
