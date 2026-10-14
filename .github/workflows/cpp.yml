@@ -1,4 +1,4 @@
-name: test
+name: cpp
 
 on:
   push:
@@ -10,13 +10,15 @@ permissions:
   contents: read
 
 # SDK に依らない共通部（src/core）の単体テストとファジング（docs/plugin/build-and-release.md「CI」）。
-# テストは通信規則の見本（protocol/fixtures）も読む。同じ見本を読む Go のテストは cli.yml が走らせる。
+# テストは通信規則の見本（protocol/fixtures）も読む。同じ見本を読む Go のテストは go.yml が走らせる。
 jobs:
-  unit:
+  test:
+    name: test (${{ matrix.os }})
     strategy:
       fail-fast: false
       # Vectorworks の対応 OS（darwin・windows）でテストする。MSVC には UndefinedBehaviorSanitizer が
-      # 無いので、Windows はサニタイザを付けない（ASan と UBSan は macOS と fuzz のジョブが受け持つ）。
+      # 無いので、Windows はサニタイザを付けない（ASan と UBSan は macOS の test と fuzz のジョブが
+      # 受け持つ）。
       # カバレッジは両方で測る。macOS は clang の source-based coverage（llvm）、Windows は MSVC の
       # ビルドを Visual Studio の Microsoft.CodeCoverage.Console（msvc）で測る。Windows でしか
       # ビルドしない FilesWindows.cpp は msvc の分にだけ入る。
@@ -64,8 +66,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (Test-Path build/Testing/Temporary/LastTestsFailed.log) { throw 'tests failed' }
           if (-not (Test-Path build/coverage.cobertura.xml)) { throw 'no coverage report' }
-      # Go（cli.yml の go）と分けて見られるように、フラグを cpp にする（llvm と msvc は同じフラグに合わせる）。
-      # cli.yml と同じコミットに固定する。
+      # Go（go.yml の go）と分けて見られるように、フラグを cpp にする（llvm と msvc は同じフラグに合わせる）。
+      # go.yml と同じコミットに固定する。
       - if: matrix.coverage != ''
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
