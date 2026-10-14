@@ -66,6 +66,22 @@ if(VW_BUILD_TESTS)
 	# 開いて待たないことのテスト（FIFO）は、退行すると失敗ではなく止まって現れる。CI のジョブの
 	# 上限まで待たないよう、上限を付ける（ふだんは数秒で終わる）。
 	set_tests_properties(VwCliTests PROPERTIES TIMEOUT 120)
+
+	# 試作: スプールのファイルの代わりに AF_UNIX のソケットで受け渡す（prototypes/socket/README.md）。
+	# マージしない。前提を macOS と Windows の CI で確かめるためだけに置く。
+	add_executable(SocketPrototypeTests prototypes/socket/src/SocketServe.cpp
+										prototypes/socket/tests/SocketTests.cpp tests/TestMain.cpp
+										tests/TestSupport.cpp)
+	if(WIN32)
+		target_sources(SocketPrototypeTests PRIVATE prototypes/socket/src/SocketWindows.cpp)
+		target_link_libraries(SocketPrototypeTests PRIVATE ws2_32)
+	else()
+		target_sources(SocketPrototypeTests PRIVATE prototypes/socket/src/SocketPosix.cpp)
+	endif()
+	target_include_directories(SocketPrototypeTests PRIVATE prototypes/socket/src tests)
+	target_link_libraries(SocketPrototypeTests PRIVATE VwCliCore)
+	add_test(NAME SocketPrototypeTests COMMAND SocketPrototypeTests)
+	set_tests_properties(SocketPrototypeTests PROPERTIES TIMEOUT 120)
 endif()
 
 # --- ファジング -----------------------------------------------------------------------------
