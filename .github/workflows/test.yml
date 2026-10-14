@@ -17,18 +17,34 @@ jobs:
       fail-fast: false
       # Vectorworks の対応 OS（darwin・windows）でテストする。MSVC には UndefinedBehaviorSanitizer が
       # 無いので、Windows はサニタイザを付けない（ASan と UBSan は macOS と fuzz のジョブが受け持つ）。
+      # カバレッジは clang の source-based coverage で測るので macOS だけで測る（MSVC には同じものが無い）。
       matrix:
         include:
           - os: macos-latest
             sanitizers: "ON"
+            coverage: "ON"
           - os: windows-latest
             sanitizers: "OFF"
+            coverage: "OFF"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - run: cmake -S . -B build -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=${{ matrix.sanitizers }} -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
+      - run: cmake -S . -B build -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=${{ matrix.sanitizers }} -DVW_ENABLE_COVERAGE=${{ matrix.coverage }} -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
       - run: cmake --build build --config Debug
       - run: ctest --test-dir build --build-config Debug --output-on-failure
+      # 共通部（src/core）だけを lcov にする（テストのコードと標準ライブラリのヘッダは数えない）。
+      - if: matrix.coverage == 'ON'
+        run: |
+          xcrun llvm-profdata merge -sparse build/coverage/*.profraw -o build/coverage.profdata
+          xcrun llvm-cov export build/VwCliTests -instr-profile=build/coverage.profdata -format=lcov src/core > build/coverage.lcov
+      # Go（cli.yml）と分けて見られるように、フラグを cpp にする。cli.yml と同じコミットに固定する。
+      - if: matrix.coverage == 'ON'
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: build/coverage.lcov
+          flags: cpp
+          fail_ci_if_error: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
 
   # libFuzzer は Apple の clang に無いので、ubuntu の clang で回す。単体テストも同じビルドで走らせる。
   fuzz:

@@ -12,6 +12,7 @@ project(VwCli LANGUAGES CXX)
 option(VW_BUILD_TESTS "Build the SDK-free unit tests" OFF)
 option(VW_BUILD_FUZZERS "Build the libFuzzer targets (clang only)" OFF)
 option(VW_ENABLE_SANITIZERS "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(VW_ENABLE_COVERAGE "Build with LLVM source-based coverage (clang only)" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,6 +34,17 @@ if(VW_ENABLE_SANITIZERS)
 							-fno-omit-frame-pointer)
 		add_link_options(-fsanitize=address,undefined)
 	endif()
+endif()
+
+# clang の source-based coverage（test.yml が llvm-cov で集めて Codecov へ送る）。MSVC には
+# 同じものが無いので、clang（Apple の clang を含む）に限る。clang-cl はリンカーが link.exe・
+# lld-link でリンクの指定を受け付けないので弾く。
+if(VW_ENABLE_COVERAGE)
+	if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+		message(FATAL_ERROR "VW_ENABLE_COVERAGE needs clang with the GNU-style driver (not clang-cl)")
+	endif()
+	add_compile_options(-fprofile-instr-generate -fcoverage-mapping)
+	add_link_options(-fprofile-instr-generate)
 endif()
 
 if(VW_BUILD_FUZZERS)
@@ -78,4 +90,22 @@ if(VW_BUILD_FUZZERS)
 		add_test(NAME JsonFuzzerSeeds
 				 COMMAND JsonFuzzer -runs=0 ${CMAKE_CURRENT_SOURCE_DIR}/protocol/fixtures/requests)
 	endif()
+endif()
+
+# --- カバレッジ -----------------------------------------------------------------------------
+if(VW_ENABLE_COVERAGE AND VW_BUILD_TESTS)
+	# 前の実行の結果が混ざらないよう、テストの前に消す（同じビルドでテストを繰り返すと、変えた
+	# 行が前の結果で通ったと数えられる）。ctest -R で絞っても、準備のテストは一緒に走る。
+	set(coverageDir ${CMAKE_BINARY_DIR}/coverage)
+	add_test(NAME CoverageClean COMMAND ${CMAKE_COMMAND} -E rm -rf ${coverageDir})
+	set_tests_properties(CoverageClean PROPERTIES FIXTURES_SETUP coverage)
+	# 計測付きのテストはすべて結果を同じ場所に書く（%p はプロセスごとに分ける）。ENVIRONMENT は
+	# 置き換えではなく足して、ほかの指定を消さない。
+	foreach(test IN ITEMS VwCliTests JsonFuzzerSeeds)
+		if(TEST ${test})
+			set_property(TEST ${test} APPEND
+						 PROPERTY ENVIRONMENT "LLVM_PROFILE_FILE=${coverageDir}/%p.profraw")
+			set_property(TEST ${test} APPEND PROPERTY FIXTURES_REQUIRED coverage)
+		endif()
+	endforeach()
 endif()

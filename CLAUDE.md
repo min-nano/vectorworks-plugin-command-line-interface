@@ -87,6 +87,11 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   `mkdir -p corpus crashes && build/JsonFuzzer -max_total_time=120 -artifact_prefix=crashes/ corpus protocol/fixtures/requests`
   で回す（libFuzzer は見つけた入力を最初に渡したディレクトリへ書くので、空のコーパスを先に渡し、
   見本のディレクトリを汚さない）。
+  カバレッジは clang（Apple の clang も可）で `-DVW_ENABLE_COVERAGE=ON` を足してテストを走らせ、
+  `llvm-profdata merge -sparse build/coverage/*.profraw -o build/coverage.profdata && llvm-cov report build/VwCliTests -instr-profile=build/coverage.profdata src/core`
+  で見る（macOS は `xcrun` を前に付ける。CI は同じものを lcov にして Codecov へ送る）。
+  `llvm-profdata`・`llvm-cov` はビルドに使った clang と同じ版を使う（版が違うと結果を読めない
+  ことがある。Linux では `llvm-profdata-18` のように版の付いた名前で入っていることが多い）。
 - 外部のライブラリ（テストの枠組みを含む）は足さない。標準ライブラリと OS の呼び出しで書く。
 
 ## 文書
