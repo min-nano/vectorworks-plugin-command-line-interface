@@ -36,15 +36,19 @@ if(VW_ENABLE_SANITIZERS)
 	endif()
 endif()
 
-# clang の source-based coverage（test.yml が llvm-cov で集めて Codecov へ送る）。MSVC には
-# 同じものが無いので、clang（Apple の clang を含む）に限る。clang-cl はリンカーが link.exe・
-# lld-link でリンクの指定を受け付けないので弾く。
+# カバレッジ（test.yml が集めて Codecov へ送る）。clang（Apple の clang を含む）は source-based
+# coverage で、llvm-cov で集める。MSVC は Visual Studio の Microsoft.CodeCoverage.Console が
+# 実行ファイルを PDB から計装して集めるので、コンパイルは変えず、計装に要る /PROFILE を付けて
+# リンクするだけ。clang-cl はリンカーが link.exe・lld-link で clang の指定を受け付けないので弾く。
 if(VW_ENABLE_COVERAGE)
-	if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
-		message(FATAL_ERROR "VW_ENABLE_COVERAGE needs clang with the GNU-style driver (not clang-cl)")
+	if(MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+		add_link_options(/PROFILE)
+	elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT MSVC)
+		add_compile_options(-fprofile-instr-generate -fcoverage-mapping)
+		add_link_options(-fprofile-instr-generate)
+	else()
+		message(FATAL_ERROR "VW_ENABLE_COVERAGE needs MSVC or clang with the GNU-style driver (not clang-cl)")
 	endif()
-	add_compile_options(-fprofile-instr-generate -fcoverage-mapping)
-	add_link_options(-fprofile-instr-generate)
 endif()
 
 if(VW_BUILD_FUZZERS)
@@ -93,7 +97,8 @@ if(VW_BUILD_FUZZERS)
 endif()
 
 # --- カバレッジ -----------------------------------------------------------------------------
-if(VW_ENABLE_COVERAGE AND VW_BUILD_TESTS)
+if(VW_ENABLE_COVERAGE AND VW_BUILD_TESTS AND NOT MSVC)
+	# clang だけ。MSVC の結果は Microsoft.CodeCoverage.Console が 1 回の実行ごとに書き出す。
 	# 前の実行の結果が混ざらないよう、テストの前に消す（同じビルドでテストを繰り返すと、変えた
 	# 行が前の結果で通ったと数えられる）。ctest -R で絞っても、準備のテストは一緒に走る。
 	set(coverageDir ${CMAKE_BINARY_DIR}/coverage)
