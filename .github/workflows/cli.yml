@@ -31,7 +31,7 @@ jobs:
       - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
         shell: bash
       # OS ごとに分岐するコード（launch 等）があるので、全 OS の結果を送る（Codecov で重なる）。
-      # C++（test.yml の cpp）と分けて見られるように、フラグは OS ではなく言語の go にする。
+      # C++（test.yml の cpp）と分けて見られるように、go のフラグを付ける。
       # 第三者の Action なのでコミットに固定する（上げるのは Dependabot）。
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
