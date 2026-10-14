@@ -80,8 +80,15 @@ if(VW_BUILD_TESTS)
 	endif()
 	target_include_directories(SocketPrototypeTests PRIVATE prototypes/socket/src tests)
 	target_link_libraries(SocketPrototypeTests PRIVATE VwCliCore)
-	add_test(NAME SocketPrototypeTests COMMAND SocketPrototypeTests)
-	set_tests_properties(SocketPrototypeTests PROPERTIES TIMEOUT 120)
+	# 止まるテストを見分けられるよう、1 件ずつ登録する（引数は名前の一部で、その名前を含むテストだけを
+	# 走らせる）。
+	foreach(name RoundTrip PartialRequestWaitsForNewline ClosedClientIsNotRun
+				 CancelBeforeTakenIsNotRun HalfClosedClientIsNotRun RunsInConnectOrder
+				 LargeResponseSpansTicks ClientLeavingMidResponseIsNotCommitted TooLargeRequest
+				 StaleSocketIsReplaced SecondServerLeavesSocketAlone NonAsciiPath PathLimit)
+		add_test(NAME Socket${name} COMMAND SocketPrototypeTests Socket${name})
+		set_tests_properties(Socket${name} PROPERTIES TIMEOUT 30)
+	endforeach()
 endif()
 
 # --- ファジング -----------------------------------------------------------------------------

@@ -177,8 +177,9 @@ TEST(SocketCancelBeforeTakenIsNotRun) {
 	CHECK(client.got.find("\"no_wait\"") != std::string::npos);
 }
 
-// 送る側だけを閉じた呼ぶ側（nc -U など）は待っているので、実行する。
-TEST(SocketHalfClosedClientIsRun) {
+// 送る側だけを閉じた呼ぶ側は、閉じた呼ぶ側と見分けられない（Windows は閉じた相手へも送れる）ので、
+// やめたものとして実行しない。
+TEST(SocketHalfClosedClientIsNotRun) {
 	TempDir dir;
 	SocketServer server(dir.utf8Path());
 	listen(server);
@@ -188,8 +189,8 @@ TEST(SocketHalfClosedClientIsRun) {
 	client.shutdownSend();
 	Calls calls;
 	settle(server, calls.handler(), {&client});
-	CHECK_EQ(calls.requests.size(), std::size_t{1});
-	CHECK_EQ(client.got, std::string(kTakenLine) + "{\"ok\":true}\n");
+	CHECK(calls.requests.empty());
+	CHECK(client.got.find("\"no_wait\"") != std::string::npos);
 }
 
 // 1 回の受け付けで、つないだ順に実行する。
@@ -225,8 +226,13 @@ TEST(SocketLargeResponseSpansTicks) {
 	server.tick(handler);
 	auto first = std::chrono::steady_clock::now() - started;
 	CHECK_EQ(calls.requests.size(), std::size_t{1});
+#ifdef _WIN32
+	// Windows の AF_UNIX は 8 MiB を 1 回の送りで受け取る（数回に分ける状態が生じない）。
+	CHECK_EQ(calls.sent, 1);
+#else
 	CHECK_EQ(calls.sent, 0);
 	CHECK_EQ(server.connections(), std::size_t{1});
+#endif
 	CHECK(first < std::chrono::seconds(1));
 	int ticks = 1;
 	while (!client.closed && ticks < 100000) {
@@ -239,7 +245,7 @@ TEST(SocketLargeResponseSpansTicks) {
 	std::printf("8 MiB response took %d ticks\n", ticks);
 }
 
-// 応答を送り切る前に呼ぶ側が居なくなったら、onSent を呼ばない（占有などを反映しない）。
+// 応答を送り切る前に呼ぶ側が居なくなったら、onSent を呼ばない（占有などを反映しない）。POSIX だけ。
 TEST(SocketClientLeavingMidResponseIsNotCommitted) {
 	TempDir dir;
 	SocketServer server(dir.utf8Path());
@@ -256,7 +262,13 @@ TEST(SocketClientLeavingMidResponseIsNotCommitted) {
 	}
 	settle(server, handler, {});
 	CHECK_EQ(calls.requests.size(), std::size_t{1});
+#ifdef _WIN32
+	// Windows は応答を 1 回で OS に渡し終えるので、呼ぶ側が読む前に居なくなっても反映する
+	// （作法 5 で応答のファイルを書けたときと同じ）。
+	CHECK_EQ(calls.sent, 1);
+#else
 	CHECK_EQ(calls.sent, 0);
+#endif
 	CHECK_EQ(server.connections(), std::size_t{0});
 }
 

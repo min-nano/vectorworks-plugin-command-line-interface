@@ -65,7 +65,8 @@ func (f *fake) handle(conn net.Conn, respond bool, done <-chan struct{}) {
 	}
 	extra := make([]byte, 1)
 	_ = conn.SetReadDeadline(time.Now().Add(time.Millisecond))
-	if n, _ := conn.Read(extra); n > 0 {
+	// 1 バイト届いた・閉じた（EOF）なら、呼ぶ側は待つのをやめている。
+	if _, err := conn.Read(extra); !errors.Is(err, os.ErrDeadlineExceeded) {
 		_, _ = conn.Write([]byte(`{"ok":false,"code":"no_wait","error":"cancelled"}` + "\n"))
 		return
 	}

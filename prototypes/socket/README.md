@@ -14,10 +14,11 @@ macOS と Windows の CI で確かめ、置き換わる範囲の行数を比べ�
 1. 呼ぶ側は `<spool>/bridge.sock` につなぎ、要求の JSON を 1 行（改行で終わる）で送る。
 2. プラグインは受け付けの回ごとに、待っている接続をつないだ順にすべて受け取り、読めるだけ読む。
    改行まで届いた要求について:
-   1. 要求の後ろにもう何か届いていれば、呼ぶ側は待つのをやめている。`no_wait` で応え、実行しない。
-   2. 受け取りの行 `{"taken":true}` を送る。送れなければ、呼ぶ側は居ない（死んだ・閉じた）ので
-      実行しない（作法 5 の待つ印の代わり）。
-   3. 送った**あと**に 1 バイト読めたら、呼ぶ側は待つのをやめている。`no_wait` で応え、実行しない。
+   1. 要求の後ろにもう何か届いている・閉じられている（EOF・切断）なら、呼ぶ側は待つのをやめた・
+      死んだ。`no_wait` で応え、実行しない（作法 5 の待つ印の代わり）。
+   2. 受け取りの行 `{"taken":true}` を送る。
+   3. 送った**あと**に 1 バイト読めた・閉じられていたら、呼ぶ側は待つのをやめた・死んだ。
+      `no_wait` で応え、実行しない。
    4. 実行し、応答の JSON を 1 行送って閉じる。送り切れない分は次の回に続ける。占有の印と終了の
       依頼は、送り切ったときに反映する。
 3. 呼ぶ側は、締切までに受け取りの行が届かなければ 1 バイト送り、届いている受け取りの行を読む。
@@ -39,7 +40,7 @@ macOS と Windows の CI で確かめ、置き換わる範囲の行数を比べ�
 | 止まらずに数回へ分けて送る（8 MiB） | `SocketLargeResponseSpansTicks` | 40 回 | CI | CI |
 | 要求が数回に分かれて届いても読める | `SocketPartialRequestWaitsForNewline` | 確かめた | CI | CI |
 | やめた呼ぶ側を実行しない | `SocketCancelBeforeTakenIsNotRun`・Go `TestCallDeferredIsNotRun` | 確かめた | CI | CI |
-| 送る側だけを閉じた呼ぶ側（`nc -U`）は実行する | `SocketHalfClosedClientIsRun` | 確かめた | CI | CI |
+| 送る側だけを閉じた呼ぶ側も、やめたものとして実行しない | `SocketHalfClosedClientIsNotRun` | 確かめた | CI | CI |
 | つないだ順に実行する | `SocketRunsInConnectOrder` | 確かめた | CI | CI |
 | 残ったソケットを次の側が作り直せる・ロックの無い側は触らない | `SocketStaleSocketIsReplaced`・`SocketSecondServerLeavesSocketAlone` | 確かめた | CI | CI |
 | パスに ASCII でない文字があってもよい（Windows が `sun_path` を UTF-8 で読むか） | `SocketNonAsciiPath`・Go `TestCallNonASCIIPath` | 確かめた | CI | CI |

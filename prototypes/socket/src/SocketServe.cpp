@@ -86,19 +86,23 @@ bool SocketServer::advance(Connection &connection, const Handler &handler) {
 			} else {
 				return false;
 			}
-		} else if (connection.in.size() > newline + 1) {
-			// 要求の後ろに何かある: 受け取りの行を送る前に、呼ぶ側が待つのをやめた。
+		} else if (connection.eof || connection.in.size() > newline + 1) {
+			// 要求の後ろに何かある・閉じた:
+			// 受け取りの行を送る前に、呼ぶ側が待つのをやめた・死んだ。 閉じた相手へ送っても Windows
+			// では失敗しないので、相手が居ないことは送りではなく
+			// 受け取り（EOF・切断）で知る。送る側だけを閉じた呼ぶ側も、やめたものとして扱う。
 			startReply(kNoWait);
 		} else {
-			// 受け取りの行を送る。送れなければ呼ぶ側は居ない（死んだ・閉じた）ので実行しない。
+			// 受け取りの行を送る。
 			sock::Io taken = sock::send(connection.socket, kTakenLine.data(), kTakenLine.size());
 			if (taken.status != sock::Io::Status::Done || taken.count != kTakenLine.size()) {
 				return finish();
 			}
-			// 送った「あと」に、やめたかを見る。呼ぶ側は待つのをやめるとき 1 バイト送ってから
-			// 読むので、ここで何も無ければ、呼ぶ側は受け取りの行を必ず読む。
+			// 送った「あと」に、やめた・閉じたかを見る。呼ぶ側は待つのをやめるとき 1 バイト送って
+			// から読むので、ここで何も無ければ、呼ぶ側は受け取りの行を必ず読む。
 			char extra = 0;
-			if (sock::receive(connection.socket, &extra, 1).status == sock::Io::Status::Done) {
+			if (sock::receive(connection.socket, &extra, 1).status !=
+			    sock::Io::Status::WouldBlock) {
 				startReply(kNoWait);
 			} else {
 				Reply reply = handler(connection.in.substr(0, newline));
@@ -115,7 +119,8 @@ bool SocketServer::advance(Connection &connection, const Handler &handler) {
 			return false;
 		}
 		if (io.status == sock::Io::Status::Closed) {
-			// 送り切る前に呼ぶ側が居なくなった。応答が届いていないので反映しない。
+			// 送り切る前に呼ぶ側が居なくなった。応答が届いていないので反映しない（Windows は閉じた
+			// 相手へも送れるので、ここに来るのは POSIX だけ）。
 			return finish();
 		}
 		connection.sent += io.count;
