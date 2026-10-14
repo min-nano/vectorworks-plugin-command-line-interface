@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/launch"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
@@ -29,6 +31,17 @@ var envVars = []string{
 
 func invoke(t *testing.T, vars map[string]string, stdin string, started *[]string, args ...string) result {
 	t.Helper()
+	return invokeStart(t, vars, stdin, func(argv []string) error {
+		if started != nil {
+			*started = argv
+		}
+		return nil
+	}, args...)
+}
+
+// invokeStart は invoke と同じで、起動（env.start）を差し替える。起動の失敗を確かめるため。
+func invokeStart(t *testing.T, vars map[string]string, stdin string, start func(argv []string) error, args ...string) result {
+	t.Helper()
 	// kong は環境変数を os から直接読むので、テストごとに置き直す（並行には走らせない）。
 	for _, name := range envVars {
 		value, ok := vars[name]
@@ -44,12 +57,7 @@ func invoke(t *testing.T, vars map[string]string, stdin string, started *[]strin
 		stdin:  strings.NewReader(stdin),
 		stdout: &stdout,
 		stderr: &stderr,
-		start: func(argv []string) error {
-			if started != nil {
-				*started = argv
-			}
-			return nil
-		},
+		start:  start,
 	})
 	return result{code, stdout.String(), stderr.String()}
 }
@@ -146,15 +154,52 @@ func TestLaunchSkipsWhenLive(t *testing.T) {
 }
 
 func TestLaunchStartsApp(t *testing.T) {
-	app := filepath.Join(t.TempDir(), "fake-vw")
-	if err := os.WriteFile(app, []byte("#!/bin/sh\n"), 0o700); err != nil {
-		t.Fatal(err)
-	}
+	app := fakeApp(t)
 	var started []string
 	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none"), "VW2026_APP": app}, "", &started, "launch")
 	if r.code != exitOK || len(started) != 1 || started[0] != app {
 		t.Fatalf("%+v %v", r, started)
 	}
+}
+
+// 動いている Vectorworks にプラグインが入っていない（Windows で起動を断られた）なら、
+// ブリッジが止まっているときと同じ 5 で終わる。
+func TestLaunchWhenRunningWithoutBridge(t *testing.T) {
+	app := fakeApp(t)
+	r := invokeStart(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none"), "VW2026_APP": app}, "",
+		func([]string) error { return fmt.Errorf("start: %w", launch.ErrAlreadyRunning) }, "launch")
+	if r.code != exitDown || r.stdout != "" || !strings.Contains(r.stderr, "plug-in installed") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestLaunchStartFails(t *testing.T) {
+	app := fakeApp(t)
+	r := invokeStart(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none"), "VW2026_APP": app}, "",
+		func([]string) error { return errors.New("exec format error") }, "launch")
+	if r.code != exitFailure || r.stdout != "" || !strings.Contains(r.stderr, "exec format error") {
+		t.Fatalf("%+v", r)
+	}
+}
+
+// 起動するものが決まらなければ、起動を試みずに失敗する。
+func TestLaunchAppNotFound(t *testing.T) {
+	var started []string
+	missing := filepath.Join(t.TempDir(), "missing")
+	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none"), "VW2026_APP": missing}, "", &started, "launch")
+	if r.code != exitFailure || started != nil || !strings.Contains(r.stderr, missing) {
+		t.Fatalf("%+v %v", r, started)
+	}
+}
+
+// fakeApp は起動の対象にする実行ファイルを作る（launch.Command はファイルがあることだけを見る）。
+func fakeApp(t *testing.T) string {
+	t.Helper()
+	app := filepath.Join(t.TempDir(), "fake-vw")
+	if err := os.WriteFile(app, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return app
 }
 
 func TestVersion(t *testing.T) {
