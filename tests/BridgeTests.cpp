@@ -202,6 +202,8 @@ TEST(BridgeReplyFailsWithoutLeavingTempWhenItCannotRename) {
 	Bridge bridge(dir.utf8Path());
 	std::filesystem::create_directory(dir.path() / "r.res.json");
 	put(dir, "r.res.json/inside");
+	// 書きかけの名前には書ける（失敗するのは書き込みではなく付け替え）。
+	put(dir, "r.res.json.tmp", "old");
 	CHECK(!bridge.reply("r", R"({"ok":true})"));
 	CHECK(!exists(dir, "r.res.json.tmp"));
 	CHECK(std::filesystem::is_directory(dir.path() / "r.res.json"));

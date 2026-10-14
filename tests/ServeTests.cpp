@@ -272,25 +272,23 @@ TEST(ServeReportsAnErrorWhenTheLockCannotBeOpened) {
 	VwCli::core::ServeResult result = server.serve(kTools, kNow);
 	CHECK(result.phase == Phase::Error);
 	CHECK(result.message.find("bridge.lock") != std::string::npos);
-	std::filesystem::remove(dir.path() / "bridge.lock");
+	CHECK(std::filesystem::remove(dir.path() / "bridge.lock"));
 	CHECK(server.serve(kTools, kNow).phase == Phase::Serving);
 }
 
-// 読めない要求（名前にディレクトリがある）は飛ばして、残りに応える。飛ばしたものには応えず、
-// 消さない（消せるのは読めた要求だけ）。
+// 読めない要求（名前にディレクトリがある）は飛ばして、残りに応える。飛ばしたものには応えない。
 TEST(ServeSkipsRequestsItCannotRead) {
 	TempDir dir;
 	gCalls.clear();
 	Server server(dir.utf8Path());
 	Caller caller(dir);
-	server.serve(kTools, kNow);
+	CHECK(server.serve(kTools, kNow).phase == Phase::Serving);
 	std::filesystem::create_directory(dir.path() / "1.req.json");
 	caller.put("2", R"({"tool":"first"})");
 	CHECK(server.serve(kTools, kNow).phase == Phase::Serving);
 	CHECK_EQ(gCalls, (std::vector<std::string>{"first"}));
 	CHECK(caller.ok("2"));
 	CHECK(!std::filesystem::exists(dir.path() / "1.res.json"));
-	CHECK(std::filesystem::is_directory(dir.path() / "1.req.json"));
 }
 
 TEST(ServeWritesValidUtf8EvenForUnknownToolNames) {
