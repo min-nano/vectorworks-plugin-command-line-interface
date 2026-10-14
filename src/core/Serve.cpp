@@ -29,7 +29,7 @@ struct Request {
 	std::string session;
 };
 
-// readRequest は要求を読む（作法「要求」）。読めなければ空で、reason に理由を書く。キーは
+// readRequest は要求を読む（通信規則「要求」）。読めなければ空で、reason に理由を書く。キーは
 // 大文字と小文字を区別して照合し、知らないキーは無視する。
 std::optional<Request> readRequest(const std::string &text, std::string &reason) {
 	if (text.size() > protocol::kMaxRequestBytes) {
@@ -93,7 +93,7 @@ const Tool *findTool(std::span<const Tool> tools, const std::string &name) {
 	return nullptr;
 }
 
-// toolsList は予約された道具 tools の結果（作法「予約された道具」）。
+// toolsList は予約された道具 tools の結果（通信規則「予約された道具」）。
 std::optional<Json> toolsList(std::span<const Tool> tools, std::string &reason) {
 	Json list = Json::array();
 	for (const Tool &tool : tools) {
@@ -154,7 +154,7 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos) {
 		if (!text) {
 			continue;
 		}
-		// 消した直後、実行する前に、呼ぶ側が待っているかを確かめる（作法「待つ印」）。
+		// 消した直後、実行する前に、呼ぶ側が待っているかを確かめる（通信規則「待つ印」）。
 		switch (bridge_.waitState(id)) {
 		case files::WaitState::Released:
 			bridge_.removeWait(id);
@@ -181,7 +181,7 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos) {
 			// answer は状態を変えない（Serve.h）。outcome も代入されていない。
 			body = &internalFailure_;
 		}
-		// 占有の印と終了の依頼は、応答を書けたときだけ反映する（Serve.h。作法「占有」）。
+		// 占有の印と終了の依頼は、応答を書けたときだけ反映する（Serve.h。通信規則「占有」）。
 		if (!bridge_.reply(id, *body)) {
 			continue;
 		}
@@ -210,7 +210,7 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		return respond(failure(protocol::kCodeInvalidRequest, reason));
 	}
 
-	// 占有に照らす（作法「占有」の表）。断るなら応答を返す。
+	// 占有に照らす（通信規則「占有」の表）。断るなら応答を返す。
 	auto check = [&](bool needSession) -> std::optional<Json> {
 		if (session_.empty()) {
 			if (!request->session.empty()) {

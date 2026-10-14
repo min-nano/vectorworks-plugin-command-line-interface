@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 # SDK に依らない共通部（src/core）の単体テストとファジング（docs/plugin/build-and-release.md「CI」）。
-# テストは作法の見本（protocol/fixtures）も読む。同じ見本を読む Go のテストは cli.yml が走らせる。
+# テストは通信規則の見本（protocol/fixtures）も読む。同じ見本を読む Go のテストは cli.yml が走らせる。
 jobs:
   unit:
     strategy:

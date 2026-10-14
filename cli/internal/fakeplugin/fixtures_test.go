@@ -14,10 +14,10 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// 作法の見本（protocol/fixtures。形は docs/fixtures.md）を読み、偽のプラグインがプラグイン
+// 通信規則の見本（protocol/fixtures。形は docs/fixtures.md）を読み、偽のプラグインがプラグイン
 // （src/core の Server。同じ見本を読む）と同じに振る舞うかを確かめる。
 
-// fixtures は作法の見本の場所（go test はパッケージのディレクトリで走る）。
+// fixtures は通信規則の見本の場所（go test はパッケージのディレクトリで走る）。
 const fixtures = "../../../protocol/fixtures"
 
 // sessionMark は、要求の見本では発行された印に置き換え、期待する応答では id の綴りを満たす

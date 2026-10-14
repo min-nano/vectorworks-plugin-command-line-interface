@@ -6,7 +6,7 @@
 // パスは UTF-8。開くファイルは子プロセスに受け継がせない（POSIX は O_CLOEXEC、Windows は
 // 継承できないハンドル）。受け継がれると、Vectorworks が終わってもロックが放されないため。
 //
-// 開いて待たない（作法「プラグイン側の義務」）。開くのは通常のファイルだけで、リンクは
+// 開いて待たない（通信規則「プラグイン側の義務」）。開くのは通常のファイルだけで、リンクは
 // たどらない（POSIX は O_NONBLOCK と O_NOFOLLOW、Windows は FILE_FLAG_OPEN_REPARSE_POINT）。
 // FIFO・デバイス・名前付きパイプを置かれても、メインスレッドを止めない。Windows は reparse
 // point（OneDrive などのクラウドのファイルを含む）と、中身がローカルにないファイルも断る。
@@ -27,7 +27,7 @@ namespace VwCli::core::files {
 std::string join(const std::string &dir, std::string_view name);
 
 // appRoot は <CLI> の親を返す（mac は利用者の passwd の項目のホームの Library/Application
-// Support、Windows は SHGetKnownFolderPath(FOLDERID_LocalAppData)。環境変数は読まない。作法
+// Support、Windows は SHGetKnownFolderPath(FOLDERID_LocalAppData)。環境変数は読まない。通信規則
 // 「スプールの場所」）。求められなければ空。
 std::optional<std::string> appRoot();
 
@@ -52,7 +52,7 @@ bool rename(const std::string &from, const std::string &to);
 // remove はファイルを消す。消せたときだけ真。
 bool remove(const std::string &path);
 
-// WaitState は待つ印（<id>.wait）の状態（作法「待つ印」）。
+// WaitState は待つ印（<id>.wait）の状態（通信規則「待つ印」）。
 enum class WaitState {
 	// 呼ぶ側が掴んでいる（待っている）
 	Held,
@@ -65,7 +65,7 @@ enum class WaitState {
 // probe は待つ印を掴めるか試し、掴めたらすぐ放す。
 WaitState probe(const std::string &path);
 
-// Lock はファイルを排他で掴み続ける（bridge.lock。作法「ロック」）。壊すと放す。
+// Lock はファイルを排他で掴み続ける（bridge.lock。通信規則「ロック」）。壊すと放す。
 class Lock {
 public:
 	enum class Result {

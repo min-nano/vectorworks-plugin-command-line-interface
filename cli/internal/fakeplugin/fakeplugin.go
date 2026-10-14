@@ -1,9 +1,9 @@
 // Package fakeplugin はプラグイン側の受け付けを真似る（docs/protocol.md「プラグイン側の義務」・
 // docs/plugin/bridge.md「受け付け 1 回」）。spool と vw2026 の単体テストだけが使う。
 //
-// 作法より緩く真似ると、CLI がプラグインの断る要求を送っても単体テストが気づかないので、
+// 通信規則より緩く真似ると、CLI がプラグインの断る要求を送っても単体テストが気づかないので、
 // 関門（id の綴り・回の始めに並べた要求だけの処理・大きさと入れ子の深さの上限・占有・ロックを取ったときの掃除）は
-// プラグインと同じに持つ。プラグインと同じに振る舞うかは、両方のテストが読む作法の見本
+// プラグインと同じに持つ。プラグインと同じに振る舞うかは、両方のテストが読む通信規則の見本
 // （protocol/fixtures。docs/fixtures.md）で確かめる。道具の表は持たないので、種類 app の道具は
 // quit だけとみなす（占有の中でだけ呼べ、成功したらその回の残りを取り出さない）。
 package fakeplugin
@@ -28,7 +28,7 @@ const (
 	waitHeld waitState = iota
 	// 呼ぶ側が放した・死んだ
 	waitReleased
-	// 無い（作法に反する）
+	// 無い（通信規則に反する）
 	waitMissing
 )
 
@@ -274,7 +274,7 @@ func refuse(code string) spool.Response {
 // 要求とする。session の null は無いものとする。
 //
 // 構造体へ直に解析すると encoding/json はキーを大文字と小文字を区別せずに照合し、ARGS のような
-// 知らないキーまで拾ってしまう。作法ではキーは区別して照合するので、map に解析して正確な綴りで引く。
+// 知らないキーまで拾ってしまう。通信規則ではキーは区別して照合するので、map に解析して正確な綴りで引く。
 func parseRequest(data []byte) (tool string, args json.RawMessage, session string, ok bool) {
 	if len(data) > spool.MaxRequestBytes || spool.NestingDepth(data) > spool.MaxNestingDepth {
 		return "", nil, "", false

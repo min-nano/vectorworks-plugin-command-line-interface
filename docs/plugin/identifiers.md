@@ -50,4 +50,4 @@
 `<CLI>` のディレクトリ名（`vectorworks2026-cli`）とスプールの名前（`spool`）は、スプールの場所を
 求める共通部（SDK に依らない）が使うので、`src/core/Protocol.h` の `kAppDirName` / `kSpoolDirName`
 に置きます。CLI 側の `cli/internal/spool` の `AppDirName` / `SpoolDirName` と対で、両側のテストが
-[作法の見本](../fixtures.md)の `constants.json` に照らします（[作法](../protocol.md#スプールの場所)）。
+[通信規則の見本](../fixtures.md)の `constants.json` に照らします（[通信規則](../protocol.md#スプールの場所)）。
