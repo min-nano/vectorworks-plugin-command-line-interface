@@ -162,6 +162,6 @@ OS タイマーの刻みの中からも呼べ、相手が居なければ `false`
 [plugin/open-questions.md](plugin/open-questions.md) にあります。
 
 1. **通信規則と CLI**（済み）: `docs/protocol.md`・`cli/`。
-2. **プラグイン**: plan.md の段 1〜5（共通部 → 骨格 → 読む道具 → 配布 → 更新）。
+2. **プラグイン**: plan.md の段 1〜5（共通部 → 骨格と配布 → インストール → 読む道具 → 終了の依頼）。
 3. **他のプラグインの機能の呼び出し**（`CallPluginLibrary`。形は[未決 3](plugin/open-questions.md#3-ほかのプラグインの機能の呼び出しの形)）。
 4. **書く道具**（undo の手順・人の操作との混在の扱いを決めてから）。

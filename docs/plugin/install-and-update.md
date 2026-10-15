@@ -43,8 +43,9 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
 **CLI を取ってきて `install` を走らせるだけ**です。配置の手順・PATH・判断はすべて `install` が
 持ち、スクリプトは持ちません（配置の知識を Go の 1 か所に置き、単体テストで確かめるため）。
 
-1. `stable` の zip（mac は `cli.vwlibrary.zip`、Windows は `cli.vlb.zip`）を一時フォルダへ
-   取ってきて、中の `bin/vw2026`（Windows は `bin\vw2026.exe`）だけを取り出す。
+1. `stable` の zip（mac は `cli.vwlibrary.zip`、Windows は `cli.vlb.zip`。タグが指定されていれば
+   そのタグのもの）を一時フォルダへ取ってきて、中の `bin/vw2026`（Windows は
+   `bin\vw2026.exe`）だけを取り出す。
 2. 取り出した CLI で `install` を走らせる（スクリプトの引数をそのまま渡す）。
 3. 一時フォルダを消し、`install` の終了コードで終わる。「Vectorworks が動いている」終了コード
    （番号は `vw2026 --help`）なら「Vectorworks を終了してからもう一度走らせる」と表示する。
@@ -52,8 +53,12 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
 - CLI だけの資産は持ちません。zip から取り出すので、CLI と同じビルドのものしか配らずに済みます。
 - 一時フォルダの CLI は、`install` の中で zip をもう一度取り、その `bin/` を `<CLI>/bin/` に
   置きます（スクリプトが取った zip は渡さない。指定を増やさないため。zip は小さい）。
-- PR のプレリリースを試すときも同じスクリプトに `--tag dev-<slug>` を渡します（`install` へ
-  そのまま渡る）。CLI もそのビルドのものになります。
+- PR のプレリリースを試すときも同じスクリプトに `--tag dev-<slug>` を渡します（スクリプトが
+  取る zip もそのタグのものになり、`install` へもそのまま渡る）。CLI もそのビルドのものになります。
+  スクリプトが読むのはタグだけで、`install` と同じ与え方（`--tag <tag>`・`--tag=<tag>`・環境変数
+  `VW2026_INSTALL_TAG`。両方あれば引数が勝つ）をすべて読みます。スクリプトが取る zip と `install` が
+  受け取るタグを食い違わせないためです（食い違うと、別のビルドの CLI で入れることになる）。ほかの
+  引数は解釈せずに渡します。
 
 ## インストールと更新（`vw2026 install`）
 
@@ -132,6 +137,9 @@ vw2026 install
   `vw2026 status` を繰り返し、終了コードで分けます（PowerShell の書き方は `vw2026 help status`）。
 
   Vectorworks が終われば占有も消えるので、起動し直したあとに使うなら占有を取り直します。
+
+  `quit` が入る（[実装の順序](plan.md)の段 5）までは、`call quit` と止まるのを待つところを、
+  利用者が Vectorworks を手で終了することに置き換えます。
 
 - `--tag` はタグをそのまま受け取ります（ブランチ名から slug を作らない。slug の規則は
   [名前と識別子](identifiers.md)）。
@@ -215,7 +223,7 @@ vw2026 uninstall --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> から
 
 ## 消すコードの歯止め
 
-**利用者のものを消すコードは次の場所だけ**にし、歯止めを緩めません。段 5 でこの表を `CLAUDE.md` に写します。
+**利用者のものを消すコードは次の場所だけ**にし、歯止めを緩めません。段 3 でこの表を `CLAUDE.md` に写します。
 
 | 消すコード | 消してよいもの |
 | --- | --- |
@@ -236,4 +244,4 @@ vw2026 uninstall --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> から
     似た名前の PATH 項目を消さない）
   - **動いている exe の名前を変えられること**（Windows の CI。応えない偽のプラグインがロックを掴んだスプールに対して `vw2026 call ping --timeout 60` を動かしたまま入れ替える）
 - **初回のスクリプト**: shellcheck・PSScriptAnalyzer。取ってきて `install` を走らせるだけなので、
-  実機の確認（段 5）で押さえます。
+  実機の確認（段 3）で押さえます。
