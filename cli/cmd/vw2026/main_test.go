@@ -440,22 +440,30 @@ func TestEveryFlagHasEnv(t *testing.T) {
 }
 
 // TestEnvNamesDoNotCollide は、VW2026_<コマンド>_ で始まる環境変数を、そのコマンド（とその下の
-// コマンド）の指定だけが使うことを確かめる。全体で使う値に VW2026_SESSION_X のような名前を付けると、
-// session コマンドの指定 X と区別できなくなるため（CLAUDE.md「Go」）。
+// コマンド）の指定だけが使うことを確かめる。<コマンド> はどの深さのコマンドでもよい（session も
+// session end も）。全体で使う値に VW2026_SESSION_X のような名前を付けると、session コマンドの指定 X と
+// 区別できなくなるため（CLAUDE.md「Go」）。
 func TestEnvNamesDoNotCollide(t *testing.T) {
 	app := kong.Must(&cli{})
-	var prefixes []string
-	for _, child := range app.Model.Children {
-		prefixes = append(prefixes, "VW2026_"+strings.ToUpper(strings.ReplaceAll(child.Name, "-", "_"))+"_")
+	// コマンドの道筋（"session end"）ごとの接頭辞（"VW2026_SESSION_END_"）。
+	prefixes := map[string]string{}
+	var walk func(nodes []*kong.Node)
+	walk = func(nodes []*kong.Node) {
+		for _, node := range nodes {
+			path := node.Path()
+			prefixes[path] = "VW2026_" + strings.ToUpper(strings.NewReplacer(" ", "_", "-", "_").Replace(path)) + "_"
+			walk(node.Children)
+		}
 	}
-	for _, node := range app.Model.Leaves(true) {
-		top := "VW2026_" + strings.ToUpper(strings.ReplaceAll(strings.Fields(node.Path())[0], "-", "_")) + "_"
-		for _, group := range node.AllFlags(false) {
+	walk(app.Model.Children)
+	for _, leaf := range app.Model.Leaves(true) {
+		for _, group := range leaf.AllFlags(false) {
 			for _, flag := range group {
 				for _, name := range flag.Envs {
-					for _, prefix := range prefixes {
-						if strings.HasPrefix(name, prefix) && prefix != top {
-							t.Errorf("%s --%s uses %s, which belongs to another command", node.Path(), flag.Name, name)
+					for path, prefix := range prefixes {
+						within := leaf.Path() == path || strings.HasPrefix(leaf.Path(), path+" ")
+						if strings.HasPrefix(name, prefix) && !within {
+							t.Errorf("%s --%s uses %s, which belongs to %s", leaf.Path(), flag.Name, name, path)
 						}
 					}
 				}
