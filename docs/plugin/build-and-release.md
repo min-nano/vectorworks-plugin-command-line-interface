@@ -85,6 +85,13 @@ cli.vwlibrary.zip                       cli.vlb.zip
   `version`・タイトルの `<sha>` にはその短い sha を、`VW_BUILD_BRANCH`・`build.json` の `branch`・
   タイトルの `<branch>` には `github.head_ref` を載せる。`ping` の `version` を
   `git log` の sha と突き合わせられるようにするため。
+- 実機で確かめる前に、ブランチを main に追いつかせる（main を取り込む）。CI は `pull_request` の
+  マージのためのコミットで走るので、追いついていないと、CI が通った組み合わせと実機で確かめた
+  組み合わせ（head）が違い、マージされるものが実機で一度も動いていないことになる。追いついて
+  いれば両者の中身は同じになる。
+- head を取り出してプレリリースする手順は、同じリポジトリの PR
+  （`github.event.pull_request.head.repo.full_name == github.repository`）でだけ走らせる。fork の
+  head は信頼できないコードで、`github.head_ref` はどのリポジトリのブランチかを区別しない。
 - 資産: `cli.vwlibrary.zip` / `cli.vlb.zip` / `get-vw2026.{sh,ps1}`（初回のスクリプト。
   利用者は `stable` のものを使う）。スクリプトの資産は、スクリプトを足す段 3 から上げる
   （[実装の順序](plan.md)。段 2 の `build.yml` は zip だけを上げ、段 2 から段 3 までは

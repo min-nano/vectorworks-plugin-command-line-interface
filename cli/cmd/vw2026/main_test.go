@@ -438,3 +438,28 @@ func TestEveryFlagHasEnv(t *testing.T) {
 		}
 	}
 }
+
+// TestEnvNamesDoNotCollide は、VW2026_<コマンド>_ で始まる環境変数を、そのコマンド（とその下の
+// コマンド）の指定だけが使うことを確かめる。全体で使う値に VW2026_SESSION_X のような名前を付けると、
+// session コマンドの指定 X と区別できなくなるため（CLAUDE.md「Go」）。
+func TestEnvNamesDoNotCollide(t *testing.T) {
+	app := kong.Must(&cli{})
+	var prefixes []string
+	for _, child := range app.Model.Children {
+		prefixes = append(prefixes, "VW2026_"+strings.ToUpper(strings.ReplaceAll(child.Name, "-", "_"))+"_")
+	}
+	for _, node := range app.Model.Leaves(true) {
+		top := "VW2026_" + strings.ToUpper(strings.ReplaceAll(strings.Fields(node.Path())[0], "-", "_")) + "_"
+		for _, group := range node.AllFlags(false) {
+			for _, flag := range group {
+				for _, name := range flag.Envs {
+					for _, prefix := range prefixes {
+						if strings.HasPrefix(name, prefix) && prefix != top {
+							t.Errorf("%s --%s uses %s, which belongs to another command", node.Path(), flag.Name, name)
+						}
+					}
+				}
+			}
+		}
+	}
+}
