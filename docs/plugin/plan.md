@@ -22,7 +22,7 @@
 
 | 段 | 項目 |
 | --- | --- |
-| 2 | A2（`ping` の `GetCurrentLayer()`）・A3（`Clock` の見送り）・B3（最初の配布の前）・C1（`ping` の `current_layer`）・C3（PR のプレリリースの sha） |
+| 2 | A2（`ping` の `GetCurrentLayer()`）・A3（`Clock` の見送り）・C1（`ping` の `current_layer`） |
 | 3 | B2（Windows の PATH） |
 | 4 | C1（読む道具の結果） |
 | 5 | A1・A2（`quit`）・A4・B1・C3（終了の処理中のタイマー） |
