@@ -31,8 +31,17 @@
 | `protocol` | 通信規則の版（[通信規則「版」](../protocol.md#版)） |
 | `pid` | 受け付けている Vectorworks のプロセス ID（`getpid` / `GetCurrentProcessId`。2 つ起動しているときにどちらが受け付けているかが分かる） |
 | `session` | 占有の印を発行しているか（[通信規則「占有」](../protocol.md#占有セッション)）。`ping` は占有によらず誰にでも答える |
-| `document_open` | `gSDK->GetCurrentLayer()` が取れるか |
-| `current_layer` | 現在のレイヤの名前 |
+| `document_open` | 図面が開いているか（`gSDK->GetCurrentLayer()` が `nullptr` でないか） |
+| `current_layer` | 現在のレイヤの名前。図面が開いていなければ `null` |
+
+図面が 1 枚も開いていないとき、`GetCurrentLayer()` は落ちずに `nullptr` を返し、その判定は
+`GetOpenFilesList()` の件数と常に一致します（起動直後も、全部閉じた後も。mac / Windows。
+[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 8）。
+図面が無いときは次のように答えます。
+
+```json
+{"version":"abc1234","branch":"main","protocol":5,"pid":4242,"session":false,"document_open":false,"current_layer":null}
+```
 
 ## `quit`
 
