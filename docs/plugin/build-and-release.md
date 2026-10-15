@@ -85,10 +85,10 @@ cli.vwlibrary.zip                       cli.vlb.zip
   `version`・タイトルの `<sha>` にはその短い sha を、`VW_BUILD_BRANCH`・`build.json` の `branch`・
   タイトルの `<branch>` には `github.head_ref` を載せる。`ping` の `version` を
   `git log` の sha と突き合わせられるようにするため。
-- 実機で確かめる前に、ブランチを main に追いつかせる（main を取り込む）。CI は `pull_request` の
-  マージのためのコミットで走るので、追いついていないと、CI が通った組み合わせと実機で確かめた
-  組み合わせ（head）が違い、マージされるものが実機で一度も動いていないことになる。追いついて
-  いれば両者の中身は同じになる。
+- CI は `pull_request` のマージのためのコミットで走り、プレリリースは head でビルドするので、
+  ブランチが main から遅れていると両者の中身は違う。ブランチを main に追いつかせることは
+  求めない（並行して進める PR ごとに取り込みを強いないため）。扱いは
+  [実装の順序「実機の確かめ方」](plan.md#実機の確かめ方)。
 - head を取り出してプレリリースする手順は、同じリポジトリの PR
   （`github.event.pull_request.head.repo.full_name == github.repository`）でだけ走らせる。fork の
   head は信頼できないコードで、`github.head_ref` はどのリポジトリのブランチかを区別しない。
