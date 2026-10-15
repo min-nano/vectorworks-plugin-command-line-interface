@@ -29,7 +29,7 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
   行い、ボリュームをまたぐ場合の扱い（コピーへの切り替え・その検出）は持ちません。名前の
   変更が失敗したら、何も変えずに失敗で終わります。
 - **入れた場所を記録しません。** 既定以外の `<Plug-Ins>` を使う利用者は、`install` と
-  `uninstall` に毎回 `--plugins-dir` を渡します（[設計「CLI はプリミティブに保つ」](../design.md#cli-はプリミティブに保つ)）。
+  `uninstall` に毎回 `--plugins-dir`（環境変数 `VW2026_PLUGINS_DIR`）を渡します（[設計「CLI はプリミティブに保つ」](../design.md#cli-はプリミティブに保つ)）。
 - **安定版と開発版を区別しません。** PR のプレリリースを入れると、プラグインも CLI も
   そのビルドのものに入れ替わります。
 - **隔離属性の解除（mac）・`Unblock-File`（Windows）は行いません。** curl・`Invoke-RestMethod`・
@@ -56,7 +56,7 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
 - PR のプレリリースを試すときも同じスクリプトに `--tag dev-<slug>` を渡します（スクリプトが
   取る zip もそのタグのものになり、`install` へもそのまま渡る）。CLI もそのビルドのものになります。
   スクリプトが読むのはタグだけで、`install` と同じ与え方（`--tag <tag>`・`--tag=<tag>`・環境変数
-  `VW2026_INSTALL_TAG`。両方あれば引数が勝つ）をすべて読みます。スクリプトが取る zip と `install` が
+  `VW2026_TAG`。両方あれば引数が勝つ）をすべて読みます。スクリプトが取る zip と `install` が
   受け取るタグを食い違わせないためです（食い違うと、別のビルドの CLI で入れることになる）。ほかの
   引数は解釈せずに渡します。
 

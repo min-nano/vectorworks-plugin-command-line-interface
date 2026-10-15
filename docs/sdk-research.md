@@ -34,7 +34,7 @@ SDK リファレンスに記載がありません。読み込みは登録の種�
 
 ## 2. 汎用の実行口（のちの検討）
 
-[設計「進め方」](design.md#進め方)の 6（書く道具）を汎用にするかの判断材料。
+[設計「進め方」](design.md#進め方)の 4（書く道具）を汎用にするかの判断材料。
 
 - プラグインから Vectorworks 内蔵の Python／VectorScript を、文字列で渡して実行できるか。
   結果や出力を受け取れるか。
@@ -76,5 +76,5 @@ SDK リファレンスに記載がありません。読み込みは登録の種�
 | `layers` | デザインレイヤの列挙（`GetDrawingHeaderFristMember`＋`NextObject`） | [Layers and Stories「デザインレイヤの並びと並べ替え」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)にある。シートレイヤを含むか・縮尺の読み方は未確認 |
 | `classes` | クラスの一覧 | 無い |
 | `layer_objects` / `object_counts` | レイヤの中のオブジェクトの列挙・種別・名前・クラス・外形 | 種別（`GetObjectTypeN`）・外形（`GetObjectBounds`）は各ページに使い方がある。列挙の順と、グループ・シンボルの中を数えるかは未確認 |
-| `ping` | `GetCurrentLayer()` で図面が開いているかを判定する | [Documents](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md)に現在のレイヤが文書に従って移ることはある。図面が 1 枚も無いときに何を返すかは未確認 |
+| `ping` | `GetCurrentLayer()` で図面が開いているかを判定する | [Documents](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md)に現在のレイヤが文書に従って移ることはある。図面が 1 枚も無いときに何を返すかは未確認（[#224](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/224) で調査中） |
 | `quit` | OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼ぶ | 無い（Documents が「プラグインの読み込み中に呼ぶと落ちる」として Plug-in Modules を指すが、その節は見当たらない）。保存の確認を取り消したときに戻ることも未確認 |

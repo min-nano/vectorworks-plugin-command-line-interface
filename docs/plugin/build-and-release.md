@@ -12,7 +12,7 @@
 | 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。プラグインとテストがリンク。OS ごとの呼び出しは `FilesPosix.cpp` / `FilesWindows.cpp` の片方） |
 | テスト | `VwCliTests`（`tests/*Tests.cpp`。外部のテストの枠組みに依らない）・`JsonFuzzer`（`tests/JsonFuzzer.cpp`）。テストは `protocol/fixtures` を読む |
 | プラグイン | `add_library(<target> MODULE)`。`VW_PLUGIN_SOURCES`（`src/*.cpp`・`src/tools/*`） |
-| 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH`。コンパイル時の定義だけで、`ping` の結果に載る。ファイルとしての版の情報は `build.json` だけ（下記） |
+| 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH`。PR では、ブランチの head の sha とブランチの名前（[リリースの形](#リリースの形)）。コンパイル時の定義だけで、`ping` の結果に載る。ファイルとしての版の情報は `build.json` だけ（下記） |
 | mac | `Module-Info.plist.in`（版の鍵は持たない）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr` |
 | Windows | `.vlb`・隣に `.vwr` |
 | ターゲット | `add_vw_plugin(VwCli "cli" io.github.min-nano.cli)` の 1 つだけ（安定版と開発版を区別しない） |
@@ -79,6 +79,19 @@ cli.vwlibrary.zip                       cli.vlb.zip
   [名前と識別子](identifiers.md)）にプレリリースする。タイトル **`Dev: <branch> (<sha>)`**・
   `--prerelease`。中身は main のものと**同じ名前のプラグイン**で、入れると入れ替わる
   （`vw2026 install --tag dev-<slug>`）。戻すときは `vw2026 install`（main の最新）。
+- PR の版は**ブランチの head** で決める。`pull_request` の `GITHUB_SHA` は main と合わせた
+  マージのためのコミットで、ブランチのどのコミットとも違うので使わない。ビルドは head
+  （`github.event.pull_request.head.sha`）を取り出して行い、`VW_BUILD_VERSION`・`build.json` の
+  `version`・タイトルの `<sha>` にはその短い sha を、`VW_BUILD_BRANCH`・`build.json` の `branch`・
+  タイトルの `<branch>` には `github.head_ref` を載せる。`ping` の `version` を
+  `git log` の sha と突き合わせられるようにするため。
+- CI は `pull_request` のマージのためのコミットで走り、プレリリースは head でビルドするので、
+  ブランチが main から遅れていると両者の中身は違う。ブランチを main に追いつかせることは
+  求めない（並行して進める PR ごとに取り込みを強いないため）。扱いは
+  [実装の順序「実機の確かめ方」](plan.md#実機の確かめ方)。
+- head を取り出してプレリリースする手順は、同じリポジトリの PR
+  （`github.event.pull_request.head.repo.full_name == github.repository`）でだけ走らせる。fork の
+  head は信頼できないコードで、`github.head_ref` はどのリポジトリのブランチかを区別しない。
 - 資産: `cli.vwlibrary.zip` / `cli.vlb.zip` / `get-vw2026.{sh,ps1}`（初回のスクリプト。
   利用者は `stable` のものを使う）。スクリプトの資産は、スクリプトを足す段 3 から上げる
   （[実装の順序](plan.md)。段 2 の `build.yml` は zip だけを上げ、段 2 から段 3 までは
