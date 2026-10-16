@@ -1,5 +1,5 @@
 {
-	"description": "要求はファイル名の昇順で処理する（id の昇順ではない。- は . より小さいので、a-b.req.json は a.req.json より先）",
+	"description": "要求はファイル名の昇順で処理する（id の昇順ではない。- は . より小さいので、a-b.req.json は a.req.json より先）。占有の中でだけ呼べる道具を断っても、残りは続けて処理する",
 	"steps": [
 		{"description": "ロックを取る（空のスプールなので何も消さない）", "expect": {"files": ["bridge.lock"]}},
 		{
@@ -13,14 +13,13 @@
 			"expect": {
 				"calls": [
 					{"tool": "echo", "args": {"include_sheets": false, "limit": 50, "layer": "1F"}},
-					{"tool": "edit", "args": {"name": "x"}},
 					{"tool": "ping", "args": {}},
 					{"tool": "echo", "args": {}},
 					{"tool": "bad_args", "args": {"limit": "many"}}
 				],
 				"responses": {
 					"0001": {"ok": true, "result": {"include_sheets": false, "limit": 50, "layer": "1F"}},
-					"0002": {"ok": true, "result": {"name": "x"}},
+					"0002": {"ok": false, "code": "no_session"},
 					"0010": {"ok": true, "result": {}},
 					"a-b": {"ok": true, "result": {}},
 					"a": {"ok": false, "code": "invalid_args"}

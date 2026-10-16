@@ -292,6 +292,7 @@ func TestCodeFor(t *testing.T) {
 		spool.ErrTimeout:    exitTimeout,
 		spool.ErrNoWait:     exitTimeout,
 		spool.ErrBusy:       exitBusy,
+		spool.ErrOccupied:   exitBusy,
 		spool.ErrNoSession:  exitBusy,
 		spool.ErrNoResponse: exitNoResponse,
 	} {
@@ -301,7 +302,8 @@ func TestCodeFor(t *testing.T) {
 	}
 }
 
-// session start が印を出し、その印の call だけが実行される。end のあとは印の無い call が実行される。
+// session start が印を出し、占有の中でだけ呼べる道具（quit）はその印の call だけが実行される。
+// 読む道具（layers・ping）は誰の call でも実行される。end のあとは quit が占有の外として断られる。
 func TestSessionStartCallEnd(t *testing.T) {
 	dir := echoBridge(t)
 	vars := map[string]string{"VW2026_SPOOL": dir}
@@ -315,14 +317,14 @@ func TestSessionStartCallEnd(t *testing.T) {
 	if r := invoke(t, vars, "", nil, "session", "start"); r.code != exitBusy {
 		t.Fatalf("a second session should be refused: %+v", r)
 	}
-	if r := invoke(t, vars, "", nil, "call", "layers"); r.code != exitBusy {
-		t.Fatalf("a call outside the session should be refused: %+v", r)
+	if r := invoke(t, vars, "", nil, "call", "quit"); r.code != exitBusy {
+		t.Fatalf("quit outside the session should be refused: %+v", r)
+	}
+	if r := invoke(t, vars, "", nil, "call", "layers"); r.code != exitOK {
+		t.Fatalf("a read tool is for everyone: %+v", r)
 	}
 	if r := invoke(t, vars, "", nil, "call", "ping"); r.code != exitOK {
 		t.Fatalf("ping is for everyone: %+v", r)
-	}
-	if r := invoke(t, vars, "", nil, "call", "layers", "--session", started.Session); r.code != exitOK {
-		t.Fatalf("%+v", r)
 	}
 	inSession := map[string]string{"VW2026_SPOOL": dir, "VW2026_SESSION": started.Session}
 	if r := invoke(t, inSession, "", nil, "call", "quit"); r.code != exitOK {
@@ -331,11 +333,8 @@ func TestSessionStartCallEnd(t *testing.T) {
 	if r := invoke(t, inSession, "", nil, "session", "end"); r.code != exitOK || strings.TrimSpace(r.stdout) != `{"ended":true}` {
 		t.Fatalf("%+v", r)
 	}
-	if r := invoke(t, inSession, "", nil, "call", "layers"); r.code != exitBusy {
+	if r := invoke(t, inSession, "", nil, "call", "quit"); r.code != exitBusy {
 		t.Fatalf("the ended session should be refused: %+v", r)
-	}
-	if r := invoke(t, vars, "", nil, "call", "layers"); r.code != exitOK {
-		t.Fatalf("%+v", r)
 	}
 	if r := invoke(t, vars, "", nil, "call", "quit"); r.code != exitBusy {
 		t.Fatalf("quit outside a session should be refused: %+v", r)

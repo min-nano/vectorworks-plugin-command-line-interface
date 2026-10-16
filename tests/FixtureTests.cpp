@@ -131,6 +131,7 @@ bool checkCase(const Json &fixture, const std::string &where) {
 		good = shaped(step,
 		              {{"description", T::String},
 		               {"other_bridge", T::Bool},
+		               {"activity", T::String},
 		               {"waits", T::Object},
 		               {"files", T::Object},
 		               {"requests", T::Object},
@@ -428,7 +429,13 @@ private:
 		}
 
 		gCalls.clear();
-		VwCli::core::ServeResult result = server_.serve(tools_, kNow + index);
+		VwCli::core::Activity activity = VwCli::core::Activity::Idle;
+		if (std::string name = text(step, "activity"); name == "quitting") {
+			activity = VwCli::core::Activity::Quitting;
+		} else if (!name.empty()) {
+			failAt(where_, "unknown activity: " + name);
+		}
+		VwCli::core::ServeResult result = server_.serve(tools_, kNow + index, activity);
 		const Json &expect = get(step, "expect");
 
 		std::string phase = text(expect, "phase");
@@ -594,8 +601,8 @@ TEST(FixtureConstantsMatchTheCode) {
 	      (std::set<std::string>{
 	          std::string(protocol::kCodeInvalidRequest), std::string(protocol::kCodeUnknownTool),
 	          std::string(protocol::kCodeInvalidArgs), std::string(protocol::kCodeNoWait),
-	          std::string(protocol::kCodeBusy), std::string(protocol::kCodeNoSession),
-	          std::string(protocol::kCodeInternal)}));
+	          std::string(protocol::kCodeBusy), std::string(protocol::kCodeOccupied),
+	          std::string(protocol::kCodeNoSession), std::string(protocol::kCodeInternal)}));
 }
 
 TEST(FixtureIdsMatchValidId) {

@@ -66,7 +66,7 @@ func TestConstantsMatchFixtures(t *testing.T) {
 	if tools := sorted(ToolTools, ToolPing, ToolSessionStart, ToolSessionEnd); !reflect.DeepEqual(tools, sorted(c.ReservedTools...)) {
 		t.Errorf("reserved tools %v, want %v", tools, c.ReservedTools)
 	}
-	codes := sorted(CodeInvalidRequest, CodeUnknownTool, CodeInvalidArgs, CodeNoWait, CodeBusy, CodeNoSession, CodeInternal)
+	codes := sorted(CodeInvalidRequest, CodeUnknownTool, CodeInvalidArgs, CodeNoWait, CodeBusy, CodeOccupied, CodeNoSession, CodeInternal)
 	if !reflect.DeepEqual(codes, sorted(c.Codes...)) {
 		t.Errorf("codes %v, want %v", codes, c.Codes)
 	}

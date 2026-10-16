@@ -13,21 +13,24 @@ type sessionCmd struct {
 
 func (sessionCmd) Help() string {
 	return `
-A session occupies the bridge: while it lasts, the plug-in runs only the calls
-that carry it (--session, or VW2026_SESSION). Other calls exit with 23 and do
-not run; "call tools" and "call ping" are answered for everyone. Without a
-session, nobody occupies the bridge and every call runs, except quit, which
-runs only in a session.
+A session occupies the bridge: while it lasts, the plug-in runs a tool that
+changes the drawing or Vectorworks (kind write or app, such as quit; see "call
+tools") only for the calls that carry it (--session, or VW2026_SESSION). Other
+calls of such a tool exit with 23 and do not run. Without a session, nobody
+occupies the bridge, and such a tool does not run at all (23). A tool that only
+reads (kind read, such as ping) and "call tools" run for every call, in a
+session or not.
 
 	vw2026 session start                     # {"session":"<ID>"}
-	vw2026 call layers --session <ID>
+	vw2026 call <TOOL> --session <ID>        # a tool of kind write or app
 	vw2026 session end --session <ID>
 
 The plug-in issues one session at a time and keeps it in memory only. Nothing
 ends it but "session end" and the end of Vectorworks: a session that is never
 ended keeps the bridge occupied until Vectorworks restarts. Quitting
 Vectorworks ends the session, so after "call quit" and "launch", start a new
-one; calls with the old one exit with 23.
+one. With the old one, a tool of kind write or app and "session end" exit with
+23; a tool that only reads does not look at the session and runs.
 `
 }
 

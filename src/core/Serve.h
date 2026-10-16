@@ -13,8 +13,18 @@
 
 namespace VwCli::core {
 
-// 道具の種類（tools の結果の kind）。図面を変えるかが分からない道具は Write とする。
+// 道具の種類（tools の結果の kind）。図面を変えるかが分からない道具は Write とする。Write と App は
+// 占有の中でだけ呼べ、終了の依頼の最中なら busy で断る。Read は占有に照らさない。
 enum class ToolKind { Read, Write, App };
+
+// 受け付けの外の状態。タイマー（Clock）が回ごとに渡す。Quitting では、種類 Write と App の道具を
+// busy で断る（ほかの道具は応える）。この判定を残すかは、SDK リファレンス #230 の結果で段 5 の前に
+// 決める（docs/plugin/architecture.md「Vectorworks が処理中」）。
+enum class Activity {
+	Idle,
+	// 終了の依頼の最中（保存の確認を開いている）。
+	Quitting,
+};
 
 // 道具が返す失敗の種別。None は失敗していない。
 enum class ErrorCode { None, InvalidArgs, Internal };
@@ -71,10 +81,16 @@ public:
 	// serve は受け付け 1 回。nowNanos は Unix 時刻のナノ秒で、占有の印の先頭に使う。
 	//
 	// ロックを掴んでいなければ用意（prepare → lock → sweep）をし、取れなければ何もせずに戻る。
-	// 回の始めに並べた要求を名前の昇順ですべて処理し、取り出した要求には同じ回の中で応える。
+	// 回の始めに並べた要求を名前の昇順ですべて処理し、取り出した要求には同じ回の中で応える
+	// （受け付けの入れ子が起きたときは、入れ子の回が先に取り出して断った要求を飛ばす）。
 	// 種類 App の道具が成功して応答を書けたら、その回の残りの要求を取り出さずに戻る（終了したら
 	// 応えられないので、残りは置いたままにする）。
-	ServeResult serve(std::span<const Tool> tools, std::int64_t nowNanos);
+	//
+	// 道具の中で Vectorworks がイベントを回し、serve の途中でまた serve が呼ばれたら（受け付けの
+	// 入れ子）、外の回の状態に触れず、取り出せる要求をすべて busy で断って戻る。外の回がすでに
+	// 並べていた要求も断る（外の回の一覧を入れ子の側へ見せる状態を持たないため）。
+	ServeResult serve(std::span<const Tool> tools, std::int64_t nowNanos,
+	                  Activity activity = Activity::Idle);
 
 	bool inSession() const { return !session_.empty(); }
 
@@ -89,13 +105,26 @@ private:
 
 	// answer は状態（占有の印・終了の依頼）を変えない。反映するのは serve で、応答を書けたときだけ
 	// （書けないと呼ぶ側は結果を受け取れないのに、占有だけが残る・消える、Vectorworks が終わる）。
-	Outcome answer(const std::string &text, std::span<const Tool> tools, std::int64_t nowNanos);
+	Outcome answer(const std::string &text, std::span<const Tool> tools, std::int64_t nowNanos,
+	               Activity activity);
+
+	// held は要求を取り出し、呼ぶ側が待っていれば中身を返す（通信規則「待つ印」）。待つ者が
+	// 居なければ待つ印を消し、待つ印が無ければ no_wait で応えて、どちらも空を返す。
+	std::optional<std::string> held(const std::string &id);
+
+	// refuseAll は受け付けの入れ子の回。取り出せる要求をすべて busy で断る。解析も道具の実行も
+	// しない（外の回の占有の印と取り合わない。道具の SDK 呼び出しの途中で SDK を呼ばない）。
+	void refuseAll();
 
 	Bridge bridge_;
 	std::string session_;
+	// serve の途中か（受け付けの入れ子の判定）。
+	bool serving_ = false;
 	// answer が投げたときの応答。前もって書き出しておき、catch の中では確保しない（メモリが足りない
 	// ときにまた投げて、応えられなくならないように）。
 	std::string internalFailure_;
+	// 受け付けの入れ子の回が断る応答。前もって書き出しておき、入れ子の回では書くだけにする。
+	std::string nestedRefusal_;
 };
 
 // kindName は tools の結果に載せる種類の綴り。

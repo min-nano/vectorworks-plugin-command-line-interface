@@ -1,0 +1,82 @@
+{
+	"description": "終了の依頼の最中は、種類 write と app を busy で断り、ほかは応える。占有に照らすのが先",
+	"steps": [
+		{
+			"description": "ロックを取る（空のスプールなので何も消さない）",
+			"expect": {"files": ["bridge.lock"]}
+		},
+		{
+			"description": "印を発行する",
+			"requests": {"start": "session-start.json"},
+			"expect": {
+				"responses": {"start": {"ok": true, "result": {"session": "$session"}}},
+				"files": ["bridge.lock", "start.res.json", "start.wait"]
+			}
+		},
+		{
+			"description": "終了の依頼の最中",
+			"activity": "quitting",
+			"requests": {
+				"a-edit": "edit-in-session.json",
+				"b-quit": "quit-in-session.json",
+				"c-echo": "echo-no-args.json",
+				"d-ping": "ping.json",
+				"e-edit": "edit.json",
+				"f-tools": "tools.json"
+			},
+			"expect": {
+				"calls": [{"tool": "echo"}, {"tool": "ping"}],
+				"responses": {
+					"a-edit": {"ok": false, "code": "busy"},
+					"b-quit": {"ok": false, "code": "busy"},
+					"c-echo": {"ok": true, "result": {}},
+					"d-ping": {"ok": true, "result": {}},
+					"e-edit": {"ok": false, "code": "occupied"},
+					"f-tools": {"ok": true}
+				},
+				"files": [
+					"a-edit.res.json",
+					"a-edit.wait",
+					"b-quit.res.json",
+					"b-quit.wait",
+					"bridge.lock",
+					"c-echo.res.json",
+					"c-echo.wait",
+					"d-ping.res.json",
+					"d-ping.wait",
+					"e-edit.res.json",
+					"e-edit.wait",
+					"f-tools.res.json",
+					"f-tools.wait"
+				]
+			}
+		},
+		{
+			"description": "占有の終わりと始めは、終了の依頼の最中も応える",
+			"activity": "quitting",
+			"requests": {"a-end": "session-end-in-session.json", "b-start": "session-start.json"},
+			"expect": {
+				"responses": {
+					"a-end": {"ok": true, "result": {"ended": true}},
+					"b-start": {"ok": true, "result": {"session": "$session"}}
+				},
+				"files": [
+					"a-end.res.json",
+					"a-end.wait",
+					"b-start.res.json",
+					"b-start.wait",
+					"bridge.lock"
+				]
+			}
+		},
+		{
+			"description": "終了の依頼の最中でなくなれば（保存の確認を取り消したあと）実行する",
+			"requests": {"a-edit": "edit-in-session.json"},
+			"expect": {
+				"calls": [{"tool": "edit", "args": {}}],
+				"responses": {"a-edit": {"ok": true, "result": {}}},
+				"files": ["a-edit.res.json", "a-edit.wait", "bridge.lock"]
+			}
+		}
+	]
+}

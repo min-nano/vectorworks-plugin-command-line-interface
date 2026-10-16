@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -69,6 +70,9 @@ private:
 
 std::vector<std::string> gCalls;
 Caller *gCaller = nullptr;
+Server *gServer = nullptr;
+// nests が入れ子に渡す道具の表（表の定義より前に使うので、テストが置く）。
+std::span<const Tool> gTools;
 bool gSession = false;
 
 Json record(const char *name) {
@@ -82,6 +86,14 @@ Json first(const Json &, const ToolContext &, ToolError &) { return record("firs
 Json putLater(const Json &, const ToolContext &, ToolError &) {
 	gCaller->put("zzz", R"({"tool":"first"})");
 	return record("put_later");
+}
+
+// nests は道具の中で Vectorworks
+// がイベントを回し、刻みがまた届いたことを真似る（受け付けの入れ子）。
+Json nests(const Json &, const ToolContext &, ToolError &) {
+	gCaller->put("c", R"({"tool":"first"})");
+	gServer->serve(gTools, kNow);
+	return record("nests");
 }
 
 Json appFails(const Json &, const ToolContext &, ToolError &error) {
@@ -105,6 +117,7 @@ Json readContext(const Json &, const ToolContext &context, ToolError &) {
 const Tool kTools[] = {
     {"first", "", "{}", ToolKind::Read, first},
     {"put_later", "", "{}", ToolKind::Read, putLater},
+    {"nests", "", "{}", ToolKind::Read, nests},
     {"app_fails", "", "{}", ToolKind::App, appFails},
     {"app_succeeds", "", "{}", ToolKind::App, appSucceeds},
     {"throws_int", "", "{}", ToolKind::Read, throwsInt},
@@ -152,9 +165,46 @@ TEST(ServeDoesNotQuitWhenTheAppToolFails) {
 	VwCli::core::ServeResult result = server.serve(kTools, kNow);
 	CHECK(!result.quit);
 	CHECK_EQ(caller.code("1"), std::string("internal"));
-	CHECK_EQ(caller.code("2"), std::string("busy"));
+	CHECK(caller.ok("2"));
 	CHECK(caller.ok("3"));
-	CHECK_EQ(gCalls, (std::vector<std::string>{"app_fails", "first"}));
+	CHECK_EQ(gCalls, (std::vector<std::string>{"app_fails", "first", "first"}));
+}
+
+// 受け付けの入れ子では、外の回が並べた要求（b・s）も、回の途中に置かれた要求（c）も、解析せずに
+// busy で断る。占有の印は発行しない。外の回は、断られた要求を取り出せずに飛ばす。待つ印は入れ子でも
+// 確かめる（放されていれば応えずに消し、無ければ no_wait）。
+TEST(ServeRefusesEveryRequestWhileNested) {
+	TempDir dir;
+	gCalls.clear();
+	Server server(dir.utf8Path());
+	Caller caller(dir);
+	gCaller = &caller;
+	gServer = &server;
+	gTools = kTools;
+	// 先にロックを取る（取るときの掃除で、待つ印の放された・無い要求が消えないように）。
+	server.serve(kTools, kNow);
+	caller.put("a", R"({"tool":"nests"})");
+	caller.put("b", R"({"tool":"first"})");
+	caller.put("s", R"({"tool":"session_start"})");
+	CHECK(files::write(dir.sub("r.wait"), ""));
+	CHECK(files::write(dir.sub("r.req.json"), R"({"tool":"first"})"));
+	CHECK(files::write(dir.sub("w.req.json"), R"({"tool":"first"})"));
+	CHECK(server.serve(kTools, kNow).phase == Phase::Serving);
+	CHECK_EQ(gCalls, (std::vector<std::string>{"nests"}));
+	CHECK(!std::filesystem::exists(dir.path() / "r.res.json"));
+	CHECK(!std::filesystem::exists(dir.path() / "r.wait"));
+	CHECK_EQ(caller.code("w"), std::string("no_wait"));
+	CHECK(caller.ok("a"));
+	CHECK_EQ(caller.code("b"), std::string("busy"));
+	CHECK_EQ(caller.code("c"), std::string("busy"));
+	CHECK_EQ(caller.code("s"), std::string("busy"));
+	CHECK(!server.inSession());
+	// 入れ子から戻ったあとは、ふつうに受け付ける。
+	caller.put("d", R"({"tool":"first"})");
+	server.serve(kTools, kNow);
+	CHECK(caller.ok("d"));
+	gCaller = nullptr;
+	gServer = nullptr;
 }
 
 TEST(ServeAnswersAnyExceptionWithInternal) {
