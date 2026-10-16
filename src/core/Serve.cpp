@@ -134,8 +134,10 @@ std::string_view kindName(ToolKind kind) {
 
 Server::Server(std::string spoolDir)
     : bridge_(std::move(spoolDir)),
-      internalFailure_(
-          failure(protocol::kCodeInternal, "要求の処理の中で例外が起きました").dump()) {}
+      internalFailure_(failure(protocol::kCodeInternal, "要求の処理の中で例外が起きました").dump()),
+      nestedRefusal_(
+          failure(protocol::kCodeBusy, "ほかの要求を処理している最中なので実行しませんでした")
+              .dump()) {}
 
 ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos, Activity activity) {
 	ServeResult result;
@@ -230,13 +232,12 @@ void Server::refuseAll() {
 	try {
 		for (const std::string &id : bridge_.poll()) {
 			if (held(id)) {
-				bridge_.reply(id, failure(protocol::kCodeBusy,
-				                          "ほかの要求を処理している最中なので実行しませんでした")
-				                      .dump());
+				bridge_.reply(id, nestedRefusal_);
 			}
 		}
 	} catch (...) {
-		// 断れなかった要求は、外の回か次の刻みが扱う。
+		// 取り出す前の要求は、外の回か次の刻みが扱う。取り出したあとに投げたら（応答を書くパスを
+		// 組み立てられないなど）その要求には応えず、呼ぶ側は待ちきれずに終わる（実行はしていない）。
 		return;
 	}
 }

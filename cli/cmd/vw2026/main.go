@@ -164,8 +164,9 @@ of a long operation or in some of its dialogs (docs/protocol.md). Status reports
 this state as running; call waits up to --timeout and then exits with 3.
 Recover from 5 and 3 differently: 5 means Vectorworks is not running, while 3
 means it is running but did not answer in time, so launching it again or
-reinstalling the plug-in does not help. Tell 3 and 4 apart before calling a tool that changes the
-drawing again: after 3 the tool did not run, while after 4 it may have.
+reinstalling the plug-in does not help. Tell 3 and 4 apart before calling a
+tool that changes the drawing again: after 3 the tool did not run, while after
+4 it may have.
 `
 }
 

@@ -123,6 +123,8 @@ private:
 	// answer が投げたときの応答。前もって書き出しておき、catch の中では確保しない（メモリが足りない
 	// ときにまた投げて、応えられなくならないように）。
 	std::string internalFailure_;
+	// 受け付けの入れ子の回が断る応答。前もって書き出しておき、入れ子の回では書くだけにする。
+	std::string nestedRefusal_;
 };
 
 // kindName は tools の結果に載せる種類の綴り。
