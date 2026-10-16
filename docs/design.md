@@ -127,12 +127,12 @@ OS タイマーの刻みの中からも呼べ、相手が居なければ `false`
   その利用者の権限で動くプログラムは、どのみち利用者のファイルを読み書きできる。
 - **頼まれたときにしか動かない。** 勝手に回る処理（定期的な取り込みなど）は持たない。
 - **図面に書き込む道具は undo の手順に必ず従う**（[SDK リファレンス「Undo」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md)）。
-  人が図面を操作している最中にも要求は届くので、人の操作と undo の記録が混ざらないかを
-  先に確かめる。
+  書く道具は自分で undo の記録を開き、戻る前に必ず閉じる（要求 1 件で undo 1 つ。
+  [ブリッジ「道具の表」](plugin/bridge.md#道具の表)）。
 - **利用者の図面を保存せずに閉じる・消す道具は持たない。**
 - **受け付けを止める手段は持たない**（止めたければアンインストールする）。代わりに、
-  Vectorworks の処理中（undo の記録が開いている間など）は、図面か Vectorworks を変える道具を
-  `busy` で断る（[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)）。
+  受け付けの入れ子と終了の依頼の最中は、要求を `busy` で断る
+  （[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)）。
 
 ## 配布と PATH
 

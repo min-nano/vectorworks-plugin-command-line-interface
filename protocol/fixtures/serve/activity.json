@@ -1,5 +1,5 @@
 {
-	"description": "Vectorworks が処理中（undo の記録が開いている・終了の依頼の最中）は、種類 write と app を busy で断り、ほかは応える。占有に照らすのが先",
+	"description": "終了の依頼の最中は、種類 write と app を busy で断り、ほかは応える。占有に照らすのが先",
 	"steps": [
 		{
 			"description": "ロックを取る（空のスプールなので何も消さない）",
@@ -14,8 +14,8 @@
 			}
 		},
 		{
-			"description": "undo の記録が開いている",
-			"activity": "undo_open",
+			"description": "終了の依頼の最中",
+			"activity": "quitting",
 			"requests": {
 				"a-edit": "edit-in-session.json",
 				"b-quit": "quit-in-session.json",
@@ -52,34 +52,8 @@
 			}
 		},
 		{
-			"description": "終了の依頼の最中",
+			"description": "占有の終わりと始めは、終了の依頼の最中も応える",
 			"activity": "quitting",
-			"requests": {
-				"a-edit": "edit-in-session.json",
-				"b-quit": "quit-in-session.json",
-				"c-echo": "echo-no-args.json"
-			},
-			"expect": {
-				"calls": [{"tool": "echo"}],
-				"responses": {
-					"a-edit": {"ok": false, "code": "busy"},
-					"b-quit": {"ok": false, "code": "busy"},
-					"c-echo": {"ok": true, "result": {}}
-				},
-				"files": [
-					"a-edit.res.json",
-					"a-edit.wait",
-					"b-quit.res.json",
-					"b-quit.wait",
-					"bridge.lock",
-					"c-echo.res.json",
-					"c-echo.wait"
-				]
-			}
-		},
-		{
-			"description": "占有の終わりと始めは、処理中でも応える",
-			"activity": "undo_open",
 			"requests": {"a-end": "session-end-in-session.json", "b-start": "session-start.json"},
 			"expect": {
 				"responses": {
@@ -96,7 +70,7 @@
 			}
 		},
 		{
-			"description": "処理中でなくなれば実行する",
+			"description": "終了の依頼の最中でなくなれば（保存の確認を取り消したあと）実行する",
 			"requests": {"a-edit": "edit-in-session.json"},
 			"expect": {
 				"calls": [{"tool": "edit", "args": {}}],

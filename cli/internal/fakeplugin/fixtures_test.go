@@ -281,7 +281,7 @@ func (r *caseRunner) step(step fixtureStep) {
 		}
 	}
 
-	if step.Activity != "" && step.Activity != "undo_open" && step.Activity != "quitting" {
+	if step.Activity != "" && step.Activity != "quitting" {
 		t.Fatalf("%s: unknown activity %q", r.name, step.Activity)
 	}
 	r.server.activity = step.Activity

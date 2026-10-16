@@ -430,9 +430,7 @@ private:
 
 		gCalls.clear();
 		VwCli::core::Activity activity = VwCli::core::Activity::Idle;
-		if (std::string name = text(step, "activity"); name == "undo_open") {
-			activity = VwCli::core::Activity::UndoOpen;
-		} else if (name == "quitting") {
+		if (std::string name = text(step, "activity"); name == "quitting") {
 			activity = VwCli::core::Activity::Quitting;
 		} else if (!name.empty()) {
 			failAt(where_, "unknown activity: " + name);

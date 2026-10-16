@@ -15,8 +15,8 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 | --- | --- | --- | --- |
 | [A1](#a1-種類-app-と終了の依頼が同じ意味になっている) | 種類 `app` と終了の依頼が同じ意味になっている | 段 5 の前 | 未着手 |
 | [A2](#a2-quitping-が使う-sdk-呼び出しが確かめられていない) | `quit`・`ping` が使う SDK 呼び出しが確かめられていない | 段 2（`ping`）・段 5（`quit`）の前 | `GetCurrentLayer()` は [SDK リファレンス #224](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/224) で調査中。`quit` の 2 つは未着手 |
-| [A3](#a3-未決-2-が段-2-の作りを変える) | 未決 2 が段 2 の作りを変える | 段 2 の前 | 済（処理中の要求は置いたままにせず `busy` で断る。undo の記録の間は種類 `write`・`app` だけを断り、`write` も占有の中でだけ呼べる。[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)） |
-| [A4](#a4-終了の依頼の最中に受け付けが入れ子になりうる) | 終了の依頼の最中に受け付けが入れ子になりうる | 段 5 | 済（A3 と合わせて決めた。終了の依頼の最中は `write`・`app` を `busy` で断り、`serve` の入れ子はすべて `busy`。`Clock` の印は段 5 で実装する） |
+| [A3](#a3-未決-2-が段-2-の作りを変える) | 未決 2 が段 2 の作りを変える | 段 2 の前 | 済（undo の記録が開いているかは見ない。書く道具は自分で記録を開いて閉じ、占有の中でだけ呼べる。受け付けの入れ子は `busy` で断る。[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)） |
+| [A4](#a4-終了の依頼の最中に受け付けが入れ子になりうる) | 終了の依頼の最中に受け付けが入れ子になりうる | 段 5 | 暫定（終了の依頼の最中は `write`・`app` を `busy` で断る。残すかは [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 の結果で段 5 の前に決める） |
 | [B1](#b1-更新の手順の見本が占有を残す) | 更新の手順の見本が占有を残す | 段 5 | 未着手 |
 | [B2](#b2-windows-の-path-の書き換えが既存の項目を壊しうる) | Windows の PATH の書き換えが既存の項目を壊しうる | 段 3 | 未着手 |
 | [B3](#b3-vw2026_app-が環境変数の名前の決まりに反する) | `VW2026_APP` が環境変数の名前の決まりに反する | 最初の配布（段 2）の前 | 済（名前は値の通じる範囲で決める、と決まりを改めた。CLAUDE.md「Go」） |
@@ -65,20 +65,18 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
   - 受け付けの見本（`protocol/fixtures/serve`）の表し方。
 - `Clock` を作る段 2 の前に決めると手戻りが無い（段 2 には `quit` も書く道具も無いが、見送りの
   判定の置き場所が変わるため）。
-- **済。** 見送り（要求を置いたままにすること）をやめ、Vectorworks が処理中なら `busy` ですぐに断る。
-  - undo の記録が開いている間と終了の依頼の最中は、種類 `write`・`app` だけを断り、読む道具は応える。
-    判定は `Clock` が回ごとに行い、`core::Server::serve` に渡す（`core::Activity`）。
-  - 受け付けの入れ子は、`core::Server` が自分で判定し、取り出せる要求をすべて断る（A4）。
+- **済。** 見送り（要求を置いたままにすること）をやめ、undo の記録が開いているかも見ない。
+  - 刻みの中から記録が開いて見えた実測は、どれもプラグイン自身の呼び出しが閉じずに戻した記録で、
+    GUI の操作は刻みが入らない区間で記録を開いて閉じる。そこで、種類 `write` の道具は自分で記録を
+    開き、戻る前に必ず閉じる（要求 1 件で undo 1 つ）と決め、判定を不要にした。
+  - 受け付けの入れ子は、`core::Server` が自分で判定し、取り出せる要求をすべて `busy` で断る。
   - ほかの呼ぶ側の占有で断る `code` は `busy` から `occupied` に分けた。種類 `write` も占有の中で
     だけ呼べ、種類 `read` と表に無い道具は占有に照らさない。
   - 開始から 10 秒は待たず、最初の刻みから受け付ける。
-  - 呼ぶ側にどう見えるか（未決 2 の 2 つめ）は `busy` の `error` で伝える。未決 2 は消した。
-  - SDK リファレンスで確かめること: [#234](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/234)（残った記録が閉じる条件）・
-    [#235](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/235)（VW のダイアログの最中の記録と `quit`）・
-    [#236](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/236)（起動直後の `IsCurrentlyBuildingAnUndoEvent()`）
-    （[SDK の調査 5](sdk-research.md#5-処理中の判定clockが使う-sdk-呼び出し)）。
+  - 未決 2 は消した。
   - 真実は[通信規則「占有」「Vectorworks が処理中」](protocol.md#vectorworks-が処理中)と
-    [構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)。
+    [構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)、
+    [ブリッジ「道具の表」](plugin/bridge.md#道具の表)。
 
 ### A4. 終了の依頼の最中に受け付けが入れ子になりうる
 
@@ -87,10 +85,13 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
   受け付けの外（タイマーが `serve` から戻ったあと）で行うので、この判定に掛からない。
 - A3 で読む道具を記録の開いている間も通すと、保存の確認の最中に受け付けが走り、2 つ目の
   `quit` で終了の依頼が重なりうる。入れ子の見送りの範囲をタイマーの呼び出し全体にする。
-- **済。** 入れ子の範囲は `serve` の中のままにし（保存の確認の間の刻みは入れ子にならないので、読む
+- **暫定。** 入れ子の範囲は `serve` の中のままにし（保存の確認の間の刻みは入れ子にならないので、読む
   道具には応える）、`Clock` が終了の依頼の前後で印を立てて `Quitting` を渡す。その間は種類
-  `write`・`app` を `busy` で断るので、2 つ目の `quit` は重ならない。`serve` の入れ子は、取り出せる
-  要求をすべて `busy` で断る（A3）。
+  `write`・`app` を `busy` で断るので、2 つ目の `quit` は重ならない。
+- 守る相手は `quit` を頼んだ当の呼ぶ側の呼び直しだけ（`write`・`app` は占有の中でしか呼べない）。
+  保存の確認の中で 2 つ目の `CloseAllFilesAndQuitVectorworks` を呼んだときに何が起きるかを
+  [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 で確かめ、段 5 の前に、判定をやめるか、残すか、
+  入れ子の判定にまとめて保存の確認の間はすべて断るかを決める。
 
 ## B. 文書の誤りと、文書と実装の食い違い
 

@@ -41,8 +41,8 @@
 
 ## 受け付け 1 回（`core::Server::serve`）
 
-`serve` は道具の表・時刻と、タイマーが判定した処理中の状態（`core::Activity`。`Idle`・`UndoOpen`・
-`Quitting`。[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）を受け取ります。
+`serve` は道具の表・時刻と、終了の依頼の最中か（`core::Activity`。`Idle`・`Quitting`。
+[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）を受け取ります。
 
 0. **`serve` の途中にまた呼ばれたら（受け付けの入れ子）**、外の回の状態に触れず、取り出せる要求を
    すべて `busy` で断って戻る。手順は 2 の取り出しと待つ印の確かめだけで、解析も道具の実行もしない
@@ -71,14 +71,14 @@
 4. 要求ごとに（[通信規則「占有」](../protocol.md#占有セッション)の表）:
    - `tools` → 道具の一覧を返す（表を検索しない。占有に照らさない）。
    - `session_start` → 占有されていなければ印を発行して返す（されていれば `occupied`）。
-     `session_end` → 占有に照らしてから印を消す（表を検索しない）。どちらも処理中の状態には照らさない。
+     `session_end` → 占有に照らしてから印を消す（表を検索しない）。どちらも終了の依頼の最中かには照らさない。
      占有の印は `core::Server` が持つ状態（1 つだけ。メモリだけで、ファイルに書かない）で、
      Vectorworks が終われば消える。印は `<時刻のナノ秒 19 桁>-<乱数 16 桁の 16 進>` で、乱数は
      `std::random_device` から作る。
    - 表に無い道具 → `unknown_tool` で応える（占有に照らさない）。
    - 種類 `read`（`ping` を含む）→ 占有に照らさずに実行して応答を書く。
-   - 種類 `write`・`app` → 占有に照らし（無ければ `no_session`、ほかの印なら `occupied`）、処理中
-     （`UndoOpen`・`Quitting`）なら `busy` で断る。通れば実行して応答を書く。
+   - 種類 `write`・`app` → 占有に照らし（無ければ `no_session`、ほかの印なら `occupied`）、終了の
+     依頼の最中（`Quitting`）なら `busy` で断る。通れば実行して応答を書く。
    - 種類 `app`（`quit`）が成功して応答を書けたら、終了の依頼を結果に載せて、
      **その回の残りの要求を取り出さずに戻る**（終了したら応えられないので、残りは置いたままにする）。
      道具が失敗した・応答を書けなかったら、終了を頼まずに続ける。
@@ -127,7 +127,7 @@ Windows では Vectorworks 2026 を 2 つ起動でき、どちらのプラグイ
 ## 道具の表
 
 ```cpp
-// Write と App は占有の中でだけ呼べ、Vectorworks が処理中なら busy で断る。Read は占有に照らさない。
+// Write と App は占有の中でだけ呼べ、終了の依頼の最中なら busy で断る。Read は占有に照らさない。
 enum class ToolKind { Read, Write, App };
 
 // 道具が返す失敗の種別。None は失敗していない。
@@ -171,9 +171,14 @@ struct Tool {
   `invalid_args` で返します（[通信規則「互換性」](../protocol.md#互換性)）。
 - 失敗の種別は応答の `code` に小文字の綴り（`invalid_args` / `internal`）で
   載せます（[通信規則「応答」](../protocol.md#応答idresjson)）。`invalid_request`・`unknown_tool`・`no_wait`・`busy`・`occupied`・`no_session` は
-  `core::Server::serve` が付けます（`occupied`・`no_session` は占有に照らした結果、`busy` は処理中の状態に照らした結果。道具は付けない）。図面が開かれていないなど、道具によって失敗になるかが違う理由は
+  `core::Server::serve` が付けます（`occupied`・`no_session` は占有に照らした結果、`busy` は終了の依頼の最中か・受け付けの入れ子かに照らした結果。道具は付けない）。図面が開かれていないなど、道具によって失敗になるかが違う理由は
   `internal` とし、`error` に書きます。
 - **種類 `write` の道具は、undo の手順に対応するまで表に載せません**（[未決 1](open-questions.md)）。
+- **種類 `write` の道具は、自分で undo の記録を開き、受け付けから戻る前に必ず閉じます**（要求 1 件で
+  undo 1 つ）。閉じずに戻ると記録が数十秒開いたままになり、その間の書き込みがそこへ入る
+  （[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 7「落とし穴」）。自分で閉じる限り、
+  ほかの記録と混ざらないので、受け付けは undo の記録が開いているかを見ません
+  （[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
 
 ## 受け付けの結果
 

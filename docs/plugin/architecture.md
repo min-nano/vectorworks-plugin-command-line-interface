@@ -14,7 +14,7 @@ Vectorworks ──読み込む──▶ cli.vwlibrary / cli.vlb     … 起動�
 | 入口 | 処理 |
 | --- | --- |
 | `plugin_module_main`（起動時） | VCOM の初期化・SDK のコールバックを記憶・**OS タイマーの開始**（拡張機能は登録しない） |
-| OS タイマー（250 ms ごと） | 処理中の判定 → 受け付け 1 回（`core::Server::serve`）→ `quit` が頼まれていたら終了を頼む |
+| OS タイマー（250 ms ごと） | 受け付け 1 回（`core::Server::serve`）→ `quit` が頼まれていたら終了を頼む |
 
 OS タイマーは起動時に開始し、最初の刻みから受け付けます。
 
@@ -23,15 +23,14 @@ OS タイマーは起動時に開始し、最初の刻みから受け付けま�
 ```
 OS タイマー
   ├─ gSDK が無い → 何もしない
-  ├─ 処理中の判定: 終了の依頼の最中 → Quitting、undo の記録が開いている → UndoOpen、ほかは Idle
-  └─ core::Server::serve（受け付け 1 回。処理中の判定を渡す）
+  └─ core::Server::serve（受け付け 1 回。終了の依頼の最中なら Quitting、ほかは Idle を渡す）
         ├─ 受け付けの入れ子（serve の途中にまた呼ばれた）→ 取り出せる要求をすべて busy で断って戻る
         ├─ ロックを掴んでいない → 取ってみる。取れなければ何もしない（次の回に取り直す）
         │                         取れたら前の回の残骸を消す
         ├─ 要求を名前の昇順で読んで消す（回の始めに並べたものだけ。読めない・消せないものは飛ばす）
         ├─ 呼ぶ側の待つ印（<id>.wait）を掴めたら、待つ者が居ないので実行しない
         ├─ 種類 write・app と session_end は占有に照らす（tools・種類 read は誰にでも）
-        ├─ 種類 write・app は、処理中（UndoOpen・Quitting）なら busy で断る
+        ├─ 種類 write・app は、終了の依頼の最中（Quitting）なら busy で断る
         └─ 道具を実行して応答を書く（quit も応答を書いてから、終了の依頼を返す）
      quit が頼まれていたら、終了の依頼の最中の印を立てて CloseAllFilesAndQuitVectorworks。戻ったら下ろす
 ```
@@ -54,12 +53,10 @@ OS タイマー
 外に溜め込むこともしません。Vectorworks の処理の妨げになる要求は、次の「Vectorworks が処理中」で
 すぐに断ります。
 
-- 何も要求が無いときの 1 回の費用は、スプールの一覧を読むことと、undo の記録が開いているかを
-  問うことだけです。
+- 何も要求が無いときの 1 回の費用は、スプールの一覧を読むことだけです（SDK を呼ばない）。
 - 起動の直後も最初の刻みから受け付けます。待つ時間（以前の「開始から 10 秒」）は根拠が無いので
   持ちません。起動画面の頃の刻みから `GetCurrentLayer()` と `GetOpenFilesList()` を呼んで落ちない
   ことは確かめてあります（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 8）。
-  同じ頃の `IsCurrentlyBuildingAnUndoEvent()` は [SDK リファレンス #236](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/236) で確かめます。
 - Vectorworks が刻みを配らない間（重い処理・一部のダイアログの最中）は応えません。そのとき要求は
   スプールに残り、刻みが戻れば処理されます（呼ぶ側の待ち時間の内なら応答が届く。過ぎた・呼ぶ側が
   強制終了された要求は、待つ印を掴める（または無い）ので実行しない。[通信規則「待つ印」](../protocol.md#待つ印idwait)）。
@@ -68,33 +65,29 @@ OS タイマー
 ## Vectorworks が処理中
 
 次の間は、要求を `busy` で断ります（呼ぶ側から見た扱いは[通信規則「Vectorworks が処理中」](../protocol.md#vectorworks-が処理中)）。
-判定は `Clock` が回ごとに行い、`core::Server::serve` に渡します（`core::Activity`）。入れ子の判定だけは
-`core::Server` が自分で持ちます。
 
 | 場面 | 判定 | 断る要求 | 理由 |
 | --- | --- | --- | --- |
-| undo の記録が開いている | `Clock` が回の始めに `gSDK->IsCurrentlyBuildingAnUndoEvent()` を 1 度問う（`UndoOpen`） | 種類 `write`・`app` | 書くと開いている記録に混ざる。読むのは安全（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 6） |
-| 終了の依頼の最中 | `Clock` が `CloseAllFilesAndQuitVectorworks` の前後で印を立てて下ろす（`Quitting`）。保存の確認の間も刻むので、その刻みで渡す | 種類 `write`・`app` | 保存しようとしている図面を書き換えない。終了の依頼を重ねない |
+| 終了の依頼の最中 | `Clock` が `CloseAllFilesAndQuitVectorworks` の前後で印を立てて下ろし、その間の刻みで `core::Server::serve` に `Quitting` を渡す（保存の確認の間も刻む） | 種類 `write`・`app` | 保存しようとしている図面を書き換えない。終了の依頼を重ねない |
 | 受け付けの入れ子 | `core::Server` が `serve` の途中かを持つ | すべて | 外の回の状態（並べた要求・占有の印）を取り合わない。道具の SDK 呼び出しの途中で SDK を呼ばない |
 
-- **undo の記録が開いていても、読む道具は応えます。** 記録が開いていることは「利用者が操作中」を
-  意味しません。SDK の内部（PIO の再計算・ビューポートの更新・スクリプトエンジンなど）も開き、
-  スクリプトエンジンはコマンドをまたいで開いたままにします（同 Findings の 6「`yes` の意味が広い」）。
-  回ごと見送ると、残った記録 1 つで `ping` まで応えなくなるためです。残った記録がいつ閉じるかは
-  [SDK リファレンス #234](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/234) で確かめます。
-- 利用者がドラッグやレンダリングをしている最中にも刻みは届きますが、そのとき VW は undo の記録を
-  開いていないので（同 Findings の 7）、書く道具も断られません。人の操作と書き込みの順序の扱いは
-  [未決 1](open-questions.md#1-図面に書く道具の振る舞い) で決めます。
-- VW のモーダルダイアログの最中に記録が開いているかはダイアログに依る見込みで、
-  [SDK リファレンス #235](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/235) で確かめます
-  （Findings の 6 で `yes` だったのは、記録を開かせてからダイアログを出した場面）。
 - **受け付けの入れ子**は、道具の SDK 呼び出しが中でイベントを回したとき（モーダルダイアログ・進捗の
-  `DoYield` など）に、そのループの中で次の刻みが届いて起きます（同 Findings の 4）。入れ子の回は
-  要求を解析せずに断ります。外の回がすでに並べていた要求も断り、外の回はそれを取り出せずに飛ばします。
-  いまの道具の呼び出しでイベントを回すものは知られていません。
-- 終了の依頼は `serve` の外（タイマーが `serve` から戻ったあと）で行うので、保存の確認の間の刻みは
-  入れ子になりません。その刻みは `Quitting` を渡してふつうに受け付け、読む道具には応えます。
-  2 つ目の `quit` は `busy` で断られるので、終了の依頼は重なりません。
+  `DoYield` など）に、そのループの中で次の刻みが届いて起きます（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4）。
+  入れ子の回は要求を解析せずに断ります。外の回がすでに並べていた要求も断り、外の回はそれを取り出せずに
+  飛ばします。いまの道具の呼び出しでイベントを回すものは知られていません。
+- **終了の依頼の最中の判定は暫定です。** 守る相手は、`quit` を頼んだ当の呼ぶ側の呼び直しだけです
+  （`write`・`app` は占有の中でしか呼べないため）。保存の確認の中で 2 つ目の
+  `CloseAllFilesAndQuitVectorworks` を呼んだときに何が起きるかを [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 で確かめ、
+  段 5 の前に、この判定を残すか（残すなら、入れ子の判定にまとめて保存の確認の間はすべて断るか）を決めます。
+  終了の依頼は `serve` の外（タイマーが `serve` から戻ったあと）で行うので、保存の確認の間の刻みは
+  入れ子にならず、いまは読む道具に応えます。
+- **undo の記録が開いているかは見ません。** 刻みの中から記録が開いて見えた実測は、どれもプラグイン
+  自身の呼び出しが開いて閉じずに戻した記録でした（Findings の 6 はプローブの `DeleteObject` が開いた
+  記録、[Undo](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md) の PIO・`CreateLocus`・スクリプトエンジンもプローブが呼んだもの）。
+  Vectorworks の GUI の操作は、刻みが入らない区間で記録を開いて閉じます（ドラッグ中・レンダリング中の
+  3976 刻みで開いていたのは 0 件。同 Findings の 7）。このプラグインの書く道具は自分で記録を開き、
+  戻る前に閉じる（[ブリッジ「道具の表」](bridge.md#道具の表)）ので、記録が混ざることはありません。
+  ほかのプラグインが閉じ忘れた記録には備えません（CLI を使っている間は GUI を操作しない前提）。
 
 ## 拡張機能を登録しない
 
@@ -116,7 +109,7 @@ CMakeLists.txt                             … 共通部・テスト・ファジ
 src/
 ├─ PluginPrefix.h / BuildConfig.h          … PCH・名前と識別子
 ├─ ModuleMain.cpp                          … 入口: VCOM の初期化・タイマーの開始
-├─ Clock.{h,cpp}                           … OS タイマー・処理中の判定・終了の依頼
+├─ Clock.{h,cpp}                           … OS タイマー・終了の依頼
 ├─ core/                                   … SDK に依らない（Protocol・Json・Files・Bridge・Serve）。プラグインとテストがリンク
 └─ tools/                                  … 道具の表（ToolTable.cpp）と中身（SDK 依存）
 scripts/                                   … 整形と検査（format.sh・lint.sh・powershell.ps1）・get-vw2026（.sh / .ps1。CLI を取って install を走らせるだけ）

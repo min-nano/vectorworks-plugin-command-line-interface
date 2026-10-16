@@ -134,7 +134,7 @@ type server struct {
 	handle Handler
 	// 道具の名前ごとの種類。無い道具は read。nil なら quit だけを app とみなす
 	kinds map[string]string
-	// 受け付けの外の状態（"undo_open"・"quitting"）。空でなければ種類 write と app を busy で断る
+	// 受け付けの外の状態（"quitting"）。空でなければ種類 write と app を busy で断る
 	activity string
 	// 掴んでいるロックを放す。nil ならロックを掴んでいない
 	unlock func()

@@ -299,13 +299,7 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		if (std::optional<Json> refusal = checkSession()) {
 			return respond(*refusal);
 		}
-		switch (activity) {
-		case Activity::Idle:
-			break;
-		case Activity::UndoOpen:
-			return respond(failure(protocol::kCodeBusy,
-			                       "Vectorworks が undo の記録を開いているので実行しませんでした"));
-		case Activity::Quitting:
+		if (activity == Activity::Quitting) {
 			return respond(failure(protocol::kCodeBusy,
 			                       "Vectorworks に終了を頼んでいる最中なので実行しませんでした"));
 		}

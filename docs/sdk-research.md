@@ -77,16 +77,4 @@ SDK リファレンスに記載がありません。読み込みは登録の種�
 | `classes` | クラスの一覧 | 無い |
 | `layer_objects` / `object_counts` | レイヤの中のオブジェクトの列挙・種別・名前・クラス・外形 | 種別（`GetObjectTypeN`）・外形（`GetObjectBounds`）は各ページに使い方がある。列挙の順と、グループ・シンボルの中を数えるかは未確認 |
 | `ping` | `GetCurrentLayer()` で図面が開いているかを判定する | [Documents](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md)に現在のレイヤが文書に従って移ることはある。図面が 1 枚も無いときに何を返すかは未確認（[#224](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/224) で調査中） |
-| `quit` | OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼ぶ | 無い（Documents が「プラグインの読み込み中に呼ぶと落ちる」として Plug-in Modules を指すが、その節は見当たらない）。保存の確認を取り消したときに戻ることも未確認（[#230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)。ほかのダイアログの最中に呼んだときは [#235](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/235)） |
-
-## 5. 処理中の判定（`Clock`）が使う SDK 呼び出し
-
-[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)のため。`Clock` は受け付けの
-各回の始めに `IsCurrentlyBuildingAnUndoEvent()` を 1 度問い、真なら種類 `write`・`app` の道具を
-`busy` で断ります。
-
-| 調べること | 使い道 | リファレンス |
-| --- | --- | --- |
-| 起動直後（最初の刻み）から `IsCurrentlyBuildingAnUndoEvent()` を呼んでよいか・何を返すか | 開始から 10 秒待たずに受け付ける（段 2） | `GetCurrentLayer()`・`GetOpenFilesList()` は最初の刻みから呼べた（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 8）。`IsCurrentlyBuildingAnUndoEvent()` は [#236](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/236) |
-| スクリプトエンジンが開いたまま残した undo の記録がいつ閉じるか | 書く道具と `quit` が `busy` で断られ続けうるか、そのとき利用者に何を求めるか | 残ることは同 Findings の 6・[Undo](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md)。閉じる条件は [#234](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/234) |
-| VW のモーダルダイアログの最中（記録を開かせていないとき）の `IsCurrentlyBuildingAnUndoEvent()` | ダイアログの最中に書く道具と `quit` が通りうるか（段 5・書く道具） | 記録を開かせてからダイアログを出した場面だけが同 Findings の 6 にある。[#235](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/235) |
+| `quit` | OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼ぶ | 無い（Documents が「プラグインの読み込み中に呼ぶと落ちる」として Plug-in Modules を指すが、その節は見当たらない）。保存の確認を取り消したときに戻ることも未確認（[#230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)。その 4 で、保存の確認の中から 2 つ目を呼んだときを確かめ、終了の依頼の最中の判定を残すかを決める。Vectorworks のダイアログの最中に呼んだときは [#235](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/235)） |

@@ -83,8 +83,8 @@ const (
 	CodeInternal = "internal"
 	// 待つ印（<id>.wait）が無いので実行しなかった
 	CodeNoWait = "no_wait"
-	// Vectorworks かプラグインが処理中（undo の記録が開いている・終了の依頼の最中・ほかの要求を
-	// 処理している最中）なので実行しなかった
+	// Vectorworks かプラグインが処理中（終了の依頼の最中・ほかの要求を処理している最中）なので
+	// 実行しなかった
 	CodeBusy = "busy"
 	// ほかの呼ぶ側が占有しているので実行しなかった
 	CodeOccupied = "occupied"
@@ -93,7 +93,7 @@ const (
 )
 
 // ErrBusy は、Vectorworks かプラグインが処理中なので実行しなかった（要求は実行されていない）。
-// 理由（undo の記録・終了の依頼・ほかの要求の処理）はプラグインの error に書かれていて、誤りの
+// 理由（終了の依頼・ほかの要求の処理）はプラグインの error に書かれていて、誤りの
 // 文言に含める。
 var ErrBusy = errors.New("the bridge is busy")
 

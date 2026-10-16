@@ -57,12 +57,12 @@ when another session occupies the bridge, when the session it calls in has
 ended, and when there is no session at all. A tool that only reads (kind read,
 such as ping) runs for every call.
 
-While Vectorworks is busy, the plug-in refuses a tool of kind write or app with
-busy, and call exits with 23: the tool did not run. Vectorworks is busy while
-undo is being recorded (for example, in some of its dialogs) and while it is
-quitting. In the rare case that a tool lets Vectorworks run its events, the
-plug-in refuses every other call with busy until the tool returns. The reason is
-on the standard error. Call again later; call does not retry by itself.
+While Vectorworks is quitting (after "call quit", while it asks whether to save
+the drawings), the plug-in refuses a tool of kind write or app with busy, and
+call exits with 23: the tool did not run. In the rare case that a tool lets
+Vectorworks run its events, the plug-in refuses every other call with busy until
+the tool returns. The reason is on the standard error. Call again later; call
+does not retry by itself.
 `
 }
 

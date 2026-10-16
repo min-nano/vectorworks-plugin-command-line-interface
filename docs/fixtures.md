@@ -72,7 +72,7 @@
 | キー | 意味 |
 | --- | --- |
 | `other_bridge` | 真なら、その回の間だけほかの Vectorworks として `bridge.lock` を掴む |
-| `activity` | その回にタイマーが渡す処理中の状態。`undo_open`（undo の記録が開いている）・`quitting`（終了の依頼の最中）。省くと処理中でない（[通信規則「Vectorworks が処理中」](protocol.md#vectorworks-が処理中)） |
+| `activity` | その回にタイマーが渡す処理中の状態。`quitting`（終了の依頼の最中）。省くと終了の依頼の最中でない（[通信規則「Vectorworks が処理中」](protocol.md#vectorworks-が処理中)） |
 | `waits` | id ごとの待つ印の状態。`held`（呼ぶ側が掴む）・`released`（中身の空のファイルだけ置く）・`missing`（置かない） |
 | `files` | 名前と中身（文字列）。通信規則の綴りでないファイルや、前の回の残骸を置く |
 | `requests` | id ごとの要求（`<id>.req.json`）。文字列は `requests/` の見本の名前で、`{"fill": …}` は `head`＋`pad` の 1 文字の繰り返し＋`tail` を `size` バイトにしたもの。`waits` に無い id の待つ印は `held` |
