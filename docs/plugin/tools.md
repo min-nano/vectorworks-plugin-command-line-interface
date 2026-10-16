@@ -43,6 +43,8 @@
 {"version":"abc1234","branch":"main","protocol":5,"pid":4242,"session":false,"document_open":false,"current_layer":null}
 ```
 
+例の `protocol` は書いた時点の版です（[通信規則「版」](../protocol.md#版)）。
+
 ## `quit`
 
 応答を書いてから、受け付けの外で `gSDK->CloseAllFilesAndQuitVectorworks(true, false)` を頼みます

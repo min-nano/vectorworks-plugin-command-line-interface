@@ -14,7 +14,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 | 項目 | 中身 | 関わる段 | 状態 |
 | --- | --- | --- | --- |
 | [A1](#a1-種類-app-と終了の依頼が同じ意味になっている) | 種類 `app` と終了の依頼が同じ意味になっている | 段 5 の前 | 未着手 |
-| [A2](#a2-quitping-が使う-sdk-呼び出しが確かめられていない) | `quit`・`ping` が使う SDK 呼び出しが確かめられていない | 段 2（`ping`）・段 5（`quit`）の前 | `GetCurrentLayer()` は済（[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)・[道具「ping」](plugin/tools.md#ping)）。`quit` は [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) で調査中 |
+| [A2](#a2-quitping-が使う-sdk-呼び出しが確かめられていない) | `quit`・`ping` が使う SDK 呼び出しが確かめられていない | 段 5（`quit`）の前 | `GetCurrentLayer()` は済（[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)・[道具「ping」](plugin/tools.md#ping)）。`quit` は [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) で調査中 |
 | [A3](#a3-未決-2-が段-2-の作りを変える) | 未決 2 が段 2 の作りを変える | 段 2 の前 | 未着手 |
 | [A4](#a4-終了の依頼の最中に受け付けが入れ子になりうる) | 終了の依頼の最中に受け付けが入れ子になりうる | 段 5 | 未着手 |
 | [B1](#b1-更新の手順の見本が占有を残す) | 更新の手順の見本が占有を残す | 段 5 | 未着手 |
@@ -47,18 +47,13 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 - [SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)では、次が未確認である。
   - OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼んでよいか
   - 保存の確認を取り消したときに呼び出しから戻るか
-  - 図面が 1 枚も無いときの `GetCurrentLayer()` の戻り値
-- [実装の順序](plugin/plan.md)の段 2（`ping`）・段 4（読む道具）・段 5（`quit`）には「使う SDK
-  呼び出しが SDK リファレンスで確かめられてから」と書いた（CLAUDE.md の 7）。残っているのは調べる
-  ことで、`GetCurrentLayer()` は段 2 の前、`quit` の 2 つは段 5 の前に、SDK リファレンスで issue を
-  立てて確かめる。
-- **`GetCurrentLayer()` は済。** 図面が 1 枚も無ければ落ちずに `nullptr` を返し、
-  `GetOpenFilesList()` の件数と常に一致する（起動直後も、全部閉じた後も。mac / Windows）。
-  `ping` の `document_open` はこれで判定し、図面のハンドルは刻みをまたいで持たないことにした
-  （[道具「ping」](plugin/tools.md#ping)・[構成「受け付けの流れ」](plugin/architecture.md#受け付けの流れ)）。
-- **`quit` の 2 つは [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)
-  で調査中。** 保存の確認の最中と、終了の途中の刻みの振る舞い（A4・C3 のタイマーに関わる）も
+- [実装の順序](plugin/plan.md)の段 5（`quit`）には「使う SDK 呼び出しが SDK リファレンスで
+  確かめられてから」と書いた（CLAUDE.md の 7）。この 2 つは段 5 の前に
+  [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)
+  で確かめる。保存の確認の最中と、終了の途中の刻みの振る舞い（A4・C3 のタイマーに関わる）も
   同じ issue で確かめる。
+- `ping` が使う `GetCurrentLayer()` は済（[道具「ping」](plugin/tools.md#ping)・
+  [構成「受け付けの流れ」](plugin/architecture.md#受け付けの流れ)）。
 
 ### A3. 未決 2 が段 2 の作りを変える
 
