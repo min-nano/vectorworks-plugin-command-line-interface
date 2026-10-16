@@ -3,6 +3,7 @@ package spool_test
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,6 +41,19 @@ func TestCallRefusedBySession(t *testing.T) {
 	}
 	if _, err := bridge.Call("edit", nil, "", 5*time.Second); !errors.Is(err, ErrNoSession) {
 		t.Fatalf("want ErrNoSession, got %v", err)
+	}
+}
+
+// busy は実行していないので、道具の失敗ではなく ErrBusy になる。理由（プラグインの error）を
+// 誤りの文言に含める（undo の記録・終了の依頼・ほかの要求の処理を呼ぶ側が見分けられるように）。
+func TestCallRefusedAsBusy(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.Start(t, dir, func(string, json.RawMessage) Response {
+		return Response{Code: CodeBusy, Error: "undo is being recorded"}
+	})
+	_, err := Open(dir).Call("edit", nil, "", 5*time.Second)
+	if !errors.Is(err, ErrBusy) || !strings.Contains(err.Error(), "undo is being recorded") {
+		t.Fatalf("want ErrBusy with the reason, got %v", err)
 	}
 }
 
