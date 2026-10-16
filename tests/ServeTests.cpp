@@ -171,7 +171,8 @@ TEST(ServeDoesNotQuitWhenTheAppToolFails) {
 }
 
 // 受け付けの入れ子では、外の回が並べた要求（b・s）も、回の途中に置かれた要求（c）も、解析せずに
-// busy で断る。占有の印は発行しない。外の回は、断られた要求を取り出せずに飛ばす。
+// busy で断る。占有の印は発行しない。外の回は、断られた要求を取り出せずに飛ばす。待つ印は入れ子でも
+// 確かめる（放されていれば応えずに消し、無ければ no_wait）。
 TEST(ServeRefusesEveryRequestWhileNested) {
 	TempDir dir;
 	gCalls.clear();
@@ -180,11 +181,19 @@ TEST(ServeRefusesEveryRequestWhileNested) {
 	gCaller = &caller;
 	gServer = &server;
 	gTools = kTools;
+	// 先にロックを取る（取るときの掃除で、待つ印の放された・無い要求が消えないように）。
+	server.serve(kTools, kNow);
 	caller.put("a", R"({"tool":"nests"})");
 	caller.put("b", R"({"tool":"first"})");
 	caller.put("s", R"({"tool":"session_start"})");
+	CHECK(files::write(dir.sub("r.wait"), ""));
+	CHECK(files::write(dir.sub("r.req.json"), R"({"tool":"first"})"));
+	CHECK(files::write(dir.sub("w.req.json"), R"({"tool":"first"})"));
 	CHECK(server.serve(kTools, kNow).phase == Phase::Serving);
 	CHECK_EQ(gCalls, (std::vector<std::string>{"nests"}));
+	CHECK(!std::filesystem::exists(dir.path() / "r.res.json"));
+	CHECK(!std::filesystem::exists(dir.path() / "r.wait"));
+	CHECK_EQ(caller.code("w"), std::string("no_wait"));
 	CHECK(caller.ok("a"));
 	CHECK_EQ(caller.code("b"), std::string("busy"));
 	CHECK_EQ(caller.code("c"), std::string("busy"));
