@@ -83,18 +83,26 @@ const (
 	CodeInternal = "internal"
 	// 待つ印（<id>.wait）が無いので実行しなかった
 	CodeNoWait = "no_wait"
-	// ほかの呼ぶ側が占有しているので実行しなかった
+	// Vectorworks かプラグインが処理中（undo の記録が開いている・終了の依頼の最中・ほかの要求を
+	// 処理している最中）なので実行しなかった
 	CodeBusy = "busy"
+	// ほかの呼ぶ側が占有しているので実行しなかった
+	CodeOccupied = "occupied"
 	// 載せた印がいまの占有のものではない・占有の中でしか呼べない道具なので実行しなかった
 	CodeNoSession = "no_session"
 )
+
+// ErrBusy は、Vectorworks かプラグインが処理中なので実行しなかった（要求は実行されていない）。
+// 理由（undo の記録・終了の依頼・ほかの要求の処理）はプラグインの error に書かれていて、誤りの
+// 文言に含める。
+var ErrBusy = errors.New("the bridge is busy")
 
 // ErrNotRunning はブリッジが見つからない（Vectorworks が起動していない・プラグインが
 // 読み込まれていない・場所が食い違っている）。
 var ErrNotRunning = errors.New("bridge is not running")
 
 // ErrTimeout は、Vectorworks は動いている（ロックが掴まれている）が締切までに応答が
-// 無かった。受け付けが見送られている（モーダルダイアログ・undo の記録の最中）ことが多い。
+// 無かった。Vectorworks が刻みを配らない（重い処理・一部のダイアログの最中）ことが多い。
 var ErrTimeout = errors.New("timed out waiting for the response")
 
 // ErrNoWait は、プラグインが no_wait で断った（待つ印が無いので実行しなかった）。ErrTimeout と
@@ -130,7 +138,7 @@ type Bridge struct {
 
 // Open はその場所のブリッジの状態を判定する（docs/protocol.md「生存の判定」）。
 //
-// 生死はロックだけで決まる。受け付けが見送られている間も、ロックは掴まれたまま。
+// 生死はロックだけで決まる。刻みが届かずに応えない間も、ロックは掴まれたまま。
 func Open(dir string) *Bridge {
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 		return &Bridge{Dir: dir, Reason: "not found"}
@@ -154,7 +162,7 @@ func NewID(now time.Time) string {
 // Call は道具を 1 つ呼び、応答を待つ。session は占有の印（session_start が返す。占有しないなら
 // 空）で、要求に載せる（docs/protocol.md「占有」）。
 //
-// 受け付けが見送られていても要求を置いて timeout まで待つ（受け付けが戻れば処理される）。
+// 刻みが届かずに応えない間も要求を置いて timeout まで待つ（刻みが戻れば処理される）。
 // 待つ間は <id>.wait を掴み、プラグインに呼ぶ側が待っていることを示す（docs/protocol.md
 // 「待つ印」）。待つのをやめるときは .wait を放して消してから、要求を消す。先に .wait を
 // やめるので、要求を消す前にプラグインが取り出しても実行されない。呼ぶ側が強制終了されても
@@ -168,8 +176,8 @@ func NewID(now time.Time) string {
 //     （実行されたかは分からない）。
 //
 // no_wait の応答は通信規則の種別で「実行しなかった」を意味するので、道具の失敗ではなく ErrNoWait
-// として返す（やめたあとにプラグインが受け取ったときや、.wait が想定外に消えたときに届く）。busy / no_session も「実行しなかった」なので、ErrBusy /
-// ErrNoSession として返す。
+// として返す（やめたあとにプラグインが受け取ったときや、.wait が想定外に消えたときに届く）。busy / occupied /
+// no_session も「実行しなかった」なので、ErrBusy / ErrOccupied / ErrNoSession として返す。
 func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout time.Duration) (*Response, error) {
 	if len(args) == 0 {
 		args = json.RawMessage("{}")
@@ -229,7 +237,9 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		case CodeNoWait:
 			return nil, fmt.Errorf("%w (%s)", ErrNoWait, tool)
 		case CodeBusy:
-			return nil, fmt.Errorf("%w (%s did not run)", ErrBusy, tool)
+			return nil, fmt.Errorf("%w (%s did not run: %s)", ErrBusy, tool, response.Error)
+		case CodeOccupied:
+			return nil, fmt.Errorf("%w (%s did not run)", ErrOccupied, tool)
 		case CodeNoSession:
 			return nil, fmt.Errorf("%w (%s did not run)", ErrNoSession, tool)
 		case CodeInvalidRequest, CodeUnknownTool, CodeInvalidArgs, CodeInternal:

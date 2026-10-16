@@ -130,8 +130,12 @@ Server::Server(std::string spoolDir)
       internalFailure_(
           failure(protocol::kCodeInternal, "要求の処理の中で例外が起きました").dump()) {}
 
-ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos) {
+ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos, Activity activity) {
 	ServeResult result;
+	if (serving_) {
+		refuseAll();
+		return result;
+	}
 	if (!bridge_.locked()) {
 		if (!bridge_.prepare(result.message)) {
 			result.phase = Phase::Error;
@@ -149,23 +153,19 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos) {
 			return result;
 		}
 	}
+	// 道具の中で Vectorworks がイベントを回すと、この回の途中でまた serve が呼ばれうる。戻るとき
+	// （例外で抜けるときも）に下ろす。
+	struct Serving {
+		bool &flag;
+		explicit Serving(bool &serving) : flag(serving) { flag = true; }
+		~Serving() { flag = false; }
+		Serving(const Serving &) = delete;
+		Serving &operator=(const Serving &) = delete;
+	} serving(serving_);
 	for (const std::string &id : bridge_.poll()) {
-		std::optional<std::string> text = bridge_.take(id);
+		std::optional<std::string> text = held(id);
 		if (!text) {
 			continue;
-		}
-		// 消した直後、実行する前に、呼ぶ側が待っているかを確かめる（通信規則「待つ印」）。
-		switch (bridge_.waitState(id)) {
-		case files::WaitState::Released:
-			bridge_.removeWait(id);
-			continue;
-		case files::WaitState::Missing:
-			bridge_.reply(id, failure(protocol::kCodeNoWait,
-			                          "待つ印（" + id + ".wait）が無いので実行しませんでした")
-			                      .dump());
-			continue;
-		case files::WaitState::Held:
-			break;
 		}
 		// 要求はもう消したので、ここで投げると誰も応えない（呼ぶ側は「実行されたかもしれない」で
 		// 終わる）。道具の外（印の乱数・メモリが足りないなど）で投げた例外も internal で応える。
@@ -175,7 +175,7 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos) {
 		Outcome outcome;
 		const std::string *body = nullptr;
 		try {
-			outcome = answer(*text, tools, nowNanos);
+			outcome = answer(*text, tools, nowNanos, activity);
 			body = &outcome.body;
 		} catch (...) {
 			// answer は状態を変えない（Serve.h）。outcome も代入されていない。
@@ -196,8 +196,39 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos) {
 	return result;
 }
 
+std::optional<std::string> Server::held(const std::string &id) {
+	std::optional<std::string> text = bridge_.take(id);
+	if (!text) {
+		return std::nullopt;
+	}
+	// 消した直後、実行する前に、呼ぶ側が待っているかを確かめる（通信規則「待つ印」）。
+	switch (bridge_.waitState(id)) {
+	case files::WaitState::Released:
+		bridge_.removeWait(id);
+		return std::nullopt;
+	case files::WaitState::Missing:
+		bridge_.reply(id, failure(protocol::kCodeNoWait,
+		                          "待つ印（" + id + ".wait）が無いので実行しませんでした")
+		                      .dump());
+		return std::nullopt;
+	case files::WaitState::Held:
+		break;
+	}
+	return text;
+}
+
+void Server::refuseAll() {
+	for (const std::string &id : bridge_.poll()) {
+		if (held(id)) {
+			bridge_.reply(id, failure(protocol::kCodeBusy,
+			                          "ほかの要求を処理している最中なので実行しませんでした")
+			                      .dump());
+		}
+	}
+}
+
 Server::Outcome Server::answer(const std::string &text, std::span<const Tool> tools,
-                               std::int64_t nowNanos) {
+                               std::int64_t nowNanos, Activity activity) {
 	auto respond = [](const Json &response, bool quit = false) {
 		Outcome outcome;
 		outcome.body = response.dump();
@@ -210,22 +241,19 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		return respond(failure(protocol::kCodeInvalidRequest, reason));
 	}
 
-	// 占有に照らす（通信規則「占有」の表）。断るなら応答を返す。
-	auto check = [&](bool needSession) -> std::optional<Json> {
+	// 占有の中でだけ呼べる要求（session_end・種類 Write と App）を占有に照らす（通信規則「占有」の
+	// 表）。断るなら応答を返す。
+	auto checkSession = [&]() -> std::optional<Json> {
 		if (session_.empty()) {
 			if (!request->session.empty()) {
 				return failure(protocol::kCodeNoSession,
 				               "載せた印はいまの占有のものではありません（占有は終わったか、"
 				               "Vectorworks を起動し直しました）");
 			}
-			if (needSession) {
-				return failure(protocol::kCodeNoSession,
-				               request->tool + " は占有の中でだけ呼べます");
-			}
-			return std::nullopt;
+			return failure(protocol::kCodeNoSession, request->tool + " は占有の中でだけ呼べます");
 		}
 		if (request->session != session_) {
-			return failure(protocol::kCodeBusy, "ほかの呼ぶ側が占有しています");
+			return failure(protocol::kCodeOccupied, "ほかの呼ぶ側が占有しています");
 		}
 		return std::nullopt;
 	};
@@ -240,10 +268,12 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 	}
 	if (name == protocol::kToolSessionStart) {
 		if (!session_.empty()) {
-			return respond(failure(protocol::kCodeBusy, "ほかの呼ぶ側が占有しています"));
+			return respond(failure(protocol::kCodeOccupied, "ほかの呼ぶ側が占有しています"));
 		}
-		if (std::optional<Json> refusal = check(false)) {
-			return respond(*refusal);
+		if (!request->session.empty()) {
+			return respond(failure(protocol::kCodeNoSession,
+			                       "載せた印はいまの占有のものではありません（占有は終わったか、"
+			                       "Vectorworks を起動し直しました）"));
 		}
 		std::string session = newSession(nowNanos);
 		Outcome outcome = respond(success(Json::object({{"session", Json::string(session)}})));
@@ -251,7 +281,7 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		return outcome;
 	}
 	if (name == protocol::kToolSessionEnd) {
-		if (std::optional<Json> refusal = check(true)) {
+		if (std::optional<Json> refusal = checkSession()) {
 			return respond(*refusal);
 		}
 		Outcome outcome = respond(success(Json::object({{"ended", Json::boolean(true)}})));
@@ -259,16 +289,26 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		return outcome;
 	}
 
+	// 表に無い道具と種類 Read の道具は占有に照らさない（図面を変えないので、占有している呼ぶ側の
+	// 作業と混ざらない）。
 	const Tool *tool = findTool(tools, name);
-	// ping は誰にでも答える。種類 App（quit）は占有の中でだけ呼べる。表に無い道具も、占有に
-	// 照らしてから知らないと答える。
-	if (name != protocol::kToolPing) {
-		if (std::optional<Json> refusal = check(tool && tool->kind == ToolKind::App)) {
-			return respond(*refusal);
-		}
-	}
 	if (!tool) {
 		return respond(failure(protocol::kCodeUnknownTool, "知らない道具です: " + name));
+	}
+	if (tool->kind != ToolKind::Read) {
+		if (std::optional<Json> refusal = checkSession()) {
+			return respond(*refusal);
+		}
+		switch (activity) {
+		case Activity::Idle:
+			break;
+		case Activity::UndoOpen:
+			return respond(failure(protocol::kCodeBusy,
+			                       "Vectorworks が undo の記録を開いているので実行しませんでした"));
+		case Activity::Quitting:
+			return respond(failure(protocol::kCodeBusy,
+			                       "Vectorworks に終了を頼んでいる最中なので実行しませんでした"));
+		}
 	}
 
 	// 道具 1 つの失敗で橋を止めない。例外はここで受ける。

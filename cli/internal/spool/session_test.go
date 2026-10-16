@@ -10,10 +10,14 @@ import (
 	. "github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// busy と no_session は実行していないので、道具の失敗ではなく ErrBusy / ErrNoSession になる。
+// writeKinds は占有の中でだけ呼べる道具（種類 write）を 1 つ持つ道具の表。
+var writeKinds = map[string]string{"edit": "write"}
+
+// occupied と no_session は実行していないので、道具の失敗ではなく ErrOccupied / ErrNoSession に
+// なる。種類 read の道具は占有に照らさない。
 func TestCallRefusedBySession(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
-	fakeplugin.Start(t, dir, echo)
+	fakeplugin.StartWithKinds(t, dir, writeKinds, echo)
 	bridge := Open(dir)
 	response, err := bridge.Call(ToolSessionStart, nil, "", 5*time.Second)
 	var started struct {
@@ -22,13 +26,19 @@ func TestCallRefusedBySession(t *testing.T) {
 	if err != nil || !response.OK || json.Unmarshal(response.Result, &started) != nil || !ValidID(started.Session) {
 		t.Fatalf("%+v %v", response, err)
 	}
-	if _, err := bridge.Call("layers", nil, "", 5*time.Second); !errors.Is(err, ErrBusy) {
-		t.Fatalf("want ErrBusy, got %v", err)
+	if _, err := bridge.Call("edit", nil, "", 5*time.Second); !errors.Is(err, ErrOccupied) {
+		t.Fatalf("want ErrOccupied, got %v", err)
+	}
+	if response, err := bridge.Call("layers", nil, "", 5*time.Second); err != nil || !response.OK {
+		t.Fatalf("%+v %v", response, err)
 	}
 	if response, err := bridge.Call(ToolSessionEnd, nil, started.Session, 5*time.Second); err != nil || !response.OK {
 		t.Fatalf("%+v %v", response, err)
 	}
-	if _, err := bridge.Call("layers", nil, started.Session, 5*time.Second); !errors.Is(err, ErrNoSession) {
+	if _, err := bridge.Call("edit", nil, started.Session, 5*time.Second); !errors.Is(err, ErrNoSession) {
+		t.Fatalf("want ErrNoSession, got %v", err)
+	}
+	if _, err := bridge.Call("edit", nil, "", 5*time.Second); !errors.Is(err, ErrNoSession) {
 		t.Fatalf("want ErrNoSession, got %v", err)
 	}
 }
@@ -36,7 +46,7 @@ func TestCallRefusedBySession(t *testing.T) {
 // Vectorworks を起動し直すと占有は消え、古い印は ErrNoSession になる。
 func TestSessionEndsWithRestart(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
-	stop := fakeplugin.Start(t, dir, echo)
+	stop := fakeplugin.StartWithKinds(t, dir, writeKinds, echo)
 	response, err := Open(dir).Call(ToolSessionStart, nil, "", 5*time.Second)
 	if err != nil || !response.OK {
 		t.Fatalf("%+v %v", response, err)
@@ -46,11 +56,11 @@ func TestSessionEndsWithRestart(t *testing.T) {
 	}
 	_ = json.Unmarshal(response.Result, &started)
 	stop()
-	fakeplugin.Start(t, dir, echo)
-	if _, err := Open(dir).Call("layers", nil, started.Session, 5*time.Second); !errors.Is(err, ErrNoSession) {
+	fakeplugin.StartWithKinds(t, dir, writeKinds, echo)
+	if _, err := Open(dir).Call("edit", nil, started.Session, 5*time.Second); !errors.Is(err, ErrNoSession) {
 		t.Fatalf("want ErrNoSession, got %v", err)
 	}
-	if response, err := Open(dir).Call("layers", nil, "", 5*time.Second); err != nil || !response.OK {
+	if response, err := Open(dir).Call(ToolSessionStart, nil, "", 5*time.Second); err != nil || !response.OK {
 		t.Fatalf("%+v %v", response, err)
 	}
 }

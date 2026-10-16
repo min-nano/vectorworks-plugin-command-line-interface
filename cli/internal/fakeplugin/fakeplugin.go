@@ -4,8 +4,10 @@
 // 通信規則より緩く真似ると、CLI がプラグインの断る要求を送っても単体テストが気づかないので、
 // 関門（id の綴り・回の始めに並べた要求だけの処理・大きさと入れ子の深さの上限・占有・ロックを取ったときの掃除）は
 // プラグインと同じに持つ。プラグインと同じに振る舞うかは、両方のテストが読む通信規則の見本
-// （protocol/fixtures。docs/fixtures.md）で確かめる。道具の表は持たないので、種類 app の道具は
-// quit だけとみなす（占有の中でだけ呼べ、成功したらその回の残りを取り出さない）。
+// （protocol/fixtures。docs/fixtures.md）で確かめる。道具の表は持たないので、道具の種類は
+// StartWithKinds で受け取り、受け取らなければ quit だけを種類 app、ほかを read とみなす。種類
+// write と app は占有の中でだけ呼べ、種類 app の道具（quit）が成功したらその回の残りを取り出さない。
+// 受け付けの入れ子は真似ない（Go の偽の道具はイベントを回さない）。
 package fakeplugin
 
 import (
@@ -67,12 +69,19 @@ func HoldLock(t *testing.T, dir string) (release func()) {
 
 // Start はロックを掴み、前の回の残骸を消してから、要求に handle で応え続ける。テストの終わりに
 // 止める。返す関数で途中でも止められる（Vectorworks の終了を真似る）。占有の印は Start ごとに
-// 持つ（Vectorworks を起動し直すと消えるのと同じ）。
+// 持つ（Vectorworks を起動し直すと消えるのと同じ）。quit だけを種類 app、ほかを read とみなす。
 func Start(t *testing.T, dir string, handle Handler) (stop func()) {
+	t.Helper()
+	return StartWithKinds(t, dir, nil, handle)
+}
+
+// StartWithKinds は Start と同じで、道具の種類（read・write・app）を道具の名前ごとに受け取る。
+// kinds に無い道具は read とみなす（kinds が nil なら quit だけを app とみなす）。
+func StartWithKinds(t *testing.T, dir string, kinds map[string]string, handle Handler) (stop func()) {
 	t.Helper()
 	// プラグインと同じく、予約された名前（NUL など）の要求もファイルとして開く
 	// （docs/protocol.md「id」）。
-	s := &server{dir: extendedPath(dir), handle: handle}
+	s := &server{dir: extendedPath(dir), handle: handle, kinds: kinds}
 	if !s.take() {
 		t.Fatalf("cannot take %s", spool.LockFile)
 	}
@@ -123,6 +132,10 @@ func sweep(dir string) {
 type server struct {
 	dir    string
 	handle Handler
+	// 道具の名前ごとの種類。無い道具は read。nil なら quit だけを app とみなす
+	kinds map[string]string
+	// 受け付けの外の状態（"undo_open"・"quitting"）。空でなければ種類 write と app を busy で断る
+	activity string
 	// 掴んでいるロックを放す。nil ならロックを掴んでいない
 	unlock func()
 	// 発行している占有の印。空なら占有されていない
@@ -205,7 +218,7 @@ func (s *server) serveOnce() (serving, quit bool) {
 			s.session = *session
 		}
 		// 終了したら応えられないので、残りは置いたままにする。
-		if tool == "quit" && response.OK {
+		if s.kind(tool) == "app" && response.OK {
 			return true, true
 		}
 	}
@@ -214,57 +227,72 @@ func (s *server) serveOnce() (serving, quit bool) {
 
 // answer は要求を占有に照らしてから応える（docs/protocol.md「占有」）。
 //
-//   - tools と ping は占有に照らさない（調べものと診断のため）。
-//   - session_start は占有されていなければ印を発行し、されていれば busy。
-//   - session_end と quit は占有の中でだけ呼べる。
-//   - そのほかは、占有されていなければ印の無い要求を、されていれば同じ印の要求だけを実行する。
+//   - tools と種類 read の道具は占有に照らさない（図面を変えないので、占有している呼ぶ側の作業と
+//     混ざらない）。表に無い道具も read とみなすので、照らさずに handle が unknown_tool で応える。
+//   - session_start は占有されていなければ印を発行し、されていれば occupied。
+//   - session_end と種類 write・app は占有の中でだけ呼べる。種類 write・app は、Vectorworks が処理中
+//     （activity）なら busy で断る。
 //
 // 占有の印は変えず、新しい印（空なら占有の終わり）を返す。反映するのは応答を書けたときだけ。
 func (s *server) answer(tool string, args json.RawMessage, session string) (spool.Response, *string) {
 	switch tool {
-	case spool.ToolTools, spool.ToolPing:
+	case spool.ToolTools:
 		return s.handle(tool, args), nil
 	case spool.ToolSessionStart:
 		if s.session != "" {
-			return refuse(spool.CodeBusy), nil
+			return refuse(spool.CodeOccupied), nil
 		}
-		if code := s.check(session, false); code != "" {
-			return refuse(code), nil
+		if session != "" {
+			return refuse(spool.CodeNoSession), nil
 		}
 		issued := spool.NewID(time.Now())
 		result, _ := json.Marshal(map[string]string{"session": issued})
 		return spool.Response{OK: true, Result: result}, &issued
 	case spool.ToolSessionEnd:
-		if code := s.check(session, true); code != "" {
+		if code := s.check(session); code != "" {
 			return refuse(code), nil
 		}
 		ended := ""
 		return spool.Response{OK: true, Result: json.RawMessage(`{"ended":true}`)}, &ended
 	}
-	// quit は種類 app。Vectorworks を終わらせるので、占有している呼ぶ側だけに認める。
-	if code := s.check(session, tool == "quit"); code != "" {
-		return refuse(code), nil
+	if s.kind(tool) != "read" {
+		if code := s.check(session); code != "" {
+			return refuse(code), nil
+		}
+		if s.activity != "" {
+			return refuse(spool.CodeBusy), nil
+		}
 	}
 	return s.handle(tool, args), nil
 }
 
-// check は要求の印を占有に照らす。実行してよければ空、断るならその code。needSession は占有の
-// 中でしか呼べない道具か。
-func (s *server) check(session string, needSession bool) string {
-	if s.session == "" {
-		if session != "" || needSession {
-			return spool.CodeNoSession
+// kind は道具の種類。
+func (s *server) kind(tool string) string {
+	if s.kinds == nil {
+		if tool == "quit" {
+			return "app"
 		}
-		return ""
+		return "read"
+	}
+	if kind, found := s.kinds[tool]; found {
+		return kind
+	}
+	return "read"
+}
+
+// check は占有の中でだけ呼べる要求の印を占有に照らす。実行してよければ空、断るならその code。
+func (s *server) check(session string) string {
+	if s.session == "" {
+		return spool.CodeNoSession
 	}
 	if session != s.session {
-		return spool.CodeBusy
+		return spool.CodeOccupied
 	}
 	return ""
 }
 
 func refuse(code string) spool.Response {
-	return spool.Response{OK: false, Code: code, Error: "refused by the session"}
+	return spool.Response{OK: false, Code: code, Error: "refused by the fake plug-in"}
 }
 
 // parseRequest は要求を読む（docs/protocol.md「要求」）。大きすぎる・入れ子が深すぎる・JSON と

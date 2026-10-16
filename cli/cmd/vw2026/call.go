@@ -37,7 +37,7 @@ standard error and exits with 22 for wrong usage (invalid_request,
 unknown_tool, or invalid_args) or 21 for any other failure (internal); with
 --raw the response also carries the code (docs/protocol.md). The codes that
 mean the tool did not run are not tool failures: call exits with 3 for no_wait
-and 23 for busy and no_session, as described below, and prints nothing to the
+and 23 for occupied, no_session, and busy, as described below, and prints nothing to the
 standard output even with --raw. A failure with a missing or unknown code is
 a malformed response, so call exits with 1 for it. So does a response file
 that is not a valid response object (not JSON, or JSON of the wrong shape);
@@ -50,9 +50,19 @@ none comes: the tool may have run. A no_wait response also means that the
 tool did not run, so call exits with 3 for it, not with 21 or 22. A call that
 is killed while waiting leaves a request that will not run either.
 
-While another session occupies the bridge (see "vw2026 help session"), call
-exits with 23: the tool did not run. So it does when the session it calls in
-has ended, and for quit outside a session.
+A tool that changes the drawing or Vectorworks (kind write or app, such as
+quit; see "call tools") runs only in a session (see "vw2026 help session").
+Called outside its session, it exits with 23: the tool did not run. So it does
+when another session occupies the bridge, when the session it calls in has
+ended, and when there is no session at all. A tool that only reads (kind read,
+such as ping) runs for every call.
+
+While Vectorworks is busy, the plug-in refuses a tool of kind write or app with
+busy, and call exits with 23: the tool did not run. Vectorworks is busy while
+undo is being recorded (for example, in some of its dialogs) and while it is
+quitting. In the rare case that a tool lets Vectorworks run its events, the
+plug-in refuses every other call with busy until the tool returns. The reason is
+on the standard error. Call again later; call does not retry by itself.
 `
 }
 
@@ -123,7 +133,7 @@ func codeFor(err error) int {
 		return exitTimeout
 	case errors.Is(err, spool.ErrNoResponse):
 		return exitNoResponse
-	case errors.Is(err, spool.ErrBusy), errors.Is(err, spool.ErrNoSession):
+	case errors.Is(err, spool.ErrBusy), errors.Is(err, spool.ErrOccupied), errors.Is(err, spool.ErrNoSession):
 		return exitBusy
 	default:
 		return exitFailure

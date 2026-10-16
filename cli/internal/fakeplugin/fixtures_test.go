@@ -45,6 +45,7 @@ type fixtureCase struct {
 type fixtureStep struct {
 	Description string                     `json:"description"`
 	OtherBridge bool                       `json:"other_bridge"`
+	Activity    string                     `json:"activity"`
 	Waits       map[string]string          `json:"waits"`
 	Files       map[string]string          `json:"files"`
 	Requests    map[string]json.RawMessage `json:"requests"`
@@ -280,6 +281,10 @@ func (r *caseRunner) step(step fixtureStep) {
 		}
 	}
 
+	if step.Activity != "" && step.Activity != "undo_open" && step.Activity != "quitting" {
+		t.Fatalf("%s: unknown activity %q", r.name, step.Activity)
+	}
+	r.server.activity = step.Activity
 	r.calls = nil
 	serving, quit := r.server.serveOnce()
 	want := step.Expect
@@ -385,7 +390,11 @@ func TestFixtureServeCases(t *testing.T) {
 			}
 			// 予約された名前の id（reserved-ids.json）もファイルとして置けるように、\\?\ を付ける。
 			r := &caseRunner{t: t, dir: extendedPath(NewDir(t)), held: map[string]func(){}}
-			r.server = &server{dir: r.dir, handle: fakeHandler(t, table.Tools, &r.calls)}
+			kinds := map[string]string{}
+			for _, fake := range table.Tools {
+				kinds[fake.Name] = fake.Kind
+			}
+			r.server = &server{dir: r.dir, handle: fakeHandler(t, table.Tools, &r.calls), kinds: kinds}
 			// 一時ディレクトリを消す前に、ロックと待つ印を放す（Windows は開いたままでは消せない）。
 			t.Cleanup(func() {
 				r.server.release()

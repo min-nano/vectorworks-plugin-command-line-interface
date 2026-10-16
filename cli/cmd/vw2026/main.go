@@ -42,7 +42,7 @@ const (
 	// 使い方の誤り
 	exitUsage = 2
 	// 待ちきれなかった（no_wait を含む）。要求は実行されない。Vectorworks は動いている
-	// （モーダル・undo の記録の最中など）。exitDown と分けるのは、呼ぶ側が起動し直さずに
+	// （刻みが届かない重い処理の最中など）。exitDown と分けるのは、呼ぶ側が起動し直さずに
 	// 待てばよいと判定できるように。
 	exitTimeout = 3
 	// 待つのをやめたときに要求をプラグインが既に受け取っていて、応答が届かなかった。exitTimeout
@@ -58,8 +58,9 @@ const (
 	exitToolFailure = 21
 	// invalid_request・unknown_tool・invalid_args を答えた。
 	exitToolUsage = 22
-	// 占有に断られた（busy・no_session。ほかが占有している・載せた占有が終わっている・quit を
-	// 占有せずに呼んだ）。要求は実行されていない。
+	// 実行せずに断られた（occupied・no_session・busy。ほかが占有している・載せた占有が終わって
+	// いる・占有の中でだけ呼べる道具を占有せずに呼んだ・Vectorworks が処理中）。要求は実行されて
+	// いない。
 	exitBusy = 23
 )
 
@@ -146,20 +147,22 @@ The commands exit with
 	6  Vectorworks is running, so install or uninstall did nothing (planned)
 	21 the tool reported a failure (internal)
 	22 the tool reported wrong usage (invalid_request, unknown_tool, or invalid_args)
-	23 refused by the session: another one occupies the bridge, the given one has ended,
-	   or quit was called outside a session (the tool did not run)
+	23 refused (the tool did not run): another session occupies the bridge, the given
+	   one has ended, a tool that runs only in a session was called outside one, or
+	   Vectorworks is busy
 
-The codes from 21 are failures that the plug-in answered for the tool or the
-session; the codes below 20 are everything else, including a no_wait response
+The codes from 21 are failures that the plug-in answered for the tool, the
+session, or a busy Vectorworks; the codes below 20 are everything else, including a no_wait response
 and a malformed one. The last digit of a code from 21 matches the code below 20
 of the same kind (1 failure, 2 wrong usage, 3 did not run). For 21 to 23 the
 reason is on the standard error; for 21 and 22, with --raw, the response is
 also on the standard output.
 
-Vectorworks can be running, holding the lock, while the plug-in defers the
-requests, for example during a modal dialog or while undo is being recorded
-(docs/protocol.md). Status reports this state as running; call waits up to
---timeout and then exits with 3. Recover from 5 and 3
+Vectorworks can be running, holding the lock, without answering: the plug-in
+answers only when Vectorworks runs its timer, which it may not do in the middle
+of a long operation or in some of its dialogs (docs/protocol.md). Status reports
+this state as running; call waits up to --timeout and then exits with 3. Recover
+from 5 and 3
 differently: 5 means Vectorworks is not running, while 3 means it is running
 but did not answer in time, so launching it again or reinstalling the plug-in
 does not help. Tell 3 and 4 apart before calling a tool that changes the

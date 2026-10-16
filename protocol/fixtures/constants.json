@@ -11,5 +11,5 @@
 	"max_nesting_depth": 64,
 	"reserved_tools": ["tools", "ping", "session_start", "session_end"],
 	"kinds": ["read", "write", "app"],
-	"codes": ["invalid_request", "unknown_tool", "invalid_args", "no_wait", "busy", "no_session", "internal"]
+	"codes": ["invalid_request", "unknown_tool", "invalid_args", "no_wait", "busy", "occupied", "no_session", "internal"]
 }

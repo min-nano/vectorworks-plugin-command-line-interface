@@ -1,5 +1,5 @@
 {
-	"description": "tools は道具の表を返す。表に無い道具は unknown_tool、道具の失敗は invalid_args と internal（例外を含む）。種類 write の道具も、占有されていなければ印なしで実行する",
+	"description": "tools は道具の表を返す。表に無い道具は unknown_tool、道具の失敗は invalid_args と internal（例外を含む）。種類 write の道具は占有の中でだけ呼べる（占有されていなければ no_session）",
 	"steps": [
 		{"description": "ロックを取る（空のスプールなので何も消さない）", "expect": {"files": ["bridge.lock"]}},
 		{
@@ -16,7 +16,6 @@
 				"calls": [
 					{"tool": "bad_args"},
 					{"tool": "broken"},
-					{"tool": "edit"},
 					{"tool": "ping"},
 					{"tool": "throws"}
 				],
@@ -83,7 +82,7 @@
 					"bad-args": {"ok": false, "code": "invalid_args"},
 					"broken": {"ok": false, "code": "internal"},
 					"throws": {"ok": false, "code": "internal"},
-					"edit": {"ok": true, "result": {"name": "x"}},
+					"edit": {"ok": false, "code": "no_session"},
 					"ping": {"ok": true, "result": {}}
 				},
 				"files": [

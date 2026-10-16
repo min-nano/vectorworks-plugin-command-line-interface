@@ -31,7 +31,7 @@ inline constexpr int kMaxNestingDepth = 64;
 // id の長さの上限（綴りは [0-9A-Za-z_-]{1,64}。通信規則「id」）。
 inline constexpr std::size_t kMaxIdLength = 64;
 
-// 予約された道具（通信規則「予約された道具」）。ping は道具の表に載るが、占有に照らさない。
+// 予約された道具（通信規則「予約された道具」）。ping は種類 read の道具として道具の表に載る。
 inline constexpr std::string_view kToolTools = "tools";
 inline constexpr std::string_view kToolPing = "ping";
 inline constexpr std::string_view kToolSessionStart = "session_start";
@@ -48,6 +48,7 @@ inline constexpr std::string_view kCodeUnknownTool = "unknown_tool";
 inline constexpr std::string_view kCodeInvalidArgs = "invalid_args";
 inline constexpr std::string_view kCodeNoWait = "no_wait";
 inline constexpr std::string_view kCodeBusy = "busy";
+inline constexpr std::string_view kCodeOccupied = "occupied";
 inline constexpr std::string_view kCodeNoSession = "no_session";
 inline constexpr std::string_view kCodeInternal = "internal";
 
