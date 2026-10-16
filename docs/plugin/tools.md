@@ -73,8 +73,8 @@
 
   新規の図面（一度も保存していない）も未保存として数えます。
 - **未保存の変更をどう判定するかは SDK リファレンスで確かめてから実装します**（CLAUDE.md の 7。
-  [SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)・[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)
-  に並べる）。`GetOpenFilesList` の `fIsInMemoryOnly` が分かっているのは「保存されていない新規の図面」で、
+  [SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)・[SDK リファレンス #240](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/240)
+  で調査中）。`GetOpenFilesList` の `fIsInMemoryOnly` が分かっているのは「保存されていない新規の図面」で、
   保存済みの図面を変更した状態（変更あり）を表すかは分かっていない。変更ありを取れなければ、
   この事前確認は新規の図面しか見つけられず、設計を見直す。
 - **第 1 引数は常に真のままです**（**利用者の図面を保存せずに閉じる手段は持たない**）。事前確認のあとに
