@@ -46,6 +46,9 @@ OS タイマー
   （[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 7）。
 - **間隔は保証されません**（250 ms で登録しても、最大 3〜5 秒空く。同 4 の 2）。刻みの間隔に
   頼る処理（時間の計測など）は持たず、時刻は時計から読みます。
+- **図面のハンドル（レイヤなど）は刻みをまたいで持ちません。** 刻みのたびに引き直します。
+  閉じた文書のレイヤと、後で開いた別の文書のレイヤが同じアドレスで返ることがあり、持ち越すと
+  別の文書を指しうるためです（同 4 の 8）。
 
 ## 受け付けを止めない
 

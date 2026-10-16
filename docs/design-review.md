@@ -14,7 +14,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 | 項目 | 中身 | 関わる段 | 状態 |
 | --- | --- | --- | --- |
 | [A1](#a1-種類-app-と終了の依頼が同じ意味になっている) | 種類 `app` と終了の依頼が同じ意味になっている | 段 5 の前 | 未着手 |
-| [A2](#a2-quitping-が使う-sdk-呼び出しが確かめられていない) | `quit`・`ping` が使う SDK 呼び出しが確かめられていない | 段 2（`ping`）・段 5（`quit`）の前 | `GetCurrentLayer()` は [SDK リファレンス #224](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/224) で調査中。`quit` の 2 つは未着手 |
+| [A2](#a2-quitping-が使う-sdk-呼び出しが確かめられていない) | `quit`・`ping` が使う SDK 呼び出しが確かめられていない | 段 5（`quit`）の前 | `GetCurrentLayer()` は済（[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)・[道具「ping」](plugin/tools.md#ping)）。`quit` は [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) で調査中 |
 | [A3](#a3-未決-2-が段-2-の作りを変える) | 未決 2 が段 2 の作りを変える | 段 2 の前 | 済（undo の記録が開いているかは見ない。書く道具は自分で記録を開いて閉じ、占有の中でだけ呼べる。受け付けの入れ子は `busy` で断る。[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)） |
 | [A4](#a4-終了の依頼の最中に受け付けが入れ子になりうる) | 終了の依頼の最中に受け付けが入れ子になりうる | 段 5 | 暫定（終了の依頼の最中は `write`・`app` を `busy` で断る。残すかは [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 の結果で段 5 の前に決める） |
 | [B1](#b1-更新の手順の見本が占有を残す) | 更新の手順の見本が占有を残す | 段 5 | 未着手 |
@@ -22,7 +22,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 | [B3](#b3-vw2026_app-が環境変数の名前の決まりに反する) | `VW2026_APP` が環境変数の名前の決まりに反する | 最初の配布（段 2）の前 | 済（名前は値の通じる範囲で決める、と決まりを改めた。CLAUDE.md「Go」） |
 | [B4](#b4-sdk-の調査の古い参照) | SDK の調査の古い参照 | なし | 済 |
 | [B5](#b5-段-24-では実機の確かめ方が成り立たない) | 段 2〜4 では実機の確かめ方が成り立たない | 段 2 | 済（段の入れ替えで、`install` の無い段は 2 だけになった。[実装の順序「実機の確かめ方」](plugin/plan.md#実機の確かめ方)） |
-| [C1](#c1-読む道具の結果に決まっていない点がある) | 読む道具の結果に決まっていない点がある | 段 4（`ping` の `current_layer` は段 2） | 未着手 |
+| [C1](#c1-読む道具の結果に決まっていない点がある) | 読む道具の結果に決まっていない点がある | 段 4 | `ping` の `current_layer` は済（図面が無ければ `null`。[道具「ping」](plugin/tools.md#ping)）。ほかは未着手 |
 | [C2](#c2-ほかのプラグインの機能と書く道具の順序が矛盾する) | ほかのプラグインの機能と書く道具の順序が矛盾する | 進め方 3・4 | 未着手（A3 で、`write` の道具は占有の中でだけ呼べることになった） |
 | [C3](#c3-そのほか) | PR のプレリリースの sha・終了の処理中のタイマー | 段 2（sha）・段 5（タイマー） | sha は済（ブランチの head。[ビルドとリリース「リリースの形」](plugin/build-and-release.md#リリースの形)）。タイマーは未着手 |
 
@@ -47,11 +47,13 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 - [SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)では、次が未確認である。
   - OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼んでよいか
   - 保存の確認を取り消したときに呼び出しから戻るか
-  - 図面が 1 枚も無いときの `GetCurrentLayer()` の戻り値
-- [実装の順序](plugin/plan.md)の段 2（`ping`）・段 4（読む道具）・段 5（`quit`）には「使う SDK
-  呼び出しが SDK リファレンスで確かめられてから」と書いた（CLAUDE.md の 7）。残っているのは調べる
-  ことで、`GetCurrentLayer()` は段 2 の前、`quit` の 2 つは段 5 の前に、SDK リファレンスで issue を
-  立てて確かめる。
+- [実装の順序](plugin/plan.md)の段 5（`quit`）には「使う SDK 呼び出しが SDK リファレンスで
+  確かめられてから」と書いた（CLAUDE.md の 7）。この 2 つは段 5 の前に
+  [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)
+  で確かめる。保存の確認の最中と、終了の途中の刻みの振る舞い（A4・C3 のタイマーに関わる）も
+  同じ issue で確かめる。
+- `ping` が使う `GetCurrentLayer()` は済（[道具「ping」](plugin/tools.md#ping)・
+  [構成「受け付けの流れ」](plugin/architecture.md#受け付けの流れ)）。
 
 ### A3. 未決 2 が段 2 の作りを変える
 
@@ -148,15 +150,15 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 ### C1. 読む道具の結果に決まっていない点がある
 
 [最初に提供する道具](plugin/tools.md)で次が決まっていない。既定値はあとで変えると互換を崩すので、
-段 4 の PR で決めて tools.md に書く（`ping` の `current_layer` は段 2 の PR で決める）。
+段 4 の PR で決めて tools.md に書く。
 
 - `layer_objects` の `type` が種別の番号か名前か
 - `layers` の `scale` の形（数か比か）
 - `bounds` の単位（図面の単位か、決まった単位か）
 - `layers` の `objects` と `object_counts` の数え方（グループ・シンボルの中を数えるか、図面全体に
   シートレイヤを含むか）
-- 図面が開かれていないときの `ping` の `current_layer`（`null` か、省くか）と、各道具の応答
-  （`internal` とする想定）
+- 図面が開かれていないときの各道具の応答（`internal` とする想定）。`ping` の `current_layer` は
+  `null` に決めた（[道具「ping」](plugin/tools.md#ping)）
 
 `classes` が使う SDK 呼び出しは SDK リファレンスに無いので、issue を立てる
 （[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)）。
