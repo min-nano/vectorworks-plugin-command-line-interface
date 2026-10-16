@@ -5,7 +5,7 @@
 // 関門（id の綴り・回の始めに並べた要求だけの処理・大きさと入れ子の深さの上限・占有・ロックを取ったときの掃除）は
 // プラグインと同じに持つ。プラグインと同じに振る舞うかは、両方のテストが読む通信規則の見本
 // （protocol/fixtures。docs/fixtures.md）で確かめる。道具の表は持たないので、道具の種類は
-// StartWithKinds で受け取り、受け取らなければ quit だけを種類 app、ほかを read とみなす。種類
+// StartWithKinds で受け取り、受け取らない道具は quit なら種類 app、ほかを read とみなす。種類
 // write と app は占有の中でだけ呼べ、種類 app の道具（quit）が成功したらその回の残りを取り出さない。
 // 受け付けの入れ子は真似ない（Go の偽の道具はイベントを回さない）。
 package fakeplugin
@@ -76,7 +76,7 @@ func Start(t *testing.T, dir string, handle Handler) (stop func()) {
 }
 
 // StartWithKinds は Start と同じで、道具の種類（read・write・app）を道具の名前ごとに受け取る。
-// kinds に無い道具は read とみなす（kinds が nil なら quit だけを app とみなす）。
+// kinds に無い道具は、quit なら app、ほかは read とみなす。
 func StartWithKinds(t *testing.T, dir string, kinds map[string]string, handle Handler) (stop func()) {
 	t.Helper()
 	// プラグインと同じく、予約された名前（NUL など）の要求もファイルとして開く
@@ -132,7 +132,7 @@ func sweep(dir string) {
 type server struct {
 	dir    string
 	handle Handler
-	// 道具の名前ごとの種類。無い道具は read。nil なら quit だけを app とみなす
+	// 道具の名前ごとの種類。無い道具は、quit なら app、ほかは read
 	kinds map[string]string
 	// 受け付けの外の状態（"quitting"）。空でなければ種類 write と app を busy で断る
 	activity string
@@ -266,16 +266,14 @@ func (s *server) answer(tool string, args json.RawMessage, session string) (spoo
 	return s.handle(tool, args), nil
 }
 
-// kind は道具の種類。
+// kind は道具の種類。kinds に無い道具は、quit なら app、ほかは read（本物の道具の表の quit は
+// 種類 app なので、kinds を渡したテストでも quit は占有の中でだけ呼べる）。
 func (s *server) kind(tool string) string {
-	if s.kinds == nil {
-		if tool == "quit" {
-			return "app"
-		}
-		return "read"
-	}
 	if kind, found := s.kinds[tool]; found {
 		return kind
+	}
+	if tool == "quit" {
+		return "app"
 	}
 	return "read"
 }

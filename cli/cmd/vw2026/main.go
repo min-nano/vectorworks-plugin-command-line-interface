@@ -147,25 +147,24 @@ The commands exit with
 	6  Vectorworks is running, so install or uninstall did nothing (planned)
 	21 the tool reported a failure (internal)
 	22 the tool reported wrong usage (invalid_request, unknown_tool, or invalid_args)
-	23 refused (the tool did not run): another session occupies the bridge, the given
-	   one has ended, a tool that runs only in a session was called outside one, or
-	   Vectorworks is busy
+	23 refused (the tool did not run): another session occupies the bridge, the
+	   given one has ended, a tool that runs only in a session was called outside
+	   one, or Vectorworks is busy
 
 The codes from 21 are failures that the plug-in answered for the tool, the
-session, or a busy Vectorworks; the codes below 20 are everything else, including a no_wait response
-and a malformed one. The last digit of a code from 21 matches the code below 20
-of the same kind (1 failure, 2 wrong usage, 3 did not run). For 21 to 23 the
-reason is on the standard error; for 21 and 22, with --raw, the response is
-also on the standard output.
+session, or a busy Vectorworks; the codes below 20 are everything else,
+including a no_wait response and a malformed one. The last digit of a code from
+21 matches the code below 20 of the same kind (1 failure, 2 wrong usage, 3 did
+not run). For 21 to 23 the reason is on the standard error; for 21 and 22, with
+--raw, the response is also on the standard output.
 
 Vectorworks can be running, holding the lock, without answering: the plug-in
 answers only when Vectorworks runs its timer, which it may not do in the middle
 of a long operation or in some of its dialogs (docs/protocol.md). Status reports
-this state as running; call waits up to --timeout and then exits with 3. Recover
-from 5 and 3
-differently: 5 means Vectorworks is not running, while 3 means it is running
-but did not answer in time, so launching it again or reinstalling the plug-in
-does not help. Tell 3 and 4 apart before calling a tool that changes the
+this state as running; call waits up to --timeout and then exits with 3.
+Recover from 5 and 3 differently: 5 means Vectorworks is not running, while 3
+means it is running but did not answer in time, so launching it again or
+reinstalling the plug-in does not help. Tell 3 and 4 apart before calling a tool that changes the
 drawing again: after 3 the tool did not run, while after 4 it may have.
 `
 }

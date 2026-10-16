@@ -22,6 +22,13 @@ Json failure(std::string_view code, std::string message) {
 	                     {"error", Json::string(std::move(message))}});
 }
 
+// staleSession は、載せた占有の印がいまの占有のものでないときの応答。
+Json staleSession() {
+	return failure(protocol::kCodeNoSession,
+	               "載せた印はいまの占有のものではありません（占有は終わったか、"
+	               "Vectorworks を起動し直しました）");
+}
+
 struct Request {
 	std::string tool;
 	Json args;
@@ -218,12 +225,19 @@ std::optional<std::string> Server::held(const std::string &id) {
 }
 
 void Server::refuseAll() {
-	for (const std::string &id : bridge_.poll()) {
-		if (held(id)) {
-			bridge_.reply(id, failure(protocol::kCodeBusy,
-			                          "ほかの要求を処理している最中なので実行しませんでした")
-			                      .dump());
+	// 入れ子の回は、道具の SDK 呼び出しが回すイベントの中で走る。例外を外へ出すと SDK と
+	// Vectorworks のフレームを越えて巻き戻るので、ここで止める。
+	try {
+		for (const std::string &id : bridge_.poll()) {
+			if (held(id)) {
+				bridge_.reply(id, failure(protocol::kCodeBusy,
+				                          "ほかの要求を処理している最中なので実行しませんでした")
+				                      .dump());
+			}
 		}
+	} catch (...) {
+		// 断れなかった要求は、外の回か次の刻みが扱う。
+		return;
 	}
 }
 
@@ -246,9 +260,7 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 	auto checkSession = [&]() -> std::optional<Json> {
 		if (session_.empty()) {
 			if (!request->session.empty()) {
-				return failure(protocol::kCodeNoSession,
-				               "載せた印はいまの占有のものではありません（占有は終わったか、"
-				               "Vectorworks を起動し直しました）");
+				return staleSession();
 			}
 			return failure(protocol::kCodeNoSession, request->tool + " は占有の中でだけ呼べます");
 		}
@@ -271,9 +283,7 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 			return respond(failure(protocol::kCodeOccupied, "ほかの呼ぶ側が占有しています"));
 		}
 		if (!request->session.empty()) {
-			return respond(failure(protocol::kCodeNoSession,
-			                       "載せた印はいまの占有のものではありません（占有は終わったか、"
-			                       "Vectorworks を起動し直しました）"));
+			return respond(staleSession());
 		}
 		std::string session = newSession(nowNanos);
 		Outcome outcome = respond(success(Json::object({{"session", Json::string(session)}})));

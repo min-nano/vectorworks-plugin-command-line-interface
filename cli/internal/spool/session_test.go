@@ -30,6 +30,10 @@ func TestCallRefusedBySession(t *testing.T) {
 	if _, err := bridge.Call("edit", nil, "", 5*time.Second); !errors.Is(err, ErrOccupied) {
 		t.Fatalf("want ErrOccupied, got %v", err)
 	}
+	// 道具の種類を渡しても、quit は種類 app のまま（占有の中でだけ呼べる）。
+	if _, err := bridge.Call("quit", nil, "", 5*time.Second); !errors.Is(err, ErrOccupied) {
+		t.Fatalf("want ErrOccupied for quit, got %v", err)
+	}
 	if response, err := bridge.Call("layers", nil, "", 5*time.Second); err != nil || !response.OK {
 		t.Fatalf("%+v %v", response, err)
 	}
@@ -47,13 +51,19 @@ func TestCallRefusedBySession(t *testing.T) {
 // busy は実行していないので、道具の失敗ではなく ErrBusy になる。理由（プラグインの error）を
 // 誤りの文言に含める（終了の依頼・ほかの要求の処理を呼ぶ側が見分けられるように）。
 func TestCallRefusedAsBusy(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.Start(t, dir, func(string, json.RawMessage) Response {
-		return Response{Code: CodeBusy, Error: "Vectorworks is quitting"}
-	})
-	_, err := Open(dir).Call("edit", nil, "", 5*time.Second)
-	if !errors.Is(err, ErrBusy) || !strings.Contains(err.Error(), "Vectorworks is quitting") {
-		t.Fatalf("want ErrBusy with the reason, got %v", err)
+	for _, reason := range []string{"Vectorworks is quitting", ""} {
+		dir := fakeplugin.NewDir(t)
+		fakeplugin.Start(t, dir, func(string, json.RawMessage) Response {
+			return Response{Code: CodeBusy, Error: reason}
+		})
+		_, err := Open(dir).Call("edit", nil, "", 5*time.Second)
+		if !errors.Is(err, ErrBusy) || !strings.Contains(err.Error(), reason) {
+			t.Fatalf("want ErrBusy with the reason %q, got %v", reason, err)
+		}
+		// 理由が空なら、区切りだけを残さない。
+		if strings.Contains(err.Error(), ": )") {
+			t.Fatalf("an empty reason left a separator: %v", err)
+		}
 	}
 }
 

@@ -22,14 +22,15 @@ reads (kind read, such as ping) and "call tools" run for every call, in a
 session or not.
 
 	vw2026 session start                     # {"session":"<ID>"}
-	vw2026 call layers --session <ID>
+	vw2026 call <TOOL> --session <ID>        # a tool of kind write or app
 	vw2026 session end --session <ID>
 
 The plug-in issues one session at a time and keeps it in memory only. Nothing
 ends it but "session end" and the end of Vectorworks: a session that is never
 ended keeps the bridge occupied until Vectorworks restarts. Quitting
 Vectorworks ends the session, so after "call quit" and "launch", start a new
-one; calls with the old one exit with 23.
+one. With the old one, a tool of kind write or app and "session end" exit with
+23; a tool that only reads does not look at the session and runs.
 `
 }
 

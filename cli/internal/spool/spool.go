@@ -237,6 +237,9 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		case CodeNoWait:
 			return nil, fmt.Errorf("%w (%s)", ErrNoWait, tool)
 		case CodeBusy:
+			if response.Error == "" {
+				return nil, fmt.Errorf("%w (%s did not run)", ErrBusy, tool)
+			}
 			return nil, fmt.Errorf("%w (%s did not run: %s)", ErrBusy, tool, response.Error)
 		case CodeOccupied:
 			return nil, fmt.Errorf("%w (%s did not run)", ErrOccupied, tool)
