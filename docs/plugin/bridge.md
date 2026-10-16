@@ -138,6 +138,9 @@ struct ToolError {
 	ErrorCode code = ErrorCode::None;
 	// 日本語。応答の error にそのまま載る。
 	std::string message;
+	// 失敗の詳細（JSON のオブジェクト）。あれば応答の detail にそのまま載る（通信規則「応答」）。
+	// 空（null）なら detail を付けない。quit が未保存の図面の一覧を返すのに使う。
+	Json detail;
 };
 
 // 道具に渡す受け付けの状態。
@@ -173,7 +176,8 @@ struct Tool {
 - 失敗の種別は応答の `code` に小文字の綴り（`invalid_args` / `internal`）で
   載せます（[通信規則「応答」](../protocol.md#応答idresjson)）。`invalid_request`・`unknown_tool`・`no_wait`・`busy`・`occupied`・`no_session` は
   `core::Server::serve` が付けます（`occupied`・`no_session` は占有に照らした結果、`busy` は終了の依頼の最中か・受け付けの入れ子かに照らした結果。道具は付けない）。図面が開かれていないなど、道具によって失敗になるかが違う理由は
-  `internal` とし、`error` に書きます。
+  `internal` とし、`error` に書きます。呼ぶ側が機械的に読む原因は `ToolError::detail` に書き、
+  `invalid_args`・`internal` の応答の `detail` として載せます。
 - **種類 `write` の道具は、undo の手順に対応するまで表に載せません**（[未決 1](open-questions.md)）。
 - **種類 `write` の道具は、自分で undo の記録を開き、受け付けから戻る前に必ず閉じます**（要求 1 件で
   undo 1 つ）。閉じずに戻ると記録が数十秒開いたままになり、その間の書き込みがそこへ入る

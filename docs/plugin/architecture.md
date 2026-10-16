@@ -31,15 +31,18 @@ OS タイマー
         ├─ 呼ぶ側の待つ印（<id>.wait）を掴めたら、待つ者が居ないので実行しない
         ├─ 種類 write・app と session_end は占有に照らす（tools・種類 read は誰にでも）
         ├─ 種類 write・app は、終了の依頼の最中（Quitting）なら busy で断る
-        └─ 道具を実行して応答を書く（quit も応答を書いてから、終了の依頼を返す）
+        └─ 道具を実行して応答を書く（quit は GetOpenFilesList で未保存の図面を調べ、あれば
+           detail に一覧を付けて失敗で応える。無ければ応答を書いてから、終了の依頼を返す）
      quit が頼まれていたら、終了の依頼の最中の印を立てて CloseAllFilesAndQuitVectorworks。戻ったら下ろす
 ```
 
 - **SDK 呼び出しはメインスレッドからだけ**行います。受け付け用のスレッドは持ちません。
 - **受け付けの中にループを書きません**（図面が操作できなくなる）。長く走る道具は持ちません
   （[通信規則「予約された道具」](../protocol.md#予約された道具)）。
-- **終了の依頼は受け付けの外で行います。** `CloseAllFilesAndQuitVectorworks` は保存の確認を
-  出すので、応答を書き終え、受け付けから戻ってからタイマーが呼びます（[道具「quit」](tools.md#quit)）。
+- **終了の依頼は受け付けの外で行います。** `CloseAllFilesAndQuitVectorworks` は未保存の図面があると
+  保存の確認を出すので、応答を書き終え、受け付けから戻ってからタイマーが呼びます（[道具「quit」](tools.md#quit)）。
+  **ダイアログを出さないため、未保存の図面は `quit` が先に調べて断ります**（確認と呼び出しの間に変更が
+  できた競合のときだけ、保存の確認が出る）。
 - タイマーは、mac は `CFRunLoopTimer` を **`kCFRunLoopCommonModes` に**登録し、Windows は
   スレッドタイマー（`SetTimer(nullptr, 0, 250, …)`）にします。mac で `kCFRunLoopDefaultMode`
   にだけ登録すると、ふつうの操作でも十数秒から数分、レンダリング中は 6 分近く刻みが止まります

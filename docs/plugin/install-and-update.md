@@ -109,20 +109,23 @@ vw2026 install
   Vectorworks は古い版のまま動き、次の起動から新しい版になります。
 - **終了させるのは呼ぶ側です。** `install` は終了を頼まず、待ちもしません（[設計「CLI は
   プリミティブに保つ」](../design.md#cli-はプリミティブに保つ)）。終了から起動し直すまでを 1 度に
-  行いたい呼ぶ側は、次のように組み合わせます（`quit` は保存の確認を出す。[道具](tools.md#quit)。
-  この組み合わせの真実はここで、ほかのページはここを参照します）。
+  行いたい呼ぶ側は、次のように組み合わせます（`quit` は未保存の図面があれば終了を頼まずに失敗する。
+  [道具](tools.md#quit)。この組み合わせの真実はここで、ほかのページはここを参照します）。
 
   ```sh
   id=…  # vw2026 session start の {"session":…}（quit は占有の中でだけ呼べる）
-  vw2026 call quit --session "$id" || exit
-  # 止まるのを待つ（5 で止まった。0 のまま上限を過ぎたら、保存の確認が取り消された。
-  # そのときは 0 のまま抜けると成功に見えるので、待ちきれなかったことを表す 3 で抜ける）
+  # 失敗したら占有を残さない。未保存の図面があるときの失敗は、標準出力の detail に一覧が出る
+  # （呼ぶ側は保存してからやり直す）
+  vw2026 call quit --session "$id" || { code=$?; vw2026 session end --session "$id"; exit "$code"; }
+  # 止まるのを待つ（5 で止まった。0 のまま上限を過ぎたのは、確認と呼び出しの間にできた変更で
+  # 保存の確認が開き、取り消された競合のとき。0 のまま抜けると成功に見えるので、
+  # 待ちきれなかったことを表す 3 で抜ける。占有も解く）
   for i in $(seq 120); do
       vw2026 status >/dev/null 2>&1; code=$?
       [ "$code" -ne 0 ] && break
       sleep 1
   done
-  case $code in 5) ;; 0) exit 3 ;; *) exit "$code" ;; esac
+  case $code in 5) ;; 0) vw2026 session end --session "$id"; exit 3 ;; *) exit "$code" ;; esac
   vw2026 install && vw2026 launch || exit
   # 動き出すのを待つ（0 で動き出した。5 のまま上限を過ぎた・1 で失敗したら、その終了コードで抜ける）
   for i in $(seq 120); do
