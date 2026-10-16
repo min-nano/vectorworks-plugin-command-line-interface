@@ -139,7 +139,7 @@ struct ToolError {
 	// 日本語。応答の error にそのまま載る。
 	std::string message;
 	// 失敗の詳細（JSON のオブジェクト）。あれば応答の detail にそのまま載る（通信規則「応答」）。
-	// 空（null）なら detail を付けない。quit が無題の図面の一覧を返すのに使う。
+	// 空（null）なら detail を付けない。quit が開いている図面の一覧を返すのに使う。
 	Json detail;
 };
 
