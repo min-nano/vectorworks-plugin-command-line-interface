@@ -1,7 +1,7 @@
 # 最初に提供する道具
 
 図面を**読むだけ**の道具と、Vectorworks を終わらせる 1 つ（`quit`）から始めます。最初の
-リリース（[実装の順序](plan.md)の段 2）に載せるのは `ping` だけで、読む道具は段 4、`quit` は段 5 で
+リリース（[実装の順序](plan.md)の段 2）に載せるのは `ping` だけで、共通部の変更は段 4、読む道具と図面を扱う道具は段 5、`quit` は段 6 で
 足します。更新は道具ではなく CLI の `vw2026 install` です（[インストール](install-and-update.md#インストールと更新vw2026-install)）。**SDK 呼び出しは、SDK リファレンスで
 挙動が確かめられているものだけを使います**（無いものはリファレンスで調べてから足す。[SDK の調査](../sdk-research.md)）。
 
@@ -85,7 +85,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
   `no_session`、ほかが占有していれば `occupied` で断られる）。Vectorworks が終われば占有も消えます。
 - **終了の依頼の最中は断られます**（`busy`。[通信規則「Vectorworks が処理中」](../protocol.md#vectorworks-が処理中)）。
   上の競合で保存の確認が開いている間に届いた 2 つ目の `quit` も `busy` で断られるので、終了の依頼は重なりません
-  （この判定を残すかは段 5 の前に決める。[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
+  （この判定を残すかは段 6 の前に決める。[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
 - **再起動の手段は持ちません**（第 2 引数は常に偽）。起動し直すのは呼ぶ側で、`session start` で占有を
   取ってから `quit`（`--session` を付ける）・止まるのを待つ・`launch`・動き出すのを待つ、を組み合わせます（更新を
   挟む形を含めて[インストール「流れ」](install-and-update.md#流れ)）。
@@ -94,7 +94,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 
 ## 図面を扱う道具（`documents`・`save`・`close`）
 
-`quit` の前に図面を保存して閉じるための道具です（[実装の順序](plan.md)の段 4）。使う SDK 呼び出しは SDK
+`quit` の前に図面を保存して閉じるための道具です（[実装の順序](plan.md)の段 5）。使う SDK 呼び出しは SDK
 リファレンスで確かめてあります（[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)。
 VW 2026 / macOS。Windows は未測定）。**変更を捨てて閉じる道具は持ちません**（人の変更を黙って捨てる手段を
 作らない）。保存は呼ぶ側の責任で、保存してから閉じれば保存の確認は出ません。必要のない図面は、一時フォルダなどへ

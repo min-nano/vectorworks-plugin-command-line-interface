@@ -18,7 +18,7 @@ namespace VwCli::core {
 enum class ToolKind { Read, Write, App };
 
 // 受け付けの外の状態。タイマー（Clock）が回ごとに渡す。Quitting では、種類 Write と App の道具を
-// busy で断る（ほかの道具は応える）。この判定を残すかは、SDK リファレンス #230 の結果で段 5 の前に
+// busy で断る（ほかの道具は応える）。この判定を残すかは、SDK リファレンス #230 の結果で段 6 の前に
 // 決める（docs/plugin/architecture.md「Vectorworks が処理中」）。
 enum class Activity {
 	Idle,
