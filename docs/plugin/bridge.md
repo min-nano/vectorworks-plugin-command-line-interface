@@ -156,8 +156,8 @@ struct ToolContext {
 	bool session = false;
 };
 
-// 失敗は error に書き（戻り値は使わない）、例外は Server が internal で応える。
-using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolStatus &error);
+// 失敗と終了の依頼は status に書き（戻り値は使わない）、例外は Server が internal で応える。
+using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolStatus &status);
 
 struct Tool {
 	// [a-z0-9_]+(\.[a-z0-9_]+)*

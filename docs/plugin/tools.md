@@ -1,6 +1,6 @@
 # 最初に提供する道具
 
-図面を**読むだけ**の道具と、Vectorworks を終わらせる 1 つ（`quit`）から始めます。最初の
+図面を**読むだけ**の道具と、図面を保存して閉じる道具（`documents`・`save`・`close`）、Vectorworks を終わらせる 1 つ（`quit`）から始めます。最初の
 リリース（[実装の順序](plan.md)の段 2）に載せるのは `ping` だけで、共通部の変更は段 4、読む道具と図面を扱う道具は段 5、`quit` は段 6 で
 足します。更新は道具ではなく CLI の `vw2026 install` です（[インストール](install-and-update.md#インストールと更新vw2026-install)）。**SDK 呼び出しは、SDK リファレンスで
 挙動が確かめられているものだけを使います**（無いものはリファレンスで調べてから足す。[SDK の調査](../sdk-research.md)）。
@@ -125,7 +125,8 @@ VW 2026 / macOS。Windows は未測定）。**変更を捨てて閉じる道具�
     **保存先が別の図面で開いているファイルなら、SDK が警告のダイアログを出して人が OK を押すまで戻りません。**
     そこで **`to` が開いている図面のパスと一致するときは、呼ぶ前に `invalid_args` で断ります**。保存先が
     開いていない既存ファイルのときは、SDK のエラーを `internal` で返します。上書きしたければ、呼ぶ側が先に
-    ファイルを消します。
+    ファイルを消します。**呼ぶ側が機械的に見分けられるよう、失敗の `detail` に `reason` を付けます:**
+    `to_is_open`（保存先が開いている図面。`invalid_args`）・`file_exists`（保存先が既にある。`internal`）。
   - 内部では `GetOpenFilesList` からパスの一致する項目の `fileRef` を引き、`SwitchToOpenFile` →
     `SaveActiveDocumentPath` で保存します。**前面の図面とカレントレイヤは、保存の前後で元に戻せます**
     （戻すのも `SwitchToOpenFile`）。
