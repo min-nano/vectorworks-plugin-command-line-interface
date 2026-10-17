@@ -17,7 +17,7 @@
 | `layer_objects` | read | `layer`（必須）・`limit`（既定 50）・`offset`（既定 0）・`type`（省略＝すべての種別） | `{"layer","objects":[{"index","type","type_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}` |
 | `object_counts` | read | `layer`（省略＝図面全体） | `{"layer"?,"types":[{"type","type_name","count"}],"total"}`（種別番号の昇順） |
 | `documents` | read | なし | [図面を扱う道具](#図面を扱う道具documentssaveclose) |
-| `save` | write | `document`（必須）・`path`（省略可） | 同上 |
+| `save` | write | `document`（必須）・`to`（省略可） | 同上 |
 | `close` | app | `document`（必須） | 同上 |
 | `quit` | app | なし | `{"quitting":true}`。図面が開いていれば `internal` で失敗し、`detail` に一覧（下記） |
 
@@ -64,14 +64,15 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
   `detail`。呼ぶ側が閉じるべき図面を知るため）。
 
   ```json
-  {"ok":false,"code":"internal","error":"図面が開いているので終了しませんでした。先に図面を閉じてください","detail":{"reason":"documents_open","documents":[{"name":"plan.vwx","path":"/Users/me/plan.vwx"},{"name":"無題 1","path":null}]}}
+  {"ok":false,"code":"internal","error":"図面が開いているので終了しませんでした。先に図面を閉じてください","detail":{"reason":"documents_open","documents":[{"name":"plan.vwx","path":"/Users/me/plan.vwx","untitled":false},{"name":"名称未設定 1","path":"/Applications/VW2026/名称未設定 1","untitled":true}]}}
   ```
 
   | フィールド | 値 |
   | --- | --- |
   | `reason` | `documents_open`（`quit` の失敗の理由を表す固定の綴り。呼ぶ側はこれで分岐する） |
   | `documents[].name` | 図面の名前 |
-  | `documents[].path` | 保存先のパス。一度も保存していない図面は `null` |
+  | `documents[].path` | 図面のパス（`documents` と同じ。無題の図面は「アプリケーションのフォルダ＋名称未設定 N」でファイルとしては存在しない） |
+  | `documents[].untitled` | 一度も保存していない図面か |
 - **図面が 0 枚なら、保存の確認は出ません。** 応答を書いてから、受け付けの外で
   `gSDK->CloseAllFilesAndQuitVectorworks(true, false)` を頼みます（[構成「受け付けの流れ」](architecture.md#受け付けの流れ)）。
   第 1 引数は常に真です（**利用者の図面を保存せずに閉じる手段は持たない**）。確かめてから頼むまでの間に利用者が
@@ -93,37 +94,55 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 
 ## 図面を扱う道具（`documents`・`save`・`close`）
 
-`quit` の前に図面を閉じるための道具です（[実装の順序](plan.md)の段 4。使う SDK 呼び出しが SDK リファレンスで
-確かめられてから）。**変更を捨てて閉じる道具は持ちません**（人の変更を黙って捨てる手段を作らない）。
-保存は呼ぶ側の責任で、保存してから閉じれば保存の確認は出ず、保存していなければ確認が出て人が答えるまで進みません。
-必要のない図面は、一時フォルダなどへ保存してから閉じ、ファイルは利用者が自分で消します。
+`quit` の前に図面を保存して閉じるための道具です（[実装の順序](plan.md)の段 4）。使う SDK 呼び出しは SDK
+リファレンスで確かめてあります（[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)。
+VW 2026 / macOS。Windows は未測定）。**変更を捨てて閉じる道具は持ちません**（人の変更を黙って捨てる手段を
+作らない）。保存は呼ぶ側の責任で、保存してから閉じれば保存の確認は出ません。必要のない図面は、一時フォルダなどへ
+保存してから閉じ、ファイルは利用者が自分で消します。
 
 **前面の図面（コンテキスト）に依存せず、対象の図面を引数で指定します。** プラグインが自分で開いた図面かを
 覚えることもしません（どの図面にも使える）。
 
 | 道具 | 種類 | 引数 | 結果 |
 | --- | --- | --- | --- |
-| `documents` | read | なし | `{"documents":[{"name","path","active"}],"count"}`。`path` は保存先で、一度も保存していない図面は `null` |
-| `save` | write | `document`（必須）・`path`（省略可） | `{"document","path"}`（保存した先） |
+| `documents` | read | なし | `{"documents":[{"name","path","untitled","active"}],"count"}` |
+| `save` | write | `document`（必須）・`to`（省略可） | `{"document","path"}`（保存した後の図面のパス） |
 | `close` | app | `document`（必須） | `{"closed":true}` |
 
-- **`document`** は対象の図面で、`documents` の `path` を渡します。一度も保存していない図面は `path` が無いので、
-  `name` を渡します。開いている図面に一致しなければ `invalid_args` で、同じ名前の無題の図面が複数あって決められない
-  ときも `invalid_args` です（`documents` で確かめる）。
-- **`save`** は対象の図面を保存します。`path`（保存先）を省くと、その図面自身のパスへ上書き保存します
-  （同じパスへの上書き保存は通り、保存で「変更あり」が消えることは実測済み）。**一度も保存していない図面は
-  保存先が無いので `path` を要します**（一時フォルダなどを指定する）。内部では `GetOpenFilesList` から
-  `fileRef` を引き、`SwitchToOpenFile` → `SaveActiveDocumentPath` で保存しますが、**前面の図面は保存の前後で
-  元に戻します**。
-- **`close`** は対象の図面を閉じます。**保存はしません。** 未保存の変更があれば保存の確認が出ます
-  （`DoMenuName("Close", 0)`。メニューの「閉じる」と同じ。`CloseDocument()` は確認なしで変更を捨てるので使いません）。
-  図面を保存してから呼ぶのは呼ぶ側の責任です。
-- 無題の図面は、変更が無くても閉じるときに保存の確認が出ます。閉じるには `save` の `path` で保存が要ります。
-- 新しいパスへの保存（無題の図面を `path` へ）と、前面でない図面を指定したときの扱いは、実装の前に
-  [SDK リファレンス #243](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/243) で確かめます（既にあるファイルへの**別名**保存は通らなかった）。
+- **`document`** は対象の図面のパスで、`documents` の `path` を渡します。パスは図面を一意に決めます
+  （同じファイル名を別のフォルダに保存した 2 枚も見分けられる）。**無題の図面のパスは「アプリケーションの
+  フォルダ＋名称未設定 N」**で、N はセッション全体の連番です（開いている間は重ならない。ファイルとしては
+  存在しない）。`untitled` が真なら一度も保存していない図面です。開いている図面に一致しなければ
+  `invalid_args` で断ります。
+- **`save`** は対象の図面を保存します。`to` を省くと、その図面自身のパスへ上書き保存します（無題の図面は
+  保存先が無いので `to` を要します。一時フォルダなどを指定する）。
+  - **新しいパスへは通ります。** 無題の図面からも、保存済みの図面からも（別名保存）。**図面のパスが保存先へ
+    移ります**（「名前を付けて保存」と同じ。元のファイルはそのまま残る）。`path` は保存した後のパスです。
+  - **保存先が既にあるファイルへは保存できません**（SDK が `GSError` 50331649 を返し、何も起きない）。
+    **保存先が別の図面で開いているファイルなら、SDK が警告のダイアログを出して人が OK を押すまで戻りません。**
+    そこで **`to` が開いている図面のパスと一致するときは、呼ぶ前に `invalid_args` で断ります**（`to` が対象の
+    図面自身のパスと同じときは上書き保存で、断らない）。保存先が開いていない既存ファイルのときは、SDK の
+    エラーを `internal` で返します。上書きしたければ、呼ぶ側が先にファイルを消します。
+  - 内部では `GetOpenFilesList` からパスの一致する項目の `fileRef` を引き、`SwitchToOpenFile` →
+    `SaveActiveDocumentPath` で保存します。**前面の図面とカレントレイヤは、保存の前後で元に戻せます**
+    （戻すのも `SwitchToOpenFile`）。
+- **`close`** は対象の図面を閉じます。**保存はしません。**
+  `DoMenuName("Close", 0)` で、メニューの「閉じる」と同じです（`CloseDocument()` は確認なしで変更を捨てる
+  ので使いません）。
+  - **保存した直後の図面は、確認なしに閉じます。** 確認が出るのは、無題の図面（無変更でも）、
+    `OpenDocumentPath` で開いただけの図面（何もしなくても。開いた時点で「変更あり」になる。同じパスへ
+    `save` してから閉じれば出ない）、`MarkCurrentDocChanged()` した図面です。
+  - **確認が出ると、人が答えるまで呼び出しから戻りません。** その間の刻みの受け付けは入れ子になり、
+    要求を `busy` で断ります（[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
+  - **戻り値（常に 0）では成否が分かりません。** 呼び出しの後に `GetOpenFilesList` を読み、対象の図面が
+    残っていれば（確認がキャンセルされた）`internal` で失敗します。
+  - 閉じたあとに前面になるのは別の図面です。`close` の前の前面の図面が残っていれば、`SwitchToOpenFile` で
+    戻します（前面を閉じたときは戻せない）。
+- **undo イベントの外で足した図形は「変更あり」にならず、閉じるときに確認なしで黙って捨てられます。**
+  「確認が出ないから変更は無い」とは読めません。図面に書く道具は undo の記録の中で書くので（段 1 の決まり）、
+  この問題は起きません。ほかのプラグインが記録の外で書いた変更は、呼ぶ側が先に `save` します。
 - 図面を開く道具は[設計「決めたこと」](../design.md#決めたこと)の「対象の図面」にあります（未実装）。
-- **図面に書く道具は undo の記録の中で書きます。** undo の記録の外の書き込みは「変更あり」にならず、
-  閉じるときも保存の確認なしに黙って捨てられます（Findings「未保存の変更ありは読めない」）。
+  `OpenDocumentPath` で開いた図面は、`save` してから `close` します。
 
 ## 他のプラグインの機能
 
