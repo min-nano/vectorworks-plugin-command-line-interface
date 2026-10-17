@@ -33,7 +33,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - run: cmake -S . -B build -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=${{ matrix.sanitizers }} -DVW_ENABLE_COVERAGE=${{ matrix.coverage != '' && 'ON' || 'OFF' }} -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
+      - run: cmake -S . -B build -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=${{ matrix.sanitizers }} -DVW_ENABLE_COVERAGE=${{ matrix.coverage != '' && 'ON' || 'OFF' }} -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
       - run: cmake --build build --config Debug
       # msvc はテストを計測の下で 1 回だけ走らせる（下のステップ）。
       - if: matrix.coverage != 'msvc'
@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: cmake -S . -B build -DCMAKE_CXX_COMPILER=clang++ -DVW_BUILD_TESTS=ON -DVW_BUILD_FUZZERS=ON -DVW_ENABLE_SANITIZERS=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
+      - run: cmake -S . -B build -DCMAKE_CXX_COMPILER=clang++ -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON -DVW_BUILD_FUZZERS=ON -DVW_ENABLE_SANITIZERS=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
       - run: cmake --build build
       - run: ctest --test-dir build --output-on-failure
       # 種（要求の見本。深い入れ子・長い文字列・不正な UTF-8 を含む）から決まった時間だけ回す。

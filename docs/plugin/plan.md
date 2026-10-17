@@ -42,6 +42,21 @@
   ファイル → 残るファイルと応答）。C++ のテストと Go の `cli/internal/spool`・`cli/internal/fakeplugin`
   のテストが同じものを読む（[通信規則の見本](../fixtures.md)）。
 
+段 2 で決めたこと（真実は各ページ）:
+
+- **`ping` の SDK に依らない部分は `src/core/Ping` に置く。** 引数の検査（引数を受けない。知らない
+  引数は `invalid_args`）と結果の形を無 SDK でテストし、`src/tools/Ping.cpp` は SDK から現在の
+  レイヤの名前を読んで渡すだけにする（[ブリッジ「分け方」](bridge.md#分け方)）。
+- **`VW_BUILD_PLUGIN` は既定で ON で、`VW_SDK_DIR` が無ければ構成で止める。** テスト・検査・
+  ファジングは `-DVW_BUILD_PLUGIN=OFF` を付ける（`cpp.yml`・`lint.sh`・`CLAUDE.md` の手元の手順）。
+  黙ってプラグインを外すと、`build.yml` で SDK の指定を誤ったときに気づけないため
+  （[ビルド「CMake」](build-and-release.md#cmake)）。
+- **mac のプラグインは arm64 だけ**（CLI は universal）。SDK リファレンスの `plugin/` が実機で
+  読み込まれている形に合わせ、確かめていない形を配らない（[ビルド「CMake」](build-and-release.md#cmake)）。
+- **公開した資産は `build.yml` の `verify` が利用者と同じ URL から取って確かめる**（zip の形と
+  `bin/vw2026 version`。[ビルド「CI」](build-and-release.md#ci)）。
+- **タグの slug は `scripts/dev-tag.sh` だけが作る**（[名前と識別子](identifiers.md)）。
+
 その先（順序は未定）:
 
 - **他のプラグインの機能を名前で呼ぶ**（`CallPluginLibrary`。形は[未決 3](open-questions.md#3-ほかのプラグインの機能の呼び出しの形)）。
@@ -56,7 +71,7 @@
 
 | 作るもの | 根拠 |
 | --- | --- |
-| `src/core/*`（Protocol・Json・Files・Bridge・Serve） | [通信規則](../protocol.md)・[ブリッジ](bridge.md)。SDK に依らない |
+| `src/core/*`（Protocol・Json・Files・Bridge・Serve・Ping） | [通信規則](../protocol.md)・[ブリッジ](bridge.md)。SDK に依らない |
 | `src/ModuleMain.cpp`・`PluginPrefix.h`・`Module-Info.plist.in`・`resources/cli.vwr`・`CMakeLists.txt` | SDK リファレンスの `plugin/`（実機で読み込まれている形）・[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)（VCOM の初期化・SDK の静的ライブラリをリンクするモジュールが定義するもの） |
 | `src/Clock.{h,cpp}` | [Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4・6・7（[構成](architecture.md#受け付けの流れ)） |
 | `src/tools/*` | [SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し) |

@@ -15,8 +15,8 @@ vw2026 call layers '{"include_sheets":false}'
 ```
 
 > **開発中です。** いまあるのは通信規則と CLI（`cli/`）とプラグインの設計、プラグインの
-> SDK に依らない共通部（`src/core`）だけで、プラグイン本体はこれから作ります
-> （[実装の順序](docs/plugin/plan.md)）。
+> SDK に依らない共通部（`src/core`）と骨格（道具は `ping` だけ）・配布（`build.yml`）です。
+> `vw2026 install` と読む道具はこれから作ります（[実装の順序](docs/plugin/plan.md)）。
 
 ## ドキュメント
 

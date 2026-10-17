@@ -1,0 +1,303 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# mac と Windows のプラグインのビルド・梱包・リリース（docs/plugin/build-and-release.md）。
+# main は転がりタグ stable に、同じリポジトリの PR はブランチの head でビルドしたものを dev-<slug> に
+# プレリリースする。fork の PR・マージキュー・main 以外の手動の実行はビルドするだけで、公開しない。
+# 公開したら、資産を利用者と同じ URL から取ってきて、zip の形と bin/vw2026 version を確かめる。
+#
+# PR では新しい push が走っているビルドを止める（古い head の公開に意味は無い）。PR が閉じたときは
+# cleanup-dev-release.yml が同じグループで走り、走っているビルドを止めてから dev-<slug> を消す。
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # ビルドする sha・刻印・公開先を 1 か所で決め、build.json を書く（mac と Windows の zip に同じものを入れる）。
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.meta.outputs.sha }}
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      title: ${{ steps.meta.outputs.title }}
+      publish: ${{ steps.meta.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # 同じリポジトリの PR はブランチの head（docs/plugin/build-and-release.md「リリースの形」）。
+          # fork の head は信頼できないので、マージのためのコミットをビルドするだけにする。
+          ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
+      - id: meta
+        env:
+          EVENT: ${{ github.event_name }}
+          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -eu
+          sha="$GITHUB_SHA"
+          branch="$GITHUB_REF_NAME"
+          tag=""
+          title=""
+          if [ "$EVENT" = pull_request ]; then
+            branch="$HEAD_REF"
+            if [ "$SAME_REPO" = true ]; then
+              sha="$HEAD_SHA"
+              tag="$(scripts/dev-tag.sh "$branch")"
+              title="Dev: $branch (${sha:0:7})"
+            fi
+          elif [ "$GITHUB_REF" = refs/heads/main ]; then
+            tag=stable
+            title="Stable (${sha:0:7})"
+          fi
+          version="${sha:0:7}"
+          jq -nc --arg version "$version" --arg branch "$branch" '{version: $version, branch: $branch}' > build.json
+          cat build.json
+          {
+            echo "sha=$sha"
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "title=$title"
+            echo "publish=$([ -n "$tag" ] && echo true || echo false)"
+          } >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: build-json
+          path: build.json
+
+  # mac の zip: cli.vwlibrary/・build.json・bin/vw2026（universal）。
+  build-mac:
+    needs: meta
+    runs-on: macos-15
+    env:
+      VW_SDK_URL: https://release.vectorworks.net/latest/Vectorworks/2026-NNA-eng-mac-SDK.zip
+      VW_SDK_DIR: ${{ github.workspace }}/vw-sdk
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+      # SDK リファレンスの plugin/ が実機で読み込まれているビルドと同じ Xcode に合わせる。
+      - run: sudo xcode-select -s /Applications/Xcode_16.2.app
+      - id: sdk-key
+        run: scripts/vw-sdk-cache-key.sh vw-sdk-2026-mac
+      - uses: actions/cache@v6
+        with:
+          path: ${{ env.VW_SDK_DIR }}
+          key: ${{ steps.sdk-key.outputs.key }}
+          restore-keys: ${{ steps.sdk-key.outputs.restore-keys }}
+      - run: scripts/fetch-vw-sdk.sh
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: cli/go.mod
+      - uses: actions/download-artifact@v8
+        with:
+          name: build-json
+          path: stage
+      - name: plug-in
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -eu
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DVW_SDK_DIR="$VW_SDK_DIR" \
+            -DVW_BUILD_VERSION="$VERSION" -DVW_BUILD_BRANCH="$BRANCH"
+          cmake --build build --target VwCli --parallel "$(sysctl -n hw.ncpu)"
+          # アドホック署名（Developer ID と公証はしない）。.vwr を入れた後にかけ、リソースまで封をする。
+          codesign --force --deep --sign - build/cli.vwlibrary
+          codesign --verify --strict --verbose=2 build/cli.vwlibrary
+          lipo -info build/cli.vwlibrary/Contents/MacOS/cli
+          test -f build/cli.vwlibrary/Contents/Resources/cli.vwr
+          ditto build/cli.vwlibrary stage/cli.vwlibrary
+      # Go は arm64 のバイナリをリンクのときにアドホック署名する。lipo は各アーキテクチャの署名を保つ。
+      - name: cli
+        run: |
+          set -eu
+          for arch in arm64 amd64; do
+            CGO_ENABLED=0 GOOS=darwin GOARCH="$arch" go -C cli build -trimpath \
+              -ldflags "-s -w -X main.version=$VERSION" -o "$RUNNER_TEMP/vw2026-$arch" ./cmd/vw2026
+          done
+          mkdir -p stage/bin
+          lipo -create -output stage/bin/vw2026 "$RUNNER_TEMP/vw2026-arm64" "$RUNNER_TEMP/vw2026-amd64"
+          lipo -info stage/bin/vw2026
+          stage/bin/vw2026 version
+      - name: package
+        run: |
+          set -eu
+          mkdir -p dist
+          (cd stage && zip -qr ../dist/cli.vwlibrary.zip .)
+          unzip -Z1 dist/cli.vwlibrary.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli.vwlibrary.zip
+          path: dist/cli.vwlibrary.zip
+
+  # Windows の zip: cli.vlb・cli.vwr・build.json・bin\vw2026.exe。
+  build-windows:
+    needs: meta
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      VW_SDK_URL: https://release.vectorworks.net/latest/Vectorworks/2026-NNA-eng-win-SDK.zip
+      VW_SDK_DIR: ${{ github.workspace }}/vw-sdk-win
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+      - id: sdk-key
+        run: scripts/vw-sdk-cache-key.sh vw-sdk-2026-win
+      - uses: actions/cache@v6
+        with:
+          path: ${{ env.VW_SDK_DIR }}
+          key: ${{ steps.sdk-key.outputs.key }}
+          restore-keys: ${{ steps.sdk-key.outputs.restore-keys }}
+      - run: scripts/fetch-vw-sdk.sh
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: cli/go.mod
+      - uses: actions/download-artifact@v8
+        with:
+          name: build-json
+          path: stage
+      - name: plug-in
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -eu
+          cmake -S . -B build -A x64 -DVW_SDK_DIR="$VW_SDK_DIR" \
+            -DVW_BUILD_VERSION="$VERSION" -DVW_BUILD_BRANCH="$BRANCH"
+          cmake --build build --config Release --target VwCli --parallel
+          cp build/Release/cli.vlb build/Release/cli.vwr stage/
+      - name: cli
+        run: |
+          set -eu
+          mkdir -p stage/bin
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go -C cli build -trimpath \
+            -ldflags "-s -w -X main.version=$VERSION" -o ../stage/bin/vw2026.exe ./cmd/vw2026
+          stage/bin/vw2026.exe version
+      # .NET の ZipFile は項目の名前の区切りを / にする（Windows PowerShell 5.1 の Compress-Archive は \
+      # にするので使わない）。
+      - name: package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [IO.Compression.ZipFile]::CreateFromDirectory("$PWD/stage", "$PWD/dist/cli.vlb.zip")
+          $zip = [IO.Compression.ZipFile]::OpenRead("$PWD/dist/cli.vlb.zip")
+          $zip.Entries.FullName
+          $zip.Dispose()
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli.vlb.zip
+          path: dist/cli.vlb.zip
+
+  release:
+    needs: [meta, build-mac, build-windows]
+    if: needs.meta.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SHA: ${{ needs.meta.outputs.sha }}
+      TAG: ${{ needs.meta.outputs.tag }}
+      TITLE: ${{ needs.meta.outputs.title }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: cli.*.zip
+          path: dist
+          merge-multiple: true
+      # タグを作り直す（main は stable を、PR は dev-<slug> を、新しい sha へ）。本文に機械が読む情報は
+      # 載せない（版は zip の中の build.json が持つ）。
+      - run: |
+          set -eu
+          ls -l dist
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release delete "$TAG" --cleanup-tag --yes
+          fi
+          if gh api "repos/$GH_REPO/git/ref/tags/$TAG" > /dev/null 2>&1; then
+            gh api -X DELETE "repos/$GH_REPO/git/refs/tags/$TAG"
+          fi
+          if [ "$TAG" = stable ]; then
+            kind=--latest
+          else
+            kind=--prerelease
+          fi
+          gh release create "$TAG" dist/cli.vwlibrary.zip dist/cli.vlb.zip --target "$SHA" \
+            --title "$TITLE" --notes "Built from $SHA." "$kind"
+
+  # 公開した資産を、利用者と同じ URL（タグと資産名から決まる）から取ってきて確かめる。
+  verify:
+    needs: [meta, release]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            asset: cli.vwlibrary.zip
+          - os: windows-latest
+            asset: cli.vlb.zip
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      URL: https://github.com/${{ github.repository }}/releases/download/${{ needs.meta.outputs.tag }}/${{ matrix.asset }}
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - run: curl -fL --retry 4 --retry-delay 5 -o "$RUNNER_TEMP/release.zip" "$URL"
+      # 直下は build.json と bin/ と、プラグイン（mac は cli.vwlibrary/、Windows は cli.vlb と cli.vwr）。
+      # bin/ の中は CLI だけ。
+      - if: runner.os == 'macOS'
+        run: |
+          set -eu
+          zip="$RUNNER_TEMP/release.zip"
+          top="$(unzip -Z1 "$zip" | cut -d/ -f1 | sort -u | tr '\n' ' ')"
+          test "$top" = "bin build.json cli.vwlibrary " || { echo "unexpected top level: $top"; exit 1; }
+          bin="$(unzip -Z1 "$zip" | grep '^bin/.' | tr '\n' ' ')"
+          test "$bin" = "bin/vw2026 " || { echo "unexpected bin/: $bin"; exit 1; }
+          dir="$RUNNER_TEMP/release"
+          unzip -q "$zip" -d "$dir"
+          codesign --verify --strict --verbose=2 "$dir/cli.vwlibrary"
+          test -f "$dir/cli.vwlibrary/Contents/Resources/cli.vwr"
+          lipo -info "$dir/bin/vw2026"
+          echo "RELEASE_DIR=$dir" >> "$GITHUB_ENV"
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zipPath = "$env:RUNNER_TEMP/release.zip"
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [IO.Compression.ZipFile]::OpenRead($zipPath)
+          $names = @($zip.Entries.FullName)
+          $zip.Dispose()
+          $names
+          $top = ($names | ForEach-Object { ($_ -split '/')[0] } | Sort-Object -Unique) -join ' '
+          if ($top -cne 'bin build.json cli.vlb cli.vwr') { throw "unexpected top level: $top" }
+          $bin = ($names | Where-Object { $_ -like 'bin/?*' }) -join ' '
+          if ($bin -cne 'bin/vw2026.exe') { throw "unexpected bin/: $bin" }
+          $dir = "$env:RUNNER_TEMP/release"
+          Expand-Archive -LiteralPath $zipPath -DestinationPath $dir
+          "RELEASE_DIR=$dir" >> $env:GITHUB_ENV
+      # build.json と CLI の版が、ビルドした sha になっている。
+      - run: |
+          set -eu
+          cat "$RELEASE_DIR/build.json"
+          test "$(jq -r .version "$RELEASE_DIR/build.json")" = "$VERSION"
+          "$RELEASE_DIR/bin/vw2026" version | tee "$RUNNER_TEMP/version.json"
+          test "$(jq -r .version "$RUNNER_TEMP/version.json")" = "$VERSION"
