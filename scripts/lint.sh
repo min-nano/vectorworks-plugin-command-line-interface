@@ -33,7 +33,7 @@ if ! clang-tidy --version 2>/dev/null | grep -qF "version $want"; then
 	echo "clang-tidy $want is required: pip install -r tools/requirements.txt" >&2
 	exit 1
 fi
-cmake -S . -B build/lint -DVW_BUILD_TESTS=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON >/dev/null
+cmake -S . -B build/lint -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON >/dev/null
 files="$(sed -n 's/^ *"file": "\(.*\)",*$/\1/p' build/lint/compile_commands.json)"
 # shellcheck disable=SC2086
 clang-tidy -p build/lint --quiet $files || status=1

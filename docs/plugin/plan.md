@@ -7,7 +7,7 @@
 | 段 | 中身 | 確かめ方 | 実機 |
 | --- | --- | --- | --- |
 | 1 | **SDK に依らない共通部**: `core/Json`（入れ子の深さに上限を設ける）・`core/Bridge`・`core/Serve`（偽の道具の表・占有）・CMake（共通部・テスト・ファジングだけ）・`protocol/fixtures/`・`cpp.yml`（`core/Json` のファジングを含む）・`format.sh` / `lint.sh` に C++ と PowerShell を足す（[整形](../format.md)・[検査](../lint.md)）・`CLAUDE.md` の追記（PR の進め方） | CI（ASan・UBSan）。Go 側のテストも同じ見本を読む | 不要 |
-| 2 | **骨格と配布**: CMake にプラグインを足す・`BuildConfig`・`ModuleMain`・`Clock`（受け付けまで。終了の依頼と `Quitting` は段 6）・道具 `ping`（表に載せるのはこれだけ。使う `GetCurrentLayer()` の図面が無いときの挙動は [SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)）・リソース・`build.yml`（mac と Windows のビルド・梱包（`bin/vw2026`）・main のリリース・PR のプレリリース）・`cleanup-dev-release.yml` | CI。リリースの資産を取ってきて、zip の形（直下に `build.json` と `bin/`）と `bin/vw2026 version` が動くことを確かめる。実機で、PR のプレリリースの zip を `curl -L` か `gh release download` で取ってきて `bin/` 以外を `<Plug-Ins>/cli/` に置き、zip の `bin/vw2026` で `status` が `running:true` になり `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。`ping` の `version` が PR の head の sha、`branch` がその PR のブランチ。`call tools` に `ping` だけが載る。起動の直後（起動画面の間）に置いた `call ping` が、落ちずに最初の刻みで応える。図面を 1 枚も開いていないときの `ping` が、`document_open` と `current_layer` について [道具](tools.md#ping)に書いたとおりに答える | 要 |
+| 2 | **骨格と配布**: CMake にプラグインを足す・`BuildConfig`・`ModuleMain`・`Clock`（受け付けまで。終了の依頼と `Quitting` は段 6）・道具 `ping`（表に載せるのはこれだけ。使う `GetCurrentLayer()` の図面が無いときの挙動は [SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)）・リソース・`build.yml`（mac と Windows のビルド・梱包（`bin/vw2026`）・main のリリース・PR のプレリリース）・`cleanup-dev-release.yml` | CI。リリースの資産を取ってきて、zip の形（直下に `build.json` と `bin/`）と `bin/vw2026 version` が動くことを確かめる。実機で、PR のプレリリースの zip を `curl -L` か `gh release download` で取ってきて `bin/` 以外を `<Plug-Ins>/cli/` に置き、zip の `bin/vw2026` で `status` が `running:true` になり `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。`ping` の `version` が PR の head の sha、`branch` がその PR のブランチ。`call tools` に `ping` だけが載る。`launch` の直後から `status` を短い間隔で繰り返し、`running:true` になった直後（起動画面の間）の `call ping` が落ちずに応える（`call` はロックを掴む者が居なければ待たずに断るので、起動を待つのは呼ぶ側の `status` の繰り返し）。図面を 1 枚も開いていないときの `ping` が、`document_open` と `current_layer` について [道具](tools.md#ping)に書いたとおりに答える | 要 |
 | 3 | **インストール・アンインストール**: `vw2026 install` / `uninstall`（資産の取得・新しいビルドの判定・付け替え・CLI の入れ替え・PATH）・初回のスクリプト（`get-vw2026.sh` / `.ps1`）・`CLAUDE.md` に消すコードの歯止めを写す | CI（Go の単体テスト。偽の HTTP サーバー。動いている CLI の入れ替えを Windows で押さえる。shellcheck・PSScriptAnalyzer）。実機で、PR のプレリリースの初回のスクリプトを `--tag dev-<slug>` を付けて curl からパイプで実行 → 新しい端末で `vw2026 status` が動き、起動して `call ping` の `version` が PR の head の sha になる。動いている間に版の違うタグ（`install --tag stable`）を指定すると「Vectorworks が動いている」終了コードで何も変わらない（同じタグでは版の比較が先に `up_to_date` を返すので、この経路を通らない）。Vectorworks を手で終了 → `install --tag dev-<slug>` で `up_to_date`。`install --tag dev-<slug> --plugins-dir <場所>` で既定以外へ入れられる（タグを付けないと `stable` の CLI に入れ替わり、それには `uninstall` が無い）。`uninstall` でリンクと PATH の項目だけが消える（既定以外の場所は `--plugins-dir` を付ける）。main（`stable`）へ戻す確認は、`stable` の CLI に `install` が無いので段 5 で行う | 要 |
 | 4 | **共通部の変更**: 種類 `app` から終了の依頼を切り離し、`ToolError` を `ToolStatus`（`detail`・`quit` を持つ）に改める。失敗の応答に省略できる `detail` を足し、`spool.Response` に `Detail` を持たせ、`vw2026 call` が失敗の `detail` を標準出力に出して `Help()` を直す。`src/core`・偽のプラグイン・見本・[通信規則](../protocol.md)を同じ PR で合わせる（道具は足さない。`ping` だけ） | CI（C++ と Go のテストが同じ見本を読む。偽のプラグインが `detail` を返し、`vw2026 call` が標準出力に出す）。実機で、PR のプレリリースを入れて `call ping` が段 2 と同じに応える（退行が無い） | 要 |
 | 5 | **読む道具と図面を扱う道具**: `layers` / `classes` / `layer_objects` / `object_counts` と `documents` / `save` / `close`（[道具](tools.md#図面を扱う道具documentssaveclose)。使う SDK 呼び出しが SDK リファレンスで確かめられてから。[SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)） | 実機で、レイヤ・クラス・オブジェクトの数と名前を用意した見本の図面に対して、結果が Vectorworks の画面（オーガナイザ・情報パレット）の表示と一致する。`documents` が開いている図面の一覧と一致し、`save` で無題の図面を一時フォルダへ・保存済みの図面を自分のパスへ保存でき（前面の図面が保存の前後で変わらない）、保存済みの図面に `to` を渡すと `invalid_args` で断られ、開いているファイルを保存先にすると `invalid_args` で断られ（警告のダイアログが出ない）、保存した図面の `close` は保存の確認なしに閉じ、保存していない無題の図面の `close` は保存の確認が出て取り消すと `internal` で失敗して図面が残る。確認のあと、Vectorworks を終了して `install`（タグなし）で main の版に戻り、`launch` のあと `call ping` の `version` が main の sha になる（段 3 の main へ戻す確認を兼ねる） | 要 |
@@ -42,6 +42,21 @@
   ファイル → 残るファイルと応答）。C++ のテストと Go の `cli/internal/spool`・`cli/internal/fakeplugin`
   のテストが同じものを読む（[通信規則の見本](../fixtures.md)）。
 
+段 2 で決めたこと（真実は各ページ）:
+
+- **`ping` の SDK に依らない部分は `src/core/Ping` に置く。** 引数の検査（引数を受けない。知らない
+  引数は `invalid_args`）と結果の形を無 SDK でテストし、`src/tools/Ping.cpp` は SDK から現在の
+  レイヤの名前を読んで渡すだけにする（[ブリッジ「分け方」](bridge.md#分け方)）。
+- **`VW_BUILD_PLUGIN` は既定で ON で、`VW_SDK_DIR` が無ければ構成で止める。** テスト・検査・
+  ファジングは `-DVW_BUILD_PLUGIN=OFF` を付ける（`cpp.yml`・`lint.sh`・`CLAUDE.md` の手元の手順）。
+  黙ってプラグインを外すと、`build.yml` で SDK の指定を誤ったときに気づけないため
+  （[ビルド「CMake」](build-and-release.md#cmake)）。
+- **mac のプラグインは arm64 だけ**（CLI は universal）。SDK リファレンスの `plugin/` が実機で
+  読み込まれている形に合わせ、確かめていない形を配らない（[ビルド「CMake」](build-and-release.md#cmake)）。
+- **公開した資産は `build.yml` の `verify` が利用者と同じ URL から取って確かめる**（zip の形と
+  `bin/vw2026 version`。[ビルド「CI」](build-and-release.md#ci)）。
+- **タグの slug は `scripts/dev-tag.sh` だけが作る**（[名前と識別子](identifiers.md)）。
+
 その先（順序は未定）:
 
 - **他のプラグインの機能を名前で呼ぶ**（`CallPluginLibrary`。形は[未決 3](open-questions.md#3-ほかのプラグインの機能の呼び出しの形)）。
@@ -56,7 +71,7 @@
 
 | 作るもの | 根拠 |
 | --- | --- |
-| `src/core/*`（Protocol・Json・Files・Bridge・Serve） | [通信規則](../protocol.md)・[ブリッジ](bridge.md)。SDK に依らない |
+| `src/core/*`（Protocol・Json・Files・Bridge・Serve・Ping） | [通信規則](../protocol.md)・[ブリッジ](bridge.md)。SDK に依らない |
 | `src/ModuleMain.cpp`・`PluginPrefix.h`・`Module-Info.plist.in`・`resources/cli.vwr`・`CMakeLists.txt` | SDK リファレンスの `plugin/`（実機で読み込まれている形）・[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)（VCOM の初期化・SDK の静的ライブラリをリンクするモジュールが定義するもの） |
 | `src/Clock.{h,cpp}` | [Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4・6・7（[構成](architecture.md#受け付けの流れ)） |
 | `src/tools/*` | [SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し) |

@@ -16,7 +16,7 @@
 | バンドル ID（mac） | `io.github.min-nano.cli` |
 | コマンド | `vw2026` |
 | CMake のターゲット | `VwCli` |
-| リリースのタグ | `stable`（main）・`dev-<ブランチの slug>`（PR のプレリリース。slug はブランチ名の `/:@ ` を `-` にし、ほかの記号を落としたもの） |
+| リリースのタグ | `stable`（main）・`dev-<ブランチの slug>`（PR のプレリリース。slug はブランチ名の `/`・`:`・`@`・空白を `-` にし、英数字・`-`・`_`・`.` のほかを落としたもの。作るのは `scripts/dev-tag.sh` だけで、`build.yml` と `cleanup-dev-release.yml` が使う） |
 
 ## 置き場所
 

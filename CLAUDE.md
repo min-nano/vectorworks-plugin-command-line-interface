@@ -100,7 +100,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   両方のテストが同じ見本を読むので、片側だけを直すと落ちる。見本で表しにくいことだけを、各言語の
   テストに書く。
 - 手元のテスト（CI の `cpp.yml` と同じ指定）:
-  `cmake -S . -B build -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug && cmake --build build && ctest --test-dir build --output-on-failure`。
+  `cmake -S . -B build -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug && cmake --build build && ctest --test-dir build --output-on-failure`。
   ファジングは clang（Apple の clang は不可）で `-DVW_BUILD_FUZZERS=ON` を足し、
   `mkdir -p corpus crashes && build/JsonFuzzer -max_total_time=120 -artifact_prefix=crashes/ corpus protocol/fixtures/requests`
   で回す（libFuzzer は見つけた入力を最初に渡したディレクトリへ書くので、空のコーパスを先に渡し、

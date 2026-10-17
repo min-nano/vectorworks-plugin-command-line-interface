@@ -9,9 +9,20 @@ issue を立てて `Findings/` に反映されてから、それを根拠に実�
 
 このプラグインはメニューも PIO も登録しません（[構成](plugin/architecture.md#拡張機能を登録しない)）。
 その形でも Vectorworks が読み込み、`plugin_module_main` を呼ぶか（＝OS タイマーを開始できるか）は
-SDK リファレンスに記載がありません。読み込みは登録の種類に依らない見込みが高いので、
-**段 2（骨格と配布）の実機確認で確かめ**、結果を SDK リファレンスの `Findings/`（Plug-in Modules）へ
-足します。読み込まれなければ、目に触れないメニューを 1 つ登録する形に切り替えます。
+SDK リファレンスに記載がありませんでした。
+
+- **macOS は読み込まれた**（段 2 の実機確認。VW 2026。起動の直後から OS タイマーが刻み、`call ping`
+  が応えた）。結果は SDK リファレンスの `Findings/`（Plug-in Modules）へ足す（未反映）。
+- **Windows は常駐しなかった**（段 2 の実機確認。VW 2026 x64・Windows 11 ARM64 の x64 エミュレーション）。
+  プラグインマネージャには載るが、起動後のプロセスに `cli.vlb` が無く、最初の刻みで作るスプールの
+  フォルダが作られない（タイマーが刻んでいない）。代わりの「目に触れないメニューを 1 つ登録する」で
+  常駐するかも確かめられていない（`REGISTER_Extension` と `_NoCache` があり、登録の情報がキャッシュ
+  されて読み込みが遅れる見込みがある）。起動時に読み込まれ常駐する条件を
+  [SDK リファレンス #252](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/252)
+  で調べ、結果を待って登録の形を決めます。
+- 同じ確認の途中で、利用者の `Plug-Ins` にプラグインを置くと Vectorworks が起動画面のあと記録を
+  残さずに終了することがあった（このプラグインに限らない）。
+  [SDK リファレンス #253](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/253) で調べます。
 
 ## 1. ほかのプラグインの機能を名前で呼び出す手段（分かった）
 

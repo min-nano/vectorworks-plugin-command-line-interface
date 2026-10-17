@@ -7,13 +7,14 @@
 | 項目 | 内容 |
 | --- | --- |
 | プロジェクト | `project(VwCli CXX)`（Apple では OBJCXX も） |
-| 選択肢 | `VW_BUILD_PLUGIN`（ON）・`VW_BUILD_TESTS`（OFF）・`VW_BUILD_FUZZERS`（OFF。clang の libFuzzer が要る）・`VW_ENABLE_SANITIZERS`（OFF。ASan と UBSan。MSVC は ASan だけ）・`VW_ENABLE_COVERAGE`（OFF。clang は source-based coverage、MSVC は `/PROFILE` を付けてリンクし Visual Studio の `Microsoft.CodeCoverage.Console` で測る。clang-cl は不可）・`VW_ENABLE_PCH`（ON）。段 1 にあるのは `VW_BUILD_TESTS`・`VW_BUILD_FUZZERS`・`VW_ENABLE_SANITIZERS`・`VW_ENABLE_COVERAGE` だけで、ほかはプラグインを足す段 2 から |
-| SDK | `VW_SDK_DIR`（`SDKLib` を含む）。mac は `libVWSDK.a`＋VWMM・`BuildVWR`、Windows は x64 だけ（`VWSDK.lib`・`VWMM.lib`・`buildvwr.exe`） |
+| 選択肢 | `VW_BUILD_PLUGIN`（ON）・`VW_BUILD_TESTS`（OFF）・`VW_BUILD_FUZZERS`（OFF。clang の libFuzzer が要る）・`VW_ENABLE_SANITIZERS`（OFF。ASan と UBSan。MSVC は ASan だけ）・`VW_ENABLE_COVERAGE`（OFF。clang は source-based coverage、MSVC は `/PROFILE` を付けてリンクし Visual Studio の `Microsoft.CodeCoverage.Console` で測る。clang-cl は不可）・`VW_ENABLE_PCH`（ON）。`VW_BUILD_PLUGIN` が ON で `VW_SDK_DIR` が無ければ構成で止める（黙ってプラグインを外さない）。SDK の無いところ（テスト・検査・ファジング。ubuntu を含む）は `-DVW_BUILD_PLUGIN=OFF` を付ける |
+| SDK | `VW_SDK_DIR`（`SDKLib` を含む）。mac は `libVWSDK.a`＋VWMM・`BuildVWR`、Windows は x64 だけ（`VWSDK.lib`・`VWMM.lib`・`buildvwr.exe`）。どれかが無ければ構成で止める。プラグインは Release でビルドする（`RELEASE_BLD`。Windows は `/MD`。SDK の Release のライブラリに合わせる） |
+| 警告 | `/W4 /permissive-`・`-Wall -Wextra -Wpedantic` は SDK に依らないターゲット（共通部・テスト・ファジング）にだけ付ける。SDK のヘッダは `SYSTEM` で読み、`/permissive-` を通る保証が無いのでプラグインには付けない |
 | 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。プラグインとテストがリンク。OS ごとの呼び出しは `FilesPosix.cpp` / `FilesWindows.cpp` の片方） |
 | テスト | `VwCliTests`（`tests/*Tests.cpp`。外部のテストの枠組みに依らない）・`JsonFuzzer`（`tests/JsonFuzzer.cpp`）。テストは `protocol/fixtures` を読む |
 | プラグイン | `add_library(<target> MODULE)`。`VW_PLUGIN_SOURCES`（`src/*.cpp`・`src/tools/*`） |
 | 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH`。PR では、ブランチの head の sha とブランチの名前（[リリースの形](#リリースの形)）。コンパイル時の定義だけで、`ping` の結果に載る。ファイルとしての版の情報は `build.json` だけ（下記） |
-| mac | `Module-Info.plist.in`（版の鍵は持たない）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr` |
+| mac | `Module-Info.plist.in`（版の鍵は持たない）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr`。arm64 だけ（`CMAKE_OSX_ARCHITECTURES`。SDK リファレンスの `plugin/` が実機で読み込まれている形）。配備の下限は macOS 14。ソースは Objective-C++ としてコンパイルする（SDK の mac のヘッダが CoreFoundation などを読むため） |
 | Windows | `.vlb`・隣に `.vwr` |
 | ターゲット | `add_vw_plugin(VwCli "cli" io.github.min-nano.cli)` の 1 つだけ（安定版と開発版を区別しない） |
 
@@ -28,8 +29,21 @@
 | `format.yml`（既存） | push / PR・マージキュー | `scripts/format.sh`（[整形](../format.md)。gofmt・shfmt・clang-format・PSScriptAnalyzer） |
 | `cpp.yml` | push / PR・マージキュー | 無 SDK の単体テストと通信規則の見本の照合（macOS は ASan・UBSan 付き、Windows は MSVC で付けない）。macOS（clang の source-based coverage）と Windows（MSVC のビルドを `Microsoft.CodeCoverage.Console` で）の単体テストでカバレッジを測り、共通部（`src/core`）の分を Codecov へ送る（どちらもフラグ `cpp`。`FilesWindows.cpp` は Windows の分にだけ入る。Windows の範囲は `tests/MsvcCoverage.xml`。Windows はテストを計測の下で 1 回だけ走らせる）。ubuntu の clang で同じテストを ASan・UBSan 付きで走らせ、`core/Json` のファジングを 120 秒回す |
 | `lint.yml`（既存） | push / PR・マージキュー | `scripts/lint.sh`（[検査](../lint.md)。go vet・actionlint・shellcheck・clang-tidy（無 SDK）・PSScriptAnalyzer） |
-| `build.yml` | push（main）/ PR / 手動 | mac と Windows のビルド・梱包・リリース |
-| `cleanup-dev-release.yml` | PR が閉じたとき | `dev-<slug>` を消す |
+| `build.yml` | push（main）/ PR・マージキュー / 手動 | mac と Windows のビルド・梱包・リリースと、公開した資産の確かめ（下記） |
+| `cleanup-dev-release.yml` | PR が閉じたとき | `dev-<slug>` のリリースとタグを消す。`build.yml` と同じ `concurrency` のグループで走り、その PR の走っているビルドを止めてから消す（消したあとに公開されないため） |
+
+`build.yml` のジョブ:
+
+| ジョブ | 中身 |
+| --- | --- |
+| `meta` | ビルドする sha・刻印・公開先（`stable` / `dev-<slug>` / 公開しない）を決め、`build.json` を書く（mac と Windows の zip に同じものを入れる）。ビルドのジョブは取り出すコミットを `meta` の出力に頼らず、同じ条件（同じリポジトリの PR だけ head）を自分の `checkout` に書き、取り出したものが `meta` の sha と同じかを確かめる（CodeQL が信頼できないコードの取り出しでないと読めるように。`meta` を変えても取り出すものが変わらないように） |
+| `build-mac` | `macos-15`・Xcode 16.2（SDK リファレンスの `plugin/` と同じ）。プラグインのビルドとアドホック署名、Go の arm64 と amd64 を `lipo` で universal に、zip |
+| `build-windows` | `windows-latest`・MSVC。プラグインのビルド、Go の amd64、zip（.NET の `ZipFile`。項目の名前の区切りを `/` にするため。Windows PowerShell 5.1 の `Compress-Archive` は `\` にする） |
+| `release` | 公開するときだけ。タグを消して作り直し、2 つの zip を上げる |
+| `verify` | 公開した資産を利用者と同じ URL（タグと資産名から決まる）から mac と Windows で取ってきて、zip の直下が `build.json`・`bin/`・プラグインだけで `bin/` の中が CLI だけであること、`build.json` と `bin/vw2026 version` の版がビルドした sha であること（mac は署名と `.vwr` も）を確かめる |
+
+fork の PR・マージキュー・main 以外の手動の実行は、マージのためのコミット（fork の PR）またはその ref を
+ビルドするだけで、公開しません（`build.yml` も必須のチェックにできるよう、`merge_group` を付ける）。
 
 必須のチェックになるワークフローには `merge_group` を付けます（付けないとキューの中で
 チェックが始まらず、マージが進まない）。また `paths` で絞りません。必須のチェックはパスごとに
@@ -43,11 +57,12 @@
 - **持たないもの**（要ると分かってから足す）: SDK に依存する clang-tidy とそのキャッシュ、
   CI の上で調べるためのワークフロー、リリースの定期的な確認。
 
-- **SDK の取得に Secrets は要りません。** SDK リファレンスの [`scripts/fetch-vw-sdk.sh`](https://github.com/min-nano/vectorworks-developer-sdk-reference/tree/main/scripts) と同じく、公開の URL
+- **SDK の取得に Secrets は要りません。** SDK リファレンスの [`scripts/fetch-vw-sdk.sh`](https://github.com/min-nano/vectorworks-developer-sdk-reference/tree/main/scripts) と同じく（このリポジトリの `scripts/fetch-vw-sdk.sh`）、公開の URL
   （`https://release.vectorworks.net/latest/Vectorworks/2026-NNA-eng-{mac,win}-SDK.zip`）から
   取ります。
 - **SDK のキャッシュのキーは、配布されている SDK の版から決めます**（SDK リファレンスの
-  `scripts/vw-sdk-cache-key.sh` と同じく、HEAD の `ETag` か `Last-Modified` を混ぜる）。URL は
+  `scripts/vw-sdk-cache-key.sh` と同じく、HEAD の `ETag` か `Last-Modified` を混ぜる。このリポジトリの
+  `scripts/vw-sdk-cache-key.sh`）。URL は
   `latest` で、SDK が差し替わっても同じなので、固定のキーでは古い SDK でビルドし続けます。
 - リリースは `GITHUB_TOKEN`（`contents: write`）で行います。
 - 自動レビューは差し当たり持ちません（持つなら Secrets に `CLAUDE_CODE_OAUTH_TOKEN` が要る）。
