@@ -22,7 +22,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # ビルドする sha・刻印・公開先を 1 か所で決め、build.json を書く（mac と Windows の zip に同じものを入れる）。
+  # 刻印・公開先を決め、build.json を書く（mac と Windows の zip に同じものを入れる）。取り出すコミットは
+  # ビルドのジョブが自分で決め、ここの sha と同じかを確かめる。
   meta:
     runs-on: ubuntu-latest
     outputs:
@@ -84,9 +85,16 @@ jobs:
       VW_SDK_DIR: ${{ github.workspace }}/vw-sdk
       VERSION: ${{ needs.meta.outputs.version }}
     steps:
+      # 取り出すものは meta の出力に頼らず、ここに条件を書く（同じリポジトリの PR だけ head。fork の
+      # PR はマージのためのコミット）。CodeQL が安全だと読めるようにし、meta を変えたときに信頼
+      # できないコードを取り出すようになるのを防ぐため。
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.meta.outputs.sha }}
+          ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
+      # 版（VERSION・build.json）は meta が決めるので、取り出したものが meta の sha と同じかを確かめる。
+      - env:
+          SHA: ${{ needs.meta.outputs.sha }}
+        run: test "$(git rev-parse HEAD)" = "$SHA"
       # SDK リファレンスの plugin/ が実機で読み込まれているビルドと同じ Xcode に合わせる。
       - run: sudo xcode-select -s /Applications/Xcode_16.2.app
       - id: sdk-key
@@ -154,9 +162,16 @@ jobs:
       VW_SDK_DIR: ${{ github.workspace }}/vw-sdk-win
       VERSION: ${{ needs.meta.outputs.version }}
     steps:
+      # 取り出すものは meta の出力に頼らず、ここに条件を書く（同じリポジトリの PR だけ head。fork の
+      # PR はマージのためのコミット）。CodeQL が安全だと読めるようにし、meta を変えたときに信頼
+      # できないコードを取り出すようになるのを防ぐため。
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.meta.outputs.sha }}
+          ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
+      # 版（VERSION・build.json）は meta が決めるので、取り出したものが meta の sha と同じかを確かめる。
+      - env:
+          SHA: ${{ needs.meta.outputs.sha }}
+        run: test "$(git rev-parse HEAD)" = "$SHA"
       - id: sdk-key
         run: scripts/vw-sdk-cache-key.sh vw-sdk-2026-win
       - uses: actions/cache@v6

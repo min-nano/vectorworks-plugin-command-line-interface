@@ -36,7 +36,7 @@
 
 | ジョブ | 中身 |
 | --- | --- |
-| `meta` | ビルドする sha・刻印・公開先（`stable` / `dev-<slug>` / 公開しない）を決め、`build.json` を書く（mac と Windows の zip に同じものを入れる） |
+| `meta` | ビルドする sha・刻印・公開先（`stable` / `dev-<slug>` / 公開しない）を決め、`build.json` を書く（mac と Windows の zip に同じものを入れる）。ビルドのジョブは取り出すコミットを `meta` の出力に頼らず、同じ条件（同じリポジトリの PR だけ head）を自分の `checkout` に書き、取り出したものが `meta` の sha と同じかを確かめる（CodeQL が信頼できないコードの取り出しでないと読めるように。`meta` を変えても取り出すものが変わらないように） |
 | `build-mac` | `macos-15`・Xcode 16.2（SDK リファレンスの `plugin/` と同じ）。プラグインのビルドとアドホック署名、Go の arm64 と amd64 を `lipo` で universal に、zip |
 | `build-windows` | `windows-latest`・MSVC。プラグインのビルド、Go の amd64、zip（.NET の `ZipFile`。項目の名前の区切りを `/` にするため。Windows PowerShell 5.1 の `Compress-Archive` は `\` にする） |
 | `release` | 公開するときだけ。タグを消して作り直し、2 つの zip を上げる |
