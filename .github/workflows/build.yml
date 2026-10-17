@@ -116,7 +116,8 @@ jobs:
           codesign --force --deep --sign - build/cli.vwlibrary
           codesign --verify --strict --verbose=2 build/cli.vwlibrary
           lipo -info build/cli.vwlibrary/Contents/MacOS/cli
-          test -f build/cli.vwlibrary/Contents/Resources/cli.vwr
+          # mac の BuildVWR は固めずに写す（ログは "Release (Copied)"）ので、ファイルとは限らない。
+          test -e build/cli.vwlibrary/Contents/Resources/cli.vwr
           ditto build/cli.vwlibrary stage/cli.vwlibrary
       # Go は arm64 のバイナリをリンクのときにアドホック署名する。lipo は各アーキテクチャの署名を保つ。
       - name: cli
@@ -274,7 +275,7 @@ jobs:
           dir="$RUNNER_TEMP/release"
           unzip -q "$zip" -d "$dir"
           codesign --verify --strict --verbose=2 "$dir/cli.vwlibrary"
-          test -f "$dir/cli.vwlibrary/Contents/Resources/cli.vwr"
+          test -e "$dir/cli.vwlibrary/Contents/Resources/cli.vwr"
           lipo -info "$dir/bin/vw2026"
           echo "RELEASE_DIR=$dir" >> "$GITHUB_ENV"
       - if: runner.os == 'Windows'
