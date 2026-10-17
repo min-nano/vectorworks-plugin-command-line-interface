@@ -80,8 +80,9 @@
    - 種類 `read`（`ping` を含む）→ 占有に照らさずに実行して応答を書く。
    - 種類 `write`・`app` → 占有に照らし（無ければ `no_session`、ほかの印なら `occupied`）、終了の
      依頼の最中（`Quitting`）なら `busy` で断る。通れば実行して応答を書く。
-   - 種類 `app`（`quit`）が成功して応答を書けたら、終了の依頼を結果に載せて、
+   - 道具が成功し、`ToolStatus::quit`（終了の依頼）を立てていて、応答を書けたら、終了の依頼を結果に載せて、
      **その回の残りの要求を取り出さずに戻る**（終了したら応えられないので、残りは置いたままにする）。
+     種類では決めない（`quit` だけが立てる。`save`・`close` などの種類 `app` の道具は立てない）。
      道具が失敗した・応答を書けなかったら、終了を頼まずに続ける。
    - **道具 1 つの例外はここで受けて `internal` の応答にする**（橋を止めない）。道具の外（占有の印を
      作るときなど）で要求 1 件の処理の中で起きた例外も、`serve` が受けて `internal` で応える。
@@ -128,19 +129,25 @@ Windows では Vectorworks 2026 を 2 つ起動でき、どちらのプラグイ
 ## 道具の表
 
 ```cpp
-// Write と App は占有の中でだけ呼べ、終了の依頼の最中なら busy で断る。Read は占有に照らさない。
+// Read: 図面を変えない。占有に照らさない。
+// Write: 図面の中身を変える。undo の手順に従う（下記）。
+// App: Vectorworks・図面のファイルや窓に働き、図面の中身は変えない（save・close・quit など）。
+// Write と App は占有の中でだけ呼べ、終了の依頼の最中なら busy で断る。
+// 終了の依頼は種類では決めず、道具が ToolStatus::quit で返す。
 enum class ToolKind { Read, Write, App };
 
 // 道具が返す失敗の種別。None は失敗していない。
 enum class ErrorCode { None, InvalidArgs, Internal };
 
-struct ToolError {
+struct ToolStatus {
 	ErrorCode code = ErrorCode::None;
 	// 日本語。応答の error にそのまま載る。
 	std::string message;
 	// 失敗の詳細（JSON のオブジェクト）。あれば応答の detail にそのまま載る（通信規則「応答」）。
 	// 空（null）なら detail を付けない。quit が開いている図面の一覧を返すのに使う。
 	Json detail;
+	// 終了の依頼。成功し、応答を書けたとき、受け付けの外で終了を頼む。quit だけが立てる。
+	bool quit = false;
 };
 
 // 道具に渡す受け付けの状態。
@@ -150,7 +157,7 @@ struct ToolContext {
 };
 
 // 失敗は error に書き（戻り値は使わない）、例外は Server が internal で応える。
-using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolError &error);
+using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolStatus &error);
 
 struct Tool {
 	// [a-z0-9_]+(\.[a-z0-9_]+)*
@@ -176,7 +183,7 @@ struct Tool {
 - 失敗の種別は応答の `code` に小文字の綴り（`invalid_args` / `internal`）で
   載せます（[通信規則「応答」](../protocol.md#応答idresjson)）。`invalid_request`・`unknown_tool`・`no_wait`・`busy`・`occupied`・`no_session` は
   `core::Server::serve` が付けます（`occupied`・`no_session` は占有に照らした結果、`busy` は終了の依頼の最中か・受け付けの入れ子かに照らした結果。道具は付けない）。図面が開かれていないなど、道具によって失敗になるかが違う理由は
-  `internal` とし、`error` に書きます。呼ぶ側が機械的に読む原因は `ToolError::detail` に書き、
+  `internal` とし、`error` に書きます。呼ぶ側が機械的に読む原因は `ToolStatus::detail` に書き、
   `invalid_args`・`internal` の応答の `detail` として載せます。
 - **種類 `write` の道具は、undo の手順に対応するまで表に載せません**（[未決 1](open-questions.md)）。
 - **種類 `write` の道具は、自分で undo の記録を開き、受け付けから戻る前に必ず閉じます**（要求 1 件で
