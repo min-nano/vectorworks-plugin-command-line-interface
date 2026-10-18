@@ -13,7 +13,7 @@
 | 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。プラグインとテストがリンク。OS ごとの呼び出しは `FilesPosix.cpp` / `FilesWindows.cpp` の片方） |
 | テスト | `VwCliTests`（`tests/*Tests.cpp`。外部のテストの枠組みに依らない）・`JsonFuzzer`（`tests/JsonFuzzer.cpp`）。テストは `protocol/fixtures` を読む |
 | プラグイン | `add_library(<target> MODULE)`。`VW_PLUGIN_SOURCES`（`src/*.cpp`・`src/tools/*`） |
-| 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH`。PR では、ブランチの head の sha とブランチの名前（[リリースの形](#リリースの形)）。コンパイル時の定義だけで、`ping` の結果に載る。ファイルとしての版の情報は `build.json` だけ（下記） |
+| 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH`。PR では、ブランチの head の sha とブランチの名前（[リリースの形](#リリースの形)）。CI では `meta` が決め、ビルドのジョブがその出力を `-D` で渡す。CMake は構成のたびに `<build>/generated/BuildStamp.h` へ C の文字列として書き（`"` と `\` を逃がす）、値をキャッシュに残さない（`-D` を付けずに構成し直せば `local` に戻る。古い sha が残らないように）。`ping` の結果に載る。ファイルとしての版の情報は `build.json` だけ（下記） |
 | mac | `Module-Info.plist.in`（版の鍵は持たない）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr`。arm64 だけ（`CMAKE_OSX_ARCHITECTURES`。SDK リファレンスの `plugin/` が実機で読み込まれている形）。配備の下限は macOS 14。ソースは Objective-C++ としてコンパイルする（SDK の mac のヘッダが CoreFoundation などを読むため） |
 | Windows | `.vlb`・隣に `.vwr` |
 | ターゲット | `add_vw_plugin(VwCli "cli" io.github.min-nano.cli)` の 1 つだけ（安定版と開発版を区別しない） |
@@ -30,16 +30,16 @@
 | `cpp.yml` | push / PR・マージキュー | 無 SDK の単体テストと通信規則の見本の照合（macOS は ASan・UBSan 付き、Windows は MSVC で付けない）。macOS（clang の source-based coverage）と Windows（MSVC のビルドを `Microsoft.CodeCoverage.Console` で）の単体テストでカバレッジを測り、共通部（`src/core`）の分を Codecov へ送る（どちらもフラグ `cpp`。`FilesWindows.cpp` は Windows の分にだけ入る。Windows の範囲は `tests/MsvcCoverage.xml`。Windows はテストを計測の下で 1 回だけ走らせる）。ubuntu の clang で同じテストを ASan・UBSan 付きで走らせ、`core/Json` のファジングを 120 秒回す |
 | `lint.yml`（既存） | push / PR・マージキュー | `scripts/lint.sh`（[検査](../lint.md)。go vet・actionlint・shellcheck・clang-tidy（無 SDK）・PSScriptAnalyzer） |
 | `build.yml` | push（main）/ PR・マージキュー / 手動 | mac と Windows のビルド・梱包・リリースと、公開した資産の確かめ（下記） |
-| `cleanup-dev-release.yml` | PR が閉じたとき | `dev-<slug>` のリリースとタグを消す。`build.yml` と同じ `concurrency` のグループで走り、その PR の走っているビルドを止めてから消す（消したあとに公開されないため） |
+| `cleanup-dev-release.yml` | PR が閉じたとき | `dev-<slug>-<PR 番号>` のリリースとタグを消す。`build.yml` と同じ `concurrency` のグループで走り、その PR の走っているビルドを止めてから消す（消したあとに公開されないため） |
 
 `build.yml` のジョブ:
 
 | ジョブ | 中身 |
 | --- | --- |
-| `meta` | ビルドする sha・刻印・公開先（`stable` / `dev-<slug>` / 公開しない）を決め、`build.json` を書く（mac と Windows の zip に同じものを入れる）。ビルドのジョブは取り出すコミットを `meta` の出力に頼らず、同じ条件（同じリポジトリの PR だけ head）を自分の `checkout` に書き、取り出したものが `meta` の sha と同じかを確かめる（CodeQL が信頼できないコードの取り出しでないと読めるように。`meta` を変えても取り出すものが変わらないように） |
+| `meta` | ビルドする sha・刻印・公開先（`stable` / `dev-<slug>-<PR 番号>` / 公開しない）を決め、`build.json` を書く（mac と Windows の zip に同じものを入れる）。ビルドのジョブは取り出すコミットを `meta` の出力に頼らず、同じ条件（同じリポジトリの PR だけ head）を自分の `checkout` に書き、取り出したものが `meta` の sha と同じかを確かめる（CodeQL が信頼できないコードの取り出しでないと読めるように。`meta` を変えても取り出すものが変わらないように） |
 | `build-mac` | `macos-15`・Xcode 16.2（SDK リファレンスの `plugin/` と同じ）。プラグインのビルドとアドホック署名、Go の arm64 と amd64 を `lipo` で universal に、zip |
 | `build-windows` | `windows-latest`・MSVC。プラグインのビルド、Go の amd64、zip（.NET の `ZipFile`。項目の名前の区切りを `/` にするため。Windows PowerShell 5.1 の `Compress-Archive` は `\` にする） |
-| `release` | 公開するときだけ。タグを消して作り直し、2 つの zip を上げる |
+| `release` | 公開するときだけ。リリースがあれば消さずに、2 つの zip を一時の名前で上げ終えてから古いものと入れ替え、タグを新しい sha へ動かしてタイトルを直す（失敗や取り消しでリリースの無い間を作らない）。無ければタグを作ってリリースを作る |
 | `verify` | 公開した資産を利用者と同じ URL（タグと資産名から決まる）から mac と Windows で取ってきて、zip の直下が `build.json`・`bin/`・プラグインだけで `bin/` の中が CLI だけであること、`build.json` と `bin/vw2026 version` の版がビルドした sha であること（mac は署名と `.vwr` も）を確かめる |
 
 fork の PR・マージキュー・main 以外の手動の実行は、マージのためのコミット（fork の PR）またはその ref を
@@ -64,6 +64,8 @@ fork の PR・マージキュー・main 以外の手動の実行は、マージ�
   `scripts/vw-sdk-cache-key.sh` と同じく、HEAD の `ETag` か `Last-Modified` を混ぜる。このリポジトリの
   `scripts/vw-sdk-cache-key.sh`）。URL は
   `latest` で、SDK が差し替わっても同じなので、固定のキーでは古い SDK でビルドし続けます。
+  版を読めないときは、実行ごとに違うキー（`<前半>-unknown-<実行の ID>`）で直近のキャッシュを戻します
+  （キャッシュは上書きできないので、固定のキーでは版が読めない間ずっと同じ SDK が戻るため）。
 - リリースは `GITHUB_TOKEN`（`contents: write`）で行います。
 - 自動レビューは差し当たり持ちません（持つなら Secrets に `CLAUDE_CODE_OAUTH_TOKEN` が要る）。
 - 署名はアドホック（`codesign --force --deep --sign -`）。Developer ID と公証はしません。
@@ -90,10 +92,10 @@ cli.vwlibrary.zip                       cli.vlb.zip
 取るので、**タグと資産名を変えません**。
 
 - main: main への push で転がりタグ `stable` を作り直す。タイトル `Stable (<sha>)`・`--latest`。
-- PR: 同じリポジトリの PR で、**変更後のコードでビルドしたもの**を `dev-<slug>`（slug は
+- PR: 同じリポジトリの PR で、**変更後のコードでビルドしたもの**を `dev-<slug>-<PR 番号>`（slug は
   [名前と識別子](identifiers.md)）にプレリリースする。タイトル **`Dev: <branch> (<sha>)`**・
   `--prerelease`。中身は main のものと**同じ名前のプラグイン**で、入れると入れ替わる
-  （`vw2026 install --tag dev-<slug>`）。戻すときは `vw2026 install`（main の最新）。
+  （`vw2026 install --tag dev-<slug>-<PR 番号>`）。戻すときは `vw2026 install`（main の最新）。
 - PR の版は**ブランチの head** で決める。`pull_request` の `GITHUB_SHA` は main と合わせた
   マージのためのコミットで、ブランチのどのコミットとも違うので使わない。ビルドは head
   （`github.event.pull_request.head.sha`）を取り出して行い、`VW_BUILD_VERSION`・`build.json` の

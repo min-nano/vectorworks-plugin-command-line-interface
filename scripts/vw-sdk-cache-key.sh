@@ -5,9 +5,11 @@
 #
 #   VW_SDK_URL=… scripts/vw-sdk-cache-key.sh <キーの前半>
 #
-# GITHUB_OUTPUT があれば key と restore-keys を書く。版を確かめられなければキーを <前半>-unknown に
-# し、restore-keys に <前半>- を渡して直近のキャッシュを使う（版が分かるときに渡すと、新しい版の
-# キャッシュが無い初回に古い版を復元し、取り直さなくなる）。
+# GITHUB_OUTPUT があれば key と restore-keys を書く。版を確かめられなければキーを
+# <前半>-unknown-<実行の ID> にし、restore-keys に <前半>- を渡して直近のキャッシュを使う（版が分かる
+# ときに渡すと、新しい版のキャッシュが無い初回に古い版を復元し、取り直さなくなる）。キーを実行ごとに
+# 変えるのは、キャッシュが上書きできず、固定の <前半>-unknown では一度保存した SDK が以後も完全一致で
+# 戻り、版が分からない間は古い SDK のままになるため。
 set -eu
 
 prefix="${1:?usage: vw-sdk-cache-key.sh <key-prefix>}"
@@ -29,7 +31,7 @@ version="$(printf '%s' "$version" | tr -c 'A-Za-z0-9._-' '-' | sed 's/--*/-/g; s
 restore=""
 if [ -z "$version" ]; then
 	echo "::warning::could not read the SDK version from $url; using the latest cache"
-	version="unknown"
+	version="unknown-${GITHUB_RUN_ID:-local}"
 	restore="${prefix}-"
 fi
 key="${prefix}-${version}"

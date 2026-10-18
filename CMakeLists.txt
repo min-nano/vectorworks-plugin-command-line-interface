@@ -134,8 +134,24 @@ if(VW_BUILD_PLUGIN)
 	endforeach()
 
 	# 刻印（docs/plugin/build-and-release.md「リリースの形」）。ping の結果にだけ載る。
-	set(VW_BUILD_VERSION "local" CACHE STRING "Short sha of the build (ping version)")
-	set(VW_BUILD_BRANCH "local" CACHE STRING "Branch of the build (ping branch)")
+	# -DVW_BUILD_VERSION / -DVW_BUILD_BRANCH で渡したときだけその値を使い、渡さなければ local。
+	# キャッシュに残さない（残ると、あとで渡さずに構成し直しても古い sha のまま ping に載る）。
+	# C の文字列に書くので \ と " を逃がす（git はブランチ名に " を許す）。生成したヘッダに書き、
+	# コンパイルの指定の引用符の扱いに頼らない。
+	foreach(stamp IN ITEMS VERSION BRANCH)
+		if(DEFINED VW_BUILD_${stamp})
+			set(value "${VW_BUILD_${stamp}}")
+		else()
+			set(value "local")
+		endif()
+		unset(VW_BUILD_${stamp} CACHE)
+		string(REPLACE "\\" "\\\\" value "${value}")
+		string(REPLACE "\"" "\\\"" value "${value}")
+		set(VW_BUILD_${stamp}_LITERAL "${value}")
+	endforeach()
+	file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/BuildStamp.h"
+		 CONTENT "#pragma once\n// CMake が書く（CMakeLists.txt）。編集しない。\n#define VW_BUILD_VERSION \"@VW_BUILD_VERSION_LITERAL@\"\n#define VW_BUILD_BRANCH \"@VW_BUILD_BRANCH_LITERAL@\"\n"
+		 @ONLY)
 
 	set(VW_PLUGIN_SOURCES src/Clock.cpp src/ModuleMain.cpp src/tools/Ping.cpp
 						  src/tools/ToolTable.cpp)
@@ -145,15 +161,13 @@ if(VW_BUILD_PLUGIN)
 		add_library(${target} MODULE ${VW_PLUGIN_SOURCES})
 		set_target_properties(${target} PROPERTIES OUTPUT_NAME "${name}")
 		target_link_libraries(${target} PRIVATE VwCliCore)
-		target_include_directories(${target} PRIVATE src)
+		target_include_directories(${target} PRIVATE src "${CMAKE_CURRENT_BINARY_DIR}/generated")
 		# SDK のヘッダの警告は出さない。
 		target_include_directories(
 			${target} SYSTEM PRIVATE "${VW_SDK_INCLUDE}" "${VW_SDK_INCLUDE}/Kernel"
 			"${VW_SDK_INCLUDE}/Interfaces" "${VW_SDK_INCLUDE}/VWMM")
 		# RELEASE_BLD は SDK の Release のライブラリに合わせる。
-		target_compile_definitions(
-			${target} PRIVATE RELEASE_BLD=1 "VW_BUILD_VERSION=\"${VW_BUILD_VERSION}\""
-			"VW_BUILD_BRANCH=\"${VW_BUILD_BRANCH}\"")
+		target_compile_definitions(${target} PRIVATE RELEASE_BLD=1)
 		if(VW_ENABLE_PCH)
 			target_precompile_headers(${target} PRIVATE src/PluginPrefix.h)
 		endif()

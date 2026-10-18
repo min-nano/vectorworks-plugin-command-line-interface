@@ -7,7 +7,8 @@ on:
 permissions:
   contents: read
 
-# PR が閉じたら、その PR のプレリリース（dev-<slug>）とタグを消す（docs/plugin/build-and-release.md「CI」）。
+# PR が閉じたら、その PR のプレリリース（dev-<slug>-<PR 番号>）とタグを消す
+# （docs/plugin/build-and-release.md「CI」）。
 # build.yml と同じグループで走り、その PR の走っているビルドを止めてから消す（消したあとに公開されない）。
 concurrency:
   group: build-${{ github.ref }}
@@ -24,6 +25,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       BRANCH: ${{ github.head_ref }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
       # タグの名前を作るスクリプトだけを、ビルドしたのと同じ head から取る。
       - uses: actions/checkout@v7
@@ -33,7 +35,7 @@ jobs:
           sparse-checkout-cone-mode: false
       - run: |
           set -eu
-          tag="$(scripts/dev-tag.sh "$BRANCH")"
+          tag="$(scripts/dev-tag.sh "$BRANCH" "$PR_NUMBER")"
           if gh release view "$tag" > /dev/null 2>&1; then
             gh release delete "$tag" --cleanup-tag --yes
           fi

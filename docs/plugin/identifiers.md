@@ -16,7 +16,7 @@
 | バンドル ID（mac） | `io.github.min-nano.cli` |
 | コマンド | `vw2026` |
 | CMake のターゲット | `VwCli` |
-| リリースのタグ | `stable`（main）・`dev-<ブランチの slug>`（PR のプレリリース。slug はブランチ名の `/`・`:`・`@`・空白を `-` にし、英数字・`-`・`_`・`.` のほかを落としたもの。作るのは `scripts/dev-tag.sh` だけで、`build.yml` と `cleanup-dev-release.yml` が使う） |
+| リリースのタグ | `stable`（main）・`dev-<ブランチの slug>-<PR 番号>`（PR のプレリリース。slug はブランチ名の `/`・`:`・`@`・空白を `-` にし、英数字・`-`・`_`・`.` のほかを落としたもの。slug は読むための飾りで、別のブランチが同じ slug になりうるので一意にするのは PR 番号。slug が空（日本語だけの名前など）なら `dev-<PR 番号>`。作るのは `scripts/dev-tag.sh` だけで、`build.yml` と `cleanup-dev-release.yml` が使う） |
 
 ## 置き場所
 
@@ -44,7 +44,9 @@
 
 ```cpp
 #define PLUGIN_VWR_ID   "cli"
-// VW_BUILD_VERSION / VW_BUILD_BRANCH は CMake が渡す（無ければ "local"）
+// VW_BUILD_VERSION / VW_BUILD_BRANCH は CMake が構成のたびに書く BuildStamp.h にある
+// （-D で渡さなければ "local"）
+#include "BuildStamp.h"
 ```
 
 `<CLI>` のディレクトリ名（`vectorworks2026-cli`）とスプールの名前（`spool`）は、スプールの場所を

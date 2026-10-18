@@ -21,9 +21,9 @@ extern "C" Sint32 GS_EXTERNAL_ENTRY plugin_module_main(Sint32 action, void * /*m
                                                        IVWUnknown *& /*inOutInterface*/,
                                                        CallBackPtr cbp) {
 	::GS_InitializeVCOM(cbp);
-	// 起動では kPluginModuleInit のあとにも何度か呼ばれる。タイマーは 1 度だけ始める（2 度目からは
-	// 何もしない）。終了（kPluginModuleDeinit）は刻みが止まった後に届くので、タイマーは止めない
-	// （Findings「Timers and Notifications」の 4 の 9）。
+	// 起動では kPluginModuleInit のあとにも何度か呼ばれる。タイマーは 1 度だけ始める（始められたら
+	// 2 度目からは何もしない）。終了（kPluginModuleDeinit）は刻みが止まった後に届くので、
+	// タイマーは止めない（Findings「Timers and Notifications」の 4 の 9）。
 	if (action != kPluginModuleDeinit) {
 		VwCli::startClock();
 	}

@@ -53,7 +53,7 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
 - CLI だけの資産は持ちません。zip から取り出すので、CLI と同じビルドのものしか配らずに済みます。
 - 一時フォルダの CLI は、`install` の中で zip をもう一度取り、その `bin/` を `<CLI>/bin/` に
   置きます（スクリプトが取った zip は渡さない。指定を増やさないため。zip は小さい）。
-- PR のプレリリースを試すときも同じスクリプトに `--tag dev-<slug>` を渡します（スクリプトが
+- PR のプレリリースを試すときも同じスクリプトに `--tag dev-<slug>-<PR 番号>` を渡します（スクリプトが
   取る zip もそのタグのものになり、`install` へもそのまま渡る）。CLI もそのビルドのものになります。
   スクリプトが読むのはタグだけで、`install` と同じ与え方（`--tag <tag>`・`--tag=<tag>`・環境変数
   `VW2026_TAG`。両方あれば引数が勝つ）をすべて読みます。スクリプトが取る zip と `install` が

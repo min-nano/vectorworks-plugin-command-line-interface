@@ -11,24 +11,28 @@ permissions:
   contents: read
 
 # mac と Windows のプラグインのビルド・梱包・リリース（docs/plugin/build-and-release.md）。
-# main は転がりタグ stable に、同じリポジトリの PR はブランチの head でビルドしたものを dev-<slug> に
-# プレリリースする。fork の PR・マージキュー・main 以外の手動の実行はビルドするだけで、公開しない。
+# main は転がりタグ stable に、同じリポジトリの PR はブランチの head でビルドしたものを
+# dev-<slug>-<PR 番号> にプレリリースする。fork の PR・マージキュー・main 以外の手動の実行は
+# ビルドするだけで、公開しない。
 # 公開したら、資産を利用者と同じ URL から取ってきて、zip の形と bin/vw2026 version を確かめる。
 #
 # PR では新しい push が走っているビルドを止める（古い head の公開に意味は無い）。PR が閉じたときは
-# cleanup-dev-release.yml が同じグループで走り、走っているビルドを止めてから dev-<slug> を消す。
+# cleanup-dev-release.yml が同じグループで走り、走っているビルドを止めてから
+# dev-<slug>-<PR 番号> を消す。
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # 刻印・公開先を決め、build.json を書く（mac と Windows の zip に同じものを入れる）。取り出すコミットは
-  # ビルドのジョブが自分で決め、ここの sha と同じかを確かめる。
+  # 刻印・公開先を決め、build.json を書く（mac と Windows の zip に同じものを入れる）。ビルドのジョブは
+  # 刻印（version・branch）をここから受け取る。取り出すコミットはビルドのジョブが自分で決め、ここの sha と
+  # 同じかを確かめる。
   meta:
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.meta.outputs.sha }}
       version: ${{ steps.meta.outputs.version }}
+      branch: ${{ steps.meta.outputs.branch }}
       tag: ${{ steps.meta.outputs.tag }}
       title: ${{ steps.meta.outputs.title }}
       publish: ${{ steps.meta.outputs.publish }}
@@ -44,6 +48,7 @@ jobs:
           SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           HEAD_REF: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -eu
           sha="$GITHUB_SHA"
@@ -54,7 +59,7 @@ jobs:
             branch="$HEAD_REF"
             if [ "$SAME_REPO" = true ]; then
               sha="$HEAD_SHA"
-              tag="$(scripts/dev-tag.sh "$branch")"
+              tag="$(scripts/dev-tag.sh "$branch" "$PR_NUMBER")"
               title="Dev: $branch (${sha:0:7})"
             fi
           elif [ "$GITHUB_REF" = refs/heads/main ]; then
@@ -67,6 +72,7 @@ jobs:
           {
             echo "sha=$sha"
             echo "version=$version"
+            echo "branch=$branch"
             echo "tag=$tag"
             echo "title=$title"
             echo "publish=$([ -n "$tag" ] && echo true || echo false)"
@@ -114,7 +120,7 @@ jobs:
           path: stage
       - name: plug-in
         env:
-          BRANCH: ${{ github.head_ref || github.ref_name }}
+          BRANCH: ${{ needs.meta.outputs.branch }}
         run: |
           set -eu
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DVW_SDK_DIR="$VW_SDK_DIR" \
@@ -189,7 +195,7 @@ jobs:
           path: stage
       - name: plug-in
         env:
-          BRANCH: ${{ github.head_ref || github.ref_name }}
+          BRANCH: ${{ needs.meta.outputs.branch }}
         run: |
           set -eu
           cmake -S . -B build -A x64 -DVW_SDK_DIR="$VW_SDK_DIR" \
@@ -238,24 +244,54 @@ jobs:
           pattern: cli.*.zip
           path: dist
           merge-multiple: true
-      # タグを作り直す（main は stable を、PR は dev-<slug> を、新しい sha へ）。本文に機械が読む情報は
-      # 載せない（版は zip の中の build.json が持つ）。
+      # main は stable を、PR は dev-<slug>-<PR 番号> を新しい sha へ動かす。リリースを消してから作り直すと、
+      # 作るのに失敗したり取り消されたりしたときにリリースの無いままになるので、既にあるリリースは残して
+      # 資産を入れ替える。資産は一時の名前で上げ終えてから古いものと入れ替える（上げるのに失敗しても古い
+      # 資産が残る）。本文に機械が読む情報は載せない（版は zip の中の build.json が持つ）。
       - run: |
           set -eu
           ls -l dist
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release delete "$TAG" --cleanup-tag --yes
-          fi
-          if gh api "repos/$GH_REPO/git/ref/tags/$TAG" > /dev/null 2>&1; then
-            gh api -X DELETE "repos/$GH_REPO/git/refs/tags/$TAG"
-          fi
           if [ "$TAG" = stable ]; then
             kind=--latest
           else
             kind=--prerelease
           fi
-          gh release create "$TAG" dist/cli.vwlibrary.zip dist/cli.vlb.zip --target "$SHA" \
-            --title "$TITLE" --notes "Built from $SHA." "$kind"
+          names="cli.vwlibrary.zip cli.vlb.zip"
+          # タグを sha へ動かす（無ければ作る）。
+          move_tag() {
+            if gh api "repos/$GH_REPO/git/ref/tags/$TAG" > /dev/null 2>&1; then
+              gh api -X PATCH "repos/$GH_REPO/git/refs/tags/$TAG" -f sha="$SHA" -F force=true > /dev/null
+            else
+              gh api -X POST "repos/$GH_REPO/git/refs" -f ref="refs/tags/$TAG" -f sha="$SHA" > /dev/null
+            fi
+          }
+          # 名前の資産の id（無ければ空）。
+          asset_id() {
+            gh api "repos/$GH_REPO/releases/tags/$TAG" --jq ".assets[] | select(.name == \"$1\") | .id"
+          }
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            move_tag
+            gh release create "$TAG" dist/cli.vwlibrary.zip dist/cli.vlb.zip --verify-tag \
+              --title "$TITLE" --notes "Built from $SHA." "$kind"
+            exit 0
+          fi
+          for n in $names; do
+            cp "dist/$n" "dist/next-$n"
+            stale="$(asset_id "next-$n")"
+            if [ -n "$stale" ]; then
+              gh api -X DELETE "repos/$GH_REPO/releases/assets/$stale"
+            fi
+            gh release upload "$TAG" "dist/next-$n"
+          done
+          for n in $names; do
+            old="$(asset_id "$n")"
+            if [ -n "$old" ]; then
+              gh api -X DELETE "repos/$GH_REPO/releases/assets/$old"
+            fi
+            gh api -X PATCH "repos/$GH_REPO/releases/assets/$(asset_id "next-$n")" -f name="$n" > /dev/null
+          done
+          move_tag
+          gh release edit "$TAG" --title "$TITLE" --notes "Built from $SHA." "$kind"
 
   # 公開した資産を、利用者と同じ URL（タグと資産名から決まる）から取ってきて確かめる。
   verify:
