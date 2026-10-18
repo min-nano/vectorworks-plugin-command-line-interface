@@ -22,7 +22,17 @@ SDK リファレンスに記載がありませんでした。
   で調べ、結果を待って登録の形を決めます。
 - 同じ確認の途中で、利用者の `Plug-Ins` にプラグインを置くと Vectorworks が起動画面のあと記録を
   残さずに終了することがあった（このプラグインに限らない）。
-  [SDK リファレンス #253](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/253) で調べます。
+  [SDK リファレンス #253](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/253) で
+  **分かった**（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)
+  の「【罠】Windows の VW は起動時にモジュールを一度降ろして読み込み直す」）。Windows の
+  Vectorworks は起動時にモジュールを `kPluginModuleInit` のあと `kPluginModuleDeinit` を送らずに
+  一度降ろし、別の番地へ読み込み直す。留めずに作った `SetTimer` のタイマーはもう無い番地を呼び続け、
+  そこへ後から入った別のモジュールのコードを踏んで落ちる。落ちた回は Windows の記録に残らず、
+  Vectorworks 同梱の Sentry がダンプを書く。**タイマーを作る前に `GET_MODULE_HANDLE_EX_FLAG_PIN` で
+  自分を留める**ことにした（[構成「受け付けの流れ」](plugin/architecture.md#受け付けの流れ)）。macOS は
+  読み込み直さないので留めない。
+  【推定】上の「Windows は常駐しなかった」も、留めていない版が読み込み直しの前に降ろされたものと
+  見ている。留めたモジュールは降ろされないので、留めた版で常駐するかを段 2 の実機確認で確かめる。
 
 ## 1. ほかのプラグインの機能を名前で呼び出す手段（分かった）
 

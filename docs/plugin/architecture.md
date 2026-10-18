@@ -47,6 +47,13 @@ OS タイマー
   スレッドタイマー（`SetTimer(nullptr, 0, 250, …)`）にします。mac で `kCFRunLoopDefaultMode`
   にだけ登録すると、ふつうの操作でも十数秒から数分、レンダリング中は 6 分近く刻みが止まります
   （[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 7）。
+- **Windows ではタイマーを作る前にモジュールを留めます**（`GetModuleHandleExW` に
+  `GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN`）。Windows の
+  Vectorworks は起動時にモジュールを読み込んで `kPluginModuleInit` を送ったあと、`kPluginModuleDeinit`
+  を送らずに一度降ろして読み込み直すので、留めずに作ったタイマーはもう無い番地を呼び続け、起動の
+  途中で落ちます。留められなければタイマーを作りません。mac は読み込み直さないので留めません
+  （[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)
+  の「【罠】Windows の VW は起動時にモジュールを一度降ろして読み込み直す」）。
 - **間隔は保証されません**（250 ms で登録しても、最大 3〜5 秒空く。同 4 の 2）。刻みの間隔に
   頼る処理（時間の計測など）は持たず、時刻は時計から読みます。
 - **図面のハンドル（レイヤなど）は刻みをまたいで持ちません。** 刻みのたびに引き直します。
@@ -103,7 +110,8 @@ OS タイマー
 - **拡張機能を 1 つも登録しなくても、Vectorworks は読み込み、`plugin_module_main` を呼びます**
   （段 2 の実機確認。VW 2026 / macOS。起動の直後から `vw2026 status` が `running:true` になり
   `call ping` が応えた）。**Windows では常駐しませんでした**（プラグインマネージャには載るが、
-  プロセスに読み込まれておらず、タイマーが刻まない）。常駐する条件は SDK リファレンスで調べています
+  プロセスに読み込まれておらず、タイマーが刻まない）。これは留めていなかった版で、起動時の
+  読み込み直しで降ろされたものと見ています。留めた版で常駐するかは実機で確かめます
   （[SDK の調査 0](../sdk-research.md#0-拡張機能を-1-つも登録しないプラグインの読み込み)）。
 - **代わりの候補**: 拡張機能を 1 つだけ登録します。ただし、それで Windows の起動時から常駐するかも
   確かめられていないので、調査の結果を待って登録の形を決めます。メニューコマンドは

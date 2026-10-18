@@ -77,6 +77,19 @@ void startClock() {
 		CFRunLoopAddTimer(CFRunLoopGetMain(), timer, kCFRunLoopCommonModes);
 	}
 #else
+	// タイマーより先に自分を留める。Windows の Vectorworks は起動時にこのモジュールを読み込んで
+	// kPluginModuleInit を送ったあと、kPluginModuleDeinit を送らずに一度降ろし、別の番地へ読み込み
+	// 直す。留めずにタイマーを作ると、もう無いモジュールの onTick の番地へ WM_TIMER が配られ続け、
+	// そこへ後から読み込まれた別のモジュールのコードを踏んで起動の途中で落ちる。留めたモジュールは
+	// 降ろされず、読み込み直しも同じモジュールを返す（Findings「Plug-in Modules」の「【罠】Windows
+	// の VW は起動時にモジュールを一度降ろして読み込み直す」）。留められなければタイマーを作らない
+	// （受け付けないだけで、落ちるよりよい）。mac は読み込み直さないので留めない（同）。
+	constexpr DWORD kPinSelf =
+	    GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN;
+	HMODULE self = nullptr;
+	if (GetModuleHandleExW(kPinSelf, reinterpret_cast<LPCWSTR>(&onTick), &self) == 0) {
+		return;
+	}
 	// ウィンドウを持たないスレッドタイマー。WM_TIMER は Vectorworks のメッセージポンプが配る。
 	SetTimer(nullptr, 0, kIntervalMs, &onTick);
 #endif
