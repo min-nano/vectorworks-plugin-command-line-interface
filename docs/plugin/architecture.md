@@ -47,6 +47,13 @@ OS タイマー
   スレッドタイマー（`SetTimer(nullptr, 0, 250, …)`）にします。mac で `kCFRunLoopDefaultMode`
   にだけ登録すると、ふつうの操作でも十数秒から数分、レンダリング中は 6 分近く刻みが止まります
   （[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 7）。
+- **Windows ではタイマーを作る前にモジュールを留めます**（`GetModuleHandleExW` に
+  `GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN`）。Windows の
+  Vectorworks は起動時にモジュールを読み込んで `kPluginModuleInit` を送ったあと、`kPluginModuleDeinit`
+  を送らずに一度降ろして読み込み直すので、留めずに作ったタイマーはもう無い番地を呼び続け、起動の
+  途中で落ちます。留められなければタイマーを作りません。mac は読み込み直さないので留めません
+  （[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)
+  の「【罠】Windows の VW は起動時にモジュールを一度降ろして読み込み直す」）。
 - **間隔は保証されません**（250 ms で登録しても、最大 3〜5 秒空く。同 4 の 2）。刻みの間隔に
   頼る処理（時間の計測など）は持たず、時刻は時計から読みます。
 - **図面のハンドル（レイヤなど）は刻みをまたいで持ちません。** 刻みのたびに引き直します。
@@ -100,13 +107,13 @@ OS タイマー
 **メニューもパレットも PIO も登録しません。** 操作はすべて CLI から行い、更新も CLI が行う
 （[インストール](install-and-update.md#インストールと更新vw2026-install)）ので、利用者の入口は要りません。
 
-- プラグインの読み込みと `plugin_module_main` の呼び出しは、拡張機能の有無に関わらず起きる
-  見込みです（PIO だけのプラグインもあるように、読み込みは登録の種類に依らない）。ただし
-  **拡張機能を 1 つも登録しない形は実機で確かめていません**（SDK リファレンスにも記載が無い）。
-  段 2（骨格と配布）の実機確認で、起動後に `vw2026 status` が `running:true` になり `call ping` が応えることで確かめます。
-- **確かめられなかったときの代わり**: 拡張機能を 1 つだけ登録します。メニューコマンドは
-  ワークスペースに加えない限り利用者の画面に出ないので、登録しても目に触れません。
-  そのときは UUID とユニバーサル名を [識別子](identifiers.md) に足します。
+- **拡張機能を 1 つも登録しなくても、Vectorworks は読み込み、`plugin_module_main` を呼びます**
+  （段 2 の実機確認。VW 2026。macOS も Windows も、起動の直後から `vw2026 status` が
+  `running:true` になり `call ping` が応えた。Windows はタイマーの前にモジュールを留めた版で）。
+- **Windows では、最初の起動で利用者の許可が要ります。** Vectorworks は開発元の分からない
+  プラグインを既定では読み込まず、起動の途中に「開発元不明のプラグイン」のダイアログを出します。
+  そこで `cli` を「有効化」すると、次の起動から読み込まれます。更新でファイルを入れ替えたときに
+  もう一度許可が要るかは確かめていません（[SDK の調査 0](../sdk-research.md#0-拡張機能を-1-つも登録しないプラグインの読み込み)）。
 
 ## ソースの配置
 
@@ -116,10 +123,11 @@ src/
 ├─ PluginPrefix.h / BuildConfig.h          … PCH・名前と識別子
 ├─ ModuleMain.cpp                          … 入口: VCOM の初期化・タイマーの開始
 ├─ Clock.{h,cpp}                           … OS タイマー・終了の依頼
-├─ core/                                   … SDK に依らない（Protocol・Json・Files・Bridge・Serve）。プラグインとテストがリンク
-└─ tools/                                  … 道具の表（ToolTable.cpp）と中身（SDK 依存）
-scripts/                                   … 整形と検査（format.sh・lint.sh・powershell.ps1）・get-vw2026（.sh / .ps1。CLI を取って install を走らせるだけ）
-resources/                                 … cli.vwr（拡張機能を登録しないので最小限）
+├─ Module-Info.plist.in                    … mac のバンドルの Info.plist（版の鍵を持たない）
+├─ core/                                   … SDK に依らない（Protocol・Json・Files・Bridge・Serve・Ping）。プラグインとテストがリンク
+└─ tools/                                  … 道具の表（ToolTable.cpp）と中身（Ping.cpp など。SDK 依存。SDK に依らない部分は core へ）
+scripts/                                   … 整形と検査（format.sh・lint.sh・powershell.ps1）・CI（fetch-vw-sdk.sh・vw-sdk-cache-key.sh・dev-tag.sh）・get-vw2026（.sh / .ps1。CLI を取って install を走らせるだけ。段 3）
+resources/                                 … cli.vwr（拡張機能を登録しないので最小限。Strings/cli.vwstrings に使わない文字列 1 つだけ）
 tests/                                     … 無 SDK の単体テスト・ファジングの入口・スクリプトのテスト
 protocol/fixtures/                         … 通信規則の見本（C++ と Go の両方のテストが読む。docs/fixtures.md）
 cli/                                       … vw2026（Go）。インストールと更新（install）・アンインストール（uninstall）もここ

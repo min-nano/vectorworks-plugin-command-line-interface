@@ -9,9 +9,48 @@ issue を立てて `Findings/` に反映されてから、それを根拠に実�
 
 このプラグインはメニューも PIO も登録しません（[構成](plugin/architecture.md#拡張機能を登録しない)）。
 その形でも Vectorworks が読み込み、`plugin_module_main` を呼ぶか（＝OS タイマーを開始できるか）は
-SDK リファレンスに記載がありません。読み込みは登録の種類に依らない見込みが高いので、
-**段 2（骨格と配布）の実機確認で確かめ**、結果を SDK リファレンスの `Findings/`（Plug-in Modules）へ
-足します。読み込まれなければ、目に触れないメニューを 1 つ登録する形に切り替えます。
+SDK リファレンスに記載がありませんでした。
+
+- **macOS は読み込まれた**（段 2 の実機確認。VW 2026。起動の直後から OS タイマーが刻み、`call ping`
+  が応えた）。結果は SDK リファレンスの `Findings/`（Plug-in Modules）へ足す（未反映）。
+- **Windows も、留めた版（下記）は読み込まれ常駐した**（段 2 の実機確認。VW 2026 x64・Windows 11
+  ARM64 の x64 エミュレーション）。起動の直後から `cli.vlb` がプロセスに居て、`call ping` が応えた。
+  拡張機能を登録しない形のままでよい。
+- **Windows の Vectorworks は、閉じたときにときどきアクセス違反（`0xC0000005`）で終わる。** 落ちた
+  スレッドは、すでに外された `libcef.dll` の中を実行していた（`cli.vlb` は関わっていない）。図面を
+  開かずに閉じた回で数えると、`296a797` で 11 回中 3 回、`0683df0` で 5 回中 0 回、プラグインなしで
+  4 回中 0 回だった（図面を開いて閉じた回は、`296a797` の 2 回もなしの 2 回も違反は 0）。起きたのは
+  プラグインありの、しかも `296a797` だけである。`0683df0` と `296a797` の違いは、`Clock.cpp` が
+  タイマーを作れなかったときにやり直すか（やり直すと留めるのが重なる）と、刻印の書き方だけで、
+  タイマーを 1 度で作れた回の動きは同じである。それでも差が出ているので、版の差か偶然か、
+  プラグインが起こりやすくしているかは判断できていない。新しい図面の最初の描画中に
+  `MaxonDocumentBuilder.vlb` の中で落ちたことも 1 回ある。実測と確かめ方は [Windows の実機での実測](plugin/windows-measurements.md)。
+  [SDK リファレンス #257](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/257)
+  で調べる。段 2 は、これを既知の未解決として残したまま進めた（受け付けには影響しない）。
+- **Windows の Vectorworks は、開発元の分からないプラグインを既定では読み込まない。** 起動の途中で
+  「開発元不明のプラグイン」のダイアログが出て `cli` を「無効」と示し、その回は読み込まない。
+  ダイアログで「有効化」を選ぶと、次の起動から読み込まれた。**ファイルを入れ替えても「有効化」は
+  残った**（`296a797` へ入れ替えた後の起動でダイアログは出たが、`cli` は「有効」のまま読み込まれ、
+  ダイアログが開いている間も `call ping` が応えた）。ダイアログは毎回は出ず、出る条件は分かって
+  いない（[Windows の実機での実測](plugin/windows-measurements.md)）。`vw2026 install` で入れ替える設計に関わる
+  ので、段 3 に入る前に
+  [SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)
+  で調べる。
+- 留めていなかった版で常駐しなかったのは、下の読み込み直しで降ろされたためか、このダイアログで
+  止められていたためかを切り分けていない。
+  [SDK リファレンス #252](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/252)
+  に結果を返す。
+- 同じ確認の途中で、利用者の `Plug-Ins` にプラグインを置くと Vectorworks が起動画面のあと記録を
+  残さずに終了することがあった（このプラグインに限らない）。
+  [SDK リファレンス #253](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/253) で
+  **分かった**（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)
+  の「【罠】Windows の VW は起動時にモジュールを一度降ろして読み込み直す」）。Windows の
+  Vectorworks は起動時にモジュールを `kPluginModuleInit` のあと `kPluginModuleDeinit` を送らずに
+  一度降ろし、別の番地へ読み込み直す。留めずに作った `SetTimer` のタイマーはもう無い番地を呼び続け、
+  そこへ後から入った別のモジュールのコードを踏んで落ちる。落ちた回は Windows の記録に残らず、
+  Vectorworks 同梱の Sentry がダンプを書く。**タイマーを作る前に `GET_MODULE_HANDLE_EX_FLAG_PIN` で
+  自分を留める**ことにした（[構成「受け付けの流れ」](plugin/architecture.md#受け付けの流れ)）。macOS は
+  読み込み直さないので留めない。留めた版は段 2 の実機確認で起動の途中に落ちなかった。
 
 ## 1. ほかのプラグインの機能を名前で呼び出す手段（分かった）
 
