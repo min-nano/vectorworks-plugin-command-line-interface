@@ -28,6 +28,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
       # -race と併用するため covermode は atomic にする。
       # PowerShell は「.」を区切り文字として解釈し -coverprofile=coverage.out が 2 つの引数として入力されるため、bash で実行する。
       - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
@@ -54,6 +55,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
       # -fuzz は 1 回に 1 つの対象しか回せないので、対象ごとに分けて 30 秒ずつ回す。
       - run: go test -run '^$' -fuzz '^FuzzNestingDepth$' -fuzztime 30s ./internal/spool
       - run: go test -run '^$' -fuzz '^FuzzNestingDepthOfRequest$' -fuzztime 30s ./internal/spool
@@ -75,6 +77,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
       - name: build
         run: |
           set -eu
