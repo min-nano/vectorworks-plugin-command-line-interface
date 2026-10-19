@@ -9,17 +9,18 @@ permissions:
 
 # PR が閉じたら、その PR のプレリリース（dev-<slug>-<PR 番号>）とタグを消す
 # （docs/plugin/build-and-release.md「CI」）。
-# build.yml と同じグループで走り、その PR の走っているビルドを止めてから消す（消したあとに公開されない）。
-# グループは PR 番号で組む。マージで閉じた PR では github.ref が main になり、github.ref で組むと
-# main の push のビルドを止めて stable が作られないため。
-concurrency:
-  group: build-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   cleanup:
     # プレリリースを作るのは同じリポジトリの PR だけ。
     if: github.event.pull_request.head.repo.full_name == github.repository
+    # build.yml と同じグループで走り、その PR の走っているビルドを止めてから消す（消したあとに
+    # 公開されない）。グループの式は build.yml と同じものにする（片方だけ変えると同じグループに
+    # 入らない）。PR では PR 番号になる。github.ref で組むと、マージで閉じた PR では main になり、
+    # main の push のビルドを止めて stable が作られない。ジョブの段に置き、片付けが走るとき
+    # （同じリポジトリの PR）だけグループを取る。
+    concurrency:
+      group: build-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: write
