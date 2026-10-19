@@ -19,6 +19,7 @@ Vectorworks の中で動くプラグイン（`cli`）の設計です。全体の
 | [install-and-update.md](install-and-update.md) | インストールと更新（`vw2026 install`。PATH を含む）・初回のスクリプト・アンインストール（`vw2026 uninstall`） |
 | [plan.md](plan.md) | 実装の順序（1 段 1 PR）・各段の終わりの確かめ方 |
 | [open-questions.md](open-questions.md) | 決まっていないこと |
+| [windows-measurements.md](windows-measurements.md) | Windows の実機での実測（段 2。起動・終了・プラグインの有無・開発元不明のダイアログ） |
 
 ## 根拠
 
