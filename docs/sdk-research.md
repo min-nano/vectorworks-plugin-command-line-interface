@@ -12,7 +12,8 @@ issue を立てて `Findings/` に反映されてから、それを根拠に実�
 SDK リファレンスに記載がありませんでした。
 
 - **macOS は読み込まれた**（段 2 の実機確認。VW 2026。起動の直後から OS タイマーが刻み、`call ping`
-  が応えた）。結果は SDK リファレンスの `Findings/`（Plug-in Modules）へ足す（未反映）。
+  が応えた。新しい環境では、先に下の「開発元不明のプラグイン」のダイアログで「有効化」が要る）。
+  結果は SDK リファレンスの `Findings/`（Plug-in Modules）へ足す（未反映）。
 - **Windows も、留めた版（下記）は読み込まれ常駐した**（段 2 の実機確認。VW 2026 x64・Windows 11
   ARM64 の x64 エミュレーション）。起動の直後から `cli.vlb` がプロセスに居て、`call ping` が応えた。
   拡張機能を登録しない形のままでよい。
@@ -27,12 +28,16 @@ SDK リファレンスに記載がありませんでした。
   `MaxonDocumentBuilder.vlb` の中で落ちたことも 1 回ある。実測と確かめ方は [Windows の実機での実測](plugin/windows-measurements.md)。
   [SDK リファレンス #257](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/257)
   で調べる。段 2 は、これを既知の未解決として残したまま進めた（受け付けには影響しない）。
-- **Windows の Vectorworks は、開発元の分からないプラグインを既定では読み込まない。** 起動の途中で
-  「開発元不明のプラグイン」のダイアログが出て `cli` を「無効」と示し、その回は読み込まない。
+- **Vectorworks は、開発元の分からないプラグインを既定では読み込まない（Windows も macOS も）。**
+  起動の途中で「開発元不明のプラグイン」のダイアログが出て `cli` を「無効」と示し、その回は読み込まない。
   ダイアログで「有効化」を選ぶと、次の起動から読み込まれた。**ファイルを入れ替えても「有効化」は
   残った**（`296a797` へ入れ替えた後の起動でダイアログは出たが、`cli` は「有効」のまま読み込まれ、
   ダイアログが開いている間も `call ping` が応えた）。ダイアログは毎回は出ず、出る条件は分かって
-  いない（[Windows の実機での実測](plugin/windows-measurements.md)）。`vw2026 install` で入れ替える設計に関わる
+  いない（[Windows の実機での実測](plugin/windows-measurements.md)）。macOS（VW 2026 31.6.0・arm64）でも、
+  新しい `cli` を置いた最初の起動で同じダイアログが出て `cli` は「無効」で読み込まれず、「有効化」して
+  起動し直した後から読み込まれた。その後の起動でもダイアログは出たが `cli` は「有効」のままで、
+  ダイアログが開いている間も `call ping` が応えた（main の `7b80014` の実機確認）。段 2 の macOS の
+  確認の記録にはこのダイアログが無く、そのとき出たかは分からない。`vw2026 install` で入れ替える設計に関わる
   ので、段 3 に入る前に
   [SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)
   で調べる。

@@ -18,9 +18,10 @@ permissions:
 #
 # PR では新しい push が走っているビルドを止める（古い head の公開に意味は無い）。PR が閉じたときは
 # cleanup-dev-release.yml が同じグループで走り、走っているビルドを止めてから
-# dev-<slug>-<PR 番号> を消す。
+# dev-<slug>-<PR 番号> を消す。PR のグループは github.ref ではなく PR 番号で組む。マージで閉じた
+# PR の closed では github.ref が main になり、github.ref で組むと main の push のビルドを止めるため。
 concurrency:
-  group: build-${{ github.ref }}
+  group: build-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
