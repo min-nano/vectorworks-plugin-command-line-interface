@@ -18,10 +18,15 @@ permissions:
 #
 # PR では新しい push が走っているビルドを止める（古い head の公開に意味は無い）。PR が閉じたときは
 # cleanup-dev-release.yml が同じグループで走り、走っているビルドを止めてから
-# dev-<slug>-<PR 番号> を消す。
+# dev-<slug>-<PR 番号> を消す。PR のグループは github.ref ではなく PR 番号で組む。マージで閉じた
+# PR の closed では github.ref が main になり、github.ref で組むと main の push のビルドを止めるため。
+# グループの式は cleanup-dev-release.yml と同じものにする（片方だけ変えると同じグループに入らない）。
+# 開き直し（reopened）は止めずに待つ。閉じたときの片付けが走っている最中に開き直すと、片付けを
+# 途中で止めてタグや消しかけのリリースを残すため。開き直しのビルドが片付けを待っている間に push が
+# 来ると、その synchronize のビルドは片付けを止める。片付けは数秒で終わるので、この隙間は残す。
 concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'reopened' }}
 
 jobs:
   # 刻印・公開先を決め、build.json を書く（mac と Windows の zip に同じものを入れる）。ビルドのジョブは
