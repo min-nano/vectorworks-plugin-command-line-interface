@@ -22,7 +22,8 @@ permissions:
 # PR の closed では github.ref が main になり、github.ref で組むと main の push のビルドを止めるため。
 # グループの式は cleanup-dev-release.yml と同じものにする（片方だけ変えると同じグループに入らない）。
 # 開き直し（reopened）は止めずに待つ。閉じたときの片付けが走っている最中に開き直すと、片付けを
-# 途中で止めてタグや消しかけのリリースを残すため。
+# 途中で止めてタグや消しかけのリリースを残すため。開き直しのビルドが片付けを待っている間に push が
+# 来ると、その synchronize のビルドは片付けを止める。片付けは数秒で終わるので、この隙間は残す。
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'reopened' }}
