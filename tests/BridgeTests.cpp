@@ -135,12 +135,14 @@ TEST(BridgeLockFailsWhenTheSpoolIsMissing) {
 	CHECK(!error.empty());
 }
 
-// 動いている間にスプールが消されても（利用者が消したなど）、掃除と見回りは何もせずに終わる。
+// 動いている間にスプールが消されても（利用者が消したなど）、掃除と見回りは何もせずに終わる
+// （スプールを作り直さない。作るのは prepare だけ）。
 TEST(BridgeSweepAndPollTolerateAMissingSpool) {
 	TempDir dir;
 	Bridge bridge(dir.sub("missing"));
 	bridge.sweep();
 	CHECK(bridge.poll().empty());
+	CHECK(!exists(dir, "missing"));
 }
 
 TEST(BridgePollReturnsValidIdsInFileNameOrder) {

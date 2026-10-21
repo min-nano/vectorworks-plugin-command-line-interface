@@ -302,42 +302,59 @@ func TestCallTakenWithoutResponse(t *testing.T) {
 	assertNoFiles(t, dir, WaitSuffix)
 }
 
-// 受け取られた要求の応答が締切のあと猶予の内に届けば、それを返す。
-func TestCallTakenThenAnswered(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
-	taken := takeRequest(t, dir)
-	go func() {
-		id := <-taken
-		// 締切（200 ms）を過ぎてから応える
-		time.Sleep(400 * time.Millisecond)
-		_ = WriteAtomically(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":true,"result":{"late":1}}`))
-	}()
-	response, err := Open(dir).Call("ping", nil, "", 200*time.Millisecond)
-	if err != nil || !response.OK || string(response.Result) != `{"late":1}` {
-		t.Fatalf("%+v %v", response, err)
+// 受け取られた要求の応答が締切のあと猶予の内に届けば、その応答で終わる（ErrNoResponse ではない）。
+// 届いた応答が壊れていれば ErrMalformedResponse（応答は届いていて、書き手の不具合なので）。
+//
+// 時間に依らないよう、要求を受け取ってから、Call が待つのをやめた（.wait を消した）のを見て
+// 応える。こうすると必ず猶予の分岐を通る。締切（1 秒）は受け取り（10 ms ごとの見回り）に十分な
+// 長さにする。受け取りが締切に間に合わなければ、Call は要求を消して ErrTimeout で終わり、テストは
+// 落ちる（どの分岐を通ったかが分かる）。
+func TestCallTakenThenAnsweredInGrace(t *testing.T) {
+	for _, c := range []struct {
+		name, response string
+		check          func(*Response, error) bool
+	}{
+		{"valid", `{"ok":true,"result":{"late":1}}`, func(r *Response, err error) bool {
+			return err == nil && r.OK && string(r.Result) == `{"late":1}`
+		}},
+		{"malformed", `{"ok":tr`, func(_ *Response, err error) bool {
+			return errors.Is(err, ErrMalformedResponse)
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			SetTakenGrace(t, 5*time.Second)
+			dir := fakeplugin.NewDir(t)
+			fakeplugin.HoldLock(t, dir)
+			taken := takeRequest(t, dir)
+			go func() {
+				var id string
+				select {
+				case id = <-taken:
+				case <-t.Context().Done():
+					return
+				}
+				for exists(filepath.Join(dir, id+WaitSuffix)) {
+					select {
+					case <-t.Context().Done():
+						return
+					case <-time.After(10 * time.Millisecond):
+					}
+				}
+				_ = WriteAtomically(filepath.Join(dir, id+ResponseSuffix), []byte(c.response))
+			}()
+			response, err := Open(dir).Call("ping", nil, "", time.Second)
+			if !c.check(response, err) {
+				t.Fatalf("%+v %v", response, err)
+			}
+			assertNoFiles(t, dir, ResponseSuffix)
+			assertNoFiles(t, dir, WaitSuffix)
+		})
 	}
-	assertNoFiles(t, dir, WaitSuffix)
 }
 
-// 受け取られた要求の応答が猶予の内に届いても、壊れていれば ErrMalformedResponse
-// （ErrNoResponse ではない。応答は届いていて、書き手の不具合なので）。
-func TestCallTakenThenMalformed(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
-	taken := takeRequest(t, dir)
-	go func() {
-		id := <-taken
-		// 締切（200 ms）を過ぎてから応える
-		time.Sleep(400 * time.Millisecond)
-		_ = WriteAtomically(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":tr`))
-	}()
-	_, err := Open(dir).Call("ping", nil, "", 200*time.Millisecond)
-	if !errors.Is(err, ErrMalformedResponse) {
-		t.Fatalf("want ErrMalformedResponse, got %v", err)
-	}
-	assertNoFiles(t, dir, ResponseSuffix)
-	assertNoFiles(t, dir, WaitSuffix)
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // 待つ者の居なくなった要求（.wait が放されている）は、実行も応答もされない。

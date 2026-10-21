@@ -39,10 +39,9 @@ type opts struct {
 	// スプールの場所を求める関数（env.spool）。dir より優先する。求められないときを確かめるため。
 	locate func() (string, error)
 	// 環境変数。envVars に挙げたもののうち、ここに無いものは消す。
-	vars  map[string]string
-	stdin string
-	// 標準入力。stdin より優先する。読めないときを確かめるため。
-	in io.Reader
+	vars map[string]string
+	// 標準入力。nil なら空。
+	stdin io.Reader
 	// 起動（env.start）。nil なら成功し、渡された引数を started に書く。
 	start   func(argv []string) error
 	started *[]string
@@ -57,8 +56,8 @@ func invoke(t *testing.T, o opts, args ...string) result {
 		}
 		o.locate = func() (string, error) { return dir, nil }
 	}
-	if o.in == nil {
-		o.in = strings.NewReader(o.stdin)
+	if o.stdin == nil {
+		o.stdin = strings.NewReader("")
 	}
 	if o.start == nil {
 		o.start = func(argv []string) error {
@@ -80,7 +79,7 @@ func invoke(t *testing.T, o opts, args ...string) result {
 	}
 	var stdout, stderr bytes.Buffer
 	code := run(args, env{
-		stdin:  o.in,
+		stdin:  o.stdin,
 		stdout: &stdout,
 		stderr: &stderr,
 		start:  o.start,
@@ -99,6 +98,8 @@ func echoBridge(t *testing.T) string {
 			return spool.Response{OK: false, Code: spool.CodeInvalidArgs, Error: "no such argument"}
 		case "quiet":
 			return spool.Response{OK: true}
+		case "null":
+			return spool.Response{OK: true, Result: json.RawMessage("null")}
 		}
 		out, _ := json.Marshal(map[string]any{"tool": tool, "args": args})
 		return spool.Response{OK: true, Result: out}
@@ -129,28 +130,43 @@ func TestCallPrintsResult(t *testing.T) {
 	}
 }
 
-// 結果の無い成功は {} を出す（出力はいつも JSON 1 行）。
+// 結果の無い成功（result が無い・null）は {} を出す（出力はいつも JSON のオブジェクト 1 行）。
+// プラグインは、道具が値を返さないと result に null を書きうる。
 func TestCallPrintsEmptyResultAsObject(t *testing.T) {
-	r := invoke(t, opts{dir: echoBridge(t)}, "call", "quiet")
-	if r.code != exitOK || r.stdout != "{}\n" {
-		t.Fatalf("%+v", r)
+	dir := echoBridge(t)
+	for _, tool := range []string{"quiet", "null"} {
+		if r := invoke(t, opts{dir: dir}, "call", tool); r.code != exitOK || r.stdout != "{}\n" {
+			t.Errorf("%s: %+v", tool, r)
+		}
 	}
 }
 
 func TestCallArgsFromStdin(t *testing.T) {
 	dir := echoBridge(t)
-	r := invoke(t, opts{dir: dir, stdin: `{"b":2}`}, "call", "x", "-")
+	r := invoke(t, opts{dir: dir, stdin: strings.NewReader(`{"b":2}`)}, "call", "x", "-")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"b":2`) {
 		t.Fatalf("%+v", r)
 	}
 }
 
-// 標準入力を読めなければ、要求を置かずに 1 で終わる。
+// 標準入力を読めなければ、要求を置かずに 1 で終わる。応える偽のプラグインは使わず、ロックだけを
+// 掴んでおき、終わったあとに要求も待つ印も残っていないことを見る。
 func TestCallArgsFromUnreadableStdin(t *testing.T) {
-	in := iotest.ErrReader(errors.New("broken pipe"))
-	r := invoke(t, opts{dir: echoBridge(t), in: in}, "call", "x", "-")
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	broken := iotest.ErrReader(errors.New("broken pipe"))
+	r := invoke(t, opts{dir: dir, stdin: broken}, "call", "x", "-")
 	if r.code != exitFailure || r.stdout != "" || !strings.Contains(r.stderr, "read stdin: broken pipe") {
 		t.Fatalf("%+v", r)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if name := entry.Name(); name != spool.LockFile {
+			t.Errorf("left %s in the spool", name)
+		}
 	}
 }
 
