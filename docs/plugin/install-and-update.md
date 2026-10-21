@@ -254,8 +254,9 @@ vw2026 uninstall --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> から
      `install --tag dev-<slug>-<PR 番号>` を走らせる（初回のスクリプトと同じ入り方）。
   2. 入った `<CLI>\bin\vw2026.exe` で `install --tag stable` を走らせる。動いているのは PR の
      ビルドで、それが自分自身を `stable` の CLI に入れ替える。
-  3. 結果が `installed` で、`<CLI>\bin\vw2026.exe version` が `stable` の版を答え、
-     `vw2026.exe.old-*` が残っていることを確かめる。
+  3. 手順 2 の出力が `installed` で、`<CLI>\bin\vw2026.exe version` の版がその出力の `version` と
+     一致し、`vw2026.exe.old-*` が残っていることを確かめる（`stable` は `main` への push で
+     作り直されるので、比べる版は改めて取らず、手順 2 で入れたものの版を使う）。
   - 入れ替えを行うコードも、名前を変えられる exe も、その PR のビルドです（プレリリースは同じ
     ワークフローの実行でビルドしたもの）。`stable` 側に `install` が無くても組めるので、
     `install` を足す段の PR でも走ります。
