@@ -62,8 +62,8 @@ If the user cancels the dialog, the loop that waits for the stop runs out.
 `
 }
 
-func (statusCmd) run(g *globals, e *env) int {
-	bridge := g.open(e)
+func (statusCmd) run(e *env) int {
+	bridge := open(e)
 	if bridge == nil {
 		return exitFailure
 	}

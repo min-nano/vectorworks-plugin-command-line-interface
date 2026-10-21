@@ -61,7 +61,9 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   推移的な依存の数は問わない。
 - いま入っている依存は [kong](https://github.com/alecthomas/kong)（コマンドラインの解析。MIT。
   実行ファイルに入る推移的な依存なし）だけ。
-- 受け渡しは偽のプラグインに対する単体テストで確かめる（`cli/internal/fakeplugin`）。
+- 受け渡しは偽のプラグインに対する単体テストで確かめる（`cli/internal/fakeplugin`）。スプールの
+  場所は `env.spoolDir` を差し替えて渡し、場所を変える指定（引数・環境変数）は足さない
+  （プラグインは `<CLI>/spool` しか見ないので、本番で効かない。`docs/protocol.md「スプールの場所」`）。
 - 手書きの字句処理（`spool.NestingDepth`）は Go の標準のファジングで、`encoding/json` と同じ深さを
   返すことを確かめる（`cli/internal/spool/fuzz_test.go`。任意のバイト列の `FuzzNestingDepth` と、
   `json.Marshal` した要求の `FuzzNestingDepthOfRequest`）。プラグインとの一致は通信規則の見本で確かめる。
@@ -77,9 +79,8 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   コマンドではなく**値の通じる範囲**で決める。両方あれば引数が勝つ。オン・オフの指定は
   `negatable:""` を付け、`--no-<指定>` で打ち消せるようにする。位置の引数（道具名・引数の JSON）は
   対象外。付け忘れは `TestEveryFlagHasEnv` が落とす。
-  - どのコマンドからも同じものを指す値（スプールの場所・占有の印・Vectorworks の場所・リリースの
-    タグ・プラグインのフォルダ）は `VW2026_<指定>`（`VW2026_SPOOL`・`VW2026_SESSION`・`VW2026_APP`・
-    `VW2026_TAG`・`VW2026_PLUGINS_DIR`）。いま 1 つのコマンドだけが読むものも含む。この名前は
+  - どのコマンドからも同じものを指す値（占有の印・Vectorworks の場所・リリースのタグ・プラグインの
+    フォルダ）は `VW2026_<指定>`（`VW2026_SESSION`・`VW2026_APP`・`VW2026_TAG`・`VW2026_PLUGINS_DIR`）。いま 1 つのコマンドだけが読むものも含む。この名前は
     `VW2026_<コマンド>_` で始めない（コマンドごとの名前と重ならないように。`TestEnvNamesDoNotCollide`）。
   - それ以外（待つ上限・出力の形のオン・オフなど、コマンドごとに違う値を与えうるもの）は
     `VW2026_<コマンド>_<指定>`（`VW2026_CALL_TIMEOUT`・`VW2026_CALL_RAW`）。`<コマンド>` は値を共有する

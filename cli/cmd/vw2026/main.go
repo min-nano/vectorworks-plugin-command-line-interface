@@ -70,31 +70,29 @@ type env struct {
 	stdout io.Writer
 	stderr io.Writer
 	start  func(argv []string) error
+	// スプールの場所。本番は常に spool.DefaultDir で、外から変える指定は持たない（プラグインは
+	// <CLI>/spool しか見ないので、別の場所を指せても要求が届かない。docs/protocol.md
+	// 「スプールの場所」）。テストは偽のプラグインのスプールを返す。
+	spoolDir func() (string, error)
 }
 
 func main() {
 	os.Exit(run(os.Args[1:], env{
-		stdin:  os.Stdin,
-		stdout: os.Stdout,
-		stderr: os.Stderr,
-		start:  launch.Start,
+		stdin:    os.Stdin,
+		stdout:   os.Stdout,
+		stderr:   os.Stderr,
+		start:    launch.Start,
+		spoolDir: spool.DefaultDir,
 	}))
 }
 
 // cli is the whole command line.
 type cli struct {
-	globals
-
 	Status  statusCmd  `cmd:"" help:"Report whether the bridge is running."`
 	Call    callCmd    `cmd:"" help:"Call one tool."`
 	Launch  launchCmd  `cmd:"" help:"Start Vectorworks."`
 	Session sessionCmd `cmd:"" help:"Occupy the bridge, or end the occupation."`
 	Version versionCmd `cmd:"" help:"Print the versions of the CLI and the protocol."`
-}
-
-// globals are the flags every command takes.
-type globals struct {
-	Spool string `help:"Spool directory. The default is <CLI>/spool; another one is for tests, as the plug-in never reads it." env:"VW2026_SPOOL" placeholder:"DIR"`
 }
 
 func (cli) Help() string {
@@ -107,7 +105,9 @@ retry, wait for a session to be free, or interpret the tools; the caller
 does those (docs/design.md). Exclusive use of the bridge is the plug-in's:
 vw2026 only asks it for a session and carries the session in the calls
 ("vw2026 help session"). The bridge and vw2026 exchange files in a spool by the
-protocol in docs/protocol.md.
+protocol in docs/protocol.md. The spool is <CLI>/spool
+(docs/plugin/identifiers.md), and nothing changes it: the plug-in looks only
+there.
 
 Each command prints one line of JSON to the standard output, writes the
 reason for a failure to the standard error, and reports the outcome in its
@@ -174,7 +174,7 @@ tool that changes the drawing again: after 3 the tool did not run, while after
 // returns only an error, so the commands use this instead and return the exit
 // code directly.
 type command interface {
-	run(g *globals, e *env) int
+	run(e *env) int
 }
 
 func run(args []string, e env) int {
@@ -219,19 +219,16 @@ func run(args []string, e env) int {
 		return exitUsage
 	}
 	cmd := ctx.Selected().Target.Addr().Interface().(command)
-	return cmd.run(&grammar.globals, &e)
+	return cmd.run(&e)
 }
 
 // open はスプールを決めて、ブリッジの状態を判定する。場所が決まらなければ標準エラーへ
 // 理由を書いて nil。
-func (g *globals) open(e *env) *spool.Bridge {
-	dir := g.Spool
-	if dir == "" {
-		var err error
-		if dir, err = spool.DefaultDir(); err != nil {
-			fmt.Fprintf(e.stderr, "vw2026: %v (set VW2026_SPOOL)\n", err)
-			return nil
-		}
+func open(e *env) *spool.Bridge {
+	dir, err := e.spoolDir()
+	if err != nil {
+		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+		return nil
 	}
 	return spool.Open(dir)
 }

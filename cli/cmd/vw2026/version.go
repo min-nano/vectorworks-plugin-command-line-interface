@@ -15,6 +15,6 @@ speaks (docs/protocol.md).
 `
 }
 
-func (versionCmd) run(g *globals, e *env) int {
+func (versionCmd) run(e *env) int {
 	return emit(e, map[string]any{"version": version, "protocol": spool.ProtocolVersion})
 }

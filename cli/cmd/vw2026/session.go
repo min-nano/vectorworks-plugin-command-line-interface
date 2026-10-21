@@ -47,8 +47,8 @@ Vectorworks restarts.
 `
 }
 
-func (c *sessionStartCmd) run(g *globals, e *env) int {
-	return callReserved(g, e, spool.ToolSessionStart, "", c.Timeout)
+func (c *sessionStartCmd) run(e *env) int {
+	return callReserved(e, spool.ToolSessionStart, "", c.Timeout)
 }
 
 type sessionEndCmd struct {
@@ -64,17 +64,17 @@ Vectorworks has restarted.
 `
 }
 
-func (c *sessionEndCmd) run(g *globals, e *env) int {
+func (c *sessionEndCmd) run(e *env) int {
 	// kong の required は、空の環境変数も値とみなすので、ここで確かめる。
 	if c.Session == "" {
 		fmt.Fprintln(e.stderr, "vw2026: session end needs --session or VW2026_SESSION")
 		return exitUsage
 	}
-	return callReserved(g, e, spool.ToolSessionEnd, c.Session, c.Timeout)
+	return callReserved(e, spool.ToolSessionEnd, c.Session, c.Timeout)
 }
 
 // callReserved は予約された道具を引数なしで呼び、結果を出す。出力・終了コードは call と同じ。
-func callReserved(g *globals, e *env, tool, session string, timeout float64) int {
+func callReserved(e *env, tool, session string, timeout float64) int {
 	c := callCmd{Tool: tool, Session: session, Timeout: timeout}
-	return c.run(g, e)
+	return c.run(e)
 }

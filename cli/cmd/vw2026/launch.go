@@ -34,8 +34,8 @@ installed), launch exits with 5.
 
 // run does not wait: waiting is the caller's choice
 // (docs/design.md「CLI はプリミティブに保つ」).
-func (c *launchCmd) run(g *globals, e *env) int {
-	bridge := g.open(e)
+func (c *launchCmd) run(e *env) int {
+	bridge := open(e)
 	if bridge == nil {
 		return exitFailure
 	}
