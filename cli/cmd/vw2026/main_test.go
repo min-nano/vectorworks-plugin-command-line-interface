@@ -47,6 +47,13 @@ func invokeStart(t *testing.T, dir string, vars map[string]string, stdin string,
 	if dir == "" {
 		dir = filepath.Join(t.TempDir(), "none")
 	}
+	return invokeEnv(t, func() (string, error) { return dir, nil }, vars, stdin, start, args...)
+}
+
+// invokeEnv は invokeStart と同じで、スプールの場所を求める関数（env.spool）を差し替える。
+// 場所を求められないときを確かめるため。
+func invokeEnv(t *testing.T, spoolDir func() (string, error), vars map[string]string, stdin string, start func(argv []string) error, args ...string) result {
+	t.Helper()
 	// kong は環境変数を os から直接読むので、テストごとに置き直す（並行には走らせない）。
 	for _, name := range envVars {
 		value, ok := vars[name]
@@ -63,9 +70,7 @@ func invokeStart(t *testing.T, dir string, vars map[string]string, stdin string,
 		stdout: &stdout,
 		stderr: &stderr,
 		start:  start,
-		spoolDir: func() (string, error) {
-			return dir, nil
-		},
+		spool:  spoolDir,
 	})
 	return result{code, stdout.String(), stderr.String()}
 }
@@ -425,6 +430,18 @@ func TestSpoolIsNotConfigurable(t *testing.T) {
 	t.Setenv("VW2026_SPOOL", live)
 	if r := invoke(t, "", nil, "", nil, "status"); r.code != exitDown {
 		t.Fatalf("VW2026_SPOOL must not be read: %+v", r)
+	}
+}
+
+// スプールの場所を求められなければ（ホームが分からないなど）、スプールを見るコマンドは
+// 理由を標準エラーに書いて 1 で終わる。
+func TestSpoolNotLocated(t *testing.T) {
+	located := func() (string, error) { return "", errors.New("cannot locate the home directory") }
+	for _, args := range [][]string{{"status"}, {"call", "ping"}, {"launch"}} {
+		r := invokeEnv(t, located, nil, "", func([]string) error { return nil }, args...)
+		if r.code != exitFailure || r.stdout != "" || !strings.Contains(r.stderr, "cannot locate the home directory") {
+			t.Errorf("%v: %+v", args, r)
+		}
 	}
 }
 

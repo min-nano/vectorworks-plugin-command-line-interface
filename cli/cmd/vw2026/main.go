@@ -73,16 +73,16 @@ type env struct {
 	// スプールの場所。本番は常に spool.DefaultDir で、外から変える指定は持たない（プラグインは
 	// <CLI>/spool しか見ないので、別の場所を指せても要求が届かない。docs/protocol.md
 	// 「スプールの場所」）。テストは偽のプラグインのスプールを返す。
-	spoolDir func() (string, error)
+	spool func() (string, error)
 }
 
 func main() {
 	os.Exit(run(os.Args[1:], env{
-		stdin:    os.Stdin,
-		stdout:   os.Stdout,
-		stderr:   os.Stderr,
-		start:    launch.Start,
-		spoolDir: spool.DefaultDir,
+		stdin:  os.Stdin,
+		stdout: os.Stdout,
+		stderr: os.Stderr,
+		start:  launch.Start,
+		spool:  spool.DefaultDir,
 	}))
 }
 
@@ -225,7 +225,7 @@ func run(args []string, e env) int {
 // open はスプールを決めて、ブリッジの状態を判定する。場所が決まらなければ標準エラーへ
 // 理由を書いて nil。
 func open(e *env) *spool.Bridge {
-	dir, err := e.spoolDir()
+	dir, err := e.spool()
 	if err != nil {
 		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
 		return nil
