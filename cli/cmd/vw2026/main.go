@@ -227,7 +227,7 @@ func run(args []string, e env) int {
 func open(e *env) *spool.Bridge {
 	dir, err := e.spool()
 	if err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+		fmt.Fprintf(e.stderr, "vw2026: cannot locate the spool: %v\n", err)
 		return nil
 	}
 	return spool.Open(dir)
