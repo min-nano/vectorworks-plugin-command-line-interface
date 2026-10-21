@@ -423,7 +423,8 @@ func TestFlagsFromEnv(t *testing.T) {
 		t.Fatalf("VW2026_CALL_TIMEOUT: %+v", r)
 	}
 	long := map[string]string{"VW2026_CALL_TIMEOUT": "60"}
-	if r := invoke(t, opts{dir: busy, vars: long}, "call", "ping", "--timeout", "0.3"); r.code != exitTimeout {
+	r = invoke(t, opts{dir: busy, vars: long}, "call", "ping", "--timeout", "0.3")
+	if r.code != exitTimeout {
 		t.Fatalf("--timeout over VW2026_CALL_TIMEOUT: %+v", r)
 	}
 	session := map[string]string{"VW2026_SESSION_TIMEOUT": "0.3"}
