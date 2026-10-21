@@ -62,7 +62,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 - いま入っている依存は [kong](https://github.com/alecthomas/kong)（コマンドラインの解析。MIT。
   実行ファイルに入る推移的な依存なし）だけ。
 - 受け渡しは偽のプラグインに対する単体テストで確かめる（`cli/internal/fakeplugin`）。スプールの
-  場所は `env.spoolDir` を差し替えて渡し、場所を変える指定（引数・環境変数）は足さない
+  場所は `env.spool` を差し替えて渡し、場所を変える指定（引数・環境変数）は足さない
   （プラグインは `<CLI>/spool` しか見ないので、本番で効かない。`docs/protocol.md「スプールの場所」`）。
 - 手書きの字句処理（`spool.NestingDepth`）は Go の標準のファジングで、`encoding/json` と同じ深さを
   返すことを確かめる（`cli/internal/spool/fuzz_test.go`。任意のバイト列の `FuzzNestingDepth` と、
