@@ -131,6 +131,13 @@ func TestLockFileWithoutHolderIsDown(t *testing.T) {
 	}
 }
 
+// スプールがあってもロックファイルが無ければ（プラグインが一度も掴んでいない）止まっている。
+func TestDirWithoutLockFileIsDown(t *testing.T) {
+	if bridge := Open(fakeplugin.NewDir(t)); bridge.Running || bridge.Reason != "not running" {
+		t.Fatalf("want down, got %+v", bridge)
+	}
+}
+
 func TestReleasedLockIsDown(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	release := fakeplugin.HoldLock(t, dir)
@@ -310,6 +317,26 @@ func TestCallTakenThenAnswered(t *testing.T) {
 	if err != nil || !response.OK || string(response.Result) != `{"late":1}` {
 		t.Fatalf("%+v %v", response, err)
 	}
+	assertNoFiles(t, dir, WaitSuffix)
+}
+
+// 受け取られた要求の応答が猶予の内に届いても、壊れていれば ErrMalformedResponse
+// （ErrNoResponse ではない。応答は届いていて、書き手の不具合なので）。
+func TestCallTakenThenMalformed(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	taken := takeRequest(t, dir)
+	go func() {
+		id := <-taken
+		// 締切（200 ms）を過ぎてから応える
+		time.Sleep(400 * time.Millisecond)
+		_ = WriteAtomically(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":tr`))
+	}()
+	_, err := Open(dir).Call("ping", nil, "", 200*time.Millisecond)
+	if !errors.Is(err, ErrMalformedResponse) {
+		t.Fatalf("want ErrMalformedResponse, got %v", err)
+	}
+	assertNoFiles(t, dir, ResponseSuffix)
 	assertNoFiles(t, dir, WaitSuffix)
 }
 
@@ -524,4 +551,31 @@ func TestCallNamesTheRequestItCannotPublish(t *testing.T) {
 			}
 		})
 	}
+}
+
+// 引数が JSON として読めなければ、何も置かずに断る（vw2026 は先に確かめるが、Call を直接
+// 呼ぶ側のため）。
+func TestCallRejectsInvalidArgs(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	fakeplugin.HoldLock(t, dir)
+	_, err := Open(dir).Call("ping", json.RawMessage(`{"a":`), "", time.Second)
+	if err == nil || !strings.HasPrefix(err.Error(), "encode request: ") {
+		t.Fatalf("want an encode error, got %v", err)
+	}
+	assertNoFiles(t, dir, RequestSuffix)
+	assertNoFiles(t, dir, WaitSuffix)
+}
+
+// 待つ印（.wait）を作れなければ、どの印かを返し、要求を公開しない。.wait は O_EXCL で作るので、
+// 同じ名前が残っていれば作れない。
+func TestCallNamesTheWaitItCannotHold(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "x"+WaitSuffix), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := WithNewID(&Bridge{Dir: dir}, "x").Call("ping", nil, "", time.Second)
+	if want := "hold x" + WaitSuffix + ": "; err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Fatalf("Call = %v, want an error starting with %q", err, want)
+	}
+	assertNoFiles(t, dir, RequestSuffix)
 }

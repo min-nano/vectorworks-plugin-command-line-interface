@@ -135,6 +135,14 @@ TEST(BridgeLockFailsWhenTheSpoolIsMissing) {
 	CHECK(!error.empty());
 }
 
+// 動いている間にスプールが消されても（利用者が消したなど）、掃除と見回りは何もせずに終わる。
+TEST(BridgeSweepAndPollTolerateAMissingSpool) {
+	TempDir dir;
+	Bridge bridge(dir.sub("missing"));
+	bridge.sweep();
+	CHECK(bridge.poll().empty());
+}
+
 TEST(BridgePollReturnsValidIdsInFileNameOrder) {
 	// 大文字と小文字だけが違う名前は、macOS と Windows では同じファイルになるので使わない。
 	TempDir dir;

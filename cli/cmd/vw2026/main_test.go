@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/iotest"
 
 	"github.com/alecthomas/kong"
 
@@ -39,6 +41,8 @@ type opts struct {
 	// 環境変数。envVars に挙げたもののうち、ここに無いものは消す。
 	vars  map[string]string
 	stdin string
+	// 標準入力。stdin より優先する。読めないときを確かめるため。
+	in io.Reader
 	// 起動（env.start）。nil なら成功し、渡された引数を started に書く。
 	start   func(argv []string) error
 	started *[]string
@@ -52,6 +56,9 @@ func invoke(t *testing.T, o opts, args ...string) result {
 			dir = filepath.Join(t.TempDir(), "none")
 		}
 		o.locate = func() (string, error) { return dir, nil }
+	}
+	if o.in == nil {
+		o.in = strings.NewReader(o.stdin)
 	}
 	if o.start == nil {
 		o.start = func(argv []string) error {
@@ -73,7 +80,7 @@ func invoke(t *testing.T, o opts, args ...string) result {
 	}
 	var stdout, stderr bytes.Buffer
 	code := run(args, env{
-		stdin:  strings.NewReader(o.stdin),
+		stdin:  o.in,
 		stdout: &stdout,
 		stderr: &stderr,
 		start:  o.start,
@@ -90,6 +97,8 @@ func echoBridge(t *testing.T) string {
 			return spool.Response{OK: false, Code: spool.CodeInternal, Error: "boom"}
 		case "picky":
 			return spool.Response{OK: false, Code: spool.CodeInvalidArgs, Error: "no such argument"}
+		case "quiet":
+			return spool.Response{OK: true}
 		}
 		out, _ := json.Marshal(map[string]any{"tool": tool, "args": args})
 		return spool.Response{OK: true, Result: out}
@@ -120,10 +129,27 @@ func TestCallPrintsResult(t *testing.T) {
 	}
 }
 
+// 結果の無い成功は {} を出す（出力はいつも JSON 1 行）。
+func TestCallPrintsEmptyResultAsObject(t *testing.T) {
+	r := invoke(t, opts{dir: echoBridge(t)}, "call", "quiet")
+	if r.code != exitOK || r.stdout != "{}\n" {
+		t.Fatalf("%+v", r)
+	}
+}
+
 func TestCallArgsFromStdin(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, opts{dir: dir, stdin: `{"b":2}`}, "call", "x", "-")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"b":2`) {
+		t.Fatalf("%+v", r)
+	}
+}
+
+// 標準入力を読めなければ、要求を置かずに 1 で終わる。
+func TestCallArgsFromUnreadableStdin(t *testing.T) {
+	in := iotest.ErrReader(errors.New("broken pipe"))
+	r := invoke(t, opts{dir: echoBridge(t), in: in}, "call", "x", "-")
+	if r.code != exitFailure || r.stdout != "" || !strings.Contains(r.stderr, "read stdin: broken pipe") {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -318,6 +344,9 @@ func TestCodeFor(t *testing.T) {
 		spool.ErrOccupied:   exitBusy,
 		spool.ErrNoSession:  exitBusy,
 		spool.ErrNoResponse: exitNoResponse,
+		// 分けるべき結果でなければ汎用の失敗
+		spool.ErrMalformedResponse: exitFailure,
+		errors.New("disk full"):    exitFailure,
 	} {
 		if got := codeFor(fmt.Errorf("%w (detail)", err)); got != want {
 			t.Errorf("%v: got %d, want %d", err, got, want)
