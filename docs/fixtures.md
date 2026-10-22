@@ -38,6 +38,8 @@
 | `invalid_args` | `invalid_args` で失敗する |
 | `internal` | `internal` で失敗する |
 | `throw` | 例外を投げる（応答は `internal`。Go の偽のプラグインは例外を投げず、同じ応答を返す） |
+| `null` | 値を返さない（応答の `result` は `{}`） |
+| `array` | 結果を配列にする（オブジェクトでないので、応答は `internal`） |
 
 知らない `does` は、その道具が呼ばれたときにテストの誤りになります（両側とも）。
 

@@ -43,6 +43,20 @@
 			"does": "throw"
 		},
 		{
+			"name": "nothing",
+			"description": "値を返さない",
+			"inputSchema": {"type": "object"},
+			"kind": "read",
+			"does": "null"
+		},
+		{
+			"name": "not_object",
+			"description": "オブジェクトでない値を返す",
+			"inputSchema": {"type": "object"},
+			"kind": "read",
+			"does": "array"
+		},
+		{
 			"name": "quit",
 			"description": "Vectorworks を終わらせる道具の代わり",
 			"inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},

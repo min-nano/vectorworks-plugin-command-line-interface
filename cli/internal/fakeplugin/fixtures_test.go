@@ -131,6 +131,10 @@ func fakeHandler(t *testing.T, tools []fakeTool, calls *[]call) Handler {
 				return spool.Response{OK: true, Result: args}
 			case "empty":
 				return spool.Response{OK: true, Result: json.RawMessage(`{}`)}
+			case "null":
+				return spool.Response{OK: true, Result: json.RawMessage(`null`)}
+			case "array":
+				return spool.Response{OK: true, Result: json.RawMessage(`[]`)}
 			case "invalid_args":
 				return spool.Response{Code: spool.CodeInvalidArgs, Error: "invalid args"}
 			case "internal", "throw":

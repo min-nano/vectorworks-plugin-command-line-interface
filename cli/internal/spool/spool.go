@@ -10,6 +10,7 @@
 package spool
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -231,6 +232,10 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 	}
 	received := func(response *Response) (*Response, error) {
 		if response.OK {
+			// 成功の result は必ずオブジェクト（docs/protocol.md「応答」）。
+			if !IsObject(response.Result) {
+				return nil, fmt.Errorf("%w (%s; the result is not an object)", ErrMalformedResponse, tool)
+			}
 			return response, nil
 		}
 		switch response.Code {
@@ -273,6 +278,13 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		return received(response)
 	}
 	return nil, fmt.Errorf("%w (%s, %s; it may have run)", ErrNoResponse, tool, timeout)
+}
+
+// IsObject は data が JSON のオブジェクトか（前後の空白は除いて見る）。data は JSON として
+// 読めたものを渡す（応答の result など）。
+func IsObject(data json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(data)
+	return len(trimmed) > 0 && trimmed[0] == '{'
 }
 
 // pollResponse は until まで応答のファイルを読み直す。届けば読んで消して返す。届かなければ nil。

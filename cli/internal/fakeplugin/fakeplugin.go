@@ -237,7 +237,7 @@ func (s *server) serveOnce() (serving, quit bool) {
 func (s *server) answer(tool string, args json.RawMessage, session string) (spool.Response, *string) {
 	switch tool {
 	case spool.ToolTools:
-		return s.handle(tool, args), nil
+		return s.run(tool, args), nil
 	case spool.ToolSessionStart:
 		if s.session != "" {
 			return refuse(spool.CodeOccupied), nil
@@ -263,7 +263,23 @@ func (s *server) answer(tool string, args json.RawMessage, session string) (spoo
 			return refuse(spool.CodeBusy), nil
 		}
 	}
-	return s.handle(tool, args), nil
+	return s.run(tool, args), nil
+}
+
+// run は道具を呼ぶ。成功の result はプラグインと同じく必ずオブジェクトにする（通信規則「応答」）。
+// 値を返さなければ {}、オブジェクトでない値は道具の不具合として internal。
+func (s *server) run(tool string, args json.RawMessage) spool.Response {
+	response := s.handle(tool, args)
+	if !response.OK {
+		return response
+	}
+	switch {
+	case len(response.Result) == 0 || string(response.Result) == "null":
+		response.Result = json.RawMessage(`{}`)
+	case !spool.IsObject(response.Result):
+		return spool.Response{Code: spool.CodeInternal, Error: "the result of " + tool + " is not an object"}
+	}
+	return response
 }
 
 // kind は道具の種類。kinds に無い道具は、quit なら app、ほかは read（本物の道具の表の quit は
