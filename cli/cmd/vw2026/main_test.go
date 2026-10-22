@@ -25,26 +25,45 @@ type result struct {
 
 // envVars は、コマンドが読む環境変数のすべて。
 var envVars = []string{
-	"VW2026_SPOOL", "VW2026_APP", "VW2026_SESSION",
+	"VW2026_APP", "VW2026_SESSION",
 	"VW2026_CALL_RAW", "VW2026_CALL_TIMEOUT", "VW2026_SESSION_TIMEOUT",
 }
 
-func invoke(t *testing.T, vars map[string]string, stdin string, started *[]string, args ...string) result {
-	t.Helper()
-	return invokeStart(t, vars, stdin, func(argv []string) error {
-		if started != nil {
-			*started = argv
-		}
-		return nil
-	}, args...)
+// opts は、テストが run に与える外の世界。零値は、何も無いスプール・環境変数なし・空の標準入力・
+// 成功する起動。
+type opts struct {
+	// スプール。空なら何も無い一時ディレクトリにする（利用者の本物のスプールに触れないように）。
+	dir string
+	// スプールの場所を求める関数（env.spool）。dir より優先する。求められないときを確かめるため。
+	locate func() (string, error)
+	// 環境変数。envVars に挙げたもののうち、ここに無いものは消す。
+	vars  map[string]string
+	stdin string
+	// 起動（env.start）。nil なら成功し、渡された引数を started に書く。
+	start   func(argv []string) error
+	started *[]string
 }
 
-// invokeStart は invoke と同じで、起動（env.start）を差し替える。起動の失敗を確かめるため。
-func invokeStart(t *testing.T, vars map[string]string, stdin string, start func(argv []string) error, args ...string) result {
+func invoke(t *testing.T, o opts, args ...string) result {
 	t.Helper()
+	if o.locate == nil {
+		dir := o.dir
+		if dir == "" {
+			dir = filepath.Join(t.TempDir(), "none")
+		}
+		o.locate = func() (string, error) { return dir, nil }
+	}
+	if o.start == nil {
+		o.start = func(argv []string) error {
+			if o.started != nil {
+				*o.started = argv
+			}
+			return nil
+		}
+	}
 	// kong は環境変数を os から直接読むので、テストごとに置き直す（並行には走らせない）。
 	for _, name := range envVars {
-		value, ok := vars[name]
+		value, ok := o.vars[name]
 		// 終わったら元に戻させる
 		t.Setenv(name, value)
 		if !ok {
@@ -54,10 +73,11 @@ func invokeStart(t *testing.T, vars map[string]string, stdin string, start func(
 	}
 	var stdout, stderr bytes.Buffer
 	code := run(args, env{
-		stdin:  strings.NewReader(stdin),
+		stdin:  strings.NewReader(o.stdin),
 		stdout: &stdout,
 		stderr: &stderr,
-		start:  start,
+		start:  o.start,
+		spool:  o.locate,
 	})
 	return result{code, stdout.String(), stderr.String()}
 }
@@ -79,14 +99,14 @@ func echoBridge(t *testing.T) string {
 
 func TestStatusLive(t *testing.T) {
 	dir := echoBridge(t)
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
+	r := invoke(t, opts{dir: dir}, "status")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"running":true`) {
 		t.Fatalf("%+v", r)
 	}
 }
 
 func TestStatusDown(t *testing.T) {
-	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "status")
+	r := invoke(t, opts{}, "status")
 	if r.code != exitDown || !strings.Contains(r.stdout, `"running":false`) || !strings.Contains(r.stdout, `"reason":"not found"`) {
 		t.Fatalf("%+v", r)
 	}
@@ -94,7 +114,7 @@ func TestStatusDown(t *testing.T) {
 
 func TestCallPrintsResult(t *testing.T) {
 	dir := echoBridge(t)
-	r := invoke(t, nil, "", nil, "call", "layers", `{"a":1}`, "--spool", dir)
+	r := invoke(t, opts{dir: dir}, "call", "layers", `{"a":1}`)
 	if r.code != exitOK || strings.TrimSpace(r.stdout) != `{"args":{"a":1},"tool":"layers"}` {
 		t.Fatalf("%+v", r)
 	}
@@ -102,7 +122,7 @@ func TestCallPrintsResult(t *testing.T) {
 
 func TestCallArgsFromStdin(t *testing.T) {
 	dir := echoBridge(t)
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, `{"b":2}`, nil, "call", "x", "-")
+	r := invoke(t, opts{dir: dir, stdin: `{"b":2}`}, "call", "x", "-")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"b":2`) {
 		t.Fatalf("%+v", r)
 	}
@@ -110,11 +130,11 @@ func TestCallArgsFromStdin(t *testing.T) {
 
 func TestCallToolError(t *testing.T) {
 	dir := echoBridge(t)
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "fail")
+	r := invoke(t, opts{dir: dir}, "call", "fail")
 	if r.code != exitToolFailure || r.stdout != "" || !strings.Contains(r.stderr, "internal: boom") {
 		t.Fatalf("%+v", r)
 	}
-	raw := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "--raw", "fail")
+	raw := invoke(t, opts{dir: dir}, "call", "--raw", "fail")
 	if raw.code != exitToolFailure || !strings.Contains(raw.stdout, `"ok":false`) || !strings.Contains(raw.stdout, `"code":"internal"`) {
 		t.Fatalf("%+v", raw)
 	}
@@ -122,7 +142,7 @@ func TestCallToolError(t *testing.T) {
 
 func TestCallToolUsageError(t *testing.T) {
 	dir := echoBridge(t)
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "picky")
+	r := invoke(t, opts{dir: dir}, "call", "picky")
 	if r.code != exitToolUsage || r.stdout != "" || !strings.Contains(r.stderr, "invalid_args: no such argument") {
 		t.Fatalf("%+v", r)
 	}
@@ -130,7 +150,7 @@ func TestCallToolUsageError(t *testing.T) {
 
 func TestCallUsageErrors(t *testing.T) {
 	for _, args := range [][]string{{"call"}, {"call", "x", "[1]"}, {"call", "x", "not json"}, {"tools"}, {"nope"}, {}} {
-		r := invoke(t, nil, "", nil, args...)
+		r := invoke(t, opts{}, args...)
 		if r.code != exitUsage {
 			t.Errorf("%v: code %d", args, r.code)
 		}
@@ -138,7 +158,7 @@ func TestCallUsageErrors(t *testing.T) {
 }
 
 func TestCallWhenDown(t *testing.T) {
-	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "call", "ping")
+	r := invoke(t, opts{}, "call", "ping")
 	if r.code != exitDown {
 		t.Fatalf("%+v", r)
 	}
@@ -147,7 +167,7 @@ func TestCallWhenDown(t *testing.T) {
 func TestLaunchSkipsWhenLive(t *testing.T) {
 	dir := echoBridge(t)
 	var started []string
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", &started, "launch")
+	r := invoke(t, opts{dir: dir, started: &started}, "launch")
 	if r.code != exitOK || started != nil || !strings.Contains(r.stdout, `"launched":false`) {
 		t.Fatalf("%+v %v", r, started)
 	}
@@ -156,7 +176,7 @@ func TestLaunchSkipsWhenLive(t *testing.T) {
 func TestLaunchStartsApp(t *testing.T) {
 	app := fakeApp(t)
 	var started []string
-	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none"), "VW2026_APP": app}, "", &started, "launch")
+	r := invoke(t, opts{vars: map[string]string{"VW2026_APP": app}, started: &started}, "launch")
 	if r.code != exitOK || len(started) != 1 || started[0] != app {
 		t.Fatalf("%+v %v", r, started)
 	}
@@ -166,8 +186,8 @@ func TestLaunchStartsApp(t *testing.T) {
 // ブリッジが止まっているときと同じ 5 で終わる。
 func TestLaunchWhenRunningWithoutBridge(t *testing.T) {
 	app := fakeApp(t)
-	r := invokeStart(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none"), "VW2026_APP": app}, "",
-		func([]string) error { return fmt.Errorf("start: %w", launch.ErrAlreadyRunning) }, "launch")
+	refused := func([]string) error { return fmt.Errorf("start: %w", launch.ErrAlreadyRunning) }
+	r := invoke(t, opts{vars: map[string]string{"VW2026_APP": app}, start: refused}, "launch")
 	if r.code != exitDown || r.stdout != "" || !strings.Contains(r.stderr, "plug-in installed") {
 		t.Fatalf("%+v", r)
 	}
@@ -175,8 +195,8 @@ func TestLaunchWhenRunningWithoutBridge(t *testing.T) {
 
 func TestLaunchStartFails(t *testing.T) {
 	app := fakeApp(t)
-	r := invokeStart(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none"), "VW2026_APP": app}, "",
-		func([]string) error { return errors.New("exec format error") }, "launch")
+	failed := func([]string) error { return errors.New("exec format error") }
+	r := invoke(t, opts{vars: map[string]string{"VW2026_APP": app}, start: failed}, "launch")
 	if r.code != exitFailure || r.stdout != "" || !strings.Contains(r.stderr, "exec format error") {
 		t.Fatalf("%+v", r)
 	}
@@ -186,7 +206,8 @@ func TestLaunchStartFails(t *testing.T) {
 func TestLaunchAppNotFound(t *testing.T) {
 	var started []string
 	missing := filepath.Join(t.TempDir(), "missing")
-	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none"), "VW2026_APP": missing}, "", &started, "launch")
+	vars := map[string]string{"VW2026_APP": missing}
+	r := invoke(t, opts{vars: vars, started: &started}, "launch")
 	if r.code != exitFailure || started != nil || !strings.Contains(r.stderr, missing) {
 		t.Fatalf("%+v %v", r, started)
 	}
@@ -203,7 +224,7 @@ func fakeApp(t *testing.T) string {
 }
 
 func TestVersion(t *testing.T) {
-	r := invoke(t, nil, "", nil, "version")
+	r := invoke(t, opts{}, "version")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":5`) {
 		t.Fatalf("%+v", r)
 	}
@@ -220,7 +241,7 @@ func busySpool(t *testing.T) (string, func()) {
 
 func TestCallWhileBusyTimesOut(t *testing.T) {
 	dir, _ := busySpool(t)
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "call", "ping", "--timeout", "0.3")
+	r := invoke(t, opts{dir: dir}, "call", "ping", "--timeout", "0.3")
 	if r.code != exitTimeout {
 		t.Fatalf("%+v", r)
 	}
@@ -230,19 +251,19 @@ func TestCallWhileBusyTimesOut(t *testing.T) {
 // 動いていると答え、放されたら止まったと答える（保存の確認のダイアログを止まったと誤らない）。
 func TestStatusWhileBusyUntilTheProcessEnds(t *testing.T) {
 	dir, quit := busySpool(t)
-	r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
+	r := invoke(t, opts{dir: dir}, "status")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"running":true`) {
 		t.Fatalf("a held lock must count as running: %+v", r)
 	}
 	quit()
-	r = invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "status")
+	r = invoke(t, opts{dir: dir}, "status")
 	if r.code != exitDown || !strings.Contains(r.stdout, `"running":false`) {
 		t.Fatalf("%+v", r)
 	}
 }
 
 func TestLaunchDoesNotTakeTimeout(t *testing.T) {
-	r := invoke(t, map[string]string{"VW2026_SPOOL": filepath.Join(t.TempDir(), "none")}, "", nil, "launch", "--timeout", "5")
+	r := invoke(t, opts{}, "launch", "--timeout", "5")
 	if r.code != exitUsage {
 		t.Fatalf("%+v", r)
 	}
@@ -250,28 +271,30 @@ func TestLaunchDoesNotTakeTimeout(t *testing.T) {
 
 func TestHelp(t *testing.T) {
 	for _, args := range [][]string{{"help"}, {"--help"}, {"-h"}} {
-		r := invoke(t, nil, "", nil, args...)
+		r := invoke(t, opts{}, args...)
 		if r.code != exitOK || !strings.Contains(r.stdout, "call") || !strings.Contains(r.stdout, "exit with") {
 			t.Fatalf("%v: %+v", args, r)
 		}
 	}
 	for _, args := range [][]string{{"help", "call"}, {"call", "--help"}, {"call", "x", "-h"}} {
-		r := invoke(t, nil, "", nil, args...)
+		r := invoke(t, opts{}, args...)
 		if r.code != exitOK || !strings.Contains(r.stdout, "--timeout") || !strings.Contains(r.stdout, "withdraws the request") {
 			t.Fatalf("%v: %+v", args, r)
 		}
 	}
 	// 引数なしは使い方の誤りで、ヘルプは標準エラーへ。
-	if r := invoke(t, nil, "", nil); r.code != exitUsage || r.stdout != "" || !strings.Contains(r.stderr, "Usage:") {
+	if r := invoke(t, opts{}); r.code != exitUsage || r.stdout != "" ||
+		!strings.Contains(r.stderr, "Usage:") {
 		t.Fatalf("%+v", r)
 	}
-	if r := invoke(t, nil, "", nil, "help", "nope"); r.code != exitUsage {
+	if r := invoke(t, opts{}, "help", "nope"); r.code != exitUsage {
 		t.Fatalf("%+v", r)
 	}
 }
 
 func TestVersionFlag(t *testing.T) {
-	if r := invoke(t, nil, "", nil, "--version"); r.code != exitOK || !strings.Contains(r.stdout, `"protocol":5`) {
+	r := invoke(t, opts{}, "--version")
+	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":5`) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -306,44 +329,44 @@ func TestCodeFor(t *testing.T) {
 // 読む道具（layers・ping）は誰の call でも実行される。end のあとは quit が占有の外として断られる。
 func TestSessionStartCallEnd(t *testing.T) {
 	dir := echoBridge(t)
-	vars := map[string]string{"VW2026_SPOOL": dir}
-	r := invoke(t, vars, "", nil, "session", "start")
+	r := invoke(t, opts{dir: dir}, "session", "start")
 	var started struct {
 		Session string `json:"session"`
 	}
 	if r.code != exitOK || json.Unmarshal([]byte(r.stdout), &started) != nil || started.Session == "" {
 		t.Fatalf("%+v", r)
 	}
-	if r := invoke(t, vars, "", nil, "session", "start"); r.code != exitBusy {
+	if r := invoke(t, opts{dir: dir}, "session", "start"); r.code != exitBusy {
 		t.Fatalf("a second session should be refused: %+v", r)
 	}
-	if r := invoke(t, vars, "", nil, "call", "quit"); r.code != exitBusy {
+	if r := invoke(t, opts{dir: dir}, "call", "quit"); r.code != exitBusy {
 		t.Fatalf("quit outside the session should be refused: %+v", r)
 	}
-	if r := invoke(t, vars, "", nil, "call", "layers"); r.code != exitOK {
+	if r := invoke(t, opts{dir: dir}, "call", "layers"); r.code != exitOK {
 		t.Fatalf("a read tool is for everyone: %+v", r)
 	}
-	if r := invoke(t, vars, "", nil, "call", "ping"); r.code != exitOK {
+	if r := invoke(t, opts{dir: dir}, "call", "ping"); r.code != exitOK {
 		t.Fatalf("ping is for everyone: %+v", r)
 	}
-	inSession := map[string]string{"VW2026_SPOOL": dir, "VW2026_SESSION": started.Session}
-	if r := invoke(t, inSession, "", nil, "call", "quit"); r.code != exitOK {
+	inSession := map[string]string{"VW2026_SESSION": started.Session}
+	if r := invoke(t, opts{dir: dir, vars: inSession}, "call", "quit"); r.code != exitOK {
 		t.Fatalf("quit in the session (from VW2026_SESSION): %+v", r)
 	}
-	if r := invoke(t, inSession, "", nil, "session", "end"); r.code != exitOK || strings.TrimSpace(r.stdout) != `{"ended":true}` {
+	if r := invoke(t, opts{dir: dir, vars: inSession}, "session", "end"); r.code != exitOK ||
+		strings.TrimSpace(r.stdout) != `{"ended":true}` {
 		t.Fatalf("%+v", r)
 	}
-	if r := invoke(t, inSession, "", nil, "call", "quit"); r.code != exitBusy {
+	if r := invoke(t, opts{dir: dir, vars: inSession}, "call", "quit"); r.code != exitBusy {
 		t.Fatalf("the ended session should be refused: %+v", r)
 	}
-	if r := invoke(t, vars, "", nil, "call", "quit"); r.code != exitBusy {
+	if r := invoke(t, opts{dir: dir}, "call", "quit"); r.code != exitBusy {
 		t.Fatalf("quit outside a session should be refused: %+v", r)
 	}
 }
 
 func TestSessionEndNeedsSession(t *testing.T) {
 	dir := echoBridge(t)
-	if r := invoke(t, map[string]string{"VW2026_SPOOL": dir}, "", nil, "session", "end"); r.code != exitUsage {
+	if r := invoke(t, opts{dir: dir}, "session", "end"); r.code != exitUsage {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -384,27 +407,60 @@ func TestToolCodeFor(t *testing.T) {
 // 指定は環境変数でも与えられ、両方あれば引数が勝つ。
 func TestFlagsFromEnv(t *testing.T) {
 	dir := echoBridge(t)
-	raw := map[string]string{"VW2026_SPOOL": dir, "VW2026_CALL_RAW": "true"}
-	if r := invoke(t, raw, "", nil, "call", "fail"); r.code != exitToolFailure || !strings.Contains(r.stdout, `"code":"internal"`) {
+	raw := map[string]string{"VW2026_CALL_RAW": "true"}
+	if r := invoke(t, opts{dir: dir, vars: raw}, "call", "fail"); r.code != exitToolFailure ||
+		!strings.Contains(r.stdout, `"code":"internal"`) {
 		t.Fatalf("VW2026_CALL_RAW: %+v", r)
 	}
-	if r := invoke(t, raw, "", nil, "call", "fail", "--no-raw"); r.code != exitToolFailure || r.stdout != "" {
+	r := invoke(t, opts{dir: dir, vars: raw}, "call", "fail", "--no-raw")
+	if r.code != exitToolFailure || r.stdout != "" {
 		t.Fatalf("--no-raw over VW2026_CALL_RAW: %+v", r)
 	}
 
 	busy, _ := busySpool(t)
-	short := map[string]string{"VW2026_SPOOL": busy, "VW2026_CALL_TIMEOUT": "0.3"}
-	if r := invoke(t, short, "", nil, "call", "ping"); r.code != exitTimeout {
+	short := map[string]string{"VW2026_CALL_TIMEOUT": "0.3"}
+	if r := invoke(t, opts{dir: busy, vars: short}, "call", "ping"); r.code != exitTimeout {
 		t.Fatalf("VW2026_CALL_TIMEOUT: %+v", r)
 	}
-	if r := invoke(t, map[string]string{"VW2026_SPOOL": busy, "VW2026_CALL_TIMEOUT": "60"}, "", nil, "call", "ping", "--timeout", "0.3"); r.code != exitTimeout {
+	long := map[string]string{"VW2026_CALL_TIMEOUT": "60"}
+	r = invoke(t, opts{dir: busy, vars: long}, "call", "ping", "--timeout", "0.3")
+	if r.code != exitTimeout {
 		t.Fatalf("--timeout over VW2026_CALL_TIMEOUT: %+v", r)
 	}
-	if r := invoke(t, map[string]string{"VW2026_SPOOL": busy, "VW2026_SESSION_TIMEOUT": "0.3"}, "", nil, "session", "start"); r.code != exitTimeout {
+	session := map[string]string{"VW2026_SESSION_TIMEOUT": "0.3"}
+	if r := invoke(t, opts{dir: busy, vars: session}, "session", "start"); r.code != exitTimeout {
 		t.Fatalf("VW2026_SESSION_TIMEOUT: %+v", r)
 	}
-	if r := invoke(t, map[string]string{"VW2026_SPOOL": busy, "VW2026_CALL_TIMEOUT": ""}, "", nil, "call", "ping"); r.code != exitUsage {
+	empty := map[string]string{"VW2026_CALL_TIMEOUT": ""}
+	if r := invoke(t, opts{dir: busy, vars: empty}, "call", "ping"); r.code != exitUsage {
 		t.Fatalf("an empty timeout: %+v", r)
+	}
+}
+
+// スプールの場所を変える指定は無い（プラグインは <CLI>/spool しか見ないので、別の場所を
+// 指せても要求が届かない）。環境変数を読まないことは spool の TestDefaultDirIgnoresSpoolVariable。
+func TestSpoolFlagIsUsageError(t *testing.T) {
+	if r := invoke(t, opts{}, "status", "--spool", t.TempDir()); r.code != exitUsage {
+		t.Fatalf("%+v", r)
+	}
+}
+
+// スプールの場所を求められなければ（ホームが分からないなど）、スプールを見るコマンドは
+// どこで失敗したかと理由を標準エラーに書いて 1 で終わる。
+func TestSpoolNotLocated(t *testing.T) {
+	locate := func() (string, error) { return "", errors.New("user: unknown userid 501") }
+	for _, args := range [][]string{
+		{"status"},
+		{"call", "ping"},
+		{"launch"},
+		{"session", "start"},
+		{"session", "end", "--session", "x"},
+	} {
+		r := invoke(t, opts{locate: locate}, args...)
+		want := "vw2026: cannot locate the spool: user: unknown userid 501"
+		if r.code != exitFailure || r.stdout != "" || !strings.Contains(r.stderr, want) {
+			t.Errorf("%v: %+v", args, r)
+		}
 	}
 }
 

@@ -66,7 +66,7 @@ does not retry by itself.
 `
 }
 
-func (c *callCmd) run(g *globals, e *env) int {
+func (c *callCmd) run(e *env) int {
 	var payload json.RawMessage
 	if c.Args != "" {
 		text := c.Args
@@ -87,7 +87,7 @@ func (c *callCmd) run(g *globals, e *env) int {
 		payload = json.RawMessage(strings.TrimSpace(text))
 	}
 
-	bridge := g.open(e)
+	bridge := open(e)
 	if bridge == nil {
 		return exitFailure
 	}
