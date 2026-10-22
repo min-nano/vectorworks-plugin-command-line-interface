@@ -105,6 +105,14 @@ func TestStartDetaches(t *testing.T) {
 	}
 }
 
+// 起動できなければ（実行ファイルが無い）、起動のエラーを返す。
+func TestStartFailsForMissingExecutable(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing"+exeSuffix())
+	if err := Start([]string{missing}); err == nil || errors.Is(err, ErrAlreadyRunning) {
+		t.Fatalf("want a start error, got %v", err)
+	}
+}
+
 // Windows では、同じ実行ファイルが動いていれば起動しない。このテスト自身が動いている
 // 実行ファイルで確かめる。
 func TestStartRefusesWhenRunningOnWindows(t *testing.T) {
