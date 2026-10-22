@@ -247,12 +247,8 @@ func emit(e *env, value any) int {
 	return emitRaw(e, data)
 }
 
-// emitRaw は data をそのまま 1 行で書く。結果の無い成功（result が無い・null）は {} にする
-// （出力はいつも JSON のオブジェクト 1 行）。
+// emitRaw は data をそのまま 1 行で書く。
 func emitRaw(e *env, data []byte) int {
-	if len(data) == 0 || string(data) == "null" {
-		data = []byte("{}")
-	}
 	fmt.Fprintf(e.stdout, "%s\n", data)
 	return exitOK
 }

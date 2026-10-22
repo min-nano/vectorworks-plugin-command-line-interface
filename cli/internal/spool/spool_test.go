@@ -596,3 +596,34 @@ func TestCallNamesTheWaitItCannotHold(t *testing.T) {
 	}
 	assertNoFiles(t, dir, RequestSuffix)
 }
+
+// 成功の応答の result は必ずオブジェクト。無い・オブジェクトでなければ壊れた応答
+// （docs/protocol.md「応答」）。
+func TestCallRejectsResultThatIsNotAnObject(t *testing.T) {
+	for _, text := range []string{
+		`{"ok":true}`,
+		`{"ok":true,"result":null}`,
+		`{"ok":true,"result":[1]}`,
+		`{"ok":true,"result":"done"}`,
+	} {
+		t.Run(text, func(t *testing.T) {
+			dir := fakeplugin.NewDir(t)
+			fakeplugin.HoldLock(t, dir)
+			answer(t, dir, text)
+			_, err := Open(dir).Call("ping", nil, "", 5*time.Second)
+			if !errors.Is(err, ErrMalformedResponse) {
+				t.Fatalf("want ErrMalformedResponse, got %v", err)
+			}
+		})
+	}
+}
+
+func TestIsObject(t *testing.T) {
+	for text, want := range map[string]bool{
+		`{}`: true, ` {"a":1} `: true, `[]`: false, `null`: false, `"{"`: false, ``: false,
+	} {
+		if got := IsObject(json.RawMessage(text)); got != want {
+			t.Errorf("IsObject(%q) = %v, want %v", text, got, want)
+		}
+	}
+}

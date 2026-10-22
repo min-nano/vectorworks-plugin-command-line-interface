@@ -1,5 +1,5 @@
 {
-	"description": "tools は道具の表を返す。表に無い道具は unknown_tool、道具の失敗は invalid_args と internal（例外を含む）。種類 write の道具は占有の中でだけ呼べる（占有されていなければ no_session）",
+	"description": "tools は道具の表を返す。表に無い道具は unknown_tool、道具の失敗は invalid_args と internal（例外を含む）。値を返さない道具の result は {}、オブジェクトでない値を返す道具は internal。種類 write の道具は占有の中でだけ呼べる（占有されていなければ no_session）",
 	"steps": [
 		{"description": "ロックを取る（空のスプールなので何も消さない）", "expect": {"files": ["bridge.lock"]}},
 		{
@@ -9,6 +9,8 @@
 				"bad-args": "bad-args.json",
 				"broken": "broken-tool.json",
 				"throws": "throws.json",
+				"nothing": "nothing.json",
+				"not-object": "not-object.json",
 				"edit": "edit.json",
 				"ping": "ping.json"
 			},
@@ -16,6 +18,8 @@
 				"calls": [
 					{"tool": "bad_args"},
 					{"tool": "broken"},
+					{"tool": "not_object"},
+					{"tool": "nothing"},
 					{"tool": "ping"},
 					{"tool": "throws"}
 				],
@@ -66,6 +70,18 @@
 									"kind": "read"
 								},
 								{
+									"name": "nothing",
+									"description": "値を返さない",
+									"inputSchema": {"type": "object"},
+									"kind": "read"
+								},
+								{
+									"name": "not_object",
+									"description": "オブジェクトでない値を返す",
+									"inputSchema": {"type": "object"},
+									"kind": "read"
+								},
+								{
 									"name": "quit",
 									"description": "Vectorworks を終わらせる道具の代わり",
 									"inputSchema": {
@@ -82,6 +98,8 @@
 					"bad-args": {"ok": false, "code": "invalid_args"},
 					"broken": {"ok": false, "code": "internal"},
 					"throws": {"ok": false, "code": "internal"},
+					"nothing": {"ok": true, "result": {}},
+					"not-object": {"ok": false, "code": "internal"},
 					"edit": {"ok": false, "code": "no_session"},
 					"ping": {"ok": true, "result": {}}
 				},
@@ -93,6 +111,10 @@
 					"broken.wait",
 					"edit.res.json",
 					"edit.wait",
+					"not-object.res.json",
+					"not-object.wait",
+					"nothing.res.json",
+					"nothing.wait",
 					"ping.res.json",
 					"ping.wait",
 					"throws.res.json",

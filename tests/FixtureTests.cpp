@@ -226,6 +226,12 @@ template <std::size_t I> Json runFake(const Json &args, const ToolContext &, Too
 		error = ToolError{ErrorCode::Internal, "道具が失敗しました"};
 		return Json();
 	}
+	if (fake.does == "null") {
+		return Json();
+	}
+	if (fake.does == "array") {
+		return Json::array();
+	}
 	if (fake.does == "throw") {
 		throw std::runtime_error("道具が例外を投げました");
 	}

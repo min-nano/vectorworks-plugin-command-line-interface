@@ -96,10 +96,6 @@ func echoBridge(t *testing.T) string {
 			return spool.Response{OK: false, Code: spool.CodeInternal, Error: "boom"}
 		case "picky":
 			return spool.Response{OK: false, Code: spool.CodeInvalidArgs, Error: "no such argument"}
-		case "quiet":
-			return spool.Response{OK: true}
-		case "null":
-			return spool.Response{OK: true, Result: json.RawMessage("null")}
 		}
 		out, _ := json.Marshal(map[string]any{"tool": tool, "args": args})
 		return spool.Response{OK: true, Result: out}
@@ -127,17 +123,6 @@ func TestCallPrintsResult(t *testing.T) {
 	r := invoke(t, opts{dir: dir}, "call", "layers", `{"a":1}`)
 	if r.code != exitOK || strings.TrimSpace(r.stdout) != `{"args":{"a":1},"tool":"layers"}` {
 		t.Fatalf("%+v", r)
-	}
-}
-
-// 結果の無い成功（result が無い・null）は {} を出す（出力はいつも JSON のオブジェクト 1 行）。
-// プラグインは、道具が値を返さないと result に null を書きうる。
-func TestCallPrintsEmptyResultAsObject(t *testing.T) {
-	dir := echoBridge(t)
-	for _, tool := range []string{"quiet", "null"} {
-		if r := invoke(t, opts{dir: dir}, "call", tool); r.code != exitOK || r.stdout != "{}\n" {
-			t.Errorf("%s: %+v", tool, r)
-		}
 	}
 }
 

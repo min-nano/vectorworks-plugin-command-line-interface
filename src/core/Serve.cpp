@@ -335,6 +335,16 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 	case ErrorCode::Internal:
 		return respond(failure(protocol::kCodeInternal, error.message));
 	}
+	// result は必ずオブジェクト（通信規則「応答」）。値を返さない道具は {} にする。
+	// オブジェクトでない値は道具の不具合として internal で応える。道具は実行したあとなので、
+	// quit の印はそのまま渡す。
+	if (result.isNull()) {
+		result = Json::object();
+	} else if (!result.isObject()) {
+		return respond(failure(protocol::kCodeInternal,
+		                       std::string("道具 ") + name + " の結果がオブジェクトではありません"),
+		               tool->kind == ToolKind::App);
+	}
 	// 道具はもう実行したので、ここで投げると、実行した要求に internal で応えることになる（避け
 	// られない。応答を書き出すための確保だけが残る）。
 	return respond(success(std::move(result)), tool->kind == ToolKind::App);

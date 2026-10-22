@@ -41,7 +41,9 @@ struct ToolContext {
 	bool session = false;
 };
 
-// 道具の中身。失敗は error に書き（戻り値は使わない）、例外は Server が internal で応える。
+// 道具の中身。結果は JSON のオブジェクトで返す（返す値が無ければ Json() でよく、{} になる。
+// オブジェクトでない値は internal で応える。通信規則「応答」）。失敗は error に書き（戻り値は
+// 使わない）、例外は Server が internal で応える。
 using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolError &error);
 
 struct Tool {

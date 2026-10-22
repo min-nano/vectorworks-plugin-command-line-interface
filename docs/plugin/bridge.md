@@ -177,6 +177,9 @@ struct Tool {
   `kind` は `read` / `write` / `app` を小文字で載せます（呼ぶ側が「図面を変えるか」を
   判定できるように）。予約された道具のうち `tools`・`session_start`・`session_end` は表に載せず、
   `tools` の結果にも出しません。`ping` と `quit` は表に載せます（[通信規則「予約された道具」](../protocol.md#予約された道具)）。
+- 道具の結果は JSON のオブジェクトで返します（[通信規則「応答」](../protocol.md#応答idresjson)）。返す値が無ければ
+  `Json()` でよく、`Server` が `{}` にします。オブジェクトでない値は道具の不具合として、`Server` が
+  `internal` で応えます。
 - 道具が受け付けの状態を知るのは `ToolContext` からだけです（`ping` の `session`）。
 - 引数の検査は道具の中で行います（JSON Schema の検証器は持たない）。省略できる引数には
   既定値を設け（`inputSchema` の `default` にも書く）、知らない引数・知っている引数の未知の値は
