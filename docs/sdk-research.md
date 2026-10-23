@@ -38,7 +38,9 @@ SDK リファレンスに記載がありませんでした。
   `Findings/` に入ったらその節へのリンクに置き換える。`vw2026 install` で入れ替える設計に関わる
   ので、段 3 に入る前に
   [SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)
-  で調べる。
+  で調べる。`install` はファイルの上書きではなく、フォルダごと付け替える（新しいフォルダを
+  `<Plug-Ins>/cli` へ名前の変更で置く）ので、その形でも「有効化」が残るかを #258 で確かめる
+  （段 2 で確かめたのはファイルの上書き）。残らなければ、付け替えの手順を設計し直す。
 - 留めていなかった版で常駐しなかったのは、下の読み込み直しで降ろされたためか、このダイアログで
   止められていたためかを切り分けていない。
   [SDK リファレンス #252](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/252)

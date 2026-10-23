@@ -41,6 +41,7 @@
 | `build-windows` | `windows-latest`・MSVC。プラグインのビルド、Go の amd64、zip（.NET の `ZipFile`。項目の名前の区切りを `/` にするため。Windows PowerShell 5.1 の `Compress-Archive` は `\` にする） |
 | `release` | 公開するときだけ。リリースがあれば消さずに、2 つの zip を一時の名前で上げ終えてから古いものと入れ替え、タグを新しい sha へ動かしてタイトルを直す（失敗や取り消しでリリースの無い間を作らない）。無ければタグを作ってリリースを作る |
 | `verify` | 公開した資産を利用者と同じ URL（タグと資産名から決まる）から mac と Windows で取ってきて、zip の直下が `build.json`・`bin/`・プラグインだけで `bin/` の中が CLI だけであること、`build.json` と `bin/vw2026 version` の版がビルドした sha であること（mac は署名と `.vwr` も）を確かめる |
+| `install-windows` | 段 3 で足す。PR のプレリリースを公開したときだけ（`needs: [meta, release]`。`stable` では走らせない）。`windows-latest` で、PR の CLI を `install --tag dev-<slug>-<PR 番号>` で入れ、入った CLI に `install --tag stable` を走らせて動いている自分自身を入れ替えさせる。利用者の `Path` の型と既存の項目が保たれることも確かめる（[インストール「テスト」](install-and-update.md#テスト)） |
 
 fork の PR・マージキュー・main 以外の手動の実行は、マージのためのコミット（fork の PR）またはその ref を
 ビルドするだけで、公開しません（`build.yml` も必須のチェックにできるよう、`merge_group` を付ける）。
