@@ -18,7 +18,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 | [A3](#a3-未決-2-が段-2-の作りを変える) | 未決 2 が段 2 の作りを変える | 段 2 の前 | 済（undo の記録が開いているかは見ない。書く道具は自分で記録を開いて閉じ、占有の中でだけ呼べる。受け付けの入れ子は `busy` で断る。[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)） |
 | [A4](#a4-終了の依頼の最中に受け付けが入れ子になりうる) | 終了の依頼の最中に受け付けが入れ子になりうる | 段 6 | 暫定（終了の依頼の最中は `write`・`app` を `busy` で断る。残すかは [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 の結果で段 6 の前に決める） |
 | [B1](#b1-更新の手順の見本が占有を残す) | 更新の手順の見本が占有を残す | 段 6 | 未着手 |
-| [B2](#b2-windows-の-path-の書き換えが既存の項目を壊しうる) | Windows の PATH の書き換えが既存の項目を壊しうる | 段 3 | 未着手 |
+| [B2](#b2-windows-の-path-の書き換えが既存の項目を壊しうる) | Windows の PATH の書き換えが既存の項目を壊しうる | 段 3 | 済（PowerShell をやめ、`advapi32` でレジストリを直接読み書きして型を保つ。[インストール「Windows の `Path` の読み書き」](plugin/install-and-update.md#windows-の-path-の読み書き)） |
 | [B3](#b3-vw2026_app-が環境変数の名前の決まりに反する) | `VW2026_APP` が環境変数の名前の決まりに反する | 最初の配布（段 2）の前 | 済（名前は値の通じる範囲で決める、と決まりを改めた。CLAUDE.md「Go」） |
 | [B4](#b4-sdk-の調査の古い参照) | SDK の調査の古い参照 | なし | 済 |
 | [B5](#b5-段-24-では実機の確かめ方が成り立たない) | 段 2〜4 では実機の確かめ方が成り立たない | 段 2 | 済（段の入れ替えで、`install` の無い段は 2 だけになった。[実装の順序「実機の確かめ方」](plugin/plan.md#実機の確かめ方)） |
@@ -116,6 +116,12 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 - 段 3 の実装の前に実機で確かめる。代わりの案は、`advapi32` の `RegQueryValueExW` /
   `RegSetValueExW` を `syscall` で呼んで型（REG_EXPAND_SZ）を保ち、`WM_SETTINGCHANGE` を送る形
   （外部の依存を足さない）。`uninstall` の PATH の後始末も同じ。
+- **済。** 実機で確かめる前に代案に決めた。展開しない値を読み、型を保って書き戻し、
+  `WM_SETTINGCHANGE` を送る。項目は展開せずに比べ（大文字と小文字・末尾の `\` は区別しない）、
+  `install` と `uninstall` は同じ比べ方の関数を使う。実物のレジストリでの振る舞いは、PR の
+  `build.yml` の Windows のジョブ（実物の exe の入れ替え）で、REG_EXPAND_SZ と `%…%` の項目が
+  保たれることとして確かめる（[インストール「Windows の `Path` の読み書き」](plugin/install-and-update.md#windows-の-path-の読み書き)・
+  [インストール「テスト」](plugin/install-and-update.md#テスト)）。
 
 ### B3. `VW2026_APP` が環境変数の名前の決まりに反する
 

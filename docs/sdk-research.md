@@ -35,10 +35,11 @@ SDK リファレンスに記載がありませんでした。
   ダイアログが開いている間も `call ping` が応えた）。ダイアログは毎回は出ず、出る条件は分かって
   いない（[Windows の実機での実測](plugin/windows-measurements.md)）。macOS でも同じダイアログで
   止められ、「有効化」して起動し直した後から読み込まれたことがある。mac での結果も #258 に返し、
-  `Findings/` に入ったらその節へのリンクに置き換える。`vw2026 install` で入れ替える設計に関わる
-  ので、段 3 に入る前に
+  `Findings/` に入ったらその節へのリンクに置き換える。
   [SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)
-  で調べる。
+  で調べる。`vw2026 install` はファイルの上書きではなくフォルダごと付け替えるので、その形でも
+  「有効化」が残るかを段 3 の実機確認で確かめ、結果を #258 に返す（[実装の順序](plugin/plan.md)。
+  残らなければ、段 3 をマージする前に扱いを決める）。
 - 留めていなかった版で常駐しなかったのは、下の読み込み直しで降ろされたためか、このダイアログで
   止められていたためかを切り分けていない。
   [SDK リファレンス #252](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/252)

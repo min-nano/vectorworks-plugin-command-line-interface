@@ -30,6 +30,12 @@
 | 退避の場所 | `<CLI>/old/cli/` | `<CLI>\old\cli\` |
 | PATH | `~/.local/bin/vw2026`（`<CLI>/bin/vw2026` へのリンク） | 利用者の `Path` に `<CLI>\bin` |
 
+- **場所の根は環境変数を読まずに求めます**（`<CLI>` とスプールは[通信規則「スプールの場所」](../protocol.md#スプールの場所)の
+  規則）。既定の `<Plug-Ins>` も同じ規則にそろえ、GUI アプリの Vectorworks と、ssh や別のアプリ
+  から起動した `vw2026` とで食い違わないようにします。
+  - Windows: `%APPDATA%` の指す場所を `SHGetKnownFolderPath(FOLDERID_RoamingAppData)` で求める
+    （環境変数 `APPDATA` は読まない。`<CLI>` の `FOLDERID_LocalAppData` と同じく `syscall` 経由）。
+  - mac: `<CLI>` と同じく、passwd の項目のホームの下の `Library/Application Support`。
 - `<Plug-Ins>` は Vectorworks の利用者フォルダの中です。Vectorworks の設定で利用者フォルダを
   移せるので、標準以外の場所も、`<CLI>` と同じドライブにあれば扱えます（`install` / `uninstall`
   に毎回 `--plugins-dir` で渡す。入れた場所は記録しない。[インストール](install-and-update.md#前提)）。

@@ -71,6 +71,13 @@ vw2026 install --tag dev-feature-x        # その PR のプレリリースの�
 vw2026 install --check                    # 入れずに、新しいビルドがあるかだけ返す（動いていてもよい）
 ```
 
+- 指定の環境変数は `--tag` が `VW2026_TAG`、`--plugins-dir` が `VW2026_PLUGINS_DIR`、`--check` が
+  `VW2026_INSTALL_CHECK`（`--no-check` で打ち消せる）です（`CLAUDE.md`「Go」の名前の決まり）。
+- `--check` は `available` でも `up_to_date` でも成功（0）で終わります。どちらかは出力の `outcome`
+  で分けます（新しいビルドがあることは失敗ではないため。取れないなど判定できなかったときだけ失敗）。
+- 「Vectorworks が動いている」終了コードは 6 です（`install` / `uninstall` で共通。番号の真実は
+  `vw2026 --help`）。
+
 ### 流れ
 
 ```
@@ -197,9 +204,37 @@ vw2026 install
 - 行き先がプラグインのフォルダの外で版によらず同じなので、更新で張り直す必要はありません。
 - **シェルの設定ファイル（`.zshrc` 等）は書き換えません。** `~/.local/bin` が PATH に無ければ
   `not_in_path` とし、追加の方法を標準エラーに表示するだけです。
-- Windows は Go から PowerShell の `[Environment]::SetEnvironmentVariable('Path', …, 'User')` を
-  呼びます（外部の依存を足さないため。`setx` は 1024 文字で切り詰めるので使わない）。新しい値は
-  **新しく開いた端末から**効きます。
+- 新しい値は **新しく開いた端末から**効きます。
+
+#### Windows の `Path` の読み書き
+
+**`HKCU\Environment` の値 `Path` を、`advapi32` の `RegQueryValueExW` / `RegSetValueExW` で
+直接読み書きします**（`syscall` で呼ぶ。外部の依存を足さない）。
+
+- **展開しない値を読み、型を保って書き戻します。** 利用者の `Path` には `%USERPROFILE%\…` の
+  ような項目があり、型は REG_EXPAND_SZ です。PowerShell の
+  `[Environment]::SetEnvironmentVariable('Path', …, 'User')` は展開した値を読み、REG_SZ で書き
+  戻すとされるので、この項目が固定の値に変わるおそれがあり、使いません（[設計のレビュー B2](../design-review.md#b2-windows-の-path-の書き換えが既存の項目を壊しうる)）。
+  `setx` も 1024 文字で切り詰めるので使いません。
+- 型は読んだものをそのまま使います（REG_SZ なら REG_SZ）。値が無ければ REG_EXPAND_SZ で作ります
+  （あとから利用者が `%…%` を含む項目を足しても展開されるように）。REG_SZ・REG_EXPAND_SZ 以外の
+  型なら書き換えず、出力の `path` を `conflict` にします。
+- 項目は `;` で分け、**書いたままの文字で比べます**（`%…%` を展開しない。大文字と小文字、末尾の
+  `\` の有無は区別しない）。`install` の「同じ項目が既にある」と `uninstall` の「一致する項目」は
+  **同じ比べ方の関数**で判定します（片方だけが一致とみなすと、`install` が `exists` と答えた項目を
+  `uninstall` が残すことになるため）。
+  - 展開せずに比べるので、`%LOCALAPPDATA%\vectorworks2026-cli\bin` のように書かれた項目は
+    `<CLI>\bin` と一致しません。`install` はそれとは別に `<CLI>\bin` を足し、`uninstall` は自分が足した形の
+    項目だけを除きます。
+- 足すときは末尾に `;<CLI>\bin` を付けます（値が空なら `<CLI>\bin` だけ）。ほかの項目の並び・
+  空の項目・前後の空白は変えません。除いて空になったときは、値を消さずに空の文字列を書きます
+  （値の有無が利用者の設定と食い違わないように）。
+- 書いたあと `user32` の `SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Environment",
+  SMTO_ABORTIFHUNG, 5000 ms)` で知らせます。知らせの失敗は無視します（値は書けていて、新しく
+  開いた端末からは効くため）。
+- 単体テストは実物のレジストリに触れません。読み書きを関数の引数で渡し、項目の足し方・除き方と
+  比べ方を確かめます。実物のレジストリは、下記「実物の exe の入れ替え」の Windows のジョブで
+  確かめます。
 
 ## アンインストール（`vw2026 uninstall`）
 
@@ -220,8 +255,8 @@ vw2026 uninstall --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> から
   （アンインストールは失敗にしない）。
 - **PATH の後始末**:
   - mac: `~/.local/bin/vw2026` が**シンボリックリンクで、`<CLI>/bin/` の中を指すときだけ**消す。
-  - Windows: 利用者の `Path` から、`<CLI>\bin` と**完全に一致する項目だけ**を除く（`install` と
-    同じく PowerShell を呼ぶ）。
+  - Windows: 利用者の `Path` から、`<CLI>\bin` と**一致する項目だけ**を除く（比べ方と読み書きは
+    `install` と同じ。[Windows の `Path` の読み書き](#windows-の-path-の読み書き)）。
 - 出力: `{"outcome":"uninstalled","left":[…]}`。
 
 ## 消すコードの歯止め
@@ -246,6 +281,12 @@ vw2026 uninstall --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> から
   - 消すコードの歯止め（名前が違う・モジュールが無いフォルダを消さない、別の場所を指すリンクと
     似た名前の PATH 項目を消さない）
   - **動いている exe の名前を変えられること**（Windows の CI。下記「実物の exe の入れ替え」）
+- **`<CLI>` の差し替え**: いまの `vw2026` のテストはスプールの場所を `env.spool` で差し替えます。
+  段 3 で、これを `<CLI>` を返す関数（`env.cliDir`。本番は `spool` パッケージが外へ出す
+  `CLIDir()`）に改め、スプールはその下の `spool` として組み立てます。`install` / `uninstall` は
+  同じ関数から `<CLI>` を得て、ロックは `<CLI>/spool` で見ます。スプールと `<CLI>` を別々に
+  差し替えられると、テストで両者が食い違いうるためです。既定の `<Plug-Ins>` は差し替えず、テストは
+  `--plugins-dir` を渡します（求め方は[名前と識別子「置き場所」](identifiers.md#置き場所)）。
 - **実物の exe の入れ替え**: PR の `build.yml` で、`release`（PR のプレリリースを出す）の
   あとに Windows のジョブで確かめます。`install` は zip をリリースからしか取らず、版が同じなら
   入れ替えないので、版の違う 2 つの公開済みのリリース（その PR の `dev-<slug>-<PR 番号>` と
@@ -267,5 +308,18 @@ vw2026 uninstall --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> から
     を動かしたまま入れ替える形は、ロックが掴まれていると `install` が何もせずに終わり、放され
     ると `call` も終わるので組めない）。ランナーは使い捨てなので既定の場所（`<Plug-Ins>`・
     `<CLI>`）を使いますが、利用者の場所に触れるので `go test` には入れません。
+- **実物の exe の入れ替えのジョブ**（`build.yml` の `install-windows`）の条件と、ほかに確かめること:
+  - `needs: [meta, release]` で、`release` が公開したあとにだけ走ります。`release` が飛ばされる
+    fork の PR・マージキュー・`main` 以外の手動の実行では、ジョブも飛ばされます。`main` への push
+    （タグが `stable`）は `if` で除きます。
+  - 手順 2 は、`stable` を作り直している `main` のビルドと重なると資産が一瞬無いことがあります
+    （`release` は古い資産を消してから新しい資産の名前を変える）。`install` は失敗しても何も
+    変えないので、ジョブは手順 2 が失敗したら 5 秒おいて 4 回まで走らせ直します（`verify` の
+    `curl --retry 4 --retry-delay 5` と同じ扱い。CLI には再試行を入れない）。
+  - **`Path` の型と既存の項目が保たれること**（[Windows の `Path` の読み書き](#windows-の-path-の読み書き)）。
+    手順 1 の前に、利用者の `Path` に `%USERPROFILE%\vw2026-path-probe` を REG_EXPAND_SZ で足して
+    おき、手順 1 のあと `Path` の型が REG_EXPAND_SZ のままで、その項目が展開されずに残り、
+    `<CLI>\bin` が 1 つだけ足されていることを確かめます。手順 2 のあとも `<CLI>\bin` は 1 つの
+    ままです（`exists`）。
 - **初回のスクリプト**: shellcheck・PSScriptAnalyzer。取ってきて `install` を走らせるだけなので、
   実機の確認（段 3）で押さえます。
