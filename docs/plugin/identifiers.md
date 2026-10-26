@@ -5,7 +5,7 @@
 （変えると呼ぶ側や更新が見つけられなくなる）。
 
 **安定版と開発版を区別しません。** PR では変更後のコードでビルドしたものをプレリリースし、
-同じ名前のプラグインとして入れ替えます（[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
+同じ名前のプラグインとして入れ替えます（`vw2026 install cli@<そのタグ>`。[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
 いま何が動いているかは、`vw2026 call ping` の `version` / `branch` で分かります。
 
 | 項目 | 値 |
@@ -15,19 +15,23 @@
 | リソース | `cli.vwr` |
 | バンドル ID（mac） | `io.github.min-nano.cli` |
 | コマンド | `vw2026` |
+| レジストリの名前（プラグインのフォルダ名） | `cli`（既定のレジストリの名前。[レジストリ](../registry.md)） |
 | CMake のターゲット | `VwCli` |
-| リリースのタグ | `stable`（main）・`dev-<ブランチの slug>-<PR 番号>`（PR のプレリリース。slug はブランチ名の `/`・`:`・`@`・空白を `-` にし、英数字・`-`・`_`・`.` のほかを落とし、続く `.` を 1 つにまとめたもの（`..` は git の ref 名に使えない）。slug は読むための飾りで、別のブランチが同じ slug になりうるので一意にするのは PR 番号。slug が空（日本語だけの名前など）なら `dev-<PR 番号>`。作るのは `scripts/dev-tag.sh` だけで、`build.yml` と `cleanup-dev-release.yml` が使う） |
+| リリースのタグ | **ビルドごとに新しいタグを付け、使い回さない**（[レジストリ「名前・タグ・ターゲット」](../registry.md#名前タグターゲット)）。main は `main-<短い sha>`（`latest` のリリース）、PR は `dev-<ブランチの slug>-<PR 番号>-<短い sha>`（プレリリース）。短い sha はビルドした sha（PR はブランチの head）。slug はブランチ名の `/`・`:`・`@`・空白を `-` にし、英数字・`-`・`_`・`.` のほかを落とし、続く `.` を 1 つにまとめたもの（`..` は git の ref 名に使えない）。slug は読むための飾りで、別のブランチが同じ slug になりうるので一意にするのは PR 番号と sha。slug が空（日本語だけの名前など）なら `dev-<PR 番号>-<短い sha>`。作るのは `scripts/dev-tag.sh` だけで、`build.yml` と `cleanup-dev-release.yml` が使う。最新は `latest`（GitHub のリリースの最新。`cli@latest`）で指す |
+| ターゲット | `macos-arm64`・`windows-x64`（このプラグインが配るもの。`macos-x64` は配らない。[ビルド「CMake」](build-and-release.md#cmake)） |
 
 ## 置き場所
 
 | 置くもの | mac | Windows |
 | --- | --- | --- |
-| プラグイン（`<Plug-Ins>/cli/`） | `~/Library/Application Support/Vectorworks/2026/Plug-Ins/cli/` | `%APPDATA%\Nemetschek\Vectorworks\2026\Plug-Ins\cli\` |
+| プラグイン（`<Plug-Ins>/<name>/`。このプラグインは `<Plug-Ins>/cli/`） | `~/Library/Application Support/Vectorworks/2026/Plug-Ins/cli/` | `%APPDATA%\Nemetschek\Vectorworks\2026\Plug-Ins\cli\` |
+| 入れたときの記録 | `<Plug-Ins>/<name>/vw2026-install.json` | `<Plug-Ins>\<name>\vw2026-install.json` |
 | CLI の場所（`<CLI>`） | `~/Library/Application Support/vectorworks2026-cli/` | `%LOCALAPPDATA%\vectorworks2026-cli\` |
 | CLI（PATH に載せる） | `<CLI>/bin/vw2026` | `<CLI>\bin\vw2026.exe` |
 | スプール（プラグインが作る） | `<CLI>/spool/` | `<CLI>\spool\` |
-| 組み立ての場所 | `<CLI>/staging/cli/` | `<CLI>\staging\cli\` |
-| 退避の場所 | `<CLI>/old/cli/` | `<CLI>\old\cli\` |
+| 組み立ての場所 | `<CLI>/staging/<name>/`（zip は `<CLI>/staging/<name>.zip`） | `<CLI>\staging\<name>\` |
+| 退避の場所 | `<CLI>/old/<name>/` | `<CLI>\old\<name>\` |
+| フックが使ってよい場所 | `<CLI>/data/<name>/` | `<CLI>\data\<name>\` |
 | PATH | `~/.local/bin/vw2026`（`<CLI>/bin/vw2026` へのリンク） | 利用者の `Path` に `<CLI>\bin` |
 
 - **場所の根は環境変数を読まずに求めます**（`<CLI>` とスプールは[通信規則「スプールの場所」](../protocol.md#スプールの場所)の
@@ -39,6 +43,9 @@
 - `<Plug-Ins>` は Vectorworks の利用者フォルダの中です。Vectorworks の設定で利用者フォルダを
   移せるので、標準以外の場所も、`<CLI>` と同じドライブにあれば扱えます（`install` / `uninstall`
   に毎回 `--plugins-dir` で渡す。入れた場所は記録しない。[インストール](install-and-update.md#前提)）。
+- `<CLI>` は、このプラグインだけでなく、`vw2026` で入れるすべてのプラグインの組み立て・退避・
+  フックの場所を持ちます（`<name>` ごとに分ける）。CLI（`bin/`）・スプール（`spool/`）・PATH は
+  このプラグインのフックが置きます（[インストール「`cli` のフック」](install-and-update.md#cli-のフック)）。
 
 ## 拡張機能
 

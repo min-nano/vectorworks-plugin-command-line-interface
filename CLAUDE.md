@@ -5,7 +5,8 @@
 ## このリポジトリについて
 
 Vectorworks 2026 を外部から操作するための**プラグイン（C++・VW SDK）と CLI（Go）**です。
-目的・決めたこと・構成は `docs/design.md`、通信規則は `docs/protocol.md` が真実です。
+目的・決めたこと・構成は `docs/design.md`、通信規則は `docs/protocol.md`、`vw2026 install` が読む
+レジストリとマニフェストの書き方は `docs/registry.md` が真実です。
 
 ## 守ること
 
@@ -16,7 +17,9 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 2. **CLI はプリミティブに保つ。** 再試行・占有を待つこと・道具ごとの解釈を入れない（呼ぶ側の
    責任）。排他はプラグインの占有（通信規則の「占有」。CLI は印を受け取って載せるだけ）だけで持ち、
    CLI に足さない（`docs/design.md「CLI はプリミティブに保つ」`）。
-3. **プラグインは単純に保つ。** 配置と更新は CLI（`vw2026 install`）が Vectorworks の終了後に行う。
+3. **プラグインは単純に保つ。** 配置と更新は CLI（`vw2026 install`）と `cli` のフック（`scripts/hooks/`）が
+   Vectorworks の終了後に行う。`install` の Go のコードはどのプラグインにも同じ手順だけを持ち、`cli` を
+   特別に扱わない（このプラグインに固有の置き方はフックに書く。`docs/plugin/install-and-update.md「cli のフック」`）。
    プラグインのフォルダは CLI の場所と同じドライブにある前提で、その外の場合の扱いを足さない
    （`docs/design.md「決めたこと」`）。
 4. **SDK 呼び出しはメインスレッドからだけ。** 受け付け用のスレッドや受け付けの中のループを
@@ -43,7 +46,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   だけ書く。各言語の設定には、その言語にしかない項目だけを書く（`docs/format.md`）。
 - ツールは言語ごとに標準のもの 1 つを、ほぼ既定のまま使い、版を固定する。Go で書かれたツールは
   `tools/go.mod`、pip のツール（clang-format・clang-tidy）は `tools/requirements.txt`、
-  PSScriptAnalyzer は `scripts/powershell.ps1` に版を置く。ツールと対象は `docs/format.md`・`docs/lint.md`。
+  PSScriptAnalyzer と Pester（フックのテスト）は `scripts/powershell.ps1` に版を置く。ツールと対象は `docs/format.md`・`docs/lint.md`。
 - **コメントは対象のコードの直前の行に置き、コードと同じ行の末尾には書かない**（どの言語でも。
   1 行で足りるものも同じ。複数行と 1 行で置き場所が混ざると読みにくいため）。
 
@@ -79,8 +82,8 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   コマンドではなく**値の通じる範囲**で決める。両方あれば引数が勝つ。オン・オフの指定は
   `negatable:""` を付け、`--no-<指定>` で打ち消せるようにする。位置の引数（道具名・引数の JSON）は
   対象外。付け忘れは `TestEveryFlagHasEnv` が落とす。
-  - どのコマンドからも同じものを指す値（占有の印・Vectorworks の場所・リリースのタグ・プラグインの
-    フォルダ）は `VW2026_<指定>`（`VW2026_SESSION`・`VW2026_APP`・`VW2026_TAG`・
+  - どのコマンドからも同じものを指す値（占有の印・Vectorworks の場所・レジストリ・プラグインの
+    フォルダ）は `VW2026_<指定>`（`VW2026_SESSION`・`VW2026_APP`・`VW2026_REGISTRY`・
     `VW2026_PLUGINS_DIR`）。いま 1 つのコマンドだけが読むものも含む。この名前は
     `VW2026_<コマンド>_` で始めない（コマンドごとの名前と重ならないように。`TestEnvNamesDoNotCollide`）。
   - それ以外（待つ上限・出力の形のオン・オフなど、コマンドごとに違う値を与えうるもの）は

@@ -34,13 +34,13 @@ SDK リファレンスに記載がありませんでした。
   残った**（`296a797` へ入れ替えた後の起動でダイアログは出たが、`cli` は「有効」のまま読み込まれ、
   ダイアログが開いている間も `call ping` が応えた）。ダイアログは毎回は出ず、出る条件は分かって
   いない（[Windows の実機での実測](plugin/windows-measurements.md)）。macOS でも同じダイアログで
-  止められ、「有効化」して起動し直した後から読み込まれたことがある。mac での結果も #258 に返し、
-  `Findings/` に入ったらその節へのリンクに置き換える。`vw2026 install` で入れ替える設計に関わる
-  ので、段 3 に入る前に
-  [SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)
-  で調べる。`install` はファイルの上書きではなく、フォルダごと付け替える（新しいフォルダを
-  `<Plug-Ins>/cli` へ名前の変更で置く）ので、その形でも「有効化」が残るかを #258 で確かめる
-  （段 2 で確かめたのはファイルの上書き）。残らなければ、付け替えの手順を設計し直す。
+  止められ、「有効化」して起動し直した後から読み込まれたことがある。[SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258) で
+  **分かった**（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)
+  の「開発元不明のプラグイン」のダイアログ。Windows も macOS も同じ）。「有効化」はモジュールの
+  **フルパス**で覚え、中身は見ない。同じパスのままフォルダごと付け替えても残り、フォルダ名を
+  変えると「無効」に戻る。`vw2026 install` はフォルダ名をレジストリの名前に固定し（`cli` は
+  `<Plug-Ins>/cli`）、更新では同じパスへ付け替えるので、この結果のとおりに残る
+  （[インストール「入れる先のフォルダ」](plugin/install-and-update.md#入れる先のフォルダ)）。
 - 留めていなかった版で常駐しなかったのは、下の読み込み直しで降ろされたためか、このダイアログで
   止められていたためかを切り分けていない。
   [SDK リファレンス #252](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/252)
