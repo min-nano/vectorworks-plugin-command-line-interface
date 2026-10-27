@@ -31,6 +31,7 @@
 | スプール（プラグインが作る） | `<CLI>/spool/` | `<CLI>\spool\` |
 | 組み立ての場所 | `<CLI>/staging/<name>/`（zip は `<CLI>/staging/<name>.zip`） | `<CLI>\staging\<name>\` |
 | 退避の場所 | `<CLI>/old/<name>/` | `<CLI>\old\<name>\` |
+| `uninstall` の途中の印 | `<CLI>/old/<name>.uninstalling` | `<CLI>\old\<name>.uninstalling` |
 | フックが使ってよい場所 | `<CLI>/data/<name>/` | `<CLI>\data\<name>\` |
 | PATH | `~/.local/bin/vw2026`（`<CLI>/bin/vw2026` へのリンク） | 利用者の `Path` に `<CLI>\bin` |
 
