@@ -29,34 +29,35 @@
 | 入れたときの記録 | `<Plug-Ins>/<name>/vw2026-install.json` | `<Plug-Ins>\<name>\vw2026-install.json` |
 | CLI（PATH に載せる） | `<Plug-Ins>/cli/bin/vw2026` | `<Plug-Ins>\cli\bin\vw2026.exe` |
 | スプール（プラグインが作る） | `<Plug-Ins>/cli/spool/` | `<Plug-Ins>\cli\spool\` |
-| `vw2026` の作業の場所（`<CLI>`） | `~/Library/Application Support/vectorworks2026-cli/` | `%LOCALAPPDATA%\vectorworks2026-cli\` |
-| 組み立ての場所 | `<CLI>/staging/<name>/`（zip は `<CLI>/staging/<name>.zip`） | `<CLI>\staging\<name>\` |
-| 退避の場所 | `<CLI>/old/<name>/` | `<CLI>\old\<name>\` |
-| `uninstall` の途中の印 | `<CLI>/old/<name>.uninstalling` | `<CLI>\old\<name>.uninstalling` |
-| よけた CLI（[インストール「動いている CLI のよけ方」](install-and-update.md#動いている-cli-のよけ方)） | `<CLI>/old/vw2026.old-<時刻>` | `<CLI>\old\vw2026.exe.old-<時刻>` |
-| フックが使ってよい場所 | `<CLI>/data/<name>/` | `<CLI>\data\<name>\` |
+| `vw2026` の作業の場所（`<Work>`。[インストール「作業の場所」](install-and-update.md#作業の場所)） | `/var/folders/…/T/vectorworks2026-cli/` | `%LOCALAPPDATA%\Temp\vectorworks2026-cli\` |
+| 組み立ての場所 | `<Work>/staging/<name>/`（zip は `<Work>/staging/<name>.zip`） | `<Work>\staging\<name>\` |
+| 退避の場所 | `<Work>/old/<name>/` | `<Work>\old\<name>\` |
+| `uninstall` の途中の印 | `<Work>/old/<name>.uninstalling` | `<Work>\old\<name>.uninstalling` |
+| よけた CLI（[インストール「動いている CLI のよけ方」](install-and-update.md#動いている-cli-のよけ方)） | `<Work>/old/vw2026.old-<時刻>` | `<Work>\old\vw2026.exe.old-<時刻>` |
 | PATH | `~/.local/bin/vw2026`（`<Plug-Ins>/cli/bin/vw2026` へのリンク） | 利用者の `Path` に `<Plug-Ins>\cli\bin` |
 
-段 2 までの実装（いまのコード）は、スプールを `<CLI>/spool/` に置き、CLI を置く場所を決めていません
-（[通信規則「スプールの場所」](../protocol.md#スプールの場所)）。上の表は段 3 からのものです。
+上の表は段 3 からのものです。段 2 までの実装（いまのコード）は、スプールを CLI の場所
+（mac は `~/Library/Application Support/vectorworks2026-cli/`、Windows は `%LOCALAPPDATA%\vectorworks2026-cli\`。
+[通信規則「スプールの場所」](../protocol.md#スプールの場所)の `<CLI>`）の下の `spool/` に置き、CLI を置く場所を決めていません。
+段 3 からは、持続する `vw2026` の場所を持ちません。
 
 - **場所の根は環境変数を読まずに求めます。** スプールは、プラグインは自分のモジュールの場所から、
   `vw2026` は自分の実行ファイルの場所から求めます（[通信規則「スプールの場所」](../protocol.md#スプールの場所)）。
-  `<CLI>` と既定の `<Plug-Ins>` は OS の決まった場所から求め、GUI アプリの Vectorworks と、ssh や別のアプリ
+  `<Work>` と既定の `<Plug-Ins>` は OS の決まった場所から求め、GUI アプリの Vectorworks と、ssh や別のアプリ
   から起動した `vw2026` とで食い違わないようにします。
-  - `<CLI>`: Windows は `%LOCALAPPDATA%` の指す場所を `SHGetKnownFolderPath(FOLDERID_LocalAppData)` で
-    求める（環境変数 `LOCALAPPDATA` は読まない。`vw2026` は `syscall` 経由）。mac はホームディレクトリの
-    `Library/Application Support` で、ホームは利用者の passwd の項目（`getpwuid_r(getuid())` の `pw_dir`）
-    から求める（環境変数 `HOME` は読まない。`vw2026` は `os/user`）。
+  - `<Work>`: Windows は `SHGetKnownFolderPath(FOLDERID_LocalAppData)` の下の `Temp`（環境変数 `TMP` /
+    `TEMP` は読まない。`vw2026` は `syscall` 経由）。mac は `/usr/bin/getconf DARWIN_USER_TEMP_DIR` の出力
+    （環境変数 `TMPDIR` は読まない）。その下の `vectorworks2026-cli`（[インストール「作業の場所」](install-and-update.md#作業の場所)）。
   - 既定の `<Plug-Ins>`: Windows は `%APPDATA%` の指す場所を `SHGetKnownFolderPath(FOLDERID_RoamingAppData)` で求める
-    （環境変数 `APPDATA` は読まない。`<CLI>` の `FOLDERID_LocalAppData` と同じく `syscall` 経由）。
-    mac は `<CLI>` と同じく、passwd の項目のホームの下の `Library/Application Support`。
+    （環境変数 `APPDATA` は読まない。`syscall` 経由）。mac はホームディレクトリの `Library/Application Support` の下で、
+    ホームは利用者の passwd の項目（`getpwuid_r(getuid())` の `pw_dir`）から求める（環境変数 `HOME` は読まない。
+    `vw2026` は `os/user`）。
 - `<Plug-Ins>` は Vectorworks の利用者フォルダの中です。Vectorworks の設定で利用者フォルダを
-  移せるので、標準以外の場所も、`<CLI>` と同じドライブにあれば扱えます（`install` / `uninstall`
+  移せるので、標準以外の場所も、`<Work>` と同じドライブにあれば扱えます（`install` / `uninstall`
   に毎回 `--plugins-dir` で渡す。入れた場所は記録しない。[インストール](install-and-update.md#前提)）。
-- `<CLI>` は、このプラグインだけでなく、`vw2026` で入れるすべてのプラグインの組み立て・退避・
-  フックの場所を持ちます（`<name>` ごとに分ける）。CLI とスプールは置きません（`cli` のフォルダの中に
-  ある。[インストール「CLI とスプールの置き場所」](install-and-update.md#cli-とスプールの置き場所)）。
+- `<Work>` は、このプラグインだけでなく、`vw2026` で入れるすべてのプラグインの組み立て・退避の場所です
+  （`<name>` ごとに分ける）。CLI とスプールは置きません（`cli` のフォルダの中にある。
+  [インストール「CLI とスプールの置き場所」](install-and-update.md#cli-とスプールの置き場所)）。
   PATH はこのプラグインのフックが置きます（[インストール「`cli` のフック」](install-and-update.md#cli-のフック)）。
 
 ## 拡張機能
@@ -79,6 +80,6 @@
 に置きます。CLI 側の `cli/internal/spool` の `AppDirName` / `SpoolDirName` と対で、両側のテストが
 [通信規則の見本](../fixtures.md)の `constants.json` に照らします（[通信規則](../protocol.md#スプールの場所)）。
 段 3 でスプールを `<Plug-Ins>/cli/spool/` に移すと、プラグインは `<CLI>` を使わなくなるので、
-`kAppDirName` と見本の `app_dir` を除き、`AppDirName` は `vw2026`（`install` の作業の場所）だけが持ちます。
+`kAppDirName` と見本の `app_dir` を除き、`AppDirName` は `vw2026`（`<Work>` のディレクトリ名）だけが持ちます。
 CLI の実行ファイルを置く `bin` は `vw2026` がスプールを求めるのに使うので、`cli/internal/spool` に置きます
 （プラグインは使わないので、見本には載せない）。

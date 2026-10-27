@@ -15,7 +15,7 @@
 <CLI>/spool/
 ```
 
-`<CLI>` は `vw2026` の作業の場所です（[名前と識別子](plugin/identifiers.md#置き場所)）。
+`<CLI>` は段 2 までの CLI の場所です（mac は `~/Library/Application Support/vectorworks2026-cli/`、Windows は `%LOCALAPPDATA%\vectorworks2026-cli\`。[名前と識別子「置き場所」](plugin/identifiers.md#置き場所)）。
 
 - **プラグインと呼ぶ側は、同じ規則で同じ場所を求めます**（探索しない）。GUI アプリの
   Vectorworks と、ssh や別のアプリから起動されたプロセスとで食い違わないためです。一時
