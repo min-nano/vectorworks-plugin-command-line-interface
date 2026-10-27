@@ -4,10 +4,11 @@
 
 namespace VwCli::core {
 
-Json ping(const Json &args, const ToolContext &context, const PingFacts &facts, ToolError &error) {
+Json ping(const Json &args, const ToolContext &context, const PingFacts &facts,
+          ToolStatus &status) {
 	if (!args.members().empty()) {
-		error.code = ErrorCode::InvalidArgs;
-		error.message =
+		status.code = ErrorCode::InvalidArgs;
+		status.message =
 		    "ping は引数を受け付けません（知らない引数: " + args.members().front().first + "）";
 		return Json();
 	}

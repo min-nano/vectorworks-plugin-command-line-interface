@@ -618,6 +618,35 @@ func TestCallRejectsResultThatIsNotAnObject(t *testing.T) {
 	}
 }
 
+// 失敗の応答の detail はそのまま渡す。あってオブジェクトでなければ壊れた応答（docs/protocol.md「応答」）。
+func TestCallDetail(t *testing.T) {
+	// want は受け取る detail。malformed なら壊れた応答。
+	for _, c := range []struct{ text, want string }{
+		{`{"ok":false,"code":"internal","error":"x","detail":{"reason":"documents_open"}}`, `{"reason":"documents_open"}`},
+		{`{"ok":false,"code":"invalid_args","error":"x","detail":{}}`, `{}`},
+		{`{"ok":false,"code":"internal","error":"x"}`, ``},
+		{`{"ok":false,"code":"internal","error":"x","detail":null}`, `malformed`},
+		{`{"ok":false,"code":"internal","error":"x","detail":[1]}`, `malformed`},
+		{`{"ok":false,"code":"internal","error":"x","detail":"x"}`, `malformed`},
+	} {
+		t.Run(c.text, func(t *testing.T) {
+			dir := fakeplugin.NewDir(t)
+			fakeplugin.HoldLock(t, dir)
+			answer(t, dir, c.text)
+			response, err := Open(dir).Call("quit", nil, "", 5*time.Second)
+			if c.want == "malformed" {
+				if !errors.Is(err, ErrMalformedResponse) {
+					t.Fatalf("want ErrMalformedResponse, got %v", err)
+				}
+				return
+			}
+			if err != nil || response.OK || string(response.Detail) != c.want {
+				t.Fatalf("got %+v %v, want the detail %s", response, err, c.want)
+			}
+		})
+	}
+}
+
 func TestIsObject(t *testing.T) {
 	for text, want := range map[string]bool{
 		`{}`: true, ` {"a":1} `: true, `[]`: false, `null`: false, `"{"`: false, ``: false,

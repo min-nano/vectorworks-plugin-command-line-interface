@@ -45,7 +45,8 @@ void tick() {
 			}
 			server.emplace(std::move(*dir));
 		}
-		// 結果の quit（終了の依頼）は見ない。種類 app の道具が表に無いので立たない（段 6 で足す）。
+		// 結果の quit（終了の依頼）は見ない。立てる道具（quit）が表に無いので立たない
+		// （段 6 で足す）。
 		server->serve(tools::table(), nowNanos(), core::Activity::Idle);
 	} catch (...) {
 		// 次の刻みでやり直す。

@@ -63,12 +63,14 @@ type Request struct {
 }
 
 // Response は応答 1 件。OK が false のときだけ Code（機械が読む種別）と Error（人向けの理由）が
-// 入る。id はファイル名が持つ。知らないフィールドは無視する（docs/protocol.md「互換性」）。
+// 入り、道具が詳細を返した失敗（invalid_args・internal）だけが Detail（JSON のオブジェクト）を持つ。
+// id はファイル名が持つ。知らないフィールドは無視する（docs/protocol.md「互換性」）。
 type Response struct {
 	OK     bool            `json:"ok"`
 	Code   string          `json:"code,omitempty"`
 	Error  string          `json:"error,omitempty"`
 	Result json.RawMessage `json:"result,omitempty"`
+	Detail json.RawMessage `json:"detail,omitempty"`
 }
 
 // 失敗の種別（Response.Code）。綴りは通信規則で固定する（docs/protocol.md「応答」）。CLI は
@@ -251,6 +253,10 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		case CodeNoSession:
 			return nil, fmt.Errorf("%w (%s did not run)", ErrNoSession, tool)
 		case CodeInvalidRequest, CodeUnknownTool, CodeInvalidArgs, CodeInternal:
+			// detail は省略できるが、あればオブジェクト（docs/protocol.md「応答」）。
+			if len(response.Detail) > 0 && !IsObject(response.Detail) {
+				return nil, fmt.Errorf("%w (%s; the detail is not an object)", ErrMalformedResponse, tool)
+			}
 			return response, nil
 		default:
 			return nil, fmt.Errorf("%w (%s; unknown code %q: %s)", ErrMalformedResponse, tool, response.Code, response.Error)

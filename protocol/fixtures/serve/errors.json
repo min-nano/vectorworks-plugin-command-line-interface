@@ -1,5 +1,5 @@
 {
-	"description": "tools は道具の表を返す。表に無い道具は unknown_tool、道具の失敗は invalid_args と internal（例外を含む）。値を返さない道具の result は {}、オブジェクトでない値を返す道具は internal。種類 write の道具は占有の中でだけ呼べる（占有されていなければ no_session）",
+	"description": "tools は道具の表を返す。表に無い道具は unknown_tool、道具の失敗は invalid_args と internal（例外を含む）で、道具が返した詳細だけを detail に載せる。値を返さない道具の result は {}、オブジェクトでない値を返す道具は internal。種類 write の道具は占有の中でだけ呼べる（占有されていなければ no_session）",
 	"steps": [
 		{"description": "ロックを取る（空のスプールなので何も消さない）", "expect": {"files": ["bridge.lock"]}},
 		{
@@ -7,6 +7,7 @@
 				"tools": "tools.json",
 				"unknown": "unknown.json",
 				"bad-args": "bad-args.json",
+				"bad-args-detail": "bad-args-detail.json",
 				"broken": "broken-tool.json",
 				"throws": "throws.json",
 				"nothing": "nothing.json",
@@ -16,6 +17,7 @@
 			},
 			"expect": {
 				"calls": [
+					{"tool": "bad_args_detail"},
 					{"tool": "bad_args"},
 					{"tool": "broken"},
 					{"tool": "not_object"},
@@ -82,6 +84,24 @@
 									"kind": "read"
 								},
 								{
+									"name": "bad_args_detail",
+									"description": "引数の誤りで失敗し、詳細を返す",
+									"inputSchema": {"type": "object"},
+									"kind": "read"
+								},
+								{
+									"name": "save",
+									"description": "図面のファイルに働き、終了は頼まない道具の代わり",
+									"inputSchema": {"type": "object"},
+									"kind": "app"
+								},
+								{
+									"name": "quit_refused",
+									"description": "終了を頼んでから失敗し、詳細を返す道具の代わり",
+									"inputSchema": {"type": "object"},
+									"kind": "app"
+								},
+								{
 									"name": "quit",
 									"description": "Vectorworks を終わらせる道具の代わり",
 									"inputSchema": {
@@ -96,6 +116,7 @@
 					},
 					"unknown": {"ok": false, "code": "unknown_tool"},
 					"bad-args": {"ok": false, "code": "invalid_args"},
+					"bad-args-detail": {"ok": false, "code": "invalid_args", "detail": {"reason": "to_is_open"}},
 					"broken": {"ok": false, "code": "internal"},
 					"throws": {"ok": false, "code": "internal"},
 					"nothing": {"ok": true, "result": {}},
@@ -104,6 +125,8 @@
 					"ping": {"ok": true, "result": {}}
 				},
 				"files": [
+					"bad-args-detail.res.json",
+					"bad-args-detail.wait",
 					"bad-args.res.json",
 					"bad-args.wait",
 					"bridge.lock",

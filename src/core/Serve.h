@@ -13,8 +13,10 @@
 
 namespace VwCli::core {
 
-// 道具の種類（tools の結果の kind）。図面を変えるかが分からない道具は Write とする。Write と App は
-// 占有の中でだけ呼べ、終了の依頼の最中なら busy で断る。Read は占有に照らさない。
+// 道具の種類（tools の結果の kind）。Read は図面を変えず、占有に照らさない。Write は図面の中身を
+// 変える（図面を変えるかが分からない道具も Write とする）。App は Vectorworks・図面のファイルや窓に
+// 働き、図面の中身は変えない（save・close・quit など）。Write と App は占有の中でだけ呼べ、終了の
+// 依頼の最中なら busy で断る。終了の依頼は種類では決めず、道具が ToolStatus::quit で返す。
 enum class ToolKind { Read, Write, App };
 
 // 受け付けの外の状態。タイマー（Clock）が回ごとに渡す。Quitting では、種類 Write と App の道具を
@@ -29,10 +31,16 @@ enum class Activity {
 // 道具が返す失敗の種別。None は失敗していない。
 enum class ErrorCode { None, InvalidArgs, Internal };
 
-struct ToolError {
+// 道具が返す失敗と終了の依頼。
+struct ToolStatus {
 	ErrorCode code = ErrorCode::None;
 	// 日本語。応答の error にそのまま載る。
 	std::string message;
+	// 失敗の詳細（JSON のオブジェクト）。失敗したときだけ応答の detail にそのまま載る（通信規則
+	// 「応答」）。空（null）なら detail を付けない。オブジェクトでない値は internal で応える。
+	Json detail;
+	// 終了の依頼。成功し、応答を書けたとき、受け付けの外で終了を頼む（quit だけが立てる）。
+	bool quit = false;
 };
 
 // 道具に渡す受け付けの状態。
@@ -42,9 +50,9 @@ struct ToolContext {
 };
 
 // 道具の中身。結果は JSON のオブジェクトで返す（返す値が無ければ Json() でよく、{} になる。
-// オブジェクトでない値は internal で応える。通信規則「応答」）。失敗は error に書き（戻り値は
-// 使わない）、例外は Server が internal で応える。
-using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolError &error);
+// オブジェクトでない値は internal で応える。通信規則「応答」）。失敗と終了の依頼は status に書き
+// （失敗したときの戻り値は使わない）、例外は Server が internal で応える。
+using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolStatus &status);
 
 struct Tool {
 	// [a-z0-9_]+(\.[a-z0-9_]+)*
@@ -71,7 +79,8 @@ struct ServeResult {
 	Phase phase = Phase::Serving;
 	// Error の理由。
 	std::string message;
-	// 種類 App の道具が成功し、その応答を書けた（終了の依頼）。受け付けの外で終了を頼む。
+	// 道具が成功して ToolStatus::quit を立て、その応答を書けた（終了の依頼）。受け付けの外で終了を
+	// 頼む。
 	bool quit = false;
 };
 
@@ -85,8 +94,8 @@ public:
 	// ロックを掴んでいなければ用意（prepare → lock → sweep）をし、取れなければ何もせずに戻る。
 	// 回の始めに並べた要求を名前の昇順ですべて処理し、取り出した要求には同じ回の中で応える
 	// （受け付けの入れ子が起きたときは、入れ子の回が先に取り出して断った要求を飛ばす）。
-	// 種類 App の道具が成功して応答を書けたら、その回の残りの要求を取り出さずに戻る（終了したら
-	// 応えられないので、残りは置いたままにする）。
+	// 道具が成功して終了の依頼（ToolStatus::quit）を立て、応答を書けたら、その回の残りの要求を
+	// 取り出さずに戻る（終了したら応えられないので、残りは置いたままにする）。
 	//
 	// 道具の中で Vectorworks がイベントを回し、serve の途中でまた serve が呼ばれたら（受け付けの
 	// 入れ子）、外の回の状態に触れず、取り出せる要求をすべて busy で断って戻る。外の回がすでに

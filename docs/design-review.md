@@ -8,12 +8,12 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 段 3 インストール・段 4 共通部の変更・段 5 読む道具と図面を扱う道具・段 6 終了の依頼と占有）。
 
 通信規則の中心（占有の表・待つ印・`no_wait` / `busy` / `no_session`・掃除・応答を書けたときだけ
-反映すること・`app` の成功でその回の残りを取り出さないこと・印の綴り・猶予の 5 秒）は、
+反映すること・終了の依頼でその回の残りを取り出さないこと・印の綴り・猶予の 5 秒）は、
 `src/core/Serve.cpp`・`src/core/Bridge.cpp`・`cli/internal/spool/spool.go` と一致していました。
 
 | 項目 | 中身 | 関わる段 | 状態 |
 | --- | --- | --- | --- |
-| [A1](#a1-種類-app-と終了の依頼が同じ意味になっている) | 種類 `app` と終了の依頼が同じ意味になっている | 段 4 の前 | 決定（終了の依頼は道具が返す印 `ToolStatus::quit` にし、`app` は占有の中でだけ呼べる種類に限る。実装は段 4 の共通部の変更。[ブリッジ「道具の表」](plugin/bridge.md#道具の表)） |
+| [A1](#a1-種類-app-と終了の依頼が同じ意味になっている) | 種類 `app` と終了の依頼が同じ意味になっている | 段 4 の前 | 済（終了の依頼は道具が返す印 `ToolStatus::quit` にし、`app` は占有の中でだけ呼べる種類に限る。段 4 の共通部の変更で実装した。[ブリッジ「道具の表」](plugin/bridge.md#道具の表)） |
 | [A2](#a2-quitping-が使う-sdk-呼び出しが確かめられていない) | `quit`・`ping` が使う SDK 呼び出しが確かめられていない | 段 6（`quit`）の前 | `GetCurrentLayer()` は済（[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)・[道具「ping」](plugin/tools.md#ping)）。`quit` は [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) で調査中 |
 | [A3](#a3-未決-2-が段-2-の作りを変える) | 未決 2 が段 2 の作りを変える | 段 2 の前 | 済（undo の記録が開いているかは見ない。書く道具は自分で記録を開いて閉じ、占有の中でだけ呼べる。受け付けの入れ子は `busy` で断る。[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)） |
 | [A4](#a4-終了の依頼の最中に受け付けが入れ子になりうる) | 終了の依頼の最中に受け付けが入れ子になりうる | 段 6 | 暫定（終了の依頼の最中は `write`・`app` を `busy` で断る。残すかは [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 の結果で段 6 の前に決める） |
@@ -41,6 +41,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 - 道具が `ping` だけのいまなら、出した実装が無いので版を上げずに直せる
   （[通信規則「互換性」](protocol.md#互換性)の例外）。直すなら `src/core`・見本・偽のプラグイン・
   [ブリッジ「受け付け 1 回」](plugin/bridge.md#受け付け-1-回coreserverserve)を合わせて直す。
+- **済。** 段 4 で `src/core`（`ToolStatus`）・偽のプラグイン・見本（`serve/quit.json`）を直した。
 
 ### A2. `quit`・`ping` が使う SDK 呼び出しが確かめられていない
 

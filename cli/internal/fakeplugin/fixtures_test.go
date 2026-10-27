@@ -30,6 +30,8 @@ type fakeTool struct {
 	InputSchema json.RawMessage `json:"inputSchema"`
 	Kind        string          `json:"kind"`
 	Does        string          `json:"does"`
+	Detail      json.RawMessage `json:"detail"`
+	Quit        bool            `json:"quit"`
 }
 
 type call struct {
@@ -61,11 +63,13 @@ type fixtureStep struct {
 	} `json:"expect"`
 }
 
-// expectedResponse は期待する応答。ok は必須で、result は書いたときだけ比べる。
+// expectedResponse は期待する応答。ok は必須で、result は書いたときだけ比べる。detail は書いた
+// ときだけ持ち、書いたものと一致する（無ければ持たない）。
 type expectedResponse struct {
 	OK     *bool           `json:"ok"`
 	Code   string          `json:"code"`
 	Result json.RawMessage `json:"result"`
+	Detail json.RawMessage `json:"detail"`
 }
 
 // readFixture は見本のファイルを読む。
@@ -136,10 +140,12 @@ func fakeHandler(t *testing.T, tools []fakeTool, calls *[]call) Handler {
 			case "array":
 				return spool.Response{OK: true, Result: json.RawMessage(`[]`)}
 			case "invalid_args":
-				return spool.Response{Code: spool.CodeInvalidArgs, Error: "invalid args"}
-			case "internal", "throw":
-				// Go の偽の道具は例外を投げないので、throw にはプラグインが例外を受けたときの応答を返す。
-				return spool.Response{Code: spool.CodeInternal, Error: "the tool failed"}
+				return spool.Response{Code: spool.CodeInvalidArgs, Error: "invalid args", Detail: fake.Detail}
+			case "internal":
+				return spool.Response{Code: spool.CodeInternal, Error: "the tool failed", Detail: fake.Detail}
+			case "throw":
+				// Go の偽の道具は例外を投げないので、プラグインが例外を受けたときの応答を返す。
+				return spool.Response{Code: spool.CodeInternal, Error: "the tool threw"}
 			default:
 				t.Fatalf("fake-tools.json: unknown does %q", fake.Does)
 			}
@@ -336,6 +342,12 @@ func (r *caseRunner) step(step fixtureStep) {
 		}
 		actual, _ := decode(t, data).(map[string]any)
 		good := actual != nil && actual["ok"] == *expected.OK
+		detail, hasDetail := actual["detail"]
+		if expected.Detail != nil {
+			good = good && hasDetail && match(decode(t, expected.Detail), detail, &r.session)
+		} else {
+			good = good && !hasDetail
+		}
 		if *expected.OK {
 			result, found := actual["result"]
 			good = good && found
@@ -395,10 +407,14 @@ func TestFixtureServeCases(t *testing.T) {
 			// 予約された名前の id（reserved-ids.json）もファイルとして置けるように、\\?\ を付ける。
 			r := &caseRunner{t: t, dir: extendedPath(NewDir(t)), held: map[string]func(){}}
 			kinds := map[string]string{}
+			quits := map[string]bool{}
 			for _, fake := range table.Tools {
 				kinds[fake.Name] = fake.Kind
+				quits[fake.Name] = fake.Quit
 			}
-			r.server = &server{dir: r.dir, handle: fakeHandler(t, table.Tools, &r.calls), kinds: kinds}
+			r.server = &server{
+				dir: r.dir, handle: fakeHandler(t, table.Tools, &r.calls), kinds: kinds, quits: quits,
+			}
 			// 一時ディレクトリを消す前に、ロックと待つ印を放す（Windows は開いたままでは消せない）。
 			t.Cleanup(func() {
 				r.server.release()
