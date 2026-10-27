@@ -127,7 +127,7 @@ src/
 ├─ Module-Info.plist.in                    … mac のバンドルの Info.plist（版の鍵を持たない）
 ├─ core/                                   … SDK に依らない（Protocol・Json・Files・Bridge・Serve・Ping）。プラグインとテストがリンク
 └─ tools/                                  … 道具の表（ToolTable.cpp）と中身（Ping.cpp など。SDK 依存。SDK に依らない部分は core へ）
-scripts/                                   … 整形と検査（format.sh・lint.sh・powershell.ps1）・CI（fetch-vw-sdk.sh・vw-sdk-cache-key.sh・dev-tag.sh）・get-vw2026（.sh / .ps1。CLI を取って install を走らせるだけ。段 3）・hooks/（cli のフック。CLI の入れ替えと PATH。zip の直下に入る。段 3）
+scripts/                                   … 整形と検査（format.sh・lint.sh・powershell.ps1）・CI（fetch-vw-sdk.sh・vw-sdk-cache-key.sh・dev-tag.sh）・get-vw2026（.sh / .ps1。CLI を取って install を走らせるだけ。段 3）・hooks/（cli のフック。PATH。zip の直下に入る。段 3）
 resources/                                 … cli.vwr（拡張機能を登録しないので最小限。Strings/cli.vwstrings に使わない文字列 1 つだけ）
 tests/                                     … 無 SDK の単体テスト・ファジングの入口・スクリプトのテスト
 protocol/fixtures/                         … 通信規則の見本（C++ と Go の両方のテストが読む。docs/fixtures.md）
