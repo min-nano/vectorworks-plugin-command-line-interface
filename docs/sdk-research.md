@@ -150,6 +150,6 @@ SDK リファレンスの `Findings/` に記載がありません。`vw2026 inst
   写しから読み込むとスプールが `<Plug-Ins>/cli/spool/` にできません。Windows では起動時に一度降ろして
   読み込み直す（上記 0）ので、読み込み直したあとの場所も同じかを見ます。
 
-段 3 の実装の前に SDK リファレンスで issue を立て、`Findings/`（Plug-in Modules）に反映されてから
-実装します（issue はまだ立てていない）。段 3 の実機確認でも、スプールが既にある状態での起動を
+[SDK リファレンス #277](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/277) で
+調べ、`Findings/`（Plug-in Modules）に反映されてから段 3 を実装します。段 3 の実機確認でも、スプールが既にある状態での起動を
 確かめます（[実装の順序](plugin/plan.md)の段 3）。

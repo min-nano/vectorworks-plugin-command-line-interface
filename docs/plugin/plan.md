@@ -24,7 +24,7 @@
 | 段 | 項目 |
 | --- | --- |
 | 2 | なし（A2 の `ping`・A3・C1 の `ping` は済） |
-| 3 | [SDK の調査 6](../sdk-research.md#6-プラグインのフォルダの中のモジュール以外のものとモジュールの読み込み元調べていない段-3-の前に確かめる)（`<Plug-Ins>/cli/` の中のモジュール以外のものと、モジュールの読み込み元。SDK リファレンスで確かめてから実装する）・B2（Windows の PATH。方針は決めた。段 3 の `install-windows` ジョブで確かめて済にする）・[SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)（済。「有効化」はモジュールのフルパスで覚え、同じパスのままフォルダごと付け替えても残る。[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の「開発元不明のプラグイン」のダイアログ） |
+| 3 | [SDK の調査 6](../sdk-research.md#6-プラグインのフォルダの中のモジュール以外のものとモジュールの読み込み元調べていない段-3-の前に確かめる)（`<Plug-Ins>/cli/` の中のモジュール以外のものと、モジュールの読み込み元。[SDK リファレンス #277](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/277) で確かめてから実装する）・B2（Windows の PATH。方針は決めた。段 3 の `install-windows` ジョブで確かめて済にする）・[SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)（済。「有効化」はモジュールのフルパスで覚え、同じパスのままフォルダごと付け替えても残る。[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の「開発元不明のプラグイン」のダイアログ） |
 | 4 | A1（種類 `app` と終了の依頼。済） |
 | 5 | C1（読む道具の結果） |
 | 6 | A2（`quit`）・A4（終了の依頼の最中の判定を残すか）・B1・C3（終了の処理中のタイマー） |
