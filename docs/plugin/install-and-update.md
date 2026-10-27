@@ -72,10 +72,9 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
 **初回のインストールも更新も、同じ `install` で行います。**
 
 ```sh
-vw2026 install cli@latest                         # main の最新（同じタグなら何もしない）
+vw2026 install cli@latest                         # main の最新（同じタグなら zip を取らず、フックだけを走らせる）
 vw2026 install cli@dev-feature-x-61-a1b2c3d       # PR のプレリリース
 vw2026 install cli@latest --check                 # 入れずに、新しいビルドがあるかだけ返す（動いていてもよい）
-vw2026 install cli@latest --reinstall             # 同じタグでも入れ直す（フックも走らせ直す）
 vw2026 install cli@latest --plugins-dir <Plug-Ins>
 vw2026 install import-ifc-homeskz@latest
 vw2026 install my-plugin@2026.3.1 --registry ./plugins.json
@@ -86,8 +85,12 @@ vw2026 install my-plugin@2026.3.1 --registry ./plugins.json
 - `--check` は、新しいビルドがあるか（`available`）と最新か（`up_to_date`）を、終了コードでは
   なく出力の `outcome` で分けます（新しいビルドがあることは失敗ではないため。判定できなかった
   ときだけ失敗）。入っていなければ `available` です。
-- `--reinstall` は、同じタグでも付け替えとフックを行います（`cli` の PATH を通し直す・消えた
-  `<CLI>/bin/vw2026` を置き直すとき）。
+- **同じタグなら、zip を取らず、フォルダも付け替えずに、`install` のフックだけを走らせます**
+  （`up_to_date`）。`cli` なら PATH を通し直し、消えた `<CLI>/bin/vw2026` を置き直します。フックは
+  Vectorworks が止まっている間にしか走らせないので、同じタグでも Vectorworks が動いていれば
+  `vectorworks_running` で終わります（新しいかだけを知りたいときは `--check`）。
+- プラグインのフォルダの中身を入れ直したいときは、`uninstall` してから `install` します（同じパスに
+  入るので、その間に Vectorworks を起動しなければ「有効化」は残る。下記「入れる先のフォルダ」）。
 - 指定・環境変数・終了コードの具体的な値は `vw2026 help install` が真実です（`CLAUDE.md`「Go」）。
 
 ### 流れ
@@ -97,9 +100,10 @@ vw2026 install <name>@<tag>
   1. 名前を引く                       既定のレジストリ → --registry の順（レジストリ「レジストリの順」）
   2. マニフェストを取る               合った規則の path（{tag} を置き換える）。tag を照らし、今のターゲットを選ぶ
   3. 入れる先を確かめる               <Plug-Ins>/<name>/ と中の記録（下記「入れる先のフォルダ」）
-                                     記録の tag と target が同じなら終わり {"outcome":"up_to_date"}
-                                     --check なら入れずに {"outcome":"available"}
+                                     --check なら入れずに {"outcome":"up_to_date"} か {"outcome":"available"}
   4. Vectorworks が動いていないか     ロックが掴まれていれば終わり {"outcome":"vectorworks_running"}（専用の終了コード）
+     （同じタグのとき）              記録の tag と target が同じなら、入っているフォルダで install のフックだけを走らせて
+                                     終わり {"outcome":"up_to_date",…,"hook":{…}}（zip を取らず、付け替えない）
   5. zip を取って照らす               asset を <CLI>/staging/<name>.zip へ。sha256 が合わなければ失敗
   6. 組み立てる                       <CLI>/staging/<name>/ へ展開し、モジュールを確かめ、記録を書く
   7. プラグインのフォルダを付け替える  下記「入れ替えの手順」
@@ -112,7 +116,9 @@ vw2026 install <name>@<tag>
 - **GitHub の API を使いません。** レジストリの規則とマニフェストの絶対の参照で、取るものの場所が
   決まります。API の回数制限・トークンの扱い・リリース本文の読み取りが要りません。
 - **新しいかは、タグとターゲットだけで比べます**（タグは使い回さないので、タグが同じならビルドも
-  同じ）。マニフェストだけを取り、zip は取りません。
+  同じ）。マニフェストだけを取り、zip は取りません。同じタグでフックを走らせるときは、マニフェストの
+  `install` のフックを使います（同じビルドなので、入っているフォルダの中のフックと同じもの）。
+  `VW2026_HOOK_PREVIOUS_TAG` には同じタグを渡します。
 - **プラグインと CLI は 1 つの zip から入ります**（`cli` の zip の `bin/` を、`cli` のフックが
   `<CLI>/bin/` へ置く）。動いているプラグインと入っている CLI は同じビルドです（[通信規則「版」](../protocol.md#版)の前提）。
 - 初回でも Vectorworks が動いていれば何もせずに終わり、CLI も置きません（何も変えない）。
@@ -358,7 +364,8 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
   ディレクトリで確かめます（環境変数は増やさない）。押さえること:
   - レジストリの順と規則の選び方（先に見つかった名前・最初に合った規則・取れなければ次へ進まない・
     `{tag}` のある規則でのタグの照合・知らない版と項目）
-  - 新しいかの判定（同じタグとターゲットで何も変えない・`--check` で何も変えない・`--reinstall`）
+  - 新しいかの判定（同じタグとターゲットで zip を取らず、付け替えずにフックだけを走らせる・同じタグでも
+    Vectorworks が動いていればフックを走らせない・`--check` で何も変えない）
   - sha256 が合わない・zip の形が正しくない（モジュールが無い・2 つある・シンボリックリンク・`..`・
     `\`）ときに何も変えない
   - 入れる先のフォルダ（記録が無い・`registry` が違うときに断る）
@@ -419,7 +426,7 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
   - タグは使い回さず、リリースは下書きで資産を上げ終えてから公開するので（[ビルド「リリースの形」](build-and-release.md#リリースの形)）、
     資産が一瞬無いことはありません。ジョブは走らせ直しを持ちません。
   - **実物のレジストリで、`Path` の 3 つの型の扱い**（[Windows の `Path` の読み書き](#windows-の-path-の読み書き)）。
-    手順 1 と 2 の間で、利用者の `Path` を置き直して `install cli@<その PR のタグ> --reinstall` を
+    手順 1 と 2 の間で、利用者の `Path` を置き直して 同じタグの `install cli@<その PR のタグ>`（フックだけが走る）を
     走らせ直し、次を確かめます（ランナーは使い捨てなので、元の値は戻さない）。
     1. 手順 1 の前に値を消しておく → 手順 1 のあと、REG_EXPAND_SZ で `<CLI>\bin` だけの値ができる。
     2. REG_SZ の `C:\vw2026-probe-sz` に置き直して走らせる → REG_SZ のまま

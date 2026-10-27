@@ -30,8 +30,8 @@
 | ターゲット | `macos-arm64` / `macos-x64` / `windows-x64` | CLI が自分の動く環境から 1 つに決める。Windows on ARM でも Vectorworks は x64 のエミュレーションで動き、CLI も amd64 で動くので `windows-x64` |
 
 **タグは使い回しません。** 1 つのリリースに 1 つのタグを付け、同じタグを別のリリースに付け直しません
-（提供側の約束。CLI は確かめられない）。入っているものと同じタグなら同じものとみなし、取り直さずに
-`up_to_date` で終わります。
+（提供側の約束。CLI は確かめられない）。入っているものと同じタグなら同じものとみなし、zip を取り直さず、
+フォルダも付け替えずに `install` のフックだけを走らせ直して `up_to_date` で終わります。
 
 最新を指す名前（`latest`・`stable` など）は、**提供側が置き場所で用意します**。レジストリは別名を
 知らず、`@` の後ろの文字列でどの規則を使うかを決めるだけです（下記「規則の選び方」）。
@@ -102,10 +102,10 @@
 ```json
 {
   "manifest_version": 1,
-  "tag": "main-a1b2c3d",
+  "tag": "0.0.0-a1b2c3d",
   "targets": {
     "macos-arm64": {
-      "asset": "https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/main-a1b2c3d/cli-macos-arm64.zip",
+      "asset": "https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/0.0.0-a1b2c3d/cli-macos-arm64.zip",
       "sha256": "…",
       "hooks": {
         "install": ["sh", "hooks/install.sh"],
@@ -113,7 +113,7 @@
       }
     },
     "windows-x64": {
-      "asset": "https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/main-a1b2c3d/cli-windows-x64.zip",
+      "asset": "https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/0.0.0-a1b2c3d/cli-windows-x64.zip",
       "sha256": "…",
       "hooks": {
         "install": ["powershell", "hooks/install.ps1"],
@@ -177,11 +177,11 @@
 
 | フック | とき | 失敗（0 以外で終わった・標準出力が JSON でない）したとき |
 | --- | --- | --- |
-| `install` | プラグインのフォルダを付け替えたあと、後始末の前。最初に入れるときも更新のときも | フォルダを元に戻して失敗で終わる。フックがフォルダの外で変えたものは CLI には戻せない |
+| `install` | プラグインのフォルダを付け替えたあと、後始末の前。最初に入れるときも更新のときも。**入っているものと同じタグのときは、zip を取らず、付け替えもせずに、入っているフォルダで走らせる**（フォルダの外に置いたものを置き直すため） | フォルダを元に戻して失敗で終わる（同じタグのときは、フォルダは変えていないのでそのまま）。フックがフォルダの外で変えたものは CLI には戻せない |
 | `uninstall` | フォルダを消す前。**入っている版の**フック（記録に写したもの）を、入っているフォルダで走らせる | 何も消さずに失敗で終わる |
 
 - **フックは、何度走っても同じ結果になるように書きます**（失敗のあとに走らせ直しても、
-  `--reinstall` で同じタグを入れ直しても壊れないため）。
+  同じタグの `install` で走らせ直しても壊れないため）。
 - **更新のときに古い版の `uninstall` は走らせません。** 新しい版の `install` に前のタグを渡すので、
   前の版が置いたものの移し替えは新しい版が受け持ちます（消してから置き直すと、その間 CLI が
   無くなるなど、片付けと置き直しの間に穴ができるため）。
@@ -212,7 +212,7 @@
   "record_version": 1,
   "name": "cli",
   "registry": "default",
-  "tag": "main-a1b2c3d",
+  "tag": "0.0.0-a1b2c3d",
   "target": "macos-arm64",
   "module": "cli.vwlibrary",
   "hooks": { "uninstall": ["sh", "hooks/uninstall.sh"] }
@@ -223,7 +223,7 @@
 | --- | --- |
 | `name` | `uninstall` の安全弁（フォルダ名と一致すること） |
 | `registry` | 同じ名前のフォルダが別の出どころのものでないかを確かめる。既定のレジストリは `default`、それ以外は `--registry` に渡した URL か絶対パス（相対パスは絶対にして残す） |
-| `tag`・`target` | 新しいかの判定（両方が一致すれば `up_to_date`）。`target` も比べるのは、同じタグでも別のターゲットの資産は別物のため |
+| `tag`・`target` | 新しいかの判定（両方が一致すれば zip を取らず、フックだけを走らせて `up_to_date`）。`target` も比べるのは、同じタグでも別のターゲットの資産は別物のため |
 | `module` | `uninstall` の安全弁（フォルダの中に実在すること） |
 | `hooks.uninstall` | `uninstall` で走らせるフック（入っている版のもの） |
 

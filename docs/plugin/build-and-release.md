@@ -37,7 +37,7 @@
 
 | ジョブ | 中身 |
 | --- | --- |
-| `meta` | ビルドする sha・刻印・公開先のタグ（`main-<短い sha>` / `dev-<slug>-<PR 番号>-<短い sha>` / 公開しない）を決め、`build.json` を書く（mac と Windows の zip に同じものを入れる）。ビルドのジョブは取り出すコミットを `meta` の出力に頼らず、同じ条件（同じリポジトリの PR だけ head）を自分の `checkout` に書き、取り出したものが `meta` の sha と同じかを確かめる（CodeQL が信頼できないコードの取り出しでないと読めるように。`meta` を変えても取り出すものが変わらないように） |
+| `meta` | ビルドする sha・刻印・公開先のタグ（`0.0.0-<短い sha>` / `dev-<slug>-<PR 番号>-<短い sha>` / 公開しない）を決め、`build.json` を書く（mac と Windows の zip に同じものを入れる）。ビルドのジョブは取り出すコミットを `meta` の出力に頼らず、同じ条件（同じリポジトリの PR だけ head）を自分の `checkout` に書き、取り出したものが `meta` の sha と同じかを確かめる（CodeQL が信頼できないコードの取り出しでないと読めるように。`meta` を変えても取り出すものが変わらないように） |
 | `build-mac` | `macos-15`・Xcode 16.2（SDK リファレンスの `plugin/` と同じ）。プラグインのビルドとアドホック署名、Go の arm64 と amd64 を `lipo` で universal に、zip |
 | `build-windows` | `windows-latest`・MSVC。プラグインのビルド、Go の amd64、zip（.NET の `ZipFile`。項目の名前の区切りを `/` にするため。Windows PowerShell 5.1 の `Compress-Archive` は `\` にする） |
 | `release` | 公開するときだけ。2 つの zip の sha256 を求めてマニフェスト（`vw2026.json`。[レジストリ「マニフェスト」](../registry.md#マニフェストvw2026json)）を書き、**下書きのリリース**を作って、zip・マニフェスト・初回のスクリプトを上げ終えてから公開する（下書きは利用者の URL から見えないので、資産が揃わない間を見せない。`latest` は公開した時点で進む）。**そのタグの公開済みのリリースが既にあれば何もしない**（同じ sha の実行し直し。タグを使い回さない）。下書きのまま残ったもの（前の実行が途中で止まった）は消して作り直す |
@@ -103,8 +103,10 @@ zip の中身はそのまま `<Plug-Ins>/cli/` に置かれ、`hooks/` のフッ
 初回のスクリプトは同じ形の URL で zip を取ります。**この URL の形と資産名（`vw2026.json`・
 `cli-<target>.zip`・`get-vw2026.{sh,ps1}`）は変えません。**
 
-- main: main への push ごとに `main-<短い sha>` のリリースを作る。タイトル `Main (<sha>)`・`--latest`。
-  `latest`（`cli@latest`）はこれを指す。
+- main: main への push ごとに `0.0.0-<短い sha>` のリリースを作る。タイトル `0.0.0 (<sha>)`・`--latest`。
+  `latest`（`cli@latest`）はこれを指す。形がある程度決まったら sha を外し、`0.0.1` から順に上げる
+  （[名前と識別子](identifiers.md)）。`install` はタグの大小を比べない（違えば入れる）ので、版の付け方を
+  変えても `install` は変わらない。
 - PR: 同じリポジトリの PR で、**変更後のコードでビルドしたもの**を push ごとに
   `dev-<slug>-<PR 番号>-<短い sha>`（slug は[名前と識別子](identifiers.md)）にプレリリースする。
   タイトル **`Dev: <branch> (<sha>)`**・`--prerelease`（`latest` を動かさない）。中身は main のものと
