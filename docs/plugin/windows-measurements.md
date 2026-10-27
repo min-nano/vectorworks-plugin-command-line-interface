@@ -81,13 +81,10 @@
 
 ### 開発元不明のプラグイン
 
-- 新しい `cli` を置いた最初の起動で「開発元不明のプラグイン」のダイアログが出て、`cli` は「無効」と
-  示され読み込まれなかった。「有効化」の後の起動から読み込まれた。
-- ファイルを別のビルドへ入れ替えても「有効」は残った。入れ替えの後の 2 回の起動でダイアログは出たが、
-  `cli` は読み込まれ、ダイアログが開いている間も `call ping` が応えた。その後、画面を確かめた起動では出なかった
-  （入れ替えの後の 1 回目は図面の描画中に落ちて終わっている）。
-- ダイアログは「認識されないプラグインがインストールされている限り、この警告は起動のたびに表示され
-  続けます」と書いているが、毎回は出なかった。
+[#258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258) と
+[#264](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/264) で `Findings/` に
+反映したので、そちらへ移しました（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の「開発元不明のプラグイン」のダイアログ）。
+このプラグインでの扱いは[構成「拡張機能を登録しない」](architecture.md#拡張機能を登録しない)です。
 
 ## 分かっていないこと
 
@@ -100,7 +97,5 @@
   [SDK リファレンス #257](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/257)
   で調べる。
 - **新しい図面の描画中に落ちたこととプラグインの関係。** 1 回だけで、なしでは 2 回とも落ちていない。
-- 開発元不明のダイアログが出る・出ないの条件
-  （[SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)）。
 - この VM（ARM64 上の x64 エミュレーション・WARP の描画・GPU のドライバ）に固有のことかどうか。
   x64 の実機では測っていない。

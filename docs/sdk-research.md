@@ -32,8 +32,7 @@ SDK リファレンスに記載がありませんでした。
   起動の途中で「開発元不明のプラグイン」のダイアログが出て `cli` を「無効」と示し、その回は読み込まなかった。
   ダイアログで「有効化」を選ぶと、次の起動から読み込まれた。**ファイルを入れ替えても「有効化」は
   残った**（`296a797` へ入れ替えた後の起動でダイアログは出たが、`cli` は「有効」のまま読み込まれ、
-  ダイアログが開いている間も `call ping` が応えた）。ダイアログは毎回は出ず、出る条件は分かって
-  いない（[Windows の実機での実測](plugin/windows-measurements.md)）。macOS でも同じダイアログで
+  ダイアログが開いている間も `call ping` が応えた）。ダイアログは毎回は出なかった。macOS でも同じダイアログで
   止められ、「有効化」して起動し直した後から読み込まれたことがある。[SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258) で
   **分かった**（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)
   の「開発元不明のプラグイン」のダイアログ。Windows も macOS も同じ）。「有効化」はモジュールの
@@ -41,6 +40,10 @@ SDK リファレンスに記載がありませんでした。
   変えると「無効」に戻る。`vw2026 install` はフォルダ名をレジストリの名前に固定し（`cli` は
   `<Plug-Ins>/cli`）、更新では同じパスへ付け替えるので、この結果のとおりに残る
   （[インストール「入れる先のフォルダ」](plugin/install-and-update.md#入れる先のフォルダ)）。
+- 全部有効なときに約 24 時間おきに出るダイアログの最中に図面を扱えるかは、
+  [SDK リファレンス #264](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/264) で
+  **分かった**（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の「ダイアログの最中も、プラグインは刻みから図面を扱える」「mac も、共通モードの刻みからなら扱える」）。
+  どう扱うかは[構成「拡張機能を登録しない」](plugin/architecture.md#拡張機能を登録しない)。
 - 留めていなかった版で常駐しなかったのは、下の読み込み直しで降ろされたためか、このダイアログで
   止められていたためかを切り分けていない。
   [SDK リファレンス #252](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/252)
