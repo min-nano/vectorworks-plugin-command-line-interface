@@ -12,7 +12,7 @@ issue を立てて `Findings/` に反映されてから、それを根拠に実�
 SDK リファレンスに記載がありませんでした。
 
 - **macOS は読み込まれた**（段 2 の実機確認。VW 2026。起動の直後から OS タイマーが刻み、`call ping`
-  が応えた。下の「開発元不明のプラグイン」のダイアログで、先に「有効化」が要ることがある）。
+  が応えた。下の「開発元不明のプラグイン」のダイアログで、そのパスで初めて読み込むときは先に「有効化」が要る）。
   結果は SDK リファレンスの `Findings/`（Plug-in Modules）へ足す（未反映）。
 - **Windows も、留めた版（下記）は読み込まれ常駐した**（段 2 の実機確認。VW 2026 x64・Windows 11
   ARM64 の x64 エミュレーション）。起動の直後から `cli.vlb` がプロセスに居て、`call ping` が応えた。
@@ -32,8 +32,7 @@ SDK リファレンスに記載がありませんでした。
   起動の途中で「開発元不明のプラグイン」のダイアログが出て `cli` を「無効」と示し、その回は読み込まなかった。
   ダイアログで「有効化」を選ぶと、次の起動から読み込まれた。**ファイルを入れ替えても「有効化」は
   残った**（`296a797` へ入れ替えた後の起動でダイアログは出たが、`cli` は「有効」のまま読み込まれ、
-  ダイアログが開いている間も `call ping` が応えた）。ダイアログは毎回は出ず、出る条件は分かって
-  いない（[Windows の実機での実測](plugin/windows-measurements.md)）。macOS でも同じダイアログで
+  ダイアログが開いている間も `call ping` が応えた）。ダイアログは毎回は出なかった。macOS でも同じダイアログで
   止められ、「有効化」して起動し直した後から読み込まれたことがある。[SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258) で
   **分かった**（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)
   の「開発元不明のプラグイン」のダイアログ。Windows も macOS も同じ）。「有効化」はモジュールの
@@ -44,10 +43,7 @@ SDK リファレンスに記載がありませんでした。
 - 全部有効なときに約 24 時間おきに出るダイアログの最中に図面を扱えるかは、
   [SDK リファレンス #264](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/264) で
   **分かった**（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の「ダイアログの最中も、プラグインは刻みから図面を扱える」「mac も、共通モードの刻みからなら扱える」）。
-  刻みから図面を開く・書く・保存する・閉じるが通り、ダイアログを閉じた後も残る。mac は共通の
-  モードに登録したタイマーだけが刻む（`cli` はそう登録している）。そのため、ダイアログは閉じずに
-  置き、日時の書き換えやボタンの操作で避けることはしない
-  （[構成「拡張機能を登録しない」](plugin/architecture.md#拡張機能を登録しない)）。
+  どう扱うかは[構成「拡張機能を登録しない」](plugin/architecture.md#拡張機能を登録しない)。
 - 留めていなかった版で常駐しなかったのは、下の読み込み直しで降ろされたためか、このダイアログで
   止められていたためかを切り分けていない。
   [SDK リファレンス #252](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/252)
