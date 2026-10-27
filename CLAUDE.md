@@ -17,9 +17,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 2. **CLI はプリミティブに保つ。** 再試行・占有を待つこと・道具ごとの解釈を入れない（呼ぶ側の
    責任）。排他はプラグインの占有（通信規則の「占有」。CLI は印を受け取って載せるだけ）だけで持ち、
    CLI に足さない（`docs/design.md「CLI はプリミティブに保つ」`）。
-3. **プラグインは単純に保つ。** 配置と更新は CLI（`vw2026 install`）と `cli` のフック（`scripts/hooks/`）が
-   Vectorworks の終了後に行う。`install` の Go のコードはどのプラグインにも同じ手順だけを持ち、`cli` を
-   特別に扱わない（このプラグインに固有の置き方はフックに書く。`docs/plugin/install-and-update.md「cli のフック」`）。
+3. **プラグインは単純に保つ。** 配置と更新は CLI（`vw2026 install`）が Vectorworks の終了後に行う。
    プラグインのフォルダは CLI の場所と同じドライブにある前提で、その外の場合の扱いを足さない
    （`docs/design.md「決めたこと」`）。
 4. **SDK 呼び出しはメインスレッドからだけ。** 受け付け用のスレッドや受け付けの中のループを
@@ -46,7 +44,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   だけ書く。各言語の設定には、その言語にしかない項目だけを書く（`docs/format.md`）。
 - ツールは言語ごとに標準のもの 1 つを、ほぼ既定のまま使い、版を固定する。Go で書かれたツールは
   `tools/go.mod`、pip のツール（clang-format・clang-tidy）は `tools/requirements.txt`、
-  PSScriptAnalyzer と Pester（フックのテスト）は `scripts/powershell.ps1` に版を置く。ツールと対象は `docs/format.md`・`docs/lint.md`。
+  PSScriptAnalyzer は `scripts/powershell.ps1` に版を置く。ツールと対象は `docs/format.md`・`docs/lint.md`。
 - **コメントは対象のコードの直前の行に置き、コードと同じ行の末尾には書かない**（どの言語でも。
   1 行で足りるものも同じ。複数行と 1 行で置き場所が混ざると読みにくいため）。
 
