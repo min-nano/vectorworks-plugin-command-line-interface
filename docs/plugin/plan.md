@@ -8,9 +8,9 @@
 | --- | --- | --- | --- |
 | 1 | **SDK に依らない共通部**: `core/Json`（入れ子の深さに上限を設ける）・`core/Bridge`・`core/Serve`（偽の道具の表・占有）・CMake（共通部・テスト・ファジングだけ）・`protocol/fixtures/`・`cpp.yml`（`core/Json` のファジングを含む）・`format.sh` / `lint.sh` に C++ と PowerShell を足す（[整形](../format.md)・[検査](../lint.md)）・`CLAUDE.md` の追記（PR の進め方） | CI（ASan・UBSan）。Go 側のテストも同じ見本を読む | 不要 |
 | 2 | **骨格と配布**: CMake にプラグインを足す・`BuildConfig`・`ModuleMain`・`Clock`（受け付けまで。終了の依頼と `Quitting` は段 6）・道具 `ping`（表に載せるのはこれだけ。使う `GetCurrentLayer()` の図面が無いときの挙動は [SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)）・リソース・`build.yml`（mac と Windows のビルド・梱包（`bin/vw2026`）・main のリリース・PR のプレリリース）・`cleanup-dev-release.yml` | CI。リリースの資産を取ってきて、zip の形（直下に `build.json` と `bin/`）と `bin/vw2026 version` が動くことを確かめる。実機で、PR のプレリリースの zip を `curl -L` か `gh release download` で取ってきて `bin/` 以外を `<Plug-Ins>/cli/` に置き、zip の `bin/vw2026` で `status` が `running:true` になり `call ping` が応える（**拡張機能なしで読み込まれることの確認を兼ねる**。[構成](architecture.md#拡張機能を登録しない)）。`ping` の `version` が PR の head の sha、`branch` がその PR のブランチ。`call tools` に `ping` だけが載る。`launch` の直後から `status` を短い間隔で繰り返し、`running:true` になった直後（起動画面の間）の `call ping` が落ちずに応える（`call` はロックを掴む者が居なければ待たずに断るので、起動を待つのは呼ぶ側の `status` の繰り返し）。図面を 1 枚も開いていないときの `ping` が、`document_open` と `current_layer` について [道具](tools.md#ping)に書いたとおりに答える | 要 |
-| 3 | **インストール・アンインストール**: `vw2026 install` / `uninstall`（資産の取得・新しいビルドの判定・付け替え・CLI の入れ替え・PATH）・初回のスクリプト（`get-vw2026.sh` / `.ps1`）・`CLAUDE.md` に消すコードの歯止めを写す・テストの `env.spool` を `env.cliDir`・`env.pluginsDir` に改め、`CLAUDE.md`「Go」の記述も直す（[インストール「テスト」](install-and-update.md#テスト)） | CI（Go の単体テスト。偽の HTTP サーバー。動いている CLI の入れ替えと、利用者の `Path` の型と既存の項目が保たれることを Windows のジョブで押さえる。shellcheck・PSScriptAnalyzer）。実機で、PR のプレリリースの初回のスクリプトを `--tag dev-<slug>-<PR 番号>` を付けて curl からパイプで実行 → 新しい端末で `vw2026 status` が動き、起動して `call ping` の `version` が PR の head の sha になる。動いている間に版の違うタグ（`install --tag stable`）を指定すると「Vectorworks が動いている」終了コードで何も変わらない（同じタグでは版の比較が先に `up_to_date` を返すので、この経路を通らない）。Vectorworks を手で終了 → `install --tag dev-<slug>-<PR 番号>` で `up_to_date`。`install --tag dev-<slug>-<PR 番号> --plugins-dir <場所>` で既定以外へ入れられる（タグを付けないと `stable` の CLI に入れ替わり、それには `uninstall` が無い）。`uninstall` でリンクと PATH の項目だけが消える（既定以外の場所は `--plugins-dir` を付ける）。`install` でプラグインのフォルダを付け替えたあとの起動で、`cli` が [SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258) の結果のとおりに読み込まれる（開発元不明のダイアログが出ても「無効」に戻らない）。main（`stable`）へ戻す確認は、`stable` の CLI に `install` が無いので段 5 で行う | 要 |
+| 3 | **インストール・アンインストール**: `vw2026 install <name>@<tag>` / `uninstall <name>`（レジストリの引き方と規則の選び方・マニフェスト・sha256・新しいかの判定・付け替え・フックの走らせ方・記録。[インストール](install-and-update.md)・[レジストリとマニフェスト](../registry.md)）・既定のレジストリ（`cli/internal/registry/default.json`。`cli` だけ）・`cli` のフック（`scripts/hooks/`。CLI の入れ替え・PATH）とそのテスト（`hooks.yml`）・`build.yml` のリリースの形を改める（使い回さないタグ・下書きで上げてから公開・マニフェスト・`cli-<target>.zip`・`latest`。`stable` のリリースとタグは、マージのあと main の最初の `0.0.0-*` が公開されてから手で消す。`cleanup-dev-release.yml`・`scripts/dev-tag.sh` も合わせる）・初回のスクリプト（`get-vw2026.sh` / `.ps1`）・`CLAUDE.md` に消すコードの歯止めを写す・`CLAUDE.md` の守ること 3 に `cli` のフック（`scripts/hooks/`。`install` の Go のコードは `cli` を特別に扱わない）を、「整形と検査」に Pester の版の置き場所（`scripts/powershell.ps1`）を足す（ファイルを足すこの段で書く）・テストの `env.spool` を `env.cliDir`・`env.pluginsDir` に改め、`CLAUDE.md`「Go」の記述も直す（[インストール「テスト」](install-and-update.md#テスト)）・`vw2026 --help` の更新の手順の例を `install cli@latest` に直す | CI（Go の単体テスト。偽の HTTP サーバーと偽のフック。フックのテストを macOS の `sh` と Windows の Pester で。動いている CLI の入れ替えと、利用者の `Path` の型と既存の項目が保たれることを Windows のジョブで押さえる。`verify` がマニフェストを既定のレジストリの規則で取って照らす。shellcheck・PSScriptAnalyzer）。実機で、段 2 で手で置いた `<Plug-Ins>/cli/` は記録が無いので `install` が断ることを確かめてから、Vectorworks を起動せずにそのフォルダを手で取り除く（同じパスに入れ直すので「有効化」は残る）。PR のプレリリースの初回のスクリプトを `cli@<その PR のタグ>` を付けて curl からパイプで実行 → 新しい端末で `vw2026 status` が動き、起動して `call ping` の `version` が PR の head の sha になる。動いている間に `install cli@<その PR のタグ>`（同じタグ）を走らせると「Vectorworks が動いている」終了コードで何も変わらない。Vectorworks を手で終了 → `install cli@<その PR のタグ>` で `up_to_date`（zip を取らず、フックだけが走る）。`~/.local/bin/vw2026`（Windows は `Path` の項目）を手で消してから同じタグで `install` すると、元に戻る。`install cli@<その PR のタグ> --plugins-dir <場所>` で既定以外へ入れられる。`uninstall cli` でプラグインのフォルダ・CLI・リンクと PATH の項目だけが消える（既定以外の場所は `--plugins-dir` を付ける）。`install` でプラグインのフォルダを付け替えたあとの起動で、`cli` が「有効」のまま読み込まれる。main（`latest`）へ戻す確認は、`latest` にフックが入る（この段がマージされる）までできないので段 5 で行う。ほかのプラグインを入れる実機の確認は、対応したプラグインがリリースされてから行う（下の「その先」） | 要 |
 | 4 | **共通部の変更**: 種類 `app` から終了の依頼を切り離し、`ToolError` を `ToolStatus`（`detail`・`quit` を持つ）に改める。失敗の応答に省略できる `detail` を足し、`spool.Response` に `Detail` を持たせ、`vw2026 call` が失敗の `detail` を標準出力に出して `Help()` を直す。`src/core`・偽のプラグイン・見本・[通信規則](../protocol.md)を同じ PR で合わせる（道具は足さない。`ping` だけ） | CI（C++ と Go のテストが同じ見本を読む。偽のプラグインが `detail` を返し、`vw2026 call` が標準出力に出す）。実機で、PR のプレリリースを入れて `call ping` が段 2 と同じに応える（退行が無い） | 要 |
-| 5 | **読む道具と図面を扱う道具**: `layers` / `classes` / `layer_objects` / `object_counts` と `documents` / `save` / `close`（[道具](tools.md#図面を扱う道具documentssaveclose)。使う SDK 呼び出しが SDK リファレンスで確かめられてから。[SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)） | 実機で、レイヤ・クラス・オブジェクトの数と名前を用意した見本の図面に対して、結果が Vectorworks の画面（オーガナイザ・情報パレット）の表示と一致する。`documents` が開いている図面の一覧と一致し、`save` で無題の図面を一時フォルダへ・保存済みの図面を自分のパスへ保存でき（前面の図面が保存の前後で変わらない）、保存済みの図面に `to` を渡すと `invalid_args` で断られ、開いているファイルを保存先にすると `invalid_args` で断られ（警告のダイアログが出ない）、保存した図面の `close` は保存の確認なしに閉じ、保存していない無題の図面の `close` は保存の確認が出て取り消すと `internal` で失敗して図面が残る。確認のあと、Vectorworks を終了して `install`（タグなし）で main の版に戻り、`launch` のあと `call ping` の `version` が main の sha になる（段 3 の main へ戻す確認を兼ねる） | 要 |
+| 5 | **読む道具と図面を扱う道具**: `layers` / `classes` / `layer_objects` / `object_counts` と `documents` / `save` / `close`（[道具](tools.md#図面を扱う道具documentssaveclose)。使う SDK 呼び出しが SDK リファレンスで確かめられてから。[SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)） | 実機で、レイヤ・クラス・オブジェクトの数と名前を用意した見本の図面に対して、結果が Vectorworks の画面（オーガナイザ・情報パレット）の表示と一致する。`documents` が開いている図面の一覧と一致し、`save` で無題の図面を一時フォルダへ・保存済みの図面を自分のパスへ保存でき（前面の図面が保存の前後で変わらない）、保存済みの図面に `to` を渡すと `invalid_args` で断られ、開いているファイルを保存先にすると `invalid_args` で断られ（警告のダイアログが出ない）、保存した図面の `close` は保存の確認なしに閉じ、保存していない無題の図面の `close` は保存の確認が出て取り消すと `internal` で失敗して図面が残る。確認のあと、Vectorworks を終了して `install cli@latest` で main の版に戻り、`launch` のあと `call ping` の `version` が main の sha になる（段 3 の main へ戻す確認を兼ねる） | 要 |
 | 6 | **終了の依頼と占有**: 道具 `quit`・`Clock` の終了の依頼（使う SDK 呼び出しが SDK リファレンスで確かめられてから。[SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)） | CI。実機で、図面（無題と、保存済みの図面を変更したもの）を開いて `session start` のあと `call quit` を呼ぶと、ダイアログが出ずに `internal` で失敗して `detail` に開いている図面の一覧が載り、`call ping` が応え、`session end` で占有が解ける。図面をすべて閉じてから `call quit` を呼ぶと、ダイアログが出ずに `status` が止まっていると答える。[インストール「流れ」](install-and-update.md#流れ)の組み合わせ（`session start` → `call quit` → 止まるのを待つ → `install` → `launch` → 動き出すのを待つ。待つのは `status` の繰り返し）で `call ping` の `version` が変わる | 要 |
 
 **段 2・3 を先に置く理由。** 最小限のプラグイン（`ping` だけ）をリリースし、`vw2026 install` で
@@ -24,7 +24,7 @@
 | 段 | 項目 |
 | --- | --- |
 | 2 | なし（A2 の `ping`・A3・C1 の `ping` は済） |
-| 3 | B2（Windows の PATH。方針は決めた。段 3 の `install-windows` ジョブで確かめて済にする）・[SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)（フォルダを付け替えたあとも「有効化」が残るか。`Findings/` に入ってから段 3 に入る。[SDK の調査 0](../sdk-research.md#0-拡張機能を-1-つも登録しないプラグインの読み込み)） |
+| 3 | B2（Windows の PATH。方針は決めた。段 3 の `install-windows` ジョブで確かめて済にする）・[SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)（済。「有効化」はモジュールのフルパスで覚え、同じパスのままフォルダごと付け替えても残る。[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の「開発元不明のプラグイン」のダイアログ） |
 | 4 | A1（種類 `app` と終了の依頼。済） |
 | 5 | C1（読む道具の結果） |
 | 6 | A2（`quit`）・A4（終了の依頼の最中の判定を残すか）・B1・C3（終了の処理中のタイマー） |
@@ -62,6 +62,8 @@
 - **他のプラグインの機能を名前で呼ぶ**（`CallPluginLibrary`。形は[未決 3](open-questions.md#3-ほかのプラグインの機能の呼び出しの形)）。
 - **図面に書く道具**（undo の手順・人の操作との混在の扱いを決めてから。[未決 1](open-questions.md)）。
 - 構造設計支援プラグインの開発版ブリッジの移行（当面は並存）。
+- **ほかのプラグインを `vw2026 install` で入れる**（既定のレジストリへの項目の追加。対応するプラグインが
+  マニフェストを公開してから。[レジストリ「提供側に求めること」](../registry.md#提供側に求めること)）。
 
 ## 書き方
 
@@ -83,7 +85,8 @@
 
 このプラグインの実機確認は `vw2026` で行います。ローカルの
 Claude Code セッションから `vw2026` を呼び、結果の JSON を読みます。図面に何かが起きたかは
-人に確かめてもらいます。PR の確認は、その PR のプレリリースを入れて行います（同じ名前で入れ替わる）。
+人に確かめてもらいます。PR の確認は、その PR のプレリリースを入れて行います（同じ名前で入れ替わる。
+タグは push ごとに変わるので、PR の最新の push のタグを使う）。
 
 実機の確認は、**道具の結果（応答・図面への作用・描画）が想定どおりか**を確かめるためのものです。
 ビルドが通ることと単体テスト・通信規則の見本の照合は CI が保証します（CI は main と合わせた
@@ -105,6 +108,7 @@ Claude Code セッションから `vw2026` を呼び、結果の JSON を読み�
   「無効」をどこで戻すかは確かめていません（[SDK の調査 0](../sdk-research.md#0-拡張機能を-1-つも登録しないプラグインの読み込み)）。
 - **Windows**: 終了コードはプロセスが終わる前にハンドルを開いて読み、落ちた場所は
   LocalDumps のダンプで見ます（[Windows の実機での実測](windows-measurements.md)「確かめ方」）。
-- **段 3**: PR のプレリリースの初回のスクリプトに `--tag dev-<slug>-<PR 番号>` を付けて入れます。
-- **段 4 以降**: `vw2026 install --tag dev-<slug>-<PR 番号>` で入れます（Vectorworks を終了してから。段 6 の
-  あとは `quit` で終了させてもよい）。戻すときは `vw2026 install`（main の最新）。
+- **段 3**: PR のプレリリースの初回のスクリプトに `cli@<その PR のタグ>` を付けて入れます。
+- **段 4 以降**: `vw2026 install cli@<その PR のタグ>`（`dev-<slug>-<PR 番号>-<短い sha>`）で入れます
+  （Vectorworks を終了してから。段 6 のあとは `quit` で終了させてもよい）。戻すときは
+  `vw2026 install cli@latest`（main の最新）。

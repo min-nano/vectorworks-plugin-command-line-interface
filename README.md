@@ -26,6 +26,7 @@ vw2026 call layers '{"include_sheets":false}'
 | [docs/plugin/](docs/plugin/README.md) | プラグインの設計（構成・ブリッジ・道具・識別子・ビルド・配布・根拠・実装の順序・未決） |
 | [docs/protocol.md](docs/protocol.md) | 通信規則（プラグインと呼ぶ側の約束。真実はここ） |
 | [docs/fixtures.md](docs/fixtures.md) | 通信規則の見本（`protocol/fixtures`。C++ と Go のテストが同じものを読む） |
+| [docs/registry.md](docs/registry.md) | `vw2026 install` が読むレジストリとマニフェストの書き方・フック・プラグインの提供側に求めること |
 | `vw2026 --help` | `vw2026` のコマンド・指定・終了コード（定義は [cli/cmd/vw2026/](cli/cmd/vw2026/)。`vw2026 help <command>` で各コマンド） |
 | [docs/format.md](docs/format.md) | 整形の決まりとツール（`scripts/format.sh`） |
 | [docs/lint.md](docs/lint.md) | 検査のツール（`scripts/lint.sh`） |

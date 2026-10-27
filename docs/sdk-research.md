@@ -34,13 +34,13 @@ SDK リファレンスに記載がありませんでした。
   残った**（`296a797` へ入れ替えた後の起動でダイアログは出たが、`cli` は「有効」のまま読み込まれ、
   ダイアログが開いている間も `call ping` が応えた）。ダイアログは毎回は出ず、出る条件は分かって
   いない（[Windows の実機での実測](plugin/windows-measurements.md)）。macOS でも同じダイアログで
-  止められ、「有効化」して起動し直した後から読み込まれたことがある。mac での結果も #258 に返し、
-  `Findings/` に入ったらその節へのリンクに置き換える。`vw2026 install` で入れ替える設計に関わる
-  ので、段 3 に入る前に
-  [SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)
-  で調べる。`install` はファイルの上書きではなく、フォルダごと付け替える（新しいフォルダを
-  `<Plug-Ins>/cli` へ名前の変更で置く）ので、その形でも「有効化」が残るかを #258 で確かめる
-  （段 2 で確かめたのはファイルの上書き）。残らなければ、付け替えの手順を設計し直す。
+  止められ、「有効化」して起動し直した後から読み込まれたことがある。[SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258) で
+  **分かった**（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)
+  の「開発元不明のプラグイン」のダイアログ。Windows も macOS も同じ）。「有効化」はモジュールの
+  **フルパス**で覚え、中身は見ない。同じパスのままフォルダごと付け替えても残り、フォルダ名を
+  変えると「無効」に戻る。`vw2026 install` はフォルダ名をレジストリの名前に固定し（`cli` は
+  `<Plug-Ins>/cli`）、更新では同じパスへ付け替えるので、この結果のとおりに残る
+  （[インストール「入れる先のフォルダ」](plugin/install-and-update.md#入れる先のフォルダ)）。
 - 留めていなかった版で常駐しなかったのは、下の読み込み直しで降ろされたためか、このダイアログで
   止められていたためかを切り分けていない。
   [SDK リファレンス #252](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/252)
@@ -124,3 +124,11 @@ SDK リファレンスに記載がありませんでした。
 | `save` / `close` / `documents` | 図面の一覧（`GetOpenFilesList`）・指定した図面の保存（`SwitchToOpenFile` → `SaveActiveDocumentPath`。無題の図面を新しいパスへ）・メニュー「閉じる」（`DoMenuName("Close", 0)`） | 一覧・同じパスへの上書き保存・「閉じる」で保存の確認が出ることは [Findings「Documents」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md) にある。**分かった**（[#243](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/243)）。新しいパスへは通る・既存のファイルへは通らず（開いているファイルなら警告のダイアログが出る）・前面は戻せる・保存した直後なら確認なしに閉じる。使い方は[道具](plugin/tools.md#図面を扱う道具documentssaveclose) |
 | `quit`（未保存の判定） | 保存済みの図面の**変更あり**を読む | **分かった: 読めない**（[#240](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/240)。[Findings「未保存の変更ありは読めない」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#未保存の変更ありは読めない)）。`outSaved`・`fIsInMemoryOnly` は「ディスクにあるか」だけを表す。そのため `quit` は図面が 0 枚のときだけ受け付ける設計にした（[道具「quit」](plugin/tools.md#quit)） |
 | `quit` | OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼ぶ | 無い（Documents が「プラグインの読み込み中に呼ぶと落ちる」として Plug-in Modules を指すが、その節は見当たらない）。保存の確認を取り消したときに戻ることも未確認（[#230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)。その 4 で、保存の確認の中から 2 つ目を呼んだときを確かめ、終了の依頼の最中の判定を残すかを決める。Vectorworks のダイアログの最中に呼んだときは [#235](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/235)） |
+
+## 5. 同じプラグインが 2 つあるときの挙動（調べていない。実装を待たせない）
+
+同じプラグイン（同じユニバーサル名・拡張機能の UUID・リソースの識別子を登録するモジュール）が
+`Plug-Ins` の 2 か所にあるとき、Vectorworks が何をもって衝突とみなし、どう振る舞うかは
+SDK リファレンスの `Findings/` に記載がありません。`vw2026 install` はこれを判定せず、二重に
+入れないのを利用者の責任としたので（[レジストリ「提供側に求めること」](registry.md#提供側に求めること)）、
+実装はこの調査を待ちません。判定を足すことになったら、先に SDK リファレンスで issue を立てます。
