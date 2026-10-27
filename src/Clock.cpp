@@ -70,7 +70,9 @@ void startClock() {
 	}
 #if GS_MAC
 	// 共通のモードに登録する。既定のモードだけでは、ふつうの操作でも十数秒から数分、レンダリング
-	// 中は 6 分近く刻みが止まる（Findings「Timers and Notifications」の 4 の 7）。Vectorworks が
+	// 中は 6 分近く刻みが止まる（Findings「Timers and Notifications」の 4 の 7）。起動の途中の
+	// 「開発元不明のプラグイン」のダイアログ（モーダル）の間も、既定のモードでは 1 度も刻まない
+	// （Findings「Plug-in Modules」の「mac も、共通モードの刻みからなら扱える」）。Vectorworks が
 	// 終わるまで持ち続ける（解放しない）。
 	CFRunLoopTimerRef timer = CFRunLoopTimerCreate(kCFAllocatorDefault, CFAbsoluteTimeGetCurrent(),
 	                                               kIntervalMs / 1000.0, 0, 0, &onTick, nullptr);
