@@ -9,7 +9,7 @@
 | 段 | 手段 | すること |
 | --- | --- | --- |
 | 初回 | `get-vw2026.sh` / `.ps1`（curl などで取ってパイプで実行） | 一時フォルダに CLI を取り出し、`vw2026 install cli@<tag>` を走らせる |
-| インストール・更新 | `vw2026 install <name>@<tag>` | `<Plug-Ins>/<name>/` を付け替え、フックを走らせる。入っているものと同じタグなら何もしない |
+| インストール・更新 | `vw2026 install <name>@<tag>` | `<Plug-Ins>/<name>/` を付け替え、フックを走らせる。入っているものと同じタグなら、zip を取らず付け替えもせずに、フックだけを走らせる |
 | アンインストール | `vw2026 uninstall <name>` | フックを走らせ、`<Plug-Ins>/<name>/` を取り除く |
 
 ```sh
@@ -90,8 +90,13 @@ vw2026 install my-plugin@2026.3.1 --registry ./plugins.json
   （`up_to_date`）。`cli` なら PATH を通し直し、消えた `<CLI>/bin/vw2026` を置き直します。フックは
   Vectorworks が止まっている間にしか走らせないので、同じタグでも Vectorworks が動いていれば
   `vectorworks_running` で終わります（新しいかだけを知りたいときは `--check`）。
-- プラグインのフォルダの中身を入れ直したいときは、`uninstall` してから `install` します（同じパスに
-  入るので、その間に Vectorworks を起動しなければ「有効化」は残る。下記「入れる先のフォルダ」）。
+- **フォルダの中身を入れ直す手段は持ちません。** 入れ直すには `uninstall` してから入れます。
+  - ほかのプラグイン: `vw2026 uninstall <name>` のあと `vw2026 install <name>@<tag>`。`uninstall` は
+    `<CLI>/data/<name>/` も消すので、フックがそこに置いたものは失われます。
+  - `cli`: `uninstall cli` は CLI そのもの（`<CLI>/bin/vw2026` と PATH）も消すので、続けて
+    `vw2026 install` は走らせられません。`uninstall cli` のあと、[初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)で入れます。
+  - どちらも同じパスに入るので、その間に Vectorworks を起動しなければ「有効化」は残ります（下記
+    「入れる先のフォルダ」）。
 - 指定・環境変数・終了コードの具体的な値は `vw2026 help install` が真実です（`CLAUDE.md`「Go」）。
 
 ### 流れ
@@ -179,7 +184,7 @@ vw2026 install <name>@<tag>
 | 無い | 作って入れる |
 | あり、記録の `name` が一致し、記録の `registry` が今回使ったレジストリと同じ | 更新として付け替える |
 | あるが、記録が無い（手で入れたもの・ほかのインストーラで入れたもの） | **何も変えずに失敗にする。** `message` に場所を載せる（利用者のものを上書きしない） |
-| あるが、記録の `registry` が違う（後から既定のレジストリに同じ名前が載り、そちらが勝つようになったときなど） | **何も変えずに失敗にする。** 別のプラグインを黙って入れ替えないため。利用者が `uninstall` してから入れ直す |
+| あるが、記録の `registry` が違う（後から既定のレジストリに同じ名前が載り、そちらが勝つようになったときなど） | **何も変えずに失敗にする。** 別のプラグインを黙って入れ替えないため。利用者が `uninstall` してから入れ直す（`<CLI>/data/<name>/` は消える。`cli` は既定のレジストリが先頭にあるので、この場合にならない） |
 
 - **更新ではフォルダのパスが変わりません。** Vectorworks は署名の無いプラグインの「有効化」を
   モジュールのフルパスで覚えるので、モジュールのファイル名が変わらない限り、更新のあとも有効の
@@ -192,7 +197,15 @@ vw2026 install <name>@<tag>
 ### 入れ替えの手順
 
 1. **組み立て**: zip を `<CLI>/staging/<name>/` に展開し、直下のモジュールを確かめて、記録
-   （`vw2026-install.json`）を書く。前回の残りがあれば先に消す。
+   （`vw2026-install.json`）を書く。前回の残りの `<CLI>/staging/<name>/`・`<CLI>/staging/<name>.zip` が
+   あれば先に消す。
+   **前回の残りの `<CLI>/old/<name>/` があるとき**（前の `install` / `uninstall` が付け替えの途中で
+   止まった）:
+   - `<Plug-Ins>/<name>/` もあり、`old` の記録の `name` が一致して記録の `module` があるなら、退避の
+     残りとみなして消す。
+   - それ以外（`<Plug-Ins>/<name>/` が無い＝`old` が入っていた唯一の版かもしれない・`old` の記録が
+     読めない）は、何も変えずに `old` の場所を `message` に載せて失敗にする（戻すか消すかは利用者が
+     決める）。
 2. **付け替え**: `<Plug-Ins>/<name>` → `<CLI>/old/<name>`、続けて `<CLI>/staging/<name>` →
    `<Plug-Ins>/<name>`。1 つ目が失敗したら何もせずに終わる（エクスプローラーやウイルス対策が
    フォルダの中のファイルを開いているとき・Vectorworks が読み込んでいるとき）。2 つ目が
@@ -228,8 +241,9 @@ vw2026 install <name>@<tag>
 | `hooks/lib.sh` / `hooks/lib.ps1` | 両方のフックが読み込む関数（PATH の項目の比べ方・足し方・除き方、リンクの判定）。`install` と `uninstall` が同じ比べ方を使うように 1 か所に置く |
 
 - zip の直下に `hooks/` として入ります（[ビルド「梱包」](build-and-release.md#梱包)）。
-- 標準出力に `{"path":…}`（下記「PATH」）と、Windows で消せなかったものを `{"left":[…]}` で出します。
-  `install` / `uninstall` の出力の `hook` に載ります。
+- 標準出力に JSON のオブジェクトを 1 つだけ出します（`install` は `{"path":…}`。下記「PATH」。
+  `uninstall` は `{"path":…,"left":[…]}`。`left` は Windows で消せなかったもの）。`install` /
+  `uninstall` の出力の `hook` に載ります。
 - zip の `bin/` はプラグインのフォルダにも残ります（zip の中身はそのまま置くため）。CLI は
   `<CLI>/bin/` のものを使い、プラグインのフォルダの中の CLI は動かしません（Windows では、動いている
   ファイルを含むフォルダの名前を変えられず、次の付け替えが失敗するため）。
@@ -341,10 +355,18 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
    `module` がフォルダの中に実在するときだけ進む。フォルダが無ければ何もせずに成功
    （`not_installed`）。フォルダはあるが記録が無い・一致しないなら、何も消さずに失敗にする
    （`vw2026` が入れたものではない）。
-3. 記録の `hooks.uninstall` を、入っているフォルダで走らせる。失敗したら何も消さずに失敗にする。
-4. `<Plug-Ins>/<name>` を `<CLI>/old/<name>` へ名前を変えてから消す（消す途中で失敗しても、
-   `Plug-Ins` の中に半端なプラグインを残さないため）。`<CLI>/data/<name>/` を消す。
-5. `<CLI>` に `staging` / `old` / `data` の空のディレクトリしか無ければ、`<CLI>` も消す。
+3. **先に** `<Plug-Ins>/<name>` を `<CLI>/old/<name>` へ名前を変える（前回の残りの `old/<name>` の
+   扱いは[入れ替えの手順](#入れ替えの手順)の 1 と同じ）。失敗したら（エクスプローラーやウイルス対策が
+   フォルダを開いているとき）何も変えずに失敗にする。
+4. 記録の `hooks.uninstall` を、移した先（`<CLI>/old/<name>/`）で走らせる（`VW2026_HOOK_PLUGIN_DIR` も
+   移した先）。失敗したら `<CLI>/old/<name>` を `<Plug-Ins>/<name>` へ戻して失敗にする。
+5. `<CLI>/old/<name>` と `<CLI>/data/<name>/` を消す。
+
+- フックより先にフォルダを移すのは、フックが外のもの（`cli` なら CLI と PATH）を消したあとで
+  フォルダの名前の変更が失敗すると、プラグインは残って読み込まれ続けるのに CLI だけが消え、
+  やり直す手段（フォルダの中の CLI はそのフォルダを掴むので、また名前を変えられない）も無くなる
+  ためです。
+6. `<CLI>` に `staging` / `old` / `data` の空のディレクトリしか無ければ、`<CLI>` も消す。
 
 - **レジストリを読みません。** 記録だけで決まるので、レジストリから消えたプラグインや、
   ネットワークにつながっていないときでも外せます。
@@ -359,8 +381,8 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
 
 | 消すコード | 消してよいもの |
 | --- | --- |
-| `install`（組み立て・後始末・フックの失敗の戻し） | `<CLI>/staging/<name>/`・`<CLI>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ。前方一致では消さない）・`<CLI>/old/<name>/`（退避した版は、記録の `name` が一致し、記録の `module` があるときだけ）・フックが失敗したときの新しい `<Plug-Ins>/<name>/`（自分が置いたもの）・最初に入れたときにフックが失敗したときの `<CLI>/data/<name>/`（そのとき作ったもの） |
-| `uninstall` | 記録の `name` が一致し、記録の `module` がある `<Plug-Ins>/<name>/`・`<CLI>/data/<name>/`・空の `<CLI>` |
+| `install`（組み立て・後始末・フックの失敗の戻し） | `<CLI>/staging/<name>/`・`<CLI>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ。前方一致では消さない）・`<CLI>/old/<name>/`（退避した版と前回の残りは、記録の `name` が一致し、記録の `module` があり、`<Plug-Ins>/<name>/` もあるときだけ）・フックが失敗したときの新しい `<Plug-Ins>/<name>/`（自分が置いたもの）・最初に入れたときにフックが失敗したときの `<CLI>/data/<name>/`（そのとき作ったもの） |
+| `uninstall` | 記録の `name` が一致し、記録の `module` がある `<Plug-Ins>/<name>/`（`<CLI>/old/<name>/` へ移してから消す）・`<CLI>/data/<name>/`・空の `<CLI>` |
 | `cli` の `install` のフック | `<CLI>/bin/` の中の `vw2026.exe.old-*`・`vw2026.new` / `vw2026.exe.new` |
 | `cli` の `uninstall` のフック | `<CLI>/bin/`・`<CLI>/spool/`・`<CLI>/bin/` の中を指す `~/.local/bin/vw2026`・`Path` の `<CLI>\bin` と一致する項目 |
 
@@ -385,6 +407,9 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
     `uninstall` で記録のフックを走らせる・`sh` / `powershell` の 2 つ目が zip の中に無い・`-` で始まる
     ときに断る・最初に入れたときの失敗で `<CLI>/data/<name>/` も消す）。偽のフックを入れた zip を偽の HTTP サーバーから配る
   - 消すコードの歯止め（記録が無い・名前が違う・モジュールが無いフォルダを消さない）
+  - 前回の残りの `<CLI>/old/<name>/`（`<Plug-Ins>/<name>/` があり記録が正しければ消す・`<Plug-Ins>/<name>/`
+    が無い・記録が読めないなら何も変えずに失敗）
+  - `uninstall` の順序（フォルダを移せないときにフックを走らせない・フックが失敗したらフォルダを戻す）
   - 既定のレジストリ（`cli/internal/registry/default.json`）が正しく読めること
   - タグの検査（`.`・`..`・先頭が英数字でないものを断る）とターゲットの決め方（mac は計算機の種類で
     決め、プロセスの種類では決めない。判定の関数を差し替えて確かめる）

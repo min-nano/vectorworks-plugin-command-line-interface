@@ -41,8 +41,8 @@
 | `build-mac` | `macos-15`・Xcode 16.2（SDK リファレンスの `plugin/` と同じ）。プラグインのビルドとアドホック署名、Go の arm64 と amd64 を `lipo` で universal に、zip |
 | `build-windows` | `windows-latest`・MSVC。プラグインのビルド、Go の amd64、zip（.NET の `ZipFile`。項目の名前の区切りを `/` にするため。Windows PowerShell 5.1 の `Compress-Archive` は `\` にする） |
 | `release` | 公開するときだけ。2 つの zip の sha256 を求めてマニフェスト（`vw2026.json`。[レジストリ「マニフェスト」](../registry.md#マニフェストvw2026json)）を書き、**下書きのリリース**を作って、zip・マニフェスト・初回のスクリプトを上げ終えてから公開する（下書きは利用者の URL から見えないので、資産が揃わない間を見せない。`latest` は公開した時点で進む）。**そのタグの公開済みのリリースが既にあれば、タグが指すコミットが今回の完全な sha と同じなら何もせず（同じ sha の実行し直し。タグを使い回さない）、違えば失敗にする**（短い sha が重なった。[リリースの形](#リリースの形)）。下書きのまま残ったもの（前の実行が途中で止まった）は消して作り直す |
-| `verify` | 公開した資産を利用者と同じ道筋（既定のレジストリの `cli` の規則が指すマニフェスト → その `asset`）で mac と Windows で取ってきて、マニフェストの `tag` が公開したタグで sha256 が zip と合うこと、zip の直下が `build.json`・`bin/`・`hooks/`・プラグインだけで `bin/` の中が CLI だけであること、`build.json` と `bin/vw2026 version` の版がビルドした sha であること（mac は署名と `.vwr` も）を確かめる。main では `latest` の規則（`releases/latest/download/vw2026.json`）でも取り、公開したタグを指すことを確かめる |
-| `install-windows` | 段 3 で足す。PR のプレリリースを公開したときだけ（`needs: [meta, release]`。main では走らせない）。`windows-latest` で、PR の CLI を `install cli@<その PR のタグ>` で入れ、入った CLI に `install cli@latest` を走らせて、`latest` のフックに動いている CLI を入れ替えさせる。利用者の `Path` の型と既存の項目が保たれることも確かめる（[インストール「テスト」](install-and-update.md#テスト)） |
+| `verify` | 公開した資産を利用者と同じ道筋（既定のレジストリの `cli` の規則が指すマニフェスト → その `asset`）で mac と Windows で取ってきて、マニフェストの `tag` が公開したタグで sha256 が zip と合うこと、zip の直下が `build.json`・`bin/`・`hooks/`・プラグインだけで `bin/` の中が CLI だけであること、`build.json` と `bin/vw2026 version` の版がビルドした sha であること（mac は署名と `.vwr` も）を確かめる。main で `--latest` を付けて公開したときは、`latest` の規則（`releases/latest/download/vw2026.json`）でも取り、公開したタグを指すことを確かめる |
+| `install-windows` | 段 3 で足す。PR のプレリリースを公開したときだけ（`needs: [meta, release]`。main では走らせない）。`windows-latest` で、PR の CLI を `install cli@<その PR のタグ>` で入れ、入った CLI に `install cli@latest` を走らせて、`latest` のフックに動いている CLI を入れ替えさせる。利用者の `Path` の型と既存の項目が保たれることも確かめる。**`latest` にフックが入るまで（段 3 の PR 自身。`latest` がまだ `stable` で `vw2026.json` が無い）は、`install cli@latest` の手順を飛ばし、PR の CLI を入れる手順と `Path` の確かめだけを行う**（[インストール「テスト」](install-and-update.md#テスト)） |
 
 fork の PR・マージキュー・main 以外の手動の実行は、マージのためのコミット（fork の PR）またはその ref を
 ビルドするだけで、公開しません（`build.yml` も必須のチェックにできるよう、`merge_group` を付ける）。
@@ -104,7 +104,10 @@ zip の中身はそのまま `<Plug-Ins>/cli/` に置かれ、`hooks/` のフッ
 `cli-<target>.zip`・`get-vw2026.{sh,ps1}`）は変えません。**
 
 - main: main への push ごとに `0.0.0-<短い sha>` のリリースを作る。タイトル `0.0.0 (<sha>)`・`--latest`。
-  `latest`（`cli@latest`）はこれを指す。形がある程度決まったら sha を外し、`0.0.1` から順に上げる
+  `latest`（`cli@latest`）はこれを指す。**`--latest` を付けるのは、ビルドしたコミットが公開する時点の
+  `main` の先頭のときだけ**で、そうでなければ `--latest=false` で公開する（失敗した古い push の
+  ワークフローを後から実行し直したときに、`latest` が古いコミットへ戻らないため）。`verify` の
+  `latest` の確かめも、`--latest` を付けたときだけ行う。形がある程度決まったら sha を外し、`0.0.1` から順に上げる
   （[名前と識別子](identifiers.md)）。`install` はタグの大小を比べない（違えば入れる）ので、版の付け方を
   変えても `install` は変わらない。
 - PR: 同じリポジトリの PR で、**変更後のコードでビルドしたもの**を push ごとに
