@@ -42,7 +42,7 @@
 | `build-windows` | `windows-latest`・MSVC。プラグインのビルド、Go の amd64、zip（.NET の `ZipFile`。項目の名前の区切りを `/` にするため。Windows PowerShell 5.1 の `Compress-Archive` は `\` にする） |
 | `release` | 公開するときだけ。2 つの zip の sha256 を求めてマニフェスト（`vw2026.json`。[レジストリ「マニフェスト」](../registry.md#マニフェストvw2026json)）を書き、**下書きのリリース**を作って、zip・マニフェスト・初回のスクリプトを上げ終えてから公開する（下書きは利用者の URL から見えないので、資産が揃わない間を見せない。`latest` は公開した時点で進む）。**そのタグの公開済みのリリースが既にあれば、タグが指すコミットが今回の完全な sha と同じなら何もせず（同じ sha の実行し直し。タグを使い回さない）、違えば失敗にする**（短い sha が重なった。[リリースの形](#リリースの形)）。下書きのまま残ったもの（前の実行が途中で止まった）は消して作り直す。PR では、同じ PR の別のタグの下書き（push で止められた前の実行のもの）も消す |
 | `verify` | 公開した資産を利用者と同じ道筋（既定のレジストリの `cli` の規則が指すマニフェスト → その `asset`）で mac と Windows で取ってきて、マニフェストの `tag` が公開したタグで sha256 が zip と合うこと、zip の直下が `build.json`・`bin/`・`hooks/`・プラグインだけで `bin/` の中が CLI だけであること、`build.json` と `bin/vw2026 version` の版がビルドした sha であること（mac は署名と `.vwr` も）を確かめる。main で `--latest` を付けて公開したときは、`latest` の規則（`releases/latest/download/vw2026.json`）でも取り、公開したタグを指すことを確かめる |
-| `install-windows` | 段 3 で足す。PR のプレリリースを公開したときだけ（`needs: [meta, release]`。main では走らせない）。`windows-latest` で、`latest` の CLI を `install cli@latest` で入れ、入った CLI に `install cli@<その PR のタグ>` を走らせて、**PR のフック**に動いている CLI を入れ替えさせる（PR で入れ替えの処理を壊したら落ちるように）。利用者の `Path` の型と既存の項目が保たれることも確かめる。**`latest` の CLI が PR のものを読めないとき（段 3 の PR 自身で `latest` にフックが無い・PR が `manifest_version` を変えた・PR が既定のレジストリの `cli` の規則を変えた）は、PR の zip の CLI で `install cli@<その PR のタグ>` を走らせ、`Path` の確かめだけを行う**（[インストール「テスト」](install-and-update.md#テスト)） |
+| `install-windows` | 段 3 で足す。PR のプレリリースを公開したときだけ（`needs: [meta, release]`。main では走らせない）。`windows-latest` で、PR の CLI を `install cli@<その PR のタグ>` で `<Plug-Ins>\cli\` に入れ、**入った PR の CLI に** `uninstall cli` と `install cli@latest` を走らせて、PR の Go のコードに動いている自分をよけさせる（PR でよけ方を壊したら落ちるように）。利用者の `Path` の型と既存の項目が保たれることも確かめる。**PR の CLI が `latest` を入れられないとき（段 3 の PR 自身で `latest` にマニフェストが無い・PR の CLI が `latest` の `manifest_version` を読めない）は、`install cli@latest` を飛ばす**（[インストール「テスト」](install-and-update.md#テスト)） |
 
 fork の PR・マージキュー・main 以外の手動の実行は、マージのためのコミット（fork の PR）またはその ref を
 ビルドするだけで、公開しません（`build.yml` も必須のチェックにできるよう、`merge_group` を付ける）。
@@ -87,8 +87,8 @@ cli-macos-arm64.zip                     cli-windows-x64.zip
             lib.sh）                                 lib.ps1）
 ```
 
-zip の中身はそのまま `<Plug-Ins>/cli/` に置かれ、`hooks/` のフックが `bin/` の CLI を `<CLI>/bin/` へ
-置きます（[インストール「`cli` のフック」](install-and-update.md#cli-のフック)）。zip の項目の区切りは
+zip の中身はそのまま `<Plug-Ins>/cli/` に置かれ、`bin/` の CLI もそこから動かします。`hooks/` のフックは
+PATH だけを置きます（[インストール「CLI とスプールの置き場所」](install-and-update.md#cli-とスプールの置き場所)）。zip の項目の区切りは
 `/` にします（`\` を区切りに使った zip を `install` は断る。[レジストリ「zip の形」](../registry.md#zip-の形)）。
 
 `build.json`（`{"version","branch"}`）は CI が書きます。`ping` の `version` / `branch` と同じ値で、
