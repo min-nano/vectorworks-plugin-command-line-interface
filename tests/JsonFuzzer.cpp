@@ -1,4 +1,4 @@
-// core/Json の解析のファジングの入口（libFuzzer）。ASan・UBSan と共にビルドし、CI（test.yml）が
+// core/Json の解析のファジングの入口（libFuzzer）。ASan・UBSan と共にビルドし、CI（cpp.yml）が
 // 決まった時間だけ回す。種は protocol/fixtures/requests（深い入れ子・長い文字列・不正な UTF-8 を
 // 含む）。
 //
