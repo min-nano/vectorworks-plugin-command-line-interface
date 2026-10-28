@@ -42,7 +42,7 @@
 | `build-windows` | `windows-latest`・MSVC。プラグインのビルド、Go の amd64、zip（.NET の `ZipFile`。項目の名前の区切りを `/` にするため。Windows PowerShell 5.1 の `Compress-Archive` は `\` にする） |
 | `release` | 公開するときだけ。2 つの zip の sha256 を求めてマニフェスト（`vw2026.json`。[レジストリ「マニフェスト」](../registry.md#マニフェストvw2026json)）を書き、**下書きのリリース**を作って、zip・マニフェスト・初回のスクリプトを上げ終えてから公開する（下書きは利用者の URL から見えないので、資産が揃わない間を見せない。`latest` は公開した時点で進む）。**そのタグの公開済みのリリースが既にあれば、タグが指すコミットが今回の完全な sha と同じなら何もせず（同じ sha の実行し直し。タグを使い回さない）、違えば失敗にする**（短い sha が重なった。[リリースの形](#リリースの形)）。下書きのまま残ったもの（前の実行が途中で止まった）は消して作り直す。PR では、同じ PR の別のタグの下書き（push で止められた前の実行のもの）も消す |
 | `verify` | 公開した資産を利用者と同じ道筋（既定のレジストリの `cli` の規則が指すマニフェスト → その `asset`）で mac と Windows で取ってきて、マニフェストの `tag` が公開したタグで sha256 が zip と合うこと、zip の直下が `build.json`・`bin/`・`hooks/`・プラグインだけで `bin/` の中が CLI だけであること、`build.json` と `bin/vw2026 version` の版がビルドした sha であること（mac は署名と `.vwr` も）を確かめる。main で `--latest` を付けて公開したときは、`latest` の規則（`releases/latest/download/vw2026.json`）でも取り、公開したタグを指すことを確かめる |
-| `install-windows` | 段 3 で足す。PR のプレリリースを公開したときだけ（`needs: [meta, release]`。main では走らせない）。`windows-latest` で、PR の CLI を `install cli@<その PR のタグ>` で `<Plug-Ins>\cli\` に入れ、**入った PR の CLI に** `uninstall cli` と `install cli@latest` を走らせて、PR の Go のコードに動いている自分をよけさせる（PR でよけ方を壊したら落ちるように）。利用者の `Path` の型と既存の項目が保たれることも確かめる。**PR の CLI が `latest` を入れられないとき（段 3 の PR 自身で `latest` にマニフェストが無い・PR の CLI が `latest` の `manifest_version` を読めない）は、`install cli@latest` を飛ばす**（[インストール「テスト」](install-and-update.md#テスト)） |
+| `install-windows` | 段 3b で足す。PR のプレリリースを公開したときだけ（`needs: [meta, release]`。main では走らせない）。`windows-latest` で、PR の CLI を `install cli@<その PR のタグ>` で `<Plug-Ins>\cli\` に入れ、**入った PR の CLI に** `uninstall cli` と `install cli@latest` を走らせて、PR の Go のコードに動いている自分をよけさせる（PR でよけ方を壊したら落ちるように）。利用者の `Path` の型と既存の項目が保たれることも確かめる。**PR の CLI が `latest` を入れられないとき（段 3b の PR 自身で `latest` にマニフェストが無い・PR の CLI が `latest` の `manifest_version` を読めない）は、`install cli@latest` を飛ばす**（[インストール「テスト」](install-and-update.md#テスト)） |
 
 fork の PR・マージキュー・main 以外の手動の実行は、マージのためのコミット（fork の PR）またはその ref を
 ビルドするだけで、公開しません（`build.yml` も必須のチェックにできるよう、`merge_group` を付ける）。
@@ -136,9 +136,9 @@ PATH だけを置きます（[インストール「CLI とスプールの置き�
   head は信頼できないコードで、`github.head_ref` はどのリポジトリのブランチかを区別しない。
 - 資産: `vw2026.json`（マニフェスト）・`cli-macos-arm64.zip` / `cli-windows-x64.zip`・
   `get-vw2026.{sh,ps1}`（初回のスクリプト。利用者は `releases/latest/download/` のものを使う）。
-  マニフェストとスクリプトの資産・新しいタグの形は、`install` を足す段 3 から（[実装の順序](plan.md)。
+  マニフェストとスクリプトの資産・新しいタグの形は、`install` を足す段 3b から（[実装の順序](plan.md)。
   段 2 の `build.yml` は転がりタグ `stable` と `dev-<slug>-<PR 番号>` を作り直して zip だけを上げる。
-  段 3 の PR がこの形に改める）。**`stable` のリリースとタグは、段 3 をマージしたあと、main の最初の
+  段 3b の PR がこの形に改める）。**`stable` のリリースとタグは、段 3b をマージしたあと、main の最初の
   `0.0.0-<短い sha>` のリリースが公開されてから手で消します**（先に消すと、プレリリースでない
   リリースが無くなり、`releases/latest/download/…` の初回のスクリプトと `cli@latest` が 404 になる）。本文に機械が読む情報は載せません
   （入れるのに要る情報はマニフェストが持つ）。CLI 単体の資産は持ちません（zip の `bin/` にあり、

@@ -89,7 +89,7 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
 - **同じボリュームにあること**: Windows の `%LOCALAPPDATA%\Temp` と既定の `<Plug-Ins>`（`%APPDATA%` の下）は
   どちらも利用者のプロファイルの中です。mac の `/var/folders` とホームは、どちらもデータボリュームに
   あります（`/private/var` はデータボリュームへの firmlink）。mac で `/var/folders` から `~/Library/…` へ名前の
-  変更で移せることは、段 3 の実機の確認で確かめます（[実装の順序](plan.md)の段 3）。
+  変更で移せることは、段 3b の実機の確認で確かめます（[実装の順序](plan.md)の段 3b）。
 
 ## 初回のスクリプト（`get-vw2026.sh` / `.ps1`）
 
@@ -441,7 +441,7 @@ vw2026 install <name>@<tag>
   置きます（[作業の場所](#作業の場所)）。
 - **スプールが同期・リダイレクトの対象になる環境には対応しません。** 段 2 まではスプールを
   `%LOCALAPPDATA%` などの利用者のホームの下に置き、同期の対象にならない前提でした（[通信規則「プラグイン側の義務」](../protocol.md#プラグイン側の義務)）。
-  段 3 からは Vectorworks の利用者フォルダの中なので、この前提は利用者フォルダの置き場所に依ります。
+  段 3a からは Vectorworks の利用者フォルダの中なので、この前提は利用者フォルダの置き場所に依ります。
   - 移動プロファイル（Windows の既定の `<Plug-Ins>` は `%APPDATA%`（Roaming）の下）は、ログオンと
     ログオフのときに写すだけなので、動いている間のロックには関わりません。CLI とスプールも写されますが、
     スプールは Vectorworks が止まると要らないものです。
@@ -629,7 +629,7 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
 
 ## 消すコードの歯止め
 
-**利用者のものを消すコードは次の場所だけ**にし、歯止めを緩めません。段 3 でこの表を `CLAUDE.md` に写します。
+**利用者のものを消すコードは次の場所だけ**にし、歯止めを緩めません。段 3b でこの表を `CLAUDE.md` に写します。
 
 | 消すコード | 消してよいもの |
 | --- | --- |
@@ -739,7 +739,7 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
      （タグの形は版の付け方で変わる。[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
   - **PR の CLI が `latest` を入れられないとき**は、手順 5 を飛ばします。入れられないときとは次のどれかで、
     ジョブが PR のマニフェストと `latest` のマニフェストを比べて決めます。
-    - `latest` にマニフェストが無い（段 3 を入れる PR 自身。`latest` がまだ `stable` で `vw2026.json` が無い）。
+    - `latest` にマニフェストが無い（段 3b を入れる PR 自身。`latest` がまだ `stable` で `vw2026.json` が無い）。
     - PR の CLI が `latest` の `manifest_version` を読めない。
     手順 3 で、PR のコードが動いている自分をよけることは確かめられます。
   - `main` への push では、版の違う相手が無いので走らせません（PR で確かめてからマージする）。
@@ -765,4 +765,4 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
     4. 置き直さずにもう一度走らせても同じ値のまま（`exists`）。
     5. 手順 3 の `uninstall cli` のあと、REG_EXPAND_SZ のまま `%USERPROFILE%\vw2026-path-probe` になる。
 - **初回のスクリプト**: shellcheck・PSScriptAnalyzer。取ってきて `install` を走らせるだけなので、
-  実機の確認（段 3）で押さえます。
+  実機の確認（段 3b）で押さえます。

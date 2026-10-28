@@ -138,7 +138,7 @@ SDK リファレンスの `Findings/` に記載がありません。`vw2026 inst
 
 ## 6. プラグインのフォルダの中のモジュール以外のものと、モジュールの読み込み元（調べていない。段 3 の前に確かめる）
 
-段 3 から、`<Plug-Ins>/cli/` にはモジュールのほかに `bin/`（CLI の実行ファイル）・`hooks/`（`.sh` /
+段 3（3a・3b）から、`<Plug-Ins>/cli/` にはモジュールのほかに `bin/`（CLI の実行ファイル）・`hooks/`（`.sh` /
 `.ps1`）・`build.json`・`vw2026-install.json`・`spool/`（`bridge.lock`・`*.req.json`・`*.res.json`・
 `*.wait`・`*.tmp`）が入ります（[インストール「CLI とスプールの置き場所」](plugin/install-and-update.md#cli-とスプールの置き場所)）。
 段 2 の実機確認では `bin/` を除いて置き、スプールもフォルダの外にあったので、次の 2 つはまだ確かめて
@@ -154,5 +154,5 @@ SDK リファレンスの `Findings/` に記載がありません。`vw2026 inst
   読み込み直す（上記 0）ので、読み込み直したあとの場所も同じかを見ます。
 
 [SDK リファレンス #277](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/277) で
-調べ、`Findings/`（Plug-in Modules）に反映されてから段 3 を実装します。段 3 の実機確認でも、スプールが既にある状態での起動を
-確かめます（[実装の順序](plugin/plan.md)の段 3）。
+調べ、`Findings/`（Plug-in Modules）に反映されてから段 3a・3b を実装します。段 3a の実機確認でも、スプールが既にある状態での起動を
+確かめます（[実装の順序](plugin/plan.md)の段 3a）。
