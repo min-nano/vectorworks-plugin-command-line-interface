@@ -88,16 +88,22 @@ std::optional<std::string> modulePath() {
 	if (::dladdr(&anchor, &info) == 0 || !info.dli_fname || info.dli_fname[0] == '\0') {
 		return std::nullopt;
 	}
-	// リンクを解く。呼ぶ側も実行ファイルのリンクを解いてから求めるので、プラグインのフォルダが
-	// リンクを通した場所にあっても、両側の示すパスが揃う（Linux の実行ファイルでは dladdr が
-	// argv[0] を返し、相対パスのこともある）。
-	char *resolved = ::realpath(info.dli_fname, nullptr);
-	if (!resolved) {
+	// リンクは解かない。バンドル（cli.vwlibrary）だけをほかの場所へのリンクにしても、そのバンドルの
+	// あるフォルダ（<Plug-Ins>/cli）を指すため。呼ぶ側は実行ファイルのリンクを解くが、その親の bin
+	// と <Plug-Ins>/cli が実体なら、両側は同じフォルダにたどり着く（通信規則「スプールの場所」）。
+	std::string path(info.dli_fname);
+	if (path.front() == '/') {
+		return path;
+	}
+	// Linux の実行ファイル（テスト）では dladdr が argv[0] を返し、相対パスのことがある。いまの
+	// 作業ディレクトリで絶対パスにする（呼ぶ前に作業ディレクトリを変えると誤る）。
+	char *cwd = ::getcwd(nullptr, 0);
+	if (!cwd) {
 		return std::nullopt;
 	}
-	std::string path(resolved);
-	std::free(resolved);
-	return path;
+	std::string absolute = join(cwd, path);
+	std::free(cwd);
+	return absolute;
 }
 
 bool makeDirectories(const std::string &path, std::string &error) {

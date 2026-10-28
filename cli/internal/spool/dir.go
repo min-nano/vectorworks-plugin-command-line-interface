@@ -15,7 +15,7 @@ func Dir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return DirOf(executable)
+	return DirOf(executable), nil
 }
 
 // DirOf は、実行ファイル（<Plug-Ins>/cli/bin/vw2026）の場所からスプールの場所
@@ -28,10 +28,14 @@ func Dir() (string, error) {
 // リンクだから。フォルダの外で動かした実行ファイル（zip を展開しただけのもの・手でビルドした
 // もの）は、入っている cli のスプールではない場所を返す。そこにロックを掴む者は居ないので、
 // 呼ぶ側には止まっていると見える（場所はコマンドが示す）。
-func DirOf(executable string) (string, error) {
-	resolved, err := filepath.EvalSymlinks(executable)
-	if err != nil {
-		return "", err
+//
+// リンクを解けなければ（Windows の subst のドライブ・割り当てたネットワークドライブなどでは
+// EvalSymlinks が失敗することがある）、解く前のパスから求める。実行ファイルのパスは使えるので、
+// スプールを決められずに終わらせないため。
+func DirOf(executable string) string {
+	path := executable
+	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
+		path = resolved
 	}
-	return filepath.Join(filepath.Dir(filepath.Dir(resolved)), SpoolDirName), nil
+	return filepath.Join(filepath.Dir(filepath.Dir(path)), SpoolDirName)
 }

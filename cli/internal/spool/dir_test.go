@@ -28,8 +28,8 @@ func fakeExecutable(t *testing.T) (executable, spool string) {
 
 func TestDirOfIsNextToTheBinFolder(t *testing.T) {
 	executable, want := fakeExecutable(t)
-	if got, err := DirOf(executable); err != nil || got != want {
-		t.Fatalf("DirOf(%s) = %s, %v; want %s", executable, got, err, want)
+	if got := DirOf(executable); got != want {
+		t.Fatalf("DirOf(%s) = %s, want %s", executable, got, want)
 	}
 }
 
@@ -43,15 +43,17 @@ func TestDirOfFollowsLinks(t *testing.T) {
 		// フォルダなので、リンクを通して走ることは無い。
 		t.Skipf("cannot create a symbolic link: %v", err)
 	}
-	if got, err := DirOf(link); err != nil || got != want {
-		t.Fatalf("DirOf(%s) = %s, %v; want %s", link, got, err, want)
+	if got := DirOf(link); got != want {
+		t.Fatalf("DirOf(%s) = %s, want %s", link, got, want)
 	}
 }
 
-// 実行ファイルが無ければ（リンクを解けなければ）、場所を求められない。
-func TestDirOfMissingExecutable(t *testing.T) {
-	if got, err := DirOf(filepath.Join(t.TempDir(), "bin", "vw2026")); err == nil {
-		t.Fatalf("DirOf of a missing file = %s, want an error", got)
+// リンクを解けなければ（ここでは実行ファイルが無い）、解く前のパスから求める。
+func TestDirOfFallsBackToTheGivenPath(t *testing.T) {
+	root := t.TempDir()
+	executable := filepath.Join(root, "cli", "bin", "vw2026")
+	if got, want := DirOf(executable), filepath.Join(root, "cli", SpoolDirName); got != want {
+		t.Fatalf("DirOf(%s) = %s, want %s", executable, got, want)
 	}
 }
 
@@ -62,10 +64,7 @@ func TestDirIgnoresEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := DirOf(executable)
-	if err != nil {
-		t.Fatal(err)
-	}
+	want := DirOf(executable)
 	for _, name := range []string{"VW2026_SPOOL", "HOME", "LOCALAPPDATA", "APPDATA", "TMPDIR"} {
 		t.Setenv(name, t.TempDir())
 	}

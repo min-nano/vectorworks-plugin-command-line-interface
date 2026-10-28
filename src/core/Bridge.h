@@ -14,11 +14,10 @@ namespace VwCli::core {
 // spoolDirOf は、モジュールのパスからスプールの場所を返す（通信規則「スプールの場所」）。パスの
 // 綴りだけから決め、ファイルを見ない（探索しない）。
 //
-// - 区切りの名前のどれかが .vwlibrary で終わる（mac のバンドルの中の実行ファイル
-//   <Plug-Ins>/cli/cli.vwlibrary/Contents/MacOS/cli）なら、そのうち最も近いバンドルのあるフォルダの
-//   下の spool。
+// - mac のバンドルの中の実行ファイル（<X>.vwlibrary/Contents/MacOS/<実行ファイル>。
+//   <Plug-Ins>/cli/cli.vwlibrary/Contents/MacOS/cli）なら、バンドルのあるフォルダの下の spool。
 // - そうでなければ（Windows の <Plug-Ins>\cli\cli.vlb・テストの実行ファイル）、モジュールのある
-//   フォルダの下の spool。
+//   フォルダの下の spool。パスの途中に .vwlibrary で終わるフォルダがあっても上らない。
 //
 // 区切りは / と、Windows では \ も。フォルダを求められない（区切りが無い）なら空。
 std::optional<std::string> spoolDirOf(const std::string &modulePath);

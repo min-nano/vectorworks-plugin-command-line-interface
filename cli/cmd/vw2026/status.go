@@ -20,7 +20,9 @@ It prints one of
 	{"running":true,"spool":"..."}
 	{"running":false,"spool":"...","reason":"..."}
 
-and exits with 5 when the bridge is not running.
+and exits with 5 when the bridge is not running, writing the spool it looked at
+to the standard error too (a vw2026 run from outside the folder of the plug-in
+looks at another spool; see "vw2026 --help").
 
 vw2026 does not wait for the bridge to start or stop; run status in a loop
 and decide on its exit status, not on its output. Stop on 1 too (the spool
@@ -69,7 +71,7 @@ func (statusCmd) run(e *env) int {
 	}
 	code := emit(e, bridgeJSON(bridge))
 	if !bridge.Running {
-		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (is Vectorworks started with the plug-in?)")
+		fmt.Fprintf(e.stderr, "vw2026: the bridge is not running (is Vectorworks started with the plug-in? spool: %s)\n", bridge.Dir)
 		return exitDown
 	}
 	return code

@@ -479,8 +479,8 @@ func TestSpoolFlagIsUsageError(t *testing.T) {
 	}
 }
 
-// 止まっていると答えるとき、call と session は求めたスプールの場所を標準エラーに示す（フォルダの
-// 外で動かした vw2026 が、場所の取り違えと見分けられるように）。status は標準出力の JSON の spool に示す。
+// 止まっていると答えるとき、求めたスプールの場所を標準エラーに示す（フォルダの外で動かした
+// vw2026 が、場所の取り違えと見分けられるように）。status は標準出力の JSON の spool にも示す。
 func TestNotRunningShowsTheSpool(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "spool")
 	for _, args := range [][]string{
@@ -495,7 +495,8 @@ func TestNotRunningShowsTheSpool(t *testing.T) {
 	}
 	quoted, _ := json.Marshal(dir)
 	r := invoke(t, opts{dir: dir}, "status")
-	if r.code != exitDown || !strings.Contains(r.stdout, `"spool":`+string(quoted)) {
+	if r.code != exitDown || !strings.Contains(r.stdout, `"spool":`+string(quoted)) ||
+		!strings.Contains(r.stderr, dir) {
 		t.Errorf("status: %+v", r)
 	}
 }
@@ -504,12 +505,19 @@ func TestNotRunningShowsTheSpool(t *testing.T) {
 func TestCallStoppedWhileWaitingShowsTheSpool(t *testing.T) {
 	dir, quit := busySpool(t)
 	stopped := make(chan struct{})
+	// 要求が置かれてから（call が待ち始めてから）ロックを放す。call はロックを締切のときに
+	// 見るので、締切より前に放せばよく、締切には余裕を持たせる。
 	go func() {
 		defer close(stopped)
-		time.Sleep(100 * time.Millisecond)
+		for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
+			if requests, _ := filepath.Glob(filepath.Join(dir, "*"+spool.RequestSuffix)); len(requests) > 0 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 		quit()
 	}()
-	r := invoke(t, opts{dir: dir}, "call", "ping", "--timeout", "0.5")
+	r := invoke(t, opts{dir: dir}, "call", "ping", "--timeout", "2")
 	// quit を呼び終えるのを待つ（テストの後始末も quit を呼ぶので、競合させない）。
 	<-stopped
 	if r.code != exitDown || r.stdout != "" || !strings.Contains(r.stderr, "stopped while waiting") ||

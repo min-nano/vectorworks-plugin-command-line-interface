@@ -95,21 +95,12 @@ func (c *callCmd) run(e *env) int {
 	if bridge == nil {
 		return exitFailure
 	}
-	// 止まっていると答えるときは、求めたスプールの場所を示す。フォルダの外で動かした vw2026 は
-	// Vectorworks が動いていても止まっていると答えるので、場所の取り違えと見分けられるように
-	// （docs/protocol.md「スプールの場所」）。
 	if !bridge.Running {
-		fmt.Fprintf(e.stderr, "vw2026: the bridge is not running (spool: %s; try `vw2026 status`)\n", bridge.Dir)
-		return exitDown
+		return failed(e, bridge, spool.ErrNotRunning)
 	}
 	response, err := bridge.Call(c.Tool, payload, c.Session, seconds(c.Timeout))
 	if err != nil {
-		if errors.Is(err, spool.ErrNotRunning) {
-			fmt.Fprintf(e.stderr, "vw2026: %v (spool: %s)\n", err, bridge.Dir)
-		} else {
-			fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
-		}
-		return codeFor(err)
+		return failed(e, bridge, err)
 	}
 	if c.Raw {
 		_ = emit(e, response)
@@ -121,6 +112,19 @@ func (c *callCmd) run(e *env) int {
 		return toolCodeFor(response.Code)
 	}
 	return exitOK
+}
+
+// failed は err を標準エラーに書き、終了コードを返す。止まっていると答えるとき（5）は、求めた
+// スプールの場所を添える。フォルダの外で動かした vw2026 は Vectorworks が動いていても止まって
+// いると答えるので、場所の取り違えと見分けられるように（docs/protocol.md「スプールの場所」）。
+func failed(e *env, bridge *spool.Bridge, err error) int {
+	code := codeFor(err)
+	if code == exitDown {
+		fmt.Fprintf(e.stderr, "vw2026: %v (spool: %s; try `vw2026 status`)\n", err, bridge.Dir)
+	} else {
+		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+	}
+	return code
 }
 
 // toolCodeFor は道具の失敗の code を終了コードにする。

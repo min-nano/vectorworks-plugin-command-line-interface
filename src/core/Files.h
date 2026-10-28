@@ -27,9 +27,9 @@ namespace VwCli::core::files {
 std::string join(const std::string &dir, std::string_view name);
 
 // modulePath は、このコードを含むモジュール（プラグインでは cli.vlb か、cli.vwlibrary の中の
-// 実行ファイル。テストではテストの実行ファイル）のパスを返す（POSIX は dladdr のパスを realpath
-// で解いたもの、Windows は GetModuleHandleExW と GetModuleFileNameW。環境変数は読まない。通信規則
-// 「スプールの場所」）。求められなければ空。
+// 実行ファイル。テストではテストの実行ファイル）のパスを返す（POSIX は dladdr、Windows は
+// GetModuleHandleExW と GetModuleFileNameW の返すパス。リンクは解かない。環境変数は読まない。
+// 通信規則「スプールの場所」）。求められなければ空。
 std::optional<std::string> modulePath();
 
 // makeDirectories は path を作る（親も無ければ作る。POSIX は 0700）。既にあれば何もしない。

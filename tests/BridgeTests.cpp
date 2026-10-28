@@ -408,11 +408,19 @@ TEST(BridgeSpoolDirOfBundleIsNextToTheBundle) {
 	std::string plugIns = "/Users/a/Library/Application Support/Vectorworks/2026/Plug-Ins";
 	CHECK_EQ(spoolDirOf(plugIns + "/cli/cli.vwlibrary/Contents/MacOS/cli").value_or(""),
 	         files::join(plugIns + "/cli", "spool"));
-	// 最も近いバンドルまで上る（上のフォルダの名前が .vwlibrary で終わっても、そこまでは
-	// 上らない）。
 	CHECK_EQ(spoolDirOf("/x.vwlibrary/cli/cli.vwlibrary/Contents/MacOS/cli").value_or(""),
 	         files::join("/x.vwlibrary/cli", "spool"));
 	CHECK_EQ(spoolDirOf("/cli.vwlibrary/Contents/MacOS/cli").value_or(""), std::string("/spool"));
+	// <X>.vwlibrary/Contents/MacOS/<実行ファイル> の形のときだけ上る。パスの途中に .vwlibrary で
+	// 終わるフォルダがあっても上らない（呼ぶ側は bin の親を取るので、上ると食い違う）。
+	CHECK_EQ(spoolDirOf("/x.vwlibrary/Plug-ins/cli/cli.vlb").value_or(""),
+	         files::join("/x.vwlibrary/Plug-ins/cli", "spool"));
+	CHECK_EQ(spoolDirOf("/a/cli.vwlibrary/MacOS/cli").value_or(""),
+	         files::join("/a/cli.vwlibrary/MacOS", "spool"));
+	CHECK_EQ(spoolDirOf("/a/cli.vwlibrary/Contents/cli").value_or(""),
+	         files::join("/a/cli.vwlibrary/Contents", "spool"));
+	CHECK_EQ(spoolDirOf("/a/cli/Contents/MacOS/cli").value_or(""),
+	         files::join("/a/cli/Contents/MacOS", "spool"));
 	// モジュールそのものの名前は見ない。
 	CHECK_EQ(spoolDirOf("/a/cli/cli.vwlibrary").value_or(""), files::join("/a/cli", "spool"));
 }

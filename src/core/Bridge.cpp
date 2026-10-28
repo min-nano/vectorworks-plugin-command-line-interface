@@ -37,16 +37,20 @@ std::optional<std::string> spoolDirOf(const std::string &modulePath) {
 	if (separators.empty()) {
 		return std::nullopt;
 	}
-	// 既定はモジュールのあるフォルダ（最後の区切りの前）。バンドルの中なら、最も近いバンドルの
-	// 名前の前の区切りまで上る（名前は区切りどうしの間。最後の名前はモジュールそのもの）。
+	// i 番目の区切りの後ろのフォルダの名前（最後の区切りの後ろはモジュールそのもの）。
+	auto folderName = [&](std::size_t i) {
+		return std::string_view(modulePath.data() + separators[i] + 1,
+		                        separators[i + 1] - separators[i] - 1);
+	};
+	// 既定はモジュールのあるフォルダ（最後の区切りの前）。mac のバンドルの中の実行ファイル
+	// （<X>.vwlibrary/Contents/MacOS/<実行ファイル>）の形のときだけ、バンドルのあるフォルダまで
+	// 上る。パスの途中に .vwlibrary で終わるフォルダがあっても上らない（呼ぶ側は bin の親を
+	// 取るので、上ると両側の場所が食い違う）。
 	std::size_t folderEnd = separators.back();
-	for (std::size_t i = separators.size() - 1; i > 0; --i) {
-		std::string_view name(modulePath.data() + separators[i - 1] + 1,
-		                      separators[i] - separators[i - 1] - 1);
-		if (endsWith(name, kBundleSuffix)) {
-			folderEnd = separators[i - 1];
-			break;
-		}
+	std::size_t n = separators.size();
+	if (n >= 4 && folderName(n - 2) == "MacOS" && folderName(n - 3) == "Contents" &&
+	    endsWith(folderName(n - 4), kBundleSuffix)) {
+		folderEnd = separators[n - 4];
 	}
 	// 根の直下（/cli.vlb など）なら、区切りを残して根を指す。
 	std::string folder = modulePath.substr(0, folderEnd == 0 ? 1 : folderEnd);
