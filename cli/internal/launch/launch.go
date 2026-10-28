@@ -2,7 +2,8 @@
 //
 // 起動は OS の標準の方法にだけ頼る。macOS は `open -a`（既に動いていれば前面に出すだけで、
 // 2 つ目は起動しない）。Windows は既定のインストール先の実行ファイルを起動し、既に
-// 動いていれば起動しない（実行ファイルを直接起動すると 2 つ目が立ち上がりうる）。
+// 動いていれば起動しない（実行ファイルを直接起動すると 2 つ目が立ち上がりうる）。どちらも
+// 既に動いていたときを成功とし、OS によって結果を変えない。
 // 既定の場所を探し回らない（ほかの場所は app で明示する）。
 // app（VW2026_APP）で明示でき、.app で終わらなければ実行ファイルとしてそのまま起動する
 // （テスト用の代替プログラムもこの経路）。
@@ -24,9 +25,6 @@ const DefaultMacApp = "Vectorworks 2026"
 
 // defaultWindowsExe は Windows の既定のインストール先の実行ファイル（%ProgramFiles% の下）。
 const defaultWindowsExe = `Vectorworks 2026\Vectorworks2026.exe`
-
-// ErrAlreadyRunning は Windows で同じ実行ファイルが既に動いている。
-var ErrAlreadyRunning = errors.New("vectorworks is already running")
 
 // Command は起動するコマンド（argv）を返す。
 func Command(app string) ([]string, error) {
@@ -53,10 +51,12 @@ func Command(app string) ([]string, error) {
 	}
 }
 
-// Start は起動して切り離す（CLI が終わっても Vectorworks は残る）。
+// Start は起動して切り離す（CLI が終わっても Vectorworks は残る）。Windows で同じ実行ファイルが
+// 既に動いていれば、2 つ目を立ち上げずに成功とする（macOS の open -a が前面に出すだけで成功する
+// のと揃え、呼ぶ側が OS ごとに分けなくて済むように）。
 func Start(argv []string) error {
 	if runtime.GOOS == "windows" && windowsRunning(argv[0]) {
-		return ErrAlreadyRunning
+		return nil
 	}
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, nil, nil

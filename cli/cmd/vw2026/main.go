@@ -193,9 +193,9 @@ this state as running; call waits up to --timeout and then exits with 3.
 Recover from 5 and 3 differently: 5 means the bridge is not running
 (Vectorworks is not running, or it is running without the bridge; see "vw2026
 help launch"), while 3 means the bridge is running but did not answer in time,
-so launching Vectorworks again or reinstalling the plug-in does not help. Tell 3 and 4
-apart before calling a tool that changes the drawing again: after 3 the tool
-did not run, while after 4 it may have.
+so launching Vectorworks again or reinstalling the plug-in does not help. Tell
+3 and 4 apart before calling a tool that changes the drawing again: after 3 the
+tool did not run, while after 4 it may have.
 `
 }
 

@@ -15,7 +15,6 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
-	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/launch"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
@@ -206,19 +205,6 @@ func TestLaunchStartsApp(t *testing.T) {
 	r := invoke(t, opts{vars: map[string]string{"VW2026_APP": app}, started: &started}, "launch")
 	if r.code != exitOK || len(started) != 1 || started[0] != app {
 		t.Fatalf("%+v %v", r, started)
-	}
-}
-
-// Vectorworks が動いているのにブリッジが動いていない（Windows で起動を断られた。プラグインが
-// 読み込まれていない・起動か終了の途中）なら、ブリッジが止まっているときと同じ 5 で終わる。
-// 文言は、読み込まれていないことと、起動・終了の途中であることの両方を挙げる。
-func TestLaunchWhenRunningWithoutBridge(t *testing.T) {
-	app := fakeApp(t)
-	refused := func([]string) error { return fmt.Errorf("start: %w", launch.ErrAlreadyRunning) }
-	r := invoke(t, opts{vars: map[string]string{"VW2026_APP": app}, start: refused}, "launch")
-	if r.code != exitDown || r.stdout != "" || !strings.Contains(r.stderr, "plug-in is not loaded") ||
-		!strings.Contains(r.stderr, "starting or quitting") {
-		t.Fatalf("%+v", r)
 	}
 }
 
