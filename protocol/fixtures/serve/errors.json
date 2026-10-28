@@ -27,7 +27,7 @@
 					"tools": {
 						"ok": true,
 						"result": {
-							"protocol": 5,
+							"protocol": 6,
 							"tools": [
 								{
 									"name": "ping",

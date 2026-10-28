@@ -41,7 +41,6 @@ func sorted(values ...string) []string {
 func TestConstantsMatchFixtures(t *testing.T) {
 	var c struct {
 		Protocol        int      `json:"protocol"`
-		AppDir          string   `json:"app_dir"`
 		SpoolDir        string   `json:"spool_dir"`
 		LockFile        string   `json:"lock_file"`
 		RequestSuffix   string   `json:"request_suffix"`
@@ -56,9 +55,9 @@ func TestConstantsMatchFixtures(t *testing.T) {
 		Codes []string `json:"codes"`
 	}
 	readFixture(t, "constants.json", &c)
-	got := []any{ProtocolVersion, AppDirName, SpoolDirName, LockFile, RequestSuffix, ResponseSuffix,
+	got := []any{ProtocolVersion, SpoolDirName, LockFile, RequestSuffix, ResponseSuffix,
 		WaitSuffix, TempSuffix, MaxRequestBytes, MaxNestingDepth}
-	want := []any{c.Protocol, c.AppDir, c.SpoolDir, c.LockFile, c.RequestSuffix, c.ResponseSuffix,
+	want := []any{c.Protocol, c.SpoolDir, c.LockFile, c.RequestSuffix, c.ResponseSuffix,
 		c.WaitSuffix, c.TempSuffix, c.MaxRequestBytes, c.MaxNestingDepth}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("constants %v, want %v", got, want)

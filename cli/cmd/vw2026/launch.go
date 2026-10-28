@@ -28,7 +28,9 @@ Windows. Launch does not search other places; name them with --app. A value
 that does not end in .app is started as an executable.
 
 When Vectorworks is running but the bridge is not (the plug-in is not
-installed), launch exits with 5.
+installed, or this vw2026 runs from outside the folder of the plug-in; see
+"vw2026 --help"), launch exits with 5 and writes the spool it looked at to the
+standard error.
 `
 }
 
@@ -51,7 +53,7 @@ func (c *launchCmd) run(e *env) int {
 	}
 	if err := e.start(argv); err != nil {
 		if errors.Is(err, launch.ErrAlreadyRunning) {
-			fmt.Fprintln(e.stderr, "vw2026: Vectorworks is running but the bridge is not (is the plug-in installed?)")
+			fmt.Fprintf(e.stderr, "vw2026: Vectorworks is running but the bridge is not (is the plug-in installed? spool: %s)\n", bridge.Dir)
 			return exitDown
 		}
 		fmt.Fprintf(e.stderr, "vw2026: launch: %v\n", err)

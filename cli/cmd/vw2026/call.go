@@ -43,6 +43,10 @@ a malformed response, so call exits with 1 for it. So does a response file
 that is not a valid response object (not JSON, or JSON of the wrong shape);
 call removes it without waiting for --timeout.
 
+When the bridge is not running, call exits with 5 and writes the spool it
+looked at to the standard error, so that a vw2026 run from outside the folder
+of the plug-in (see "vw2026 --help") can be told from a stopped Vectorworks.
+
 When --timeout runs out, call stops waiting, withdraws the request, and
 exits with 3: the tool did not run. If the plug-in had already taken the
 request, call waits a few more seconds for the response, and exits with 4 if
@@ -91,13 +95,20 @@ func (c *callCmd) run(e *env) int {
 	if bridge == nil {
 		return exitFailure
 	}
+	// 止まっていると答えるときは、求めたスプールの場所を示す。フォルダの外で動かした vw2026 は
+	// Vectorworks が動いていても止まっていると答えるので、場所の取り違えと見分けられるように
+	// （docs/protocol.md「スプールの場所」）。
 	if !bridge.Running {
-		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (try `vw2026 status`)")
+		fmt.Fprintf(e.stderr, "vw2026: the bridge is not running (spool: %s; try `vw2026 status`)\n", bridge.Dir)
 		return exitDown
 	}
 	response, err := bridge.Call(c.Tool, payload, c.Session, seconds(c.Timeout))
 	if err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+		if errors.Is(err, spool.ErrNotRunning) {
+			fmt.Fprintf(e.stderr, "vw2026: %v (spool: %s)\n", err, bridge.Dir)
+		} else {
+			fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+		}
 		return codeFor(err)
 	}
 	if c.Raw {

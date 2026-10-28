@@ -2,10 +2,11 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cstdlib>
 #include <cstring>
 #include <dirent.h>
+#include <dlfcn.h>
 #include <fcntl.h>
-#include <pwd.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -79,20 +80,24 @@ std::string join(const std::string &dir, std::string_view name) {
 	return path;
 }
 
-std::optional<std::string> appRoot() {
-	// ホームは環境変数 HOME ではなく passwd の項目から求める（launchd のジョブで無い・ツールの
-	// 実行環境で上書きされることがあり、CLI と食い違うと要求が届かないため）。
-	long size = ::sysconf(_SC_GETPW_R_SIZE_MAX);
-	std::string buffer(size > 0 ? static_cast<std::size_t>(size) : 16384, '\0');
-	passwd entry{};
-	passwd *found = nullptr;
-	while (::getpwuid_r(::getuid(), &entry, buffer.data(), buffer.size(), &found) == ERANGE) {
-		buffer.resize(buffer.size() * 2);
-	}
-	if (!found || !found->pw_dir || found->pw_dir[0] == '\0') {
+std::optional<std::string> modulePath() {
+	// モジュールの中の番地なら何でもよいので、関数ではなく静的なデータの番地を渡す（関数の
+	// ポインタを void * にするのは処理系に依る）。
+	static const char anchor = 0;
+	Dl_info info{};
+	if (::dladdr(&anchor, &info) == 0 || !info.dli_fname || info.dli_fname[0] == '\0') {
 		return std::nullopt;
 	}
-	return join(join(found->pw_dir, "Library"), "Application Support");
+	// リンクを解く。呼ぶ側も実行ファイルのリンクを解いてから求めるので、プラグインのフォルダが
+	// リンクを通した場所にあっても、両側の示すパスが揃う（Linux の実行ファイルでは dladdr が
+	// argv[0] を返し、相対パスのこともある）。
+	char *resolved = ::realpath(info.dli_fname, nullptr);
+	if (!resolved) {
+		return std::nullopt;
+	}
+	std::string path(resolved);
+	std::free(resolved);
+	return path;
 }
 
 bool makeDirectories(const std::string &path, std::string &error) {

@@ -24,7 +24,7 @@
 ## `ping`
 
 ```json
-{"version":"abc1234","branch":"main","protocol":5,"pid":4242,"session":false,"document_open":true,"current_layer":"1F"}
+{"version":"abc1234","branch":"main","protocol":6,"pid":4242,"session":false,"document_open":true,"current_layer":"1F"}
 ```
 
 | フィールド | 値 |
@@ -43,7 +43,7 @@
 図面が無いときは次のように答えます。
 
 ```json
-{"version":"abc1234","branch":"main","protocol":5,"pid":4242,"session":false,"document_open":false,"current_layer":null}
+{"version":"abc1234","branch":"main","protocol":6,"pid":4242,"session":false,"document_open":false,"current_layer":null}
 ```
 
 例の `protocol` は書いた時点の版です（[通信規則「版」](../protocol.md#版)）。

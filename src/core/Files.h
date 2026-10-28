@@ -26,10 +26,11 @@ namespace VwCli::core::files {
 // join は dir と name を OS の区切りでつなぐ。
 std::string join(const std::string &dir, std::string_view name);
 
-// appRoot は <CLI> の親を返す（mac は利用者の passwd の項目のホームの Library/Application
-// Support、Windows は SHGetKnownFolderPath(FOLDERID_LocalAppData)。環境変数は読まない。通信規則
+// modulePath は、このコードを含むモジュール（プラグインでは cli.vlb か、cli.vwlibrary の中の
+// 実行ファイル。テストではテストの実行ファイル）のパスを返す（POSIX は dladdr のパスを realpath
+// で解いたもの、Windows は GetModuleHandleExW と GetModuleFileNameW。環境変数は読まない。通信規則
 // 「スプールの場所」）。求められなければ空。
-std::optional<std::string> appRoot();
+std::optional<std::string> modulePath();
 
 // makeDirectories は path を作る（親も無ければ作る。POSIX は 0700）。既にあれば何もしない。
 // 持ち主と権限は確かめない。

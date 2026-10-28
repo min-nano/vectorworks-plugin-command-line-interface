@@ -70,9 +70,10 @@ type env struct {
 	stdout io.Writer
 	stderr io.Writer
 	start  func(argv []string) error
-	// スプールの場所。本番は常に spool.DefaultDir で、外から変える指定は持たない（プラグインは
-	// <CLI>/spool しか見ないので、別の場所を指せても要求が届かない。docs/protocol.md
-	// 「スプールの場所」）。テストは偽のプラグインのスプールを返す。
+	// スプールの場所。本番は常に spool.Dir（実行ファイルの場所から求める）で、外から変える指定は
+	// 持たない（プラグインはモジュールの場所から求めた <Plug-Ins>/cli/spool しか見ないので、別の
+	// 場所を指せても要求が届かない。docs/protocol.md「スプールの場所」）。テストは偽のプラグインの
+	// スプールを返す。
 	spool func() (string, error)
 }
 
@@ -82,7 +83,7 @@ func main() {
 		stdout: os.Stdout,
 		stderr: os.Stderr,
 		start:  launch.Start,
-		spool:  spool.DefaultDir,
+		spool:  spool.Dir,
 	}))
 }
 
@@ -105,9 +106,14 @@ retry, wait for a session to be free, or interpret the tools; the caller
 does those (docs/design.md). Exclusive use of the bridge is the plug-in's:
 vw2026 only asks it for a session and carries the session in the calls
 ("vw2026 help session"). The bridge and vw2026 exchange files in a spool by the
-protocol in docs/protocol.md. The spool is <CLI>/spool
-(docs/plugin/identifiers.md), and nothing changes it: the plug-in looks only
-there.
+protocol in docs/protocol.md. The spool is the folder spool in the folder of
+the cli plug-in (<Plug-Ins>/cli/spool; docs/plugin/identifiers.md). vw2026
+finds it from where its own executable is (<Plug-Ins>/cli/bin/vw2026, after
+following links), and nothing changes it: the plug-in finds the same folder
+from where its module is, and looks only there. A copy of vw2026 run from
+outside that folder (for example, from an unpacked zip) looks for the spool
+next to its own folder, finds no bridge there, and reports the bridge as not
+running; the commands show the spool they looked at.
 
 Each command prints one line of JSON to the standard output, writes the
 reason for a failure to the standard error, and reports the outcome in its

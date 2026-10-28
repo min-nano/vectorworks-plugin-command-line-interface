@@ -214,8 +214,10 @@ func TestLaunchStartsApp(t *testing.T) {
 func TestLaunchWhenRunningWithoutBridge(t *testing.T) {
 	app := fakeApp(t)
 	refused := func([]string) error { return fmt.Errorf("start: %w", launch.ErrAlreadyRunning) }
-	r := invoke(t, opts{vars: map[string]string{"VW2026_APP": app}, start: refused}, "launch")
-	if r.code != exitDown || r.stdout != "" || !strings.Contains(r.stderr, "plug-in installed") {
+	dir := filepath.Join(t.TempDir(), "spool")
+	r := invoke(t, opts{dir: dir, vars: map[string]string{"VW2026_APP": app}, start: refused}, "launch")
+	if r.code != exitDown || r.stdout != "" || !strings.Contains(r.stderr, "plug-in installed") ||
+		!strings.Contains(r.stderr, dir) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -252,7 +254,7 @@ func fakeApp(t *testing.T) string {
 
 func TestVersion(t *testing.T) {
 	r := invoke(t, opts{}, "version")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":5`) {
+	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":6`) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -321,7 +323,7 @@ func TestHelp(t *testing.T) {
 
 func TestVersionFlag(t *testing.T) {
 	r := invoke(t, opts{}, "--version")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":5`) {
+	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":6`) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -467,18 +469,40 @@ func TestFlagsFromEnv(t *testing.T) {
 	}
 }
 
-// スプールの場所を変える指定は無い（プラグインは <CLI>/spool しか見ないので、別の場所を
-// 指せても要求が届かない）。環境変数を読まないことは spool の TestDefaultDirIgnoresSpoolVariable。
+// スプールの場所を変える指定は無い（プラグインはモジュールの場所から求めた <Plug-Ins>/cli/spool
+// しか見ないので、別の場所を指せても要求が届かない）。環境変数を読まないことは spool の
+// TestDirIgnoresEnvironment。
 func TestSpoolFlagIsUsageError(t *testing.T) {
 	if r := invoke(t, opts{}, "status", "--spool", t.TempDir()); r.code != exitUsage {
 		t.Fatalf("%+v", r)
 	}
 }
 
-// スプールの場所を求められなければ（ホームが分からないなど）、スプールを見るコマンドは
+// 止まっていると答えるとき、call と session は求めたスプールの場所を標準エラーに示す（フォルダの
+// 外で動かした vw2026 が、場所の取り違えと見分けられるように）。status は標準出力の JSON の spool に示す。
+func TestNotRunningShowsTheSpool(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "spool")
+	for _, args := range [][]string{
+		{"call", "ping"},
+		{"session", "start"},
+		{"session", "end", "--session", "x"},
+	} {
+		r := invoke(t, opts{dir: dir}, args...)
+		if r.code != exitDown || r.stdout != "" || !strings.Contains(r.stderr, dir) {
+			t.Errorf("%v: %+v", args, r)
+		}
+	}
+	quoted, _ := json.Marshal(dir)
+	r := invoke(t, opts{dir: dir}, "status")
+	if r.code != exitDown || !strings.Contains(r.stdout, `"spool":`+string(quoted)) {
+		t.Errorf("status: %+v", r)
+	}
+}
+
+// スプールの場所を求められなければ（実行ファイルの場所が分からないなど）、スプールを見るコマンドは
 // どこで失敗したかと理由を標準エラーに書いて 1 で終わる。
 func TestSpoolNotLocated(t *testing.T) {
-	locate := func() (string, error) { return "", errors.New("user: unknown userid 501") }
+	locate := func() (string, error) { return "", errors.New("lstat /nowhere/bin/vw2026: no such file or directory") }
 	for _, args := range [][]string{
 		{"status"},
 		{"call", "ping"},
@@ -487,7 +511,7 @@ func TestSpoolNotLocated(t *testing.T) {
 		{"session", "end", "--session", "x"},
 	} {
 		r := invoke(t, opts{locate: locate}, args...)
-		want := "vw2026: cannot locate the spool: user: unknown userid 501"
+		want := "vw2026: cannot locate the spool: lstat /nowhere/bin/vw2026: no such file or directory"
 		if r.code != exitFailure || r.stdout != "" || !strings.Contains(r.stderr, want) {
 			t.Errorf("%v: %+v", args, r)
 		}

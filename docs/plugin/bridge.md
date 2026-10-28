@@ -8,8 +8,8 @@
 | --- | --- | --- |
 | `src/core/Protocol.h` | 依らない | 通信規則の定数（ファイルの綴り・上限・予約された道具・`code`）と id の検査。`protocol/fixtures/constants.json` と対（[通信規則の見本](../fixtures.md)） |
 | `src/core/Json.{h,cpp}` | 依らない | 小さな JSON（入れ子の深さに上限を設ける。読み方は Go の `encoding/json` に合わせる。[受け付け 1 回](#受け付け-1-回coreserverserve)の 3） |
-| `src/core/Files.h`・`FilesPosix.cpp`・`FilesWindows.cpp` | 依らない | スプールに使う OS の呼び出し（ロック・待つ印・読み書き・`<CLI>` の親の場所）。開くファイルは子プロセスに受け継がせない。開いて待たない（通常のファイルだけを読み書きし、リンクはたどらない。POSIX は `O_NONBLOCK`・`O_NOFOLLOW` で開く。Windows は `\\?\` と `FILE_FLAG_OPEN_REPARSE_POINT` で開き（パスは絶対パスに限る）、reparse point（OneDrive などのクラウドのファイル・重複除去を含む）と中身がローカルにないファイルを断る）。書きかけは消してから新しく作る（リンクの先を壊さない。[通信規則「プラグイン側の義務」](../protocol.md#プラグイン側の義務)） |
-| `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つ（`prepare` / `lock` / `sweep` / `poll` / `take` / `waitState` / `reply`）と、スプールの場所（`defaultSpoolDir`）。場所は引数で受ける（テストは一時ディレクトリを渡す） |
+| `src/core/Files.h`・`FilesPosix.cpp`・`FilesWindows.cpp` | 依らない | スプールに使う OS の呼び出し（ロック・待つ印・読み書き・自分のモジュールの場所）。開くファイルは子プロセスに受け継がせない。開いて待たない（通常のファイルだけを読み書きし、リンクはたどらない。POSIX は `O_NONBLOCK`・`O_NOFOLLOW` で開く。Windows は `\\?\` と `FILE_FLAG_OPEN_REPARSE_POINT` で開き（パスは絶対パスに限る）、reparse point（OneDrive などのクラウドのファイル・重複除去を含む）と中身がローカルにないファイルを断る）。書きかけは消してから新しく作る（リンクの先を壊さない。[通信規則「プラグイン側の義務」](../protocol.md#プラグイン側の義務)） |
+| `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つ（`prepare` / `lock` / `sweep` / `poll` / `take` / `waitState` / `reply`）と、スプールの場所（モジュールのパスから求める `spoolDirOf` と、自分のモジュールに当てる `defaultSpoolDir`）。`Bridge` は場所を引数で受ける（テストは一時ディレクトリを渡す） |
 | `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（`core::Server::serve`。下記）と、占有の印（`Server` が発行した 1 つをメモリに持つ）。道具の表と時刻を引数で受けるので無 SDK でテストできる |
 | `src/core/Ping.{h,cpp}` | 依らない | 道具 `ping` の中身のうち SDK に依らない部分（引数の検査と結果の形）。SDK から読む値（現在のレイヤの名前）は引数で受ける |
 | `src/tools/ToolTable.cpp` | 依る | 道具の表 |
@@ -25,8 +25,9 @@
 
 ## スプールの用意
 
-- 場所は `<CLI>/spool`（[通信規則「スプールの場所」](../protocol.md#スプールの場所)。段 3 で `<Plug-Ins>/cli/spool` に移し、モジュールの場所から求める。[通信規則「段 3 で移す場所」](../protocol.md#段-3-で移す場所)）。環境変数は
-  読まず、**探索しません**。
+- 場所は `<Plug-Ins>/cli/spool`（[通信規則「スプールの場所」](../protocol.md#スプールの場所)）。
+  自分のモジュールの場所から求め（`files::modulePath` のパスを `spoolDirOf` に渡す）、環境変数は
+  読まず、**探索しません**。求められなければ、次の刻みでやり直します（`Clock` の `tick`）。
 - `prepare`: 無ければ 0700 で作る（親も無ければ作る）。持ち主と権限は確かめない。失敗したら
   次の回にやり直す（理由は受け付けの結果に載せる）。
 - `lock`: `bridge.lock` を掴む（POSIX は `flock(LOCK_EX|LOCK_NB)`、Windows は共有なしで開く。
@@ -173,7 +174,7 @@ struct Tool {
 ```
 
 - **道具を足すときに触るのは表の 1 行と中身 1 つだけ**です。CLI は道具を知らないので直しません。
-- `tools` の結果は `{"protocol":5,"tools":[{"name","description","inputSchema","kind"}]}`。
+- `tools` の結果は `{"protocol":6,"tools":[{"name","description","inputSchema","kind"}]}`。
   `kind` は `read` / `write` / `app` を小文字で載せます（呼ぶ側が「図面を変えるか」を
   判定できるように）。予約された道具のうち `tools`・`session_start`・`session_end` は表に載せず、
   `tools` の結果にも出しません。`ping` と `quit` は表に載せます（[通信規則「予約された道具」](../protocol.md#予約された道具)）。
