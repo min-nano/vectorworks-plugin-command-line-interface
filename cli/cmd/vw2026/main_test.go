@@ -15,7 +15,6 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
-	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/launch"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
@@ -221,17 +220,6 @@ func TestLaunchStartsApp(t *testing.T) {
 	r := invoke(t, opts{vars: map[string]string{"VW2026_APP": app}, started: &started}, "launch")
 	if r.code != exitOK || len(started) != 1 || started[0] != app {
 		t.Fatalf("%+v %v", r, started)
-	}
-}
-
-// 動いている Vectorworks にプラグインが入っていない（Windows で起動を断られた）なら、
-// ブリッジが止まっているときと同じ 5 で終わる。
-func TestLaunchWhenRunningWithoutBridge(t *testing.T) {
-	app := fakeApp(t)
-	refused := func([]string) error { return fmt.Errorf("start: %w", launch.ErrAlreadyRunning) }
-	r := invoke(t, opts{vars: map[string]string{"VW2026_APP": app}, start: refused}, "launch")
-	if r.code != exitDown || r.stdout != "" || !strings.Contains(r.stderr, "plug-in installed") {
-		t.Fatalf("%+v", r)
 	}
 }
 

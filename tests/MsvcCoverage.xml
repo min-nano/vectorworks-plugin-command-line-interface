@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-	Microsoft.CodeCoverage.Console の設定（test.yml の Windows の行）。clang の分（llvm-cov に
+	Microsoft.CodeCoverage.Console の設定（cpp.yml の Windows の行）。clang の分（llvm-cov に
 	src/core を渡す）と同じく、共通部（src/core）だけを数える。テストのコードと標準ライブラリの
 	ヘッダは数えない。正規表現は ECMAScript で、パスの区切りは \。
 -->

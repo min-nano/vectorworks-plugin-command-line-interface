@@ -1,7 +1,6 @@
 package launch
 
 import (
-	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -108,14 +107,14 @@ func TestStartDetaches(t *testing.T) {
 // 起動できなければ（実行ファイルが無い）、起動のエラーを返す。
 func TestStartFailsForMissingExecutable(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing"+exeSuffix())
-	if err := Start([]string{missing}); err == nil || errors.Is(err, ErrAlreadyRunning) {
+	if err := Start([]string{missing}); err == nil {
 		t.Fatalf("want a start error, got %v", err)
 	}
 }
 
-// Windows では、同じ実行ファイルが動いていれば起動しない。このテスト自身が動いている
-// 実行ファイルで確かめる。
-func TestStartRefusesWhenRunningOnWindows(t *testing.T) {
+// Windows では、同じ実行ファイルが動いていれば起動せずに成功とする。このテスト自身が動いている
+// 実行ファイルで確かめる（誤って起動すると、起動された側は印を書いてすぐ終わる）。
+func TestStartSkipsWhenRunningOnWindows(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("windows only")
 	}
@@ -126,8 +125,14 @@ func TestStartRefusesWhenRunningOnWindows(t *testing.T) {
 	if !windowsRunning(self) {
 		t.Fatal("windowsRunning does not see the running test binary")
 	}
-	if err := Start([]string{self}); !errors.Is(err, ErrAlreadyRunning) {
-		t.Fatalf("want ErrAlreadyRunning, got %v", err)
+	marker := filepath.Join(t.TempDir(), "started")
+	t.Setenv(helperEnv, marker)
+	if err := Start([]string{self}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(2 * time.Second)
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("started a second process")
 	}
 }
 
