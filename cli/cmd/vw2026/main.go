@@ -133,7 +133,8 @@ open, so the caller saves and closes the drawings first. End the session on
 each failure: otherwise it stays until Vectorworks quits, and other callers
 are refused. In sh, with the waits of "vw2026 help status":
 
-	id=...  # "session" in the output of vw2026 session start
+	# "session" in the output of vw2026 session start
+	id=...
 	# with drawings open, quit fails and lists them in "detail"
 	vw2026 call quit --session "$id"; code=$?
 	if [ "$code" -ne 0 ]; then vw2026 session end --session "$id"; exit "$code"; fi
