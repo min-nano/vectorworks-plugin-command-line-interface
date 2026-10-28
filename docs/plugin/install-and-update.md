@@ -244,13 +244,18 @@ vw2026 install <name>@<tag>
   vw2026 call quit --session "$id" || { code=$?; vw2026 session end --session "$id"; exit "$code"; }
   # 止まるのを待つ（5 で止まった。0 のまま上限を過ぎたのは、確かめてから頼むまでの間に
   # 利用者が図面を開いて保存の確認が開き、取り消された（または開いたままの）とき。0 のまま抜けると成功に見えるので、
-  # 待ちきれなかったことを表す 3 で抜ける。占有も解く）
+  # 待ちきれなかったことを表す 3 で抜ける。status が失敗した（1 など）ときも、Vectorworks が
+  # 動いたままかもしれないので、その終了コードで抜ける前に占有を解く）
   for i in $(seq 120); do
       vw2026 status >/dev/null 2>&1; code=$?
       [ "$code" -ne 0 ] && break
       sleep 1
   done
-  case $code in 5) ;; 0) vw2026 session end --session "$id"; exit 3 ;; *) exit "$code" ;; esac
+  case $code in
+      5) ;;
+      0) vw2026 session end --session "$id"; exit 3 ;;
+      *) vw2026 session end --session "$id"; exit "$code" ;;
+  esac
   vw2026 install cli@latest && vw2026 launch || exit
   # 動き出すのを待つ（0 で動き出した。5 のまま上限を過ぎた・1 で失敗したら、その終了コードで抜ける）
   for i in $(seq 120); do

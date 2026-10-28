@@ -127,8 +127,10 @@ true or false (or 1 or 0), and --no-raw turns it off again.
 vw2026 does not wait for the bridge to start or stop: the caller runs status
 in a loop ("vw2026 help status").
 
-To update the plug-in, the caller combines the commands (install is not
-implemented yet; see docs/plugin/install-and-update.md):
+To update the plug-in, the caller combines the commands as below (install is
+not implemented yet). docs/plugin/install-and-update.md has the whole sequence,
+with the waits and with "session end" on each failure, so that a failure does
+not leave the session behind:
 
 	vw2026 session start             # quit runs only in a session
 	vw2026 call quit --session <ID>  # then wait for the bridge to stop
@@ -162,11 +164,12 @@ Vectorworks can be running, holding the lock, without answering: the plug-in
 answers only when Vectorworks runs its timer, which it may not do in the middle
 of a long operation or in some of its dialogs (docs/protocol.md). Status reports
 this state as running; call waits up to --timeout and then exits with 3.
-Recover from 5 and 3 differently: 5 means Vectorworks is not running, while 3
-means it is running but did not answer in time, so launching it again or
-reinstalling the plug-in does not help. Tell 3 and 4 apart before calling a
-tool that changes the drawing again: after 3 the tool did not run, while after
-4 it may have.
+Recover from 5 and 3 differently: 5 means the bridge is not running
+(Vectorworks is not running, or it is running without the bridge; see "vw2026
+help launch"), while 3 means it is running but did not answer in time, so
+launching it again or reinstalling the plug-in does not help. Tell 3 and 4
+apart before calling a tool that changes the drawing again: after 3 the tool
+did not run, while after 4 it may have.
 `
 }
 

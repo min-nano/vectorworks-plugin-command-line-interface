@@ -27,10 +27,15 @@ The default application is "Vectorworks 2026" on macOS, started with
 Windows. Launch does not search other places; name them with --app. A value
 that does not end in .app is started as an executable.
 
-When Vectorworks is running but the bridge is not (the plug-in is not
-installed), launch exits with 5 on Windows. On macOS, "open -a" brings the
-running Vectorworks to the front instead, so launch prints {"launched":true,...}
-and exits with 0; run status to tell whether the bridge is running.
+When Vectorworks is running but the bridge is not, launch exits with 5 on
+Windows: the plug-in is not installed, or Vectorworks is still starting or
+already quitting (run status in a loop to tell these apart). Launch finds a
+running Vectorworks with tasklist; if tasklist fails, launch starts the
+application as if Vectorworks were not running. On macOS, an application
+started with "open -a" (one ending in .app) is brought to the front instead,
+so launch prints {"launched":true,...} and exits with 0; run status to tell
+whether the bridge is running. An executable given with --app on macOS is
+started without checking whether Vectorworks is running.
 `
 }
 
@@ -53,7 +58,7 @@ func (c *launchCmd) run(e *env) int {
 	}
 	if err := e.start(argv); err != nil {
 		if errors.Is(err, launch.ErrAlreadyRunning) {
-			fmt.Fprintln(e.stderr, "vw2026: Vectorworks is running but the bridge is not (is the plug-in installed?)")
+			fmt.Fprintln(e.stderr, "vw2026: Vectorworks is running but the bridge is not (is the plug-in installed, or is Vectorworks starting or quitting?)")
 			return exitDown
 		}
 		fmt.Fprintf(e.stderr, "vw2026: launch: %v\n", err)
