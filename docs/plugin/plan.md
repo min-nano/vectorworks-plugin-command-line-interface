@@ -57,6 +57,18 @@
   `bin/vw2026 version`。[ビルド「CI」](build-and-release.md#ci)）。
 - **タグの slug は `scripts/dev-tag.sh` だけが作る**（[名前と識別子](identifiers.md)）。
 
+段 4 で決めたこと（真実は各ページ）:
+
+- **`detail` は道具が返した失敗（`invalid_args`・`internal`）にだけ載り、オブジェクトに限る。** 道具が
+  オブジェクトでない詳細を返せば、プラグインは道具の不具合として `internal` で応え、呼ぶ側はそれ以外の
+  応答の `detail` とオブジェクトでない `detail` を壊れた応答として扱う
+  （[通信規則「応答」](../protocol.md#応答idresjson)）。
+- **`vw2026 call` は失敗の `detail` を標準出力に出す。** 成功の `result` と同じく、呼ぶ側が標準出力の
+  JSON をそのまま読めるようにするため。出し方は `vw2026 help call` が真実。
+- **終了の依頼は、応答が成功のときだけ出す。** 終了の依頼を立てて失敗した道具も、成功したが結果が
+  オブジェクトでない（`internal` で応える）道具も、終了を頼まない。失敗の終了コードを受け取った呼ぶ側が、
+  終了していく Vectorworks に向かって動かないようにするため（[ブリッジ「受け付け 1 回」](bridge.md#受け付け-1-回coreserverserve)）。
+
 その先（順序は未定）:
 
 - **他のプラグインの機能を名前で呼ぶ**（`CallPluginLibrary`。形は[未決 3](open-questions.md#3-ほかのプラグインの機能の呼び出しの形)）。

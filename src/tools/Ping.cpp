@@ -42,9 +42,10 @@ std::optional<std::string> currentLayer() {
 
 }
 
-core::Json ping(const core::Json &args, const core::ToolContext &context, core::ToolError &error) {
+core::Json ping(const core::Json &args, const core::ToolContext &context,
+                core::ToolStatus &status) {
 	core::PingFacts facts{VW_BUILD_VERSION, VW_BUILD_BRANCH, processId(), currentLayer()};
-	return core::ping(args, context, facts, error);
+	return core::ping(args, context, facts, status);
 }
 
 }

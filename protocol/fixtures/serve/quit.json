@@ -1,5 +1,5 @@
 {
-	"description": "種類 app の道具（quit）が成功したら、応答を書いて終了の依頼を返し、その回の残りの要求は取り出さない",
+	"description": "道具が終了の依頼を立てて成功したら、応答を書いて終了の依頼を返し、その回の残りの要求は取り出さない。終了の依頼は種類では決めず（種類 app でも立てなければ頼まない）、失敗の応答では出さない（結果がオブジェクトでなく internal で応えるときを含む）",
 	"steps": [
 		{"description": "ロックを取る（空のスプールなので何も消さない）", "expect": {"files": ["bridge.lock"]}},
 		{
@@ -7,6 +7,40 @@
 			"expect": {
 				"responses": {"start": {"ok": true, "result": {"session": "$session"}}},
 				"files": ["bridge.lock", "start.res.json", "start.wait"]
+			}
+		},
+		{
+			"description": "種類 app の道具が成功しても、終了の依頼を立てなければ終了を頼まず、残りも処理する",
+			"requests": {"1": "save-in-session.json", "2": "echo-in-session.json"},
+			"expect": {
+				"calls": [{"tool": "save", "args": {}}, {"tool": "echo"}],
+				"responses": {"1": {"ok": true, "result": {}}, "2": {"ok": true, "result": {}}},
+				"files": ["1.res.json", "1.wait", "2.res.json", "2.wait", "bridge.lock"]
+			}
+		},
+		{
+			"description": "終了の依頼を立てても、失敗したら終了を頼まず、残りも処理する。失敗の detail は応答に載る",
+			"requests": {"1": "quit-refused-in-session.json", "2": "echo-in-session.json"},
+			"expect": {
+				"calls": [{"tool": "quit_refused", "args": {}}, {"tool": "echo"}],
+				"responses": {
+					"1": {
+						"ok": false,
+						"code": "internal",
+						"detail": {"reason": "documents_open", "documents": [{"name": "plan.vwx"}]}
+					},
+					"2": {"ok": true, "result": {}}
+				},
+				"files": ["1.res.json", "1.wait", "2.res.json", "2.wait", "bridge.lock"]
+			}
+		},
+		{
+			"description": "終了の依頼を立てても、結果がオブジェクトでなく internal で応えるなら終了を頼まず、残りも処理する",
+			"requests": {"1": "quit-broken-in-session.json", "2": "echo-in-session.json"},
+			"expect": {
+				"calls": [{"tool": "quit_broken", "args": {}}, {"tool": "echo"}],
+				"responses": {"1": {"ok": false, "code": "internal"}, "2": {"ok": true, "result": {}}},
+				"files": ["1.res.json", "1.wait", "2.res.json", "2.wait", "bridge.lock"]
 			}
 		},
 		{

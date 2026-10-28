@@ -96,6 +96,8 @@ func echoBridge(t *testing.T) string {
 			return spool.Response{OK: false, Code: spool.CodeInternal, Error: "boom"}
 		case "picky":
 			return spool.Response{OK: false, Code: spool.CodeInvalidArgs, Error: "no such argument"}
+		case "explain":
+			return spool.Response{OK: false, Code: spool.CodeInternal, Error: "open", Detail: json.RawMessage(`{"reason":"documents_open"}`)}
 		}
 		out, _ := json.Marshal(map[string]any{"tool": tool, "args": args})
 		return spool.Response{OK: true, Result: out}
@@ -163,6 +165,19 @@ func TestCallToolError(t *testing.T) {
 	}
 	raw := invoke(t, opts{dir: dir}, "call", "--raw", "fail")
 	if raw.code != exitToolFailure || !strings.Contains(raw.stdout, `"ok":false`) || !strings.Contains(raw.stdout, `"code":"internal"`) {
+		t.Fatalf("%+v", raw)
+	}
+}
+
+// 道具が失敗の detail を返せば、標準出力に出す（--raw なら応答ごと）。
+func TestCallToolErrorDetail(t *testing.T) {
+	dir := echoBridge(t)
+	r := invoke(t, opts{dir: dir}, "call", "explain")
+	if r.code != exitToolFailure || r.stdout != "{\"reason\":\"documents_open\"}\n" || !strings.Contains(r.stderr, "internal: open") {
+		t.Fatalf("%+v", r)
+	}
+	raw := invoke(t, opts{dir: dir}, "call", "--raw", "explain")
+	if raw.code != exitToolFailure || !strings.Contains(raw.stdout, `"detail":{"reason":"documents_open"}`) {
 		t.Fatalf("%+v", raw)
 	}
 }

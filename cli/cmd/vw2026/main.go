@@ -155,8 +155,9 @@ The codes from 21 are failures that the plug-in answered for the tool, the
 session, or a busy Vectorworks; the codes below 20 are everything else,
 including a no_wait response and a malformed one. The last digit of a code from
 21 matches the code below 20 of the same kind (1 failure, 2 wrong usage, 3 did
-not run). For 21 to 23 the reason is on the standard error; for 21 and 22, with
---raw, the response is also on the standard output.
+not run). For 21 to 23 the reason is on the standard error; for 21 and 22, the
+detail of the failure, if the tool gives one, is on the standard output (with
+--raw, the whole response is).
 
 Vectorworks can be running, holding the lock, without answering: the plug-in
 answers only when Vectorworks runs its timer, which it may not do in the middle

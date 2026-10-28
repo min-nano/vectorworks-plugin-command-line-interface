@@ -30,6 +30,8 @@ type fakeTool struct {
 	InputSchema json.RawMessage `json:"inputSchema"`
 	Kind        string          `json:"kind"`
 	Does        string          `json:"does"`
+	Detail      json.RawMessage `json:"detail"`
+	Quit        bool            `json:"quit"`
 }
 
 type call struct {
@@ -61,11 +63,13 @@ type fixtureStep struct {
 	} `json:"expect"`
 }
 
-// expectedResponse は期待する応答。ok は必須で、result は書いたときだけ比べる。
+// expectedResponse は期待する応答。ok は必須で、result は書いたときだけ比べる。detail は書いた
+// ときだけ持ち、書いたものと一致する（無ければ持たない）。
 type expectedResponse struct {
 	OK     *bool           `json:"ok"`
 	Code   string          `json:"code"`
 	Result json.RawMessage `json:"result"`
+	Detail json.RawMessage `json:"detail"`
 }
 
 // readFixture は見本のファイルを読む。
@@ -126,23 +130,30 @@ func fakeHandler(t *testing.T, tools []fakeTool, calls *[]call) Handler {
 				continue
 			}
 			*calls = append(*calls, call{tool, args})
+			var response spool.Response
 			switch fake.Does {
 			case "echo":
-				return spool.Response{OK: true, Result: args}
+				response = spool.Response{OK: true, Result: args}
 			case "empty":
-				return spool.Response{OK: true, Result: json.RawMessage(`{}`)}
+				response = spool.Response{OK: true, Result: json.RawMessage(`{}`)}
 			case "null":
-				return spool.Response{OK: true, Result: json.RawMessage(`null`)}
+				response = spool.Response{OK: true, Result: json.RawMessage(`null`)}
 			case "array":
-				return spool.Response{OK: true, Result: json.RawMessage(`[]`)}
+				response = spool.Response{OK: true, Result: json.RawMessage(`[]`)}
 			case "invalid_args":
-				return spool.Response{Code: spool.CodeInvalidArgs, Error: "invalid args"}
-			case "internal", "throw":
-				// Go の偽の道具は例外を投げないので、throw にはプラグインが例外を受けたときの応答を返す。
-				return spool.Response{Code: spool.CodeInternal, Error: "the tool failed"}
+				response = spool.Response{Code: spool.CodeInvalidArgs, Error: "invalid args"}
+			case "internal":
+				response = spool.Response{Code: spool.CodeInternal, Error: "the tool failed"}
+			case "throw":
+				// Go の偽の道具は例外を投げないので、プラグインが例外を受けたときの応答を返す。
+				return spool.Response{Code: spool.CodeInternal, Error: "the tool threw"}
 			default:
 				t.Fatalf("fake-tools.json: unknown does %q", fake.Does)
 			}
+			// C++ の偽の道具（tests/FixtureTests.cpp の runFake）と同じく、detail は does に依らず
+			// 返す。成功に載せないのは偽のプラグインの仕事。
+			response.Detail = fake.Detail
+			return response
 		}
 		return spool.Response{Code: spool.CodeUnknownTool, Error: "unknown tool: " + tool}
 	}
@@ -336,6 +347,12 @@ func (r *caseRunner) step(step fixtureStep) {
 		}
 		actual, _ := decode(t, data).(map[string]any)
 		good := actual != nil && actual["ok"] == *expected.OK
+		detail, hasDetail := actual["detail"]
+		if expected.Detail != nil {
+			good = good && hasDetail && match(decode(t, expected.Detail), detail, &r.session)
+		} else {
+			good = good && !hasDetail
+		}
 		if *expected.OK {
 			result, found := actual["result"]
 			good = good && found
@@ -379,6 +396,11 @@ func TestFixtureServeCases(t *testing.T) {
 		if fake.Kind != "read" && fake.Kind != "write" && fake.Kind != "app" {
 			t.Fatalf("fake-tools.json: unknown kind %q", fake.Kind)
 		}
+		// C++ の読み込みと同じく、detail はオブジェクトに限る（null や配列を書くと、両側が違う場合を
+		// 確かめることになる）。
+		if fake.Detail != nil && !spool.IsObject(fake.Detail) {
+			t.Fatalf("fake-tools.json: the detail of %s is not an object", fake.Name)
+		}
 	}
 	paths, err := filepath.Glob(filepath.Join(fixtures, "serve", "*.json"))
 	if err != nil || len(paths) == 0 {
@@ -392,13 +414,24 @@ func TestFixtureServeCases(t *testing.T) {
 			if len(fixture.Steps) == 0 {
 				t.Fatalf("%s: no steps", name)
 			}
+			for _, step := range fixture.Steps {
+				for id, expected := range step.Expect.Responses {
+					if expected.Detail != nil && !spool.IsObject(expected.Detail) {
+						t.Fatalf("%s: the detail expected for %s is not an object", name, id)
+					}
+				}
+			}
 			// 予約された名前の id（reserved-ids.json）もファイルとして置けるように、\\?\ を付ける。
 			r := &caseRunner{t: t, dir: extendedPath(NewDir(t)), held: map[string]func(){}}
 			kinds := map[string]string{}
+			quits := map[string]bool{}
 			for _, fake := range table.Tools {
 				kinds[fake.Name] = fake.Kind
+				quits[fake.Name] = fake.Quit
 			}
-			r.server = &server{dir: r.dir, handle: fakeHandler(t, table.Tools, &r.calls), kinds: kinds}
+			r.server = &server{
+				dir: r.dir, handle: fakeHandler(t, table.Tools, &r.calls), kinds: kinds, quits: quits,
+			}
 			// 一時ディレクトリを消す前に、ロックと待つ印を放す（Windows は開いたままでは消せない）。
 			t.Cleanup(func() {
 				r.server.release()

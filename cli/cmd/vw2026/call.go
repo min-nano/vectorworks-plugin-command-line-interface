@@ -13,7 +13,7 @@ import (
 type callCmd struct {
 	Tool    string  `arg:"" help:"Tool to call (\"vw2026 call tools\" lists them)."`
 	Args    string  `arg:"" optional:"" name:"args" help:"Arguments as a JSON object, or - to read them from the standard input."`
-	Raw     bool    `env:"VW2026_CALL_RAW" negatable:"" help:"Print the whole response (ok, result, and error)."`
+	Raw     bool    `env:"VW2026_CALL_RAW" negatable:"" help:"Print the whole response (ok, result, error, and detail)."`
 	Timeout float64 `env:"VW2026_CALL_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
 	Session string  `env:"VW2026_SESSION" placeholder:"ID" help:"Session to call in (\"vw2026 session start\" prints it)."`
 }
@@ -34,8 +34,12 @@ that the plug-in would not read (over 1 MiB, or nested deeper than 64).
 On success, call prints the result of the tool. With --raw it prints the
 whole response. When the tool fails, call writes its code and reason to the
 standard error and exits with 22 for wrong usage (invalid_request,
-unknown_tool, or invalid_args) or 21 for any other failure (internal); with
---raw the response also carries the code (docs/protocol.md). The codes that
+unknown_tool, or invalid_args) or 21 for any other failure (internal). If the
+tool tells why it failed in a form for programs (the detail, a JSON object;
+docs/plugin/tools.md describes it for each tool), call prints the detail;
+otherwise it prints nothing. Branch on the detail, not on the reason. With
+--raw, call prints the whole response, which carries the code and the detail
+(docs/protocol.md). The codes that
 mean the tool did not run are not tool failures: call exits with 3 for no_wait
 and 23 for occupied, no_session, and busy, as described below, and prints nothing to the
 standard output even with --raw. A failure with a missing or unknown code is
@@ -100,10 +104,14 @@ func (c *callCmd) run(e *env) int {
 		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
 		return codeFor(err)
 	}
-	if c.Raw {
+	switch {
+	case c.Raw:
 		_ = emit(e, response)
-	} else if response.OK {
+	case response.OK:
 		_ = emitRaw(e, response.Result)
+	case len(response.Detail) > 0:
+		// 呼ぶ側が失敗の原因を機械的に読めるように（docs/protocol.md「応答」の detail）。
+		_ = emitRaw(e, response.Detail)
 	}
 	if !response.OK {
 		fmt.Fprintf(e.stderr, "vw2026: %s: %s: %s\n", c.Tool, response.Code, response.Error)

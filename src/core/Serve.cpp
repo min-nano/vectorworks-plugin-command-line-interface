@@ -16,10 +16,15 @@ Json success(Json result) {
 	return Json::object({{"ok", Json::boolean(true)}, {"result", std::move(result)}});
 }
 
-Json failure(std::string_view code, std::string message) {
-	return Json::object({{"ok", Json::boolean(false)},
-	                     {"code", Json::string(std::string(code))},
-	                     {"error", Json::string(std::move(message))}});
+// failure は失敗の応答。detail は道具が返した失敗の詳細で、null なら付けない（通信規則「応答」）。
+Json failure(std::string_view code, std::string message, Json detail = Json()) {
+	Json response = Json::object({{"ok", Json::boolean(false)},
+	                              {"code", Json::string(std::string(code))},
+	                              {"error", Json::string(std::move(message))}});
+	if (!detail.isNull()) {
+		response.set("detail", std::move(detail));
+	}
+	return response;
 }
 
 // staleSession は、載せた占有の印がいまの占有のものでないときの応答。
@@ -317,37 +322,42 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 	}
 
 	// 道具 1 つの失敗で橋を止めない。例外はここで受ける。
-	ToolError error;
+	ToolStatus status;
 	Json result;
 	try {
-		result = tool->run(request->args, ToolContext{inSession()}, error);
+		result = tool->run(request->args, ToolContext{inSession()}, status);
 	} catch (const std::exception &exception) {
 		return respond(failure(protocol::kCodeInternal,
 		                       std::string("道具の中で例外が起きました: ") + exception.what()));
 	} catch (...) {
 		return respond(failure(protocol::kCodeInternal, "道具の中で例外が起きました"));
 	}
-	switch (error.code) {
-	case ErrorCode::None:
-		break;
-	case ErrorCode::InvalidArgs:
-		return respond(failure(protocol::kCodeInvalidArgs, error.message));
-	case ErrorCode::Internal:
-		return respond(failure(protocol::kCodeInternal, error.message));
+	// 終了の依頼は、道具が成功したときだけ出す（失敗した quit は終了を頼まない）。
+	// 種類では決めない。
+	if (status.code != ErrorCode::None) {
+		// detail は JSON のオブジェクト（通信規則「応答」）。オブジェクトでない値は
+		// 道具の不具合として internal で応え、detail を付けない。
+		if (!status.detail.isNull() && !status.detail.isObject()) {
+			return respond(
+			    failure(protocol::kCodeInternal,
+				        std::string("道具 ") + name + " の detail がオブジェクトではありません"));
+		}
+		std::string_view code = status.code == ErrorCode::InvalidArgs ? protocol::kCodeInvalidArgs
+		                                                              : protocol::kCodeInternal;
+		return respond(failure(code, std::move(status.message), std::move(status.detail)));
 	}
 	// result は必ずオブジェクト（通信規則「応答」）。値を返さない道具は {} にする。
-	// オブジェクトでない値は道具の不具合として internal で応える。道具は実行したあとなので、
-	// quit の印はそのまま渡す。
+	// オブジェクトでない値は道具の不具合として internal で応え、失敗なので終了を頼まない（失敗の
+	// 終了コードを受け取った呼ぶ側が、終了していく Vectorworks に向かって動かないように）。
 	if (result.isNull()) {
 		result = Json::object();
 	} else if (!result.isObject()) {
-		return respond(failure(protocol::kCodeInternal,
-		                       std::string("道具 ") + name + " の結果がオブジェクトではありません"),
-		               tool->kind == ToolKind::App);
+		return respond(failure(protocol::kCodeInternal, std::string("道具 ") + name +
+		                                                    " の結果がオブジェクトではありません"));
 	}
 	// 道具はもう実行したので、ここで投げると、実行した要求に internal で応えることになる（避け
 	// られない。応答を書き出すための確保だけが残る）。
-	return respond(success(std::move(result)), tool->kind == ToolKind::App);
+	return respond(success(std::move(result)), status.quit);
 }
 
 }
