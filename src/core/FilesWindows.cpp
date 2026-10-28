@@ -161,24 +161,16 @@ std::optional<std::string> modulePath() {
 	if (::GetModuleHandleExW(kFromAddress, reinterpret_cast<LPCWSTR>(&anchor), &module) == 0) {
 		return std::nullopt;
 	}
-	// 足りなければ切り詰めて領域の大きさを返すので、収まるまで広げる（MAX_PATH を超えるパスも
-	// ある）。
-	std::wstring path(MAX_PATH, L'\0');
-	for (;;) {
-		DWORD size = static_cast<DWORD>(path.size());
-		DWORD length = ::GetModuleFileNameW(module, path.data(), size);
-		if (length == 0) {
-			return std::nullopt;
-		}
-		if (length < size) {
-			path.resize(length);
-			return narrow(path);
-		}
-		if (size >= 32768) {
-			return std::nullopt;
-		}
-		path.resize(path.size() * 2);
+	// パスの長さの上限（\\?\ のパスで 32767 文字）が収まる領域を 1 度で渡す。MAX_PATH を超える
+	// パスもあり、足りなければ切り詰めて領域の大きさを返すため。
+	std::wstring path(32768, L'\0');
+	DWORD size = static_cast<DWORD>(path.size());
+	DWORD length = ::GetModuleFileNameW(module, path.data(), size);
+	if (length == 0 || length >= size) {
+		return std::nullopt;
 	}
+	path.resize(length);
+	return narrow(path);
 }
 
 bool makeDirectories(const std::string &path, std::string &error) {
