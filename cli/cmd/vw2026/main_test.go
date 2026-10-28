@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"testing/iotest"
+	"time"
 
 	"github.com/alecthomas/kong"
 
@@ -496,6 +497,24 @@ func TestNotRunningShowsTheSpool(t *testing.T) {
 	r := invoke(t, opts{dir: dir}, "status")
 	if r.code != exitDown || !strings.Contains(r.stdout, `"spool":`+string(quoted)) {
 		t.Errorf("status: %+v", r)
+	}
+}
+
+// 待つ間にブリッジが止まった（ロックが放された）ときも、求めたスプールの場所を示して 5 で終わる。
+func TestCallStoppedWhileWaitingShowsTheSpool(t *testing.T) {
+	dir, quit := busySpool(t)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		time.Sleep(100 * time.Millisecond)
+		quit()
+	}()
+	r := invoke(t, opts{dir: dir}, "call", "ping", "--timeout", "0.5")
+	// quit を呼び終えるのを待つ（テストの後始末も quit を呼ぶので、競合させない）。
+	<-stopped
+	if r.code != exitDown || r.stdout != "" || !strings.Contains(r.stderr, "stopped while waiting") ||
+		!strings.Contains(r.stderr, dir) {
+		t.Fatalf("%+v", r)
 	}
 }
 
