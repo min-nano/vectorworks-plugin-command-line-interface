@@ -130,25 +130,30 @@ func fakeHandler(t *testing.T, tools []fakeTool, calls *[]call) Handler {
 				continue
 			}
 			*calls = append(*calls, call{tool, args})
+			var response spool.Response
 			switch fake.Does {
 			case "echo":
-				return spool.Response{OK: true, Result: args}
+				response = spool.Response{OK: true, Result: args}
 			case "empty":
-				return spool.Response{OK: true, Result: json.RawMessage(`{}`)}
+				response = spool.Response{OK: true, Result: json.RawMessage(`{}`)}
 			case "null":
-				return spool.Response{OK: true, Result: json.RawMessage(`null`)}
+				response = spool.Response{OK: true, Result: json.RawMessage(`null`)}
 			case "array":
-				return spool.Response{OK: true, Result: json.RawMessage(`[]`)}
+				response = spool.Response{OK: true, Result: json.RawMessage(`[]`)}
 			case "invalid_args":
-				return spool.Response{Code: spool.CodeInvalidArgs, Error: "invalid args", Detail: fake.Detail}
+				response = spool.Response{Code: spool.CodeInvalidArgs, Error: "invalid args"}
 			case "internal":
-				return spool.Response{Code: spool.CodeInternal, Error: "the tool failed", Detail: fake.Detail}
+				response = spool.Response{Code: spool.CodeInternal, Error: "the tool failed"}
 			case "throw":
 				// Go の偽の道具は例外を投げないので、プラグインが例外を受けたときの応答を返す。
 				return spool.Response{Code: spool.CodeInternal, Error: "the tool threw"}
 			default:
 				t.Fatalf("fake-tools.json: unknown does %q", fake.Does)
 			}
+			// C++ の偽の道具（tests/FixtureTests.cpp の runFake）と同じく、detail は does に依らず
+			// 返す。成功に載せないのは偽のプラグインの仕事。
+			response.Detail = fake.Detail
+			return response
 		}
 		return spool.Response{Code: spool.CodeUnknownTool, Error: "unknown tool: " + tool}
 	}
@@ -391,6 +396,11 @@ func TestFixtureServeCases(t *testing.T) {
 		if fake.Kind != "read" && fake.Kind != "write" && fake.Kind != "app" {
 			t.Fatalf("fake-tools.json: unknown kind %q", fake.Kind)
 		}
+		// C++ の読み込みと同じく、detail はオブジェクトに限る（null や配列を書くと、両側が違う場合を
+		// 確かめることになる）。
+		if fake.Detail != nil && !spool.IsObject(fake.Detail) {
+			t.Fatalf("fake-tools.json: the detail of %s is not an object", fake.Name)
+		}
 	}
 	paths, err := filepath.Glob(filepath.Join(fixtures, "serve", "*.json"))
 	if err != nil || len(paths) == 0 {
@@ -403,6 +413,13 @@ func TestFixtureServeCases(t *testing.T) {
 			readFixture(t, filepath.Join("serve", name), &fixture)
 			if len(fixture.Steps) == 0 {
 				t.Fatalf("%s: no steps", name)
+			}
+			for _, step := range fixture.Steps {
+				for id, expected := range step.Expect.Responses {
+					if expected.Detail != nil && !spool.IsObject(expected.Detail) {
+						t.Fatalf("%s: the detail expected for %s is not an object", name, id)
+					}
+				}
 			}
 			// 予約された名前の id（reserved-ids.json）もファイルとして置けるように、\\?\ を付ける。
 			r := &caseRunner{t: t, dir: extendedPath(NewDir(t)), held: map[string]func(){}}

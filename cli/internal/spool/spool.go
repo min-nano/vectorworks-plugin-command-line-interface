@@ -233,6 +233,16 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		return fmt.Errorf("%w (%s, %s; %s)", ErrTimeout, tool, timeout, reason)
 	}
 	received := func(response *Response) (*Response, error) {
+		// detail を持てるのは道具が返した失敗（invalid_args・internal）だけで、オブジェクトに限る
+		// （docs/protocol.md「応答」）。null も「無い」ではなく壊れた応答とする。
+		if response.Detail != nil {
+			if response.OK || (response.Code != CodeInvalidArgs && response.Code != CodeInternal) {
+				return nil, fmt.Errorf("%w (%s; a detail on a response that cannot carry one)", ErrMalformedResponse, tool)
+			}
+			if !IsObject(response.Detail) {
+				return nil, fmt.Errorf("%w (%s; the detail is not an object)", ErrMalformedResponse, tool)
+			}
+		}
 		if response.OK {
 			// 成功の result は必ずオブジェクト（docs/protocol.md「応答」）。
 			if !IsObject(response.Result) {
@@ -253,10 +263,6 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		case CodeNoSession:
 			return nil, fmt.Errorf("%w (%s did not run)", ErrNoSession, tool)
 		case CodeInvalidRequest, CodeUnknownTool, CodeInvalidArgs, CodeInternal:
-			// detail は省略できるが、あればオブジェクト（docs/protocol.md「応答」）。
-			if len(response.Detail) > 0 && !IsObject(response.Detail) {
-				return nil, fmt.Errorf("%w (%s; the detail is not an object)", ErrMalformedResponse, tool)
-			}
 			return response, nil
 		default:
 			return nil, fmt.Errorf("%w (%s; unknown code %q: %s)", ErrMalformedResponse, tool, response.Code, response.Error)

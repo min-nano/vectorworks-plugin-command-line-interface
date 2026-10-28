@@ -347,14 +347,13 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		return respond(failure(code, std::move(status.message), std::move(status.detail)));
 	}
 	// result は必ずオブジェクト（通信規則「応答」）。値を返さない道具は {} にする。
-	// オブジェクトでない値は道具の不具合として internal で応える。道具は実行したあとなので、
-	// 終了の依頼はそのまま渡す（終了を頼んだ道具の結果が壊れていても、頼みは取り消さない）。
+	// オブジェクトでない値は道具の不具合として internal で応え、失敗なので終了を頼まない（失敗の
+	// 終了コードを受け取った呼ぶ側が、終了していく Vectorworks に向かって動かないように）。
 	if (result.isNull()) {
 		result = Json::object();
 	} else if (!result.isObject()) {
-		return respond(failure(protocol::kCodeInternal,
-		                       std::string("道具 ") + name + " の結果がオブジェクトではありません"),
-		               status.quit);
+		return respond(failure(protocol::kCodeInternal, std::string("道具 ") + name +
+		                                                    " の結果がオブジェクトではありません"));
 	}
 	// 道具はもう実行したので、ここで投げると、実行した要求に internal で応えることになる（避け
 	// られない。応答を書き出すための確保だけが残る）。

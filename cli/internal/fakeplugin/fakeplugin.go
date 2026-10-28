@@ -12,6 +12,7 @@
 package fakeplugin
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -272,8 +273,12 @@ func (s *server) answer(tool string, args json.RawMessage, session string) (spoo
 // run は道具を呼ぶ。応答はプラグインと同じに整える（通信規則「応答」）。成功の result は必ず
 // オブジェクトにし、値を返さなければ {}、オブジェクトでない値は道具の不具合として internal。
 // detail は失敗にだけ載せ、オブジェクトでない detail は道具の不具合として internal（detail なし）。
+// null の detail は、プラグイン（Json の null）と同じく「無い」とみなす。
 func (s *server) run(tool string, args json.RawMessage) spool.Response {
 	response := s.handle(tool, args)
+	if string(bytes.TrimSpace(response.Detail)) == "null" {
+		response.Detail = nil
+	}
 	if !response.OK {
 		if len(response.Detail) > 0 && !spool.IsObject(response.Detail) {
 			return spool.Response{Code: spool.CodeInternal, Error: "the detail of " + tool + " is not an object"}

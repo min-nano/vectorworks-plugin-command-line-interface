@@ -628,6 +628,11 @@ func TestCallDetail(t *testing.T) {
 		{`{"ok":false,"code":"internal","error":"x","detail":null}`, `malformed`},
 		{`{"ok":false,"code":"internal","error":"x","detail":[1]}`, `malformed`},
 		{`{"ok":false,"code":"internal","error":"x","detail":"x"}`, `malformed`},
+		{`{"ok":true,"result":{},"detail":{}}`, `malformed`},
+		{`{"ok":false,"code":"unknown_tool","error":"x","detail":{}}`, `malformed`},
+		{`{"ok":false,"code":"invalid_request","error":"x","detail":{}}`, `malformed`},
+		{`{"ok":false,"code":"busy","error":"x","detail":null}`, `malformed`},
+		{`{"ok":false,"code":"no_session","error":"x","detail":{}}`, `malformed`},
 	} {
 		t.Run(c.text, func(t *testing.T) {
 			dir := fakeplugin.NewDir(t)
