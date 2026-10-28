@@ -17,7 +17,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 | [A2](#a2-quitping-が使う-sdk-呼び出しが確かめられていない) | `quit`・`ping` が使う SDK 呼び出しが確かめられていない | 段 6（`quit`）の前 | `GetCurrentLayer()` は済（[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)・[道具「ping」](plugin/tools.md#ping)）。`quit` は [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) で調査中 |
 | [A3](#a3-未決-2-が段-2-の作りを変える) | 未決 2 が段 2 の作りを変える | 段 2 の前 | 済（undo の記録が開いているかは見ない。書く道具は自分で記録を開いて閉じ、占有の中でだけ呼べる。受け付けの入れ子は `busy` で断る。[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)） |
 | [A4](#a4-終了の依頼の最中に受け付けが入れ子になりうる) | 終了の依頼の最中に受け付けが入れ子になりうる | 段 6 | 暫定（終了の依頼の最中は `write`・`app` を `busy` で断る。残すかは [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 の結果で段 6 の前に決める） |
-| [B1](#b1-更新の手順の見本が占有を残す) | 更新の手順の見本が占有を残す | 段 6 | 済（失敗の道筋で `session end` を呼ぶ形に直した。[インストール「流れ」](plugin/install-and-update.md#流れ)） |
+| [B1](#b1-更新の手順の見本が占有を残す) | 更新の手順の見本が占有を残す | 段 6 | 済（失敗の道筋で `session end` を呼ぶ形に直し、見本を `vw2026 --help` へ移した。[インストール「流れ」](plugin/install-and-update.md#流れ)） |
 | [B2](#b2-windows-の-path-の書き換えが既存の項目を壊しうる) | Windows の PATH の書き換えが既存の項目を壊しうる | 段 3 | 対応中（PowerShell をやめ、`advapi32` でレジストリを直接読み書きして型を保つと決めた。段 3 の `install-windows` ジョブが実物のレジストリで確かめたら済にする。[インストール「Windows の `Path` の読み書き」](plugin/install-and-update.md#windows-の-path-の読み書き)） |
 | [B3](#b3-vw2026_app-が環境変数の名前の決まりに反する) | `VW2026_APP` が環境変数の名前の決まりに反する | 最初の配布（段 2）の前 | 済（名前は値の通じる範囲で決める、と決まりを改めた。CLAUDE.md「Go」） |
 | [B4](#b4-sdk-の調査の古い参照) | SDK の調査の古い参照 | なし | 済 |
@@ -102,12 +102,14 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 ### B1. 更新の手順の見本が占有を残す
 
 - [インストール「流れ」](plugin/install-and-update.md#流れ)の見本は、`call quit` が失敗したとき
-  （`|| exit`）と、保存の確認が取り消されたとき（`exit 3`）に `session end` を呼ばない。
-  占有は Vectorworks を起動し直すまで残り、ほかの呼ぶ側はすべて `busy` で断られる。
-- 見本は「この組み合わせの真実」なので、失敗の道筋で `session end` を呼ぶ形に直す。
-- **済。** 見本は、`call quit` が失敗したとき、止まるのを待ちきれなかったとき（保存の確認が
-  取り消された・開いたまま）、止まるのを待つ間に `status` が失敗したときに、`session end` を呼んで
-  から抜ける形になっている。`vw2026 --help` の組み合わせは、この見本を参照する。
+  （`|| exit`）と、保存の確認が取り消されたとき（`exit 3`）に `session end` を呼ばなかった（PR #66 の前）。
+  占有は Vectorworks を起動し直すまで残り、ほかの呼ぶ側はすべて `occupied` で断られる。
+- 直し方: 失敗の道筋で `session end` を呼ぶ形に直す。
+- **済。** 見本（`vw2026 --help`。CLI の使い方の真実は help なので、文書から移した）は、`call quit` が
+  失敗したときと、止まるのを待ちきれなかったとき（保存の確認が取り消された・開いたまま）に
+  `session end` を呼んでから抜ける形になっている。止まるのを待つ間に `status` が失敗したときも呼ぶが、
+  それはスプールの場所が分からないときで、`session end` も届かないので、占有は Vectorworks が
+  終わるまで残る。
 - [実装の順序](plugin/plan.md)の段 6 の確かめ方には、図面が開いていて `call quit` が断られたあとの
   `session end` を入れてある。保存の確認が取り消されるのは、確かめてから頼むまでの間に利用者が図面を
   開いたときだけで、通常は起きない（[道具「quit」](plugin/tools.md#quit)）ので、確かめ方には入れない。

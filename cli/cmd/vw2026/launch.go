@@ -28,13 +28,18 @@ Windows. Launch does not search other places; name them with --app. A value
 that does not end in .app is started as an executable.
 
 When Vectorworks is running but the bridge is not, launch exits with 5 on
-Windows: the plug-in is not installed, or Vectorworks is still starting or
-already quitting (run status in a loop to tell these apart). Launch finds a
+Windows. Either the plug-in is not loaded (for example, it is not installed, or
+it was not enabled in the dialog about plug-ins from unidentified developers),
+or Vectorworks is still starting or already quitting. Status in a loop tells
+only the start apart, by turning to 0. If it stays at 5, either the plug-in is
+not loaded, or Vectorworks has quit and launch can be run again. Launch finds a
 running Vectorworks with tasklist; if tasklist fails, launch starts the
-application as if Vectorworks were not running. On macOS, an application
-started with "open -a" (one ending in .app) is brought to the front instead,
-so launch prints {"launched":true,...} and exits with 0; run status to tell
-whether the bridge is running. An executable given with --app on macOS is
+application as if Vectorworks were not running.
+
+On macOS, the default application and a value ending in .app are started with
+"open -a", which brings a running Vectorworks to the front instead, so launch
+prints {"launched":true,...} and exits with 0; run status to tell whether the
+bridge is running. On any OS but Windows, an executable given with --app is
 started without checking whether Vectorworks is running.
 `
 }
@@ -58,7 +63,7 @@ func (c *launchCmd) run(e *env) int {
 	}
 	if err := e.start(argv); err != nil {
 		if errors.Is(err, launch.ErrAlreadyRunning) {
-			fmt.Fprintln(e.stderr, "vw2026: Vectorworks is running but the bridge is not (is the plug-in installed, or is Vectorworks starting or quitting?)")
+			fmt.Fprintln(e.stderr, "vw2026: Vectorworks is running but the bridge is not (the plug-in is not loaded, or Vectorworks is starting or quitting; see `vw2026 help launch`)")
 			return exitDown
 		}
 		fmt.Fprintf(e.stderr, "vw2026: launch: %v\n", err)
