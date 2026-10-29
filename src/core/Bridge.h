@@ -11,8 +11,20 @@
 
 namespace VwCli::core {
 
-// defaultSpoolDir は <CLI>/spool を返す（通信規則「スプールの場所」）。環境変数は読まず、探索
-// しない。求められなければ空。
+// spoolDirOf は、モジュールのパスからスプールの場所を返す（通信規則「スプールの場所」）。パスの
+// 綴りだけから決め、ファイルを見ない（探索しない）。
+//
+// - mac のバンドルの中の実行ファイル（<X>.vwlibrary/Contents/MacOS/<実行ファイル>。
+//   <Plug-Ins>/cli/cli.vwlibrary/Contents/MacOS/cli）なら、バンドルのあるフォルダの下の spool。
+// - そうでなければ（Windows の <Plug-Ins>\cli\cli.vlb・テストの実行ファイル）、モジュールのある
+//   フォルダの下の spool。パスの途中に .vwlibrary で終わるフォルダがあっても上らない。
+//
+// 区切りは / と、Windows では \ も。フォルダを求められない（区切りが無い）なら空。
+std::optional<std::string> spoolDirOf(const std::string &modulePath);
+
+// defaultSpoolDir は、このコードを含むモジュールの場所（files::modulePathOf）から spoolDirOf で
+// スプールの場所を求める。環境変数は読まない。求められなければ空（POSIX で作業ディレクトリを
+// 求められなければ例外。受け付けの刻みが受け止め、次の刻みでやり直す）。
 std::optional<std::string> defaultSpoolDir();
 
 class Bridge {

@@ -8,10 +8,6 @@
 #endif
 #include <windows.h>
 
-#include <knownfolders.h>
-#include <objbase.h>
-#include <shlobj.h>
-
 #include <algorithm>
 
 namespace VwCli::core::files {
@@ -47,9 +43,10 @@ std::string narrow(std::wstring_view wide) {
 // を読むつもりで、NUL デバイスを開くことになる。付けると名前を解釈せずにそのまま使う。
 //
 // \\?\ のパスは / を区切りとして読まず、. と .. も解かないので、/ を区切りに直す。スプールの場所は
-// SHGetKnownFolderPath の返す絶対パスで、. と .. を含まない。受け付けるのはドライブからの絶対パス
-// （C:\…）・UNC（\\server\…）・\\?\ 付きのパスだけで、それ以外（ルート相対・ドライブ相対・
-// \\.\ のデバイス名前空間）は空を返して開かせない（予約された名前をデバイスとして開かないため）。
+// GetModuleFileNameW の返すモジュールの絶対パスから求め、. と .. を含まない。受け付けるのは
+// ドライブからの絶対パス（C:\…）・UNC（\\server\…）・\\?\ 付きのパスだけで、それ以外（ルート
+// 相対・ドライブ相対・\\.\ のデバイス名前空間）は空を返して開かせない（予約された名前を
+// デバイスとして開かないため）。
 std::wstring extended(std::string_view path) {
 	std::wstring wide = widen(path);
 	std::replace(wide.begin(), wide.end(), L'/', L'\\');
@@ -128,7 +125,8 @@ Refusal rejected(HANDLE file) {
 // たどると、名前付きパイプへのリンクを置かれたとき、パイプにつないで ReadFile でメインスレッドが
 // 止まる（POSIX の O_NOFOLLOW にあたる）。リンクでない reparse point（OneDrive などのクラウドの
 // ファイル・重複除去）も断る。中身を読むにはたどって開き直すしかなく、その間の差し替えへの
-// 備えが、スプール（%LOCALAPPDATA% の下）に置かれる見込みの低さに見合わないため。
+// 備えが、スプールに置かれる見込みの低さに見合わないため（スプールは Vectorworks の利用者フォルダの
+// 中で、そこを同期の対象にした環境には対応しない。通信規則「プラグイン側の義務」）。
 Opened openFile(const std::string &path, DWORD access, DWORD share, DWORD disposition) {
 	HANDLE file = ::CreateFileW(extended(path).c_str(), access, share, nullptr, disposition,
 	                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
@@ -153,17 +151,24 @@ std::string join(const std::string &dir, std::string_view name) {
 	return path;
 }
 
-std::optional<std::string> appRoot() {
-	// 環境変数 LOCALAPPDATA は読まない（起動のしかたで変わりうるので、CLI と食い違うと要求が
-	// 届かないため）。失敗しても返された領域は解放する（SHGetKnownFolderPath の約束）。
-	PWSTR path = nullptr;
-	HRESULT result = ::SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &path);
-	std::optional<std::string> root;
-	if (SUCCEEDED(result) && path) {
-		root = narrow(path);
+std::optional<std::string> modulePathOf(const void *address) {
+	// 参照の数は変えない（留めるのは Clock.cpp の startClock の受け持ち）。
+	HMODULE module = nullptr;
+	constexpr DWORD kFromAddress =
+	    GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT;
+	if (::GetModuleHandleExW(kFromAddress, static_cast<LPCWSTR>(address), &module) == 0) {
+		return std::nullopt;
 	}
-	::CoTaskMemFree(path);
-	return root;
+	// パスの長さの上限（\\?\ のパスで 32767 文字）が収まる領域を 1 度で渡す。MAX_PATH を超える
+	// パスもあり、足りなければ切り詰めて領域の大きさを返すため。
+	std::wstring path(32768, L'\0');
+	DWORD size = static_cast<DWORD>(path.size());
+	DWORD length = ::GetModuleFileNameW(module, path.data(), size);
+	if (length == 0 || length >= size) {
+		return std::nullopt;
+	}
+	path.resize(length);
+	return narrow(path);
 }
 
 bool makeDirectories(const std::string &path, std::string &error) {

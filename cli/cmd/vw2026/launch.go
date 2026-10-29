@@ -39,8 +39,10 @@ So {"launched":true,...} does not tell whether the bridge will start; run
 status in a loop. It turns to 0 when Vectorworks was still starting. If it
 stays at 5, either the plug-in is not loaded (for example, it is not
 installed, or it was not enabled in the dialog about plug-ins from
-unidentified developers), or Vectorworks was quitting and has quit, and launch
-can be run again.
+unidentified developers), this vw2026 runs from outside the folder of the
+plug-in and looks at another spool (status shows the spool it looks at; see
+"vw2026 --help"), or Vectorworks was quitting and has quit, and launch can be
+run again.
 `
 }
 

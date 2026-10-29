@@ -4,8 +4,9 @@
 #include <cerrno>
 #include <cstring>
 #include <dirent.h>
+#include <dlfcn.h>
 #include <fcntl.h>
-#include <pwd.h>
+#include <filesystem>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -79,20 +80,22 @@ std::string join(const std::string &dir, std::string_view name) {
 	return path;
 }
 
-std::optional<std::string> appRoot() {
-	// ホームは環境変数 HOME ではなく passwd の項目から求める（launchd のジョブで無い・ツールの
-	// 実行環境で上書きされることがあり、CLI と食い違うと要求が届かないため）。
-	long size = ::sysconf(_SC_GETPW_R_SIZE_MAX);
-	std::string buffer(size > 0 ? static_cast<std::size_t>(size) : 16384, '\0');
-	passwd entry{};
-	passwd *found = nullptr;
-	while (::getpwuid_r(::getuid(), &entry, buffer.data(), buffer.size(), &found) == ERANGE) {
-		buffer.resize(buffer.size() * 2);
-	}
-	if (!found || !found->pw_dir || found->pw_dir[0] == '\0') {
+std::optional<std::string> modulePathOf(const void *address) {
+	// リンクは解かない。バンドル（cli.vwlibrary）だけをほかの場所へのリンクにしても、そのバンドルの
+	// あるフォルダ（<Plug-Ins>/cli）を指すため。呼ぶ側は実行ファイルのリンクを解くが、その親の bin
+	// と <Plug-Ins>/cli が実体なら、両側は同じフォルダにたどり着く（通信規則「スプールの場所」）。
+	Dl_info info{};
+	if (::dladdr(address, &info) == 0 || !info.dli_fname) {
 		return std::nullopt;
 	}
-	return join(join(found->pw_dir, "Library"), "Application Support");
+	return absolute(info.dli_fname);
+}
+
+std::optional<std::string> absolute(const std::string &path) {
+	if (path.empty()) {
+		return std::nullopt;
+	}
+	return std::filesystem::absolute(path).string();
 }
 
 bool makeDirectories(const std::string &path, std::string &error) {

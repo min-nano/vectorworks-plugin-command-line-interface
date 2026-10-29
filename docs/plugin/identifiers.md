@@ -1,9 +1,10 @@
 # 名前と識別子
 
 名前と置き場所の真実はこのページです（ほかのページはここを参照する）。
-**スプールの場所・コマンド名・リンクの名前・インストール先は、`vw2026 install` で配る最初の版（段 3）の
+**スプールの場所・コマンド名・リンクの名前・インストール先は、`vw2026 install` で配る最初の版（段 3b）の
 あとは変えません**（変えると呼ぶ側や更新が見つけられなくなる）。段 2 は利用者が手で置いて確かめるための
-版で、段 3 で入れ直す（[実装の順序](plan.md)の段 3）ので、段 3 でスプールの場所と CLI の置き場所を改めます。
+版で、段 3a・3b で入れ直す（[実装の順序](plan.md)の段 3a・3b）ので、段 3a でスプールの場所を、段 3b で CLI の
+置き場所を改めます。
 
 **安定版と開発版を区別しません。** PR では変更後のコードでビルドしたものをプレリリースし、
 同じ名前のプラグインとして入れ替えます（`vw2026 install cli@<そのタグ>`。[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
@@ -36,10 +37,10 @@
 | よけた CLI（[インストール「動いている CLI のよけ方」](install-and-update.md#動いている-cli-のよけ方)） | `<Work>/old/vw2026.old-<時刻>` | `<Work>\old\vw2026.exe.old-<時刻>` |
 | PATH | `~/.local/bin/vw2026`（`<Plug-Ins>/cli/bin/vw2026` へのリンク） | 利用者の `Path` に `<Plug-Ins>\cli\bin` |
 
-上の表は段 3 からのものです。段 2 までの実装（いまのコード）は、スプールを CLI の場所
-（mac は `~/Library/Application Support/vectorworks2026-cli/`、Windows は `%LOCALAPPDATA%\vectorworks2026-cli\`。
-[通信規則「スプールの場所」](../protocol.md#スプールの場所)の `<CLI>`）の下の `spool/` に置き、CLI を置く場所を決めていません。
-段 3 からは、持続する `vw2026` の場所を持ちません。
+上の表は段 3（3a・3b）からのものです。スプールの場所（`<Plug-Ins>/cli/spool/`）はすでに実装にあり、`<Work>` と
+その下・入れたときの記録・PATH は `install` を足す PR で実装します。段 2 までの実装は、スプールを利用者の
+ホームの下（mac は `~/Library/Application Support/vectorworks2026-cli/spool/`、Windows は
+`%LOCALAPPDATA%\vectorworks2026-cli\spool\`）に置いていました。段 3b からは、持続する `vw2026` の場所を持ちません。
 
 - **場所の根は環境変数を読まずに求めます。** スプールは、プラグインは自分のモジュールの場所から、
   `vw2026` は自分の実行ファイルの場所から求めます（[通信規則「スプールの場所」](../protocol.md#スプールの場所)）。
@@ -77,11 +78,10 @@
 #include "BuildStamp.h"
 ```
 
-`<CLI>` のディレクトリ名（`vectorworks2026-cli`）とスプールの名前（`spool`）は、スプールの場所を
-求める共通部（SDK に依らない）が使うので、`src/core/Protocol.h` の `kAppDirName` / `kSpoolDirName`
-に置きます。CLI 側の `cli/internal/spool` の `AppDirName` / `SpoolDirName` と対で、両側のテストが
-[通信規則の見本](../fixtures.md)の `constants.json` に照らします（[通信規則](../protocol.md#スプールの場所)）。
-段 3 でスプールを `<Plug-Ins>/cli/spool/` に移すと、プラグインは `<CLI>` を使わなくなるので、
-`kAppDirName` と見本の `app_dir` を除き、`AppDirName` は `vw2026`（`<Work>` のディレクトリ名）だけが持ちます。
-CLI の実行ファイルを置く `bin` は `vw2026` がスプールを求めるのに使うので、`cli/internal/spool` に置きます
-（プラグインは使わないので、見本には載せない）。
+スプールの名前（`spool`）は、スプールの場所を求める共通部（SDK に依らない）が使うので、
+`src/core/Protocol.h` の `kSpoolDirName` に置きます。CLI 側の `cli/internal/spool` の `SpoolDirName` と
+対で、両側のテストが[通信規則の見本](../fixtures.md)の `constants.json` に照らします
+（[通信規則](../protocol.md#スプールの場所)）。`<Work>` のディレクトリ名（`vectorworks2026-cli`）は
+`vw2026` だけが使うので、`install` を足す PR が `cli` の Go のコードに置きます（見本には載せない）。
+CLI の実行ファイルを置く `bin` は、`vw2026` が実行ファイルのあるフォルダの親をスプールの親とするだけで、
+名前としては使いません。

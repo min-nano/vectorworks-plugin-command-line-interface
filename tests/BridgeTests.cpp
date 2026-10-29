@@ -401,19 +401,81 @@ TEST(FilesRejectRelativePathsOnWindows) {
 }
 #endif
 
-TEST(BridgeDefaultSpoolDirIsUnderTheAppDir) {
+// mac のプラグインはバンドルの中の実行ファイルなので、バンドルのあるフォルダ（<Plug-Ins>/cli）の
+// 下に置く。
+TEST(BridgeSpoolDirOfBundleIsNextToTheBundle) {
+	using VwCli::core::spoolDirOf;
+	std::string plugIns = "/Users/a/Library/Application Support/Vectorworks/2026/Plug-Ins";
+	CHECK_EQ(spoolDirOf(plugIns + "/cli/cli.vwlibrary/Contents/MacOS/cli").value_or(""),
+	         files::join(plugIns + "/cli", "spool"));
+	CHECK_EQ(spoolDirOf("/x.vwlibrary/cli/cli.vwlibrary/Contents/MacOS/cli").value_or(""),
+	         files::join("/x.vwlibrary/cli", "spool"));
+	CHECK_EQ(spoolDirOf("/cli.vwlibrary/Contents/MacOS/cli").value_or(""), std::string("/spool"));
+	// <X>.vwlibrary/Contents/MacOS/<実行ファイル> の形のときだけ上る。パスの途中に .vwlibrary で
+	// 終わるフォルダがあっても上らない（呼ぶ側は bin の親を取るので、上ると食い違う）。
+	CHECK_EQ(spoolDirOf("/x.vwlibrary/Plug-ins/cli/cli.vlb").value_or(""),
+	         files::join("/x.vwlibrary/Plug-ins/cli", "spool"));
+	CHECK_EQ(spoolDirOf("/a/cli.vwlibrary/MacOS/cli").value_or(""),
+	         files::join("/a/cli.vwlibrary/MacOS", "spool"));
+	CHECK_EQ(spoolDirOf("/a/cli.vwlibrary/Contents/cli").value_or(""),
+	         files::join("/a/cli.vwlibrary/Contents", "spool"));
+	CHECK_EQ(spoolDirOf("/a/cli/Contents/MacOS/cli").value_or(""),
+	         files::join("/a/cli/Contents/MacOS", "spool"));
+	// モジュールそのものの名前は見ない。
+	CHECK_EQ(spoolDirOf("/a/cli/cli.vwlibrary").value_or(""), files::join("/a/cli", "spool"));
+}
+
+// Windows のプラグイン（cli.vlb）とテストの実行ファイルは、モジュールのあるフォルダの下に置く。
+TEST(BridgeSpoolDirOfModuleIsNextToTheModule) {
+	using VwCli::core::spoolDirOf;
+	CHECK_EQ(spoolDirOf("/a/b/VwCliTests").value_or(""), files::join("/a/b", "spool"));
+	CHECK_EQ(spoolDirOf("/VwCliTests").value_or(""), std::string("/spool"));
+	CHECK(!spoolDirOf("VwCliTests"));
+	CHECK(!spoolDirOf(""));
+#ifdef _WIN32
+	std::string plugIns = "C:\\Users\\a\\AppData\\Roaming\\Nemetschek\\Vectorworks\\2026\\Plug-ins";
+	CHECK_EQ(spoolDirOf(plugIns + "\\cli\\cli.vlb").value_or(""), plugIns + "\\cli\\spool");
+	CHECK_EQ(spoolDirOf("\\\\?\\C:\\cli\\cli.vlb").value_or(""),
+	         std::string("\\\\?\\C:\\cli\\spool"));
+	CHECK_EQ(spoolDirOf("C:\\cli.vlb").value_or(""), std::string("C:\\spool"));
+#else
+	// POSIX では \ は名前の一部。
+	CHECK_EQ(spoolDirOf("/a/b\\c").value_or(""), std::string("/a/spool"));
+#endif
+}
+
+// どのモジュールの中にも無い番地（スタック）には、モジュールのパスが無い。
+TEST(FilesModulePathOfAddressOutsideModules) {
+	int local = 0;
+	CHECK(!files::modulePathOf(&local));
+}
+
+#ifndef _WIN32
+// 相対パスはいまの作業ディレクトリの下にする（Linux の実行ファイルでは dladdr が argv[0] を返す）。
+TEST(FilesAbsoluteResolvesAgainstTheWorkingDirectory) {
+	CHECK_EQ(files::absolute("/a/b").value_or(""), std::string("/a/b"));
+	CHECK(!files::absolute(""));
+	std::string cwd = VwCli::test::utf8(std::filesystem::current_path());
+	CHECK_EQ(files::absolute("build/VwCliTests").value_or(""),
+	         files::join(cwd, "build/VwCliTests"));
+}
+#endif
+
+// テストでは、このコードを含むモジュールはテストの実行ファイルなので、そのフォルダの下になる。
+TEST(BridgeDefaultSpoolDirIsNextToTheModule) {
+	static const char anchor = 0;
+	std::optional<std::string> module = files::modulePathOf(&anchor);
+	REQUIRE(module);
+	std::filesystem::path modulePath = std::filesystem::path(
+	    std::u8string(reinterpret_cast<const char8_t *>(module->data()), module->size()));
+	CHECK(modulePath.is_absolute());
+	CHECK(std::filesystem::is_regular_file(modulePath));
+	CHECK_EQ(VwCli::test::utf8(modulePath.stem()), std::string("VwCliTests"));
+
 	std::optional<std::string> dir = VwCli::core::defaultSpoolDir();
 	REQUIRE(dir);
 	std::filesystem::path path = std::filesystem::path(
 	    std::u8string(reinterpret_cast<const char8_t *>(dir->data()), dir->size()));
 	CHECK_EQ(VwCli::test::utf8(path.filename()), std::string("spool"));
-	CHECK_EQ(VwCli::test::utf8(path.parent_path().filename()), std::string("vectorworks2026-cli"));
-#ifdef _WIN32
-	CHECK(path.is_absolute());
-#else
-	CHECK_EQ(VwCli::test::utf8(path.parent_path().parent_path().filename()),
-	         std::string("Application Support"));
-	CHECK_EQ(VwCli::test::utf8(path.parent_path().parent_path().parent_path().filename()),
-	         std::string("Library"));
-#endif
+	CHECK(path.parent_path() == modulePath.parent_path());
 }

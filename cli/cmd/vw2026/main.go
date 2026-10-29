@@ -70,9 +70,10 @@ type env struct {
 	stdout io.Writer
 	stderr io.Writer
 	start  func(argv []string) error
-	// スプールの場所。本番は常に spool.DefaultDir で、外から変える指定は持たない（プラグインは
-	// <CLI>/spool しか見ないので、別の場所を指せても要求が届かない。docs/protocol.md
-	// 「スプールの場所」）。テストは偽のプラグインのスプールを返す。
+	// スプールの場所。本番は常に spool.Dir（実行ファイルの場所から求める）で、外から変える指定は
+	// 持たない（プラグインはモジュールの場所から求めた <Plug-Ins>/cli/spool しか見ないので、別の
+	// 場所を指せても要求が届かない。docs/protocol.md「スプールの場所」）。テストは偽のプラグインの
+	// スプールを返す。
 	spool func() (string, error)
 }
 
@@ -82,7 +83,7 @@ func main() {
 		stdout: os.Stdout,
 		stderr: os.Stderr,
 		start:  launch.Start,
-		spool:  spool.DefaultDir,
+		spool:  spool.Dir,
 	}))
 }
 
@@ -105,9 +106,15 @@ retry, wait for a session to be free, or interpret the tools; the caller
 does those (docs/design.md). Exclusive use of the bridge is the plug-in's:
 vw2026 only asks it for a session and carries the session in the calls
 ("vw2026 help session"). The bridge and vw2026 exchange files in a spool by the
-protocol in docs/protocol.md. The spool is <CLI>/spool
-(docs/plugin/identifiers.md), and nothing changes it: the plug-in looks only
-there.
+protocol in docs/protocol.md. The spool is the folder spool in the folder of
+the cli plug-in (<Plug-Ins>/cli/spool; docs/plugin/identifiers.md). vw2026
+finds it from where its own executable is (<Plug-Ins>/cli/bin/vw2026, after
+following links; if they cannot be followed, from the path as it is), and
+nothing changes it: the plug-in finds the same folder from where its module
+is, and looks only there. A copy of vw2026 run from
+outside that folder (for example, from an unpacked zip) looks for the spool
+next to its own folder, finds no bridge there, and reports the bridge as not
+running; the commands show the spool they looked at.
 
 Each command prints one line of JSON to the standard output, writes the
 reason for a failure to the standard error, and reports the outcome in its
@@ -172,7 +179,7 @@ The commands exit with
 	3  timed out, or refused for a missing wait file (the tool did not run and will not run;
 	   Vectorworks is running)
 	4  the plug-in took the request but no response came (the tool may have run)
-	5  the bridge is not running
+	5  the bridge is not running (or this vw2026 looks at another spool)
 	6  Vectorworks is running, so install or uninstall did nothing (planned)
 	21 the tool reported a failure (internal)
 	22 the tool reported wrong usage (invalid_request, unknown_tool, or invalid_args)
@@ -195,9 +202,12 @@ this state as running; call waits up to --timeout and then exits with 3.
 Recover from 5 and 3 differently: 5 means the bridge is not running
 (Vectorworks is not running, or it is running without the bridge; see "vw2026
 help launch"), while 3 means the bridge is running but did not answer in time,
-so launching Vectorworks again or reinstalling the plug-in does not help. Tell
-3 and 4 apart before calling a tool that changes the drawing again: after 3 the
-tool did not run, while after 4 it may have.
+so launching Vectorworks again or reinstalling the plug-in does not help. A 5
+can also mean that this vw2026 runs from outside the folder of the plug-in and
+looks at another spool: before launching Vectorworks again, check the spool
+that the command shows (on the standard error, and in the output of status).
+Tell 3 and 4 apart before calling a tool that changes the drawing again: after
+3 the tool did not run, while after 4 it may have.
 `
 }
 

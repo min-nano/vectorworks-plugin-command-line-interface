@@ -13,14 +13,56 @@ bool endsWith(std::string_view text, std::string_view suffix) {
 	return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
 }
 
+// mac のプラグインのバンドル（<name>.vwlibrary）の名前の終わり。
+constexpr std::string_view kBundleSuffix = ".vwlibrary";
+
+bool isSeparator(char c) {
+#ifdef _WIN32
+	return c == '/' || c == '\\';
+#else
+	return c == '/';
+#endif
+}
+
+}
+
+std::optional<std::string> spoolDirOf(const std::string &modulePath) {
+	// 区切りの位置を並べる（先頭から）。
+	std::vector<std::size_t> separators;
+	for (std::size_t at = 0; at < modulePath.size(); ++at) {
+		if (isSeparator(modulePath[at])) {
+			separators.push_back(at);
+		}
+	}
+	if (separators.empty()) {
+		return std::nullopt;
+	}
+	// i 番目の区切りの後ろのフォルダの名前（最後の区切りの後ろはモジュールそのもの）。
+	auto folderName = [&](std::size_t i) {
+		return std::string_view(modulePath.data() + separators[i] + 1,
+		                        separators[i + 1] - separators[i] - 1);
+	};
+	// 既定はモジュールのあるフォルダ（最後の区切りの前）。mac のバンドルの中の実行ファイル
+	// （<X>.vwlibrary/Contents/MacOS/<実行ファイル>）の形のときだけ、バンドルのあるフォルダまで
+	// 上る。パスの途中に .vwlibrary で終わるフォルダがあっても上らない（呼ぶ側は bin の親を
+	// 取るので、上ると両側の場所が食い違う）。
+	std::size_t folderEnd = separators.back();
+	std::size_t n = separators.size();
+	if (n >= 4 && folderName(n - 2) == "MacOS" && folderName(n - 3) == "Contents" &&
+	    endsWith(folderName(n - 4), kBundleSuffix)) {
+		folderEnd = separators[n - 4];
+	}
+	// 根の直下（/cli.vlb など）なら、区切りを残して根を指す。
+	std::string folder = modulePath.substr(0, folderEnd == 0 ? 1 : folderEnd);
+	return files::join(folder, protocol::kSpoolDirName);
 }
 
 std::optional<std::string> defaultSpoolDir() {
-	std::optional<std::string> root = files::appRoot();
-	if (!root) {
-		return std::nullopt;
-	}
-	return files::join(files::join(*root, protocol::kAppDirName), protocol::kSpoolDirName);
+	// モジュールの中の番地なら何でもよいので、関数ではなく静的なデータの番地を渡す（関数の
+	// ポインタを void * にするのは処理系に依る）。
+	// 求められなければ空のパスを渡し、spoolDirOf が空を返す（区切りが無い）。
+	static const char anchor = 0;
+	return spoolDirOf(files::modulePathOf(&anchor).value_or(""));
 }
 
 bool Bridge::prepare(std::string &error) { return files::makeDirectories(dir_, error); }

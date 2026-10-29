@@ -97,9 +97,10 @@ add_library(VwCliCore STATIC src/core/Bridge.cpp src/core/Json.cpp src/core/Ping
 						   src/core/Serve.cpp)
 if(WIN32)
 	target_sources(VwCliCore PRIVATE src/core/FilesWindows.cpp)
-	target_link_libraries(VwCliCore PUBLIC shell32 ole32)
 else()
 	target_sources(VwCliCore PRIVATE src/core/FilesPosix.cpp)
+	# dladdr（モジュールの場所。glibc 2.34 より前は libdl にある。mac は空）。
+	target_link_libraries(VwCliCore PUBLIC ${CMAKE_DL_LIBS})
 endif()
 target_include_directories(VwCliCore PUBLIC src)
 vw_strict(VwCliCore)

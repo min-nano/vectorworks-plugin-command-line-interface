@@ -47,6 +47,10 @@ a malformed response, so call exits with 1 for it. So does a response file
 that is not a valid response object (not JSON, or JSON of the wrong shape);
 call removes it without waiting for --timeout.
 
+When the bridge is not running, call exits with 5 and writes the spool it
+looked at to the standard error, so that a vw2026 run from outside the folder
+of the plug-in (see "vw2026 --help") can be told from a stopped Vectorworks.
+
 When --timeout runs out, call stops waiting, withdraws the request, and
 exits with 3: the tool did not run. If the plug-in had already taken the
 request, call waits a few more seconds for the response, and exits with 4 if
@@ -96,13 +100,11 @@ func (c *callCmd) run(e *env) int {
 		return exitFailure
 	}
 	if !bridge.Running {
-		fmt.Fprintln(e.stderr, "vw2026: the bridge is not running (try `vw2026 status`)")
-		return exitDown
+		return failed(e, bridge, spool.ErrNotRunning)
 	}
 	response, err := bridge.Call(c.Tool, payload, c.Session, seconds(c.Timeout))
 	if err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
-		return codeFor(err)
+		return failed(e, bridge, err)
 	}
 	switch {
 	case c.Raw:
@@ -118,6 +120,19 @@ func (c *callCmd) run(e *env) int {
 		return toolCodeFor(response.Code)
 	}
 	return exitOK
+}
+
+// failed は err を標準エラーに書き、終了コードを返す。止まっていると答えるとき（5）は、求めた
+// スプールの場所を添える。フォルダの外で動かした vw2026 は Vectorworks が動いていても止まって
+// いると答えるので、場所の取り違えと見分けられるように（docs/protocol.md「スプールの場所」）。
+func failed(e *env, bridge *spool.Bridge, err error) int {
+	code := codeFor(err)
+	if code == exitDown {
+		fmt.Fprintf(e.stderr, "vw2026: %v (spool: %s; try `vw2026 status`)\n", err, bridge.Dir)
+	} else {
+		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+	}
+	return code
 }
 
 // toolCodeFor は道具の失敗の code を終了コードにする。

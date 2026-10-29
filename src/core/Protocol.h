@@ -10,10 +10,9 @@
 namespace VwCli::core::protocol {
 
 // 通信規則の版。tools と ping の結果に載せるだけで、実行時に照合しない（通信規則「版」）。
-inline constexpr int kVersion = 5;
+inline constexpr int kVersion = 6;
 
-// <CLI> のディレクトリ名と、その下のスプールの名前（通信規則「スプールの場所」）。
-inline constexpr std::string_view kAppDirName = "vectorworks2026-cli";
+// cli のプラグインのフォルダ（<Plug-Ins>/cli/）の下のスプールの名前（通信規則「スプールの場所」）。
 inline constexpr std::string_view kSpoolDirName = "spool";
 
 // スプールに置くファイルの綴り（通信規則「ファイル」）。

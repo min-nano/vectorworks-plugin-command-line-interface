@@ -136,23 +136,27 @@ SDK リファレンスの `Findings/` に記載がありません。`vw2026 inst
 入れないのを利用者の責任としたので（[レジストリ「提供側に求めること」](registry.md#提供側に求めること)）、
 実装はこの調査を待ちません。判定を足すことになったら、先に SDK リファレンスで issue を立てます。
 
-## 6. プラグインのフォルダの中のモジュール以外のものと、モジュールの読み込み元（調べていない。段 3 の前に確かめる）
+## 6. プラグインのフォルダの中のモジュール以外のものと、モジュールの読み込み元（分かった）
 
-段 3 から、`<Plug-Ins>/cli/` にはモジュールのほかに `bin/`（CLI の実行ファイル）・`hooks/`（`.sh` /
+段 3（3a・3b）から、`<Plug-Ins>/cli/` にはモジュールのほかに `bin/`（CLI の実行ファイル）・`hooks/`（`.sh` /
 `.ps1`）・`build.json`・`vw2026-install.json`・`spool/`（`bridge.lock`・`*.req.json`・`*.res.json`・
 `*.wait`・`*.tmp`）が入ります（[インストール「CLI とスプールの置き場所」](plugin/install-and-update.md#cli-とスプールの置き場所)）。
-段 2 の実機確認では `bin/` を除いて置き、スプールもフォルダの外にあったので、次の 2 つはまだ確かめて
-いません。SDK リファレンスの `Findings/` にも記載がありません。
-
-- **Vectorworks が `Plug-Ins` の下のモジュール以外のファイルとサブフォルダを無視するか。** 起動時に
-  読もうとして警告を出さないか、中身を書き換え・移動しないか、動いている間にそれらのファイルを開いた
-  ままにしないか（Windows では付け替えを止める）。スプールは中身が起動ごとに違い、`bridge.lock` と前の
-  回の残りが入ったまま次の起動を迎えます。
-- **Vectorworks がモジュールを置いた場所からそのまま読み込むか**（別の場所へ写してから読み込まないか）。
-  プラグインはモジュールの場所からスプールを求めるので（[通信規則「段 3 で移す場所」](protocol.md#段-3-で移す場所)）、
-  写しから読み込むとスプールが `<Plug-Ins>/cli/spool/` にできません。Windows では起動時に一度降ろして
-  読み込み直す（上記 0）ので、読み込み直したあとの場所も同じかを見ます。
-
 [SDK リファレンス #277](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/277) で
-調べ、`Findings/`（Plug-in Modules）に反映されてから段 3 を実装します。段 3 の実機確認でも、スプールが既にある状態での起動を
-確かめます（[実装の順序](plugin/plan.md)の段 3）。
+**分かった**（[Findings「Plug-in Modules」の「プラグインのフォルダの『モジュール以外のもの』は無視され、モジュールは置いた場所から読まれる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md#プラグインのフォルダのモジュール以外のものは無視されモジュールは置いた場所から読まれるwindowsmacos)。
+Windows も macOS も同じ）。
+
+- **Vectorworks は `Plug-Ins` の下のモジュール以外のファイルとサブフォルダを無視する。** 起動時に
+  警告を出さず（「開発元不明のプラグイン」のダイアログにもモジュールしか載らない）、起動をまたいで
+  書き換え・移動・削除をせず、起動後に開いたままにもしない。スプールに `bridge.lock` と前の回の残りが
+  入ったまま次の起動を迎えても同じだった。
+- **Vectorworks はモジュールを置いた場所のファイルからそのまま読み込む。** mac の `dladdr`、Windows の
+  `GetModuleHandleExW(FROM_ADDRESS)` → `GetModuleFileNameW` は `<Plug-Ins>/cli/` の中のモジュールを返す。
+  プラグインがモジュールの場所から求めるスプール（[通信規則「スプールの場所」](protocol.md#スプールの場所)）は
+  `<Plug-Ins>/cli/spool/` になる。Windows で起動時に一度降ろして読み込み直した（上記 0）あとも同じパスだった
+  （降ろす前の最初の読み込みで求めた値は見ていない。同じファイルからの読み直しなので同じと推定されている）。
+- **Windows では、Vectorworks が動いている間は `<Plug-Ins>/cli/` そのものの名前を変えられない**
+  （`cli.vlb` が写像されているため。中の `bin/`・`spool/` などのフォルダは変えられる）。`vw2026 install` が
+  フォルダごと付け替えるのは Vectorworks が止まっているときだけ、という決めごと（[インストール「流れ」](plugin/install-and-update.md#流れ)）と
+  合っている。
+
+段 3a の実機確認でも、スプールが既にある状態での起動を確かめます（[実装の順序](plugin/plan.md)の段 3a）。

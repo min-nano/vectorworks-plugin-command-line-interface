@@ -1,6 +1,5 @@
 {
-	"protocol": 5,
-	"app_dir": "vectorworks2026-cli",
+	"protocol": 6,
 	"spool_dir": "spool",
 	"lock_file": "bridge.lock",
 	"request_suffix": ".req.json",

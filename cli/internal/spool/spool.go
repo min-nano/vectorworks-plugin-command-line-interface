@@ -33,7 +33,7 @@ const (
 	// ProtocolVersion は受け渡しの版（上げる場合は docs/protocol.md「互換性」）。表示のためだけで、
 	// 実行時に照合はしない（CLI とプラグインは同じ zip から同時に入り、更新は Vectorworks の
 	// 終了後にしか行わないので、両側は常に同じビルドである。docs/protocol.md「版」）。
-	ProtocolVersion = 5
+	ProtocolVersion = 6
 
 	// MaxRequestBytes はプラグイン側が受け付ける要求 1 件の上限。超える要求は置く前に断る
 	// （置いても「読めない要求」として失敗が返るだけなので）。

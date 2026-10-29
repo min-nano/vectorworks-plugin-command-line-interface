@@ -585,7 +585,6 @@ TEST(FixtureConstantsMatchTheCode) {
 	Json constants = load(fixtures() / "constants.json");
 	CHECK(shaped(constants,
 	             {{"protocol", T::Number},
-	              {"app_dir", T::String},
 	              {"spool_dir", T::String},
 	              {"lock_file", T::String},
 	              {"request_suffix", T::String},
@@ -599,7 +598,6 @@ TEST(FixtureConstantsMatchTheCode) {
 	              {"codes", T::Array}},
 	             "constants.json"));
 	CHECK_EQ(get(constants, "protocol").asInt64().value_or(0), std::int64_t{protocol::kVersion});
-	CHECK_EQ(text(constants, "app_dir"), std::string(protocol::kAppDirName));
 	CHECK_EQ(text(constants, "spool_dir"), std::string(protocol::kSpoolDirName));
 	CHECK_EQ(text(constants, "lock_file"), std::string(protocol::kLockFile));
 	CHECK_EQ(text(constants, "request_suffix"), std::string(protocol::kRequestSuffix));
