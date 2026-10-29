@@ -23,7 +23,8 @@ namespace VwCli::core {
 std::optional<std::string> spoolDirOf(const std::string &modulePath);
 
 // defaultSpoolDir は、このコードを含むモジュールの場所（files::modulePathOf）から spoolDirOf で
-// スプールの場所を求める。環境変数は読まない。求められなければ空。
+// スプールの場所を求める。環境変数は読まない。求められなければ空（POSIX で作業ディレクトリを
+// 求められなければ例外。受け付けの刻みが受け止め、次の刻みでやり直す）。
 std::optional<std::string> defaultSpoolDir();
 
 class Bridge {

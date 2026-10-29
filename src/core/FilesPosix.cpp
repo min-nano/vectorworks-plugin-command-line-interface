@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include <cerrno>
-#include <cstdlib>
 #include <cstring>
 #include <dirent.h>
 #include <dlfcn.h>
 #include <fcntl.h>
+#include <filesystem>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -95,16 +95,7 @@ std::optional<std::string> absolute(const std::string &path) {
 	if (path.empty()) {
 		return std::nullopt;
 	}
-	if (path.starts_with('/')) {
-		return path;
-	}
-	char *cwd = ::getcwd(nullptr, 0);
-	if (!cwd) {
-		return std::nullopt;
-	}
-	std::string full = join(cwd, path);
-	std::free(cwd);
-	return full;
+	return std::filesystem::absolute(path).string();
 }
 
 bool makeDirectories(const std::string &path, std::string &error) {

@@ -30,13 +30,14 @@ std::string join(const std::string &dir, std::string_view name);
 // 実行ファイル。テストではテストの実行ファイル）のパスを返す（POSIX は dladdr のパスを absolute で
 // 絶対パスにしたもの、Windows は GetModuleHandleExW と GetModuleFileNameW の返すパス。リンクは
 // 解かない。環境変数は読まない。通信規則「スプールの場所」）。address がどのモジュールの中にも
-// 無い・求められなければ空。
+// 無い・求められなければ空（POSIX は absolute と同じく例外を投げることがある）。
 std::optional<std::string> modulePathOf(const void *address);
 
 #ifndef _WIN32
 // absolute は path を絶対パスにする。/ で始まればそのまま、そうでなければいまの作業ディレクトリの
 // 下（Linux の実行ファイルでは dladdr が argv[0] を返し、相対パスのことがある。呼ぶ前に作業
-// ディレクトリを変えると誤る）。path が空・作業ディレクトリを求められなければ空。
+// ディレクトリを変えると誤る）。path が空なら空。作業ディレクトリを求められなければ
+// std::filesystem::filesystem_error を投げる（std::filesystem::absolute）。
 std::optional<std::string> absolute(const std::string &path);
 #endif
 

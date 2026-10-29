@@ -60,12 +60,9 @@ std::optional<std::string> spoolDirOf(const std::string &modulePath) {
 std::optional<std::string> defaultSpoolDir() {
 	// モジュールの中の番地なら何でもよいので、関数ではなく静的なデータの番地を渡す（関数の
 	// ポインタを void * にするのは処理系に依る）。
+	// 求められなければ空のパスを渡し、spoolDirOf が空を返す（区切りが無い）。
 	static const char anchor = 0;
-	std::optional<std::string> module = files::modulePathOf(&anchor);
-	if (!module) {
-		return std::nullopt;
-	}
-	return spoolDirOf(*module);
+	return spoolDirOf(files::modulePathOf(&anchor).value_or(""));
 }
 
 bool Bridge::prepare(std::string &error) { return files::makeDirectories(dir_, error); }
