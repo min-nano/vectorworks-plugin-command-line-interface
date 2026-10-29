@@ -57,11 +57,52 @@
 			"does": "array"
 		},
 		{
+			"name": "bad_args_detail",
+			"description": "引数の誤りで失敗し、詳細を返す",
+			"inputSchema": {"type": "object"},
+			"kind": "read",
+			"does": "invalid_args",
+			"detail": {"reason": "to_is_open"}
+		},
+		{
+			"name": "empty_detail",
+			"description": "成功し、詳細を返す（成功の応答には載らない）",
+			"inputSchema": {"type": "object"},
+			"kind": "read",
+			"does": "empty",
+			"detail": {"reason": "ignored"}
+		},
+		{
+			"name": "save",
+			"description": "図面のファイルに働き、終了は頼まない道具の代わり",
+			"inputSchema": {"type": "object"},
+			"kind": "app",
+			"does": "empty"
+		},
+		{
+			"name": "quit_refused",
+			"description": "終了を頼んでから失敗し、詳細を返す道具の代わり",
+			"inputSchema": {"type": "object"},
+			"kind": "app",
+			"does": "internal",
+			"quit": true,
+			"detail": {"reason": "documents_open", "documents": [{"name": "plan.vwx"}]}
+		},
+		{
+			"name": "quit_broken",
+			"description": "終了を頼み、オブジェクトでない値を返す道具の代わり",
+			"inputSchema": {"type": "object"},
+			"kind": "app",
+			"does": "array",
+			"quit": true
+		},
+		{
 			"name": "quit",
 			"description": "Vectorworks を終わらせる道具の代わり",
 			"inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
 			"kind": "app",
-			"does": "empty"
+			"does": "empty",
+			"quit": true
 		}
 	]
 }

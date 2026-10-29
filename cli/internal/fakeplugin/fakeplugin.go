@@ -6,11 +6,13 @@
 // プラグインと同じに持つ。プラグインと同じに振る舞うかは、両方のテストが読む通信規則の見本
 // （protocol/fixtures。docs/fixtures.md）で確かめる。道具の表は持たないので、道具の種類は
 // StartWithKinds で受け取り、受け取らない道具は quit なら種類 app、ほかを read とみなす。種類
-// write と app は占有の中でだけ呼べ、種類 app の道具（quit）が成功したらその回の残りを取り出さない。
-// 受け付けの入れ子は真似ない（Go の偽の道具はイベントを回さない）。
+// write と app は占有の中でだけ呼べる。終了の依頼は種類では決めず、本物の道具の表と同じく quit
+// だけが立てるとみなし、quit が成功したらその回の残りを取り出さない。受け付けの入れ子は真似ない
+// （Go の偽の道具はイベントを回さない）。
 package fakeplugin
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -134,6 +136,8 @@ type server struct {
 	handle Handler
 	// 道具の名前ごとの種類。無い道具は、quit なら app、ほかは read
 	kinds map[string]string
+	// 成功したら終了を頼む道具（道具が返す終了の依頼）。nil なら quit だけ
+	quits map[string]bool
 	// 受け付けの外の状態（"quitting"）。空でなければ種類 write と app を busy で断る
 	activity string
 	// 掴んでいるロックを放す。nil ならロックを掴んでいない
@@ -163,7 +167,7 @@ func (s *server) release() {
 // serveOnce は受け付け 1 回。ロックを掴んでいなければ取ってみて、取れなければ何もせずに
 // serving を偽で返す。要求を名前の昇順で読み、消し、呼ぶ側が待っていれば実行する。処理するのは
 // 回の始めに並べた要求だけで（件数と時間の上限は無い）、取り出した要求には同じ回の中で応える。
-// quit が成功したら、その回の残りの要求を取り出さずに quit を真で返す。
+// 終了を頼む道具（quits）が成功したら、その回の残りの要求を取り出さずに quit を真で返す。
 func (s *server) serveOnce() (serving, quit bool) {
 	if s.unlock == nil && !s.take() {
 		return false, false
@@ -218,7 +222,7 @@ func (s *server) serveOnce() (serving, quit bool) {
 			s.session = *session
 		}
 		// 終了したら応えられないので、残りは置いたままにする。
-		if s.kind(tool) == "app" && response.OK {
+		if s.quitsOn(tool) && response.OK {
 			return true, true
 		}
 	}
@@ -266,13 +270,22 @@ func (s *server) answer(tool string, args json.RawMessage, session string) (spoo
 	return s.run(tool, args), nil
 }
 
-// run は道具を呼ぶ。成功の result はプラグインと同じく必ずオブジェクトにする（通信規則「応答」）。
-// 値を返さなければ {}、オブジェクトでない値は道具の不具合として internal。
+// run は道具を呼ぶ。応答はプラグインと同じに整える（通信規則「応答」）。成功の result は必ず
+// オブジェクトにし、値を返さなければ {}、オブジェクトでない値は道具の不具合として internal。
+// detail は失敗にだけ載せ、オブジェクトでない detail は道具の不具合として internal（detail なし）。
+// null の detail は、プラグイン（Json の null）と同じく「無い」とみなす。
 func (s *server) run(tool string, args json.RawMessage) spool.Response {
 	response := s.handle(tool, args)
+	if string(bytes.TrimSpace(response.Detail)) == "null" {
+		response.Detail = nil
+	}
 	if !response.OK {
+		if len(response.Detail) > 0 && !spool.IsObject(response.Detail) {
+			return spool.Response{Code: spool.CodeInternal, Error: "the detail of " + tool + " is not an object"}
+		}
 		return response
 	}
+	response.Detail = nil
 	switch {
 	case len(response.Result) == 0 || string(response.Result) == "null":
 		response.Result = json.RawMessage(`{}`)
@@ -292,6 +305,15 @@ func (s *server) kind(tool string) string {
 		return "app"
 	}
 	return "read"
+}
+
+// quitsOn は、道具が成功したら終了を頼むか。quits が無ければ quit だけ（本物の道具の表で終了を
+// 頼むのは quit だけ）。
+func (s *server) quitsOn(tool string) bool {
+	if s.quits == nil {
+		return tool == "quit"
+	}
+	return s.quits[tool]
 }
 
 // check は占有の中でだけ呼べる要求の印を占有に照らす。実行してよければ空、断るならその code。

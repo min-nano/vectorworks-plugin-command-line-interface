@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/launch"
@@ -27,10 +26,23 @@ The default application is "Vectorworks 2026" on macOS, started with
 Windows. Launch does not search other places; name them with --app. A value
 that does not end in .app is started as an executable.
 
-When Vectorworks is running but the bridge is not (the plug-in is not
-installed, or this vw2026 runs from outside the folder of the plug-in; see
-"vw2026 --help"), launch exits with 5 and writes the spool it looked at to the
-standard error.
+Launch does not start a second Vectorworks. When Vectorworks is running but
+the bridge is not, launch prints {"launched":true,...} and exits with 0 on
+every OS, as if it had started Vectorworks: on macOS, "open -a" (used for the
+default application and a value ending in .app) brings the running Vectorworks
+to the front, and on Windows, launch starts nothing. Windows finds a running
+Vectorworks with tasklist; if tasklist fails, launch starts the application as
+if Vectorworks were not running. On any OS but Windows, an executable given
+with --app is started without checking whether Vectorworks is running.
+
+So {"launched":true,...} does not tell whether the bridge will start; run
+status in a loop. It turns to 0 when Vectorworks was still starting. If it
+stays at 5, either the plug-in is not loaded (for example, it is not
+installed, or it was not enabled in the dialog about plug-ins from
+unidentified developers), this vw2026 runs from outside the folder of the
+plug-in and looks at another spool (status shows the spool it looks at; see
+"vw2026 --help"), or Vectorworks was quitting and has quit, and launch can be
+run again.
 `
 }
 
@@ -52,10 +64,6 @@ func (c *launchCmd) run(e *env) int {
 		return exitFailure
 	}
 	if err := e.start(argv); err != nil {
-		if errors.Is(err, launch.ErrAlreadyRunning) {
-			fmt.Fprintf(e.stderr, "vw2026: Vectorworks is running but the bridge is not (is the plug-in installed? spool: %s)\n", bridge.Dir)
-			return exitDown
-		}
 		fmt.Fprintf(e.stderr, "vw2026: launch: %v\n", err)
 		return exitFailure
 	}

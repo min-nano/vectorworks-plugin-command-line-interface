@@ -64,7 +64,7 @@ if(VW_ENABLE_SANITIZERS)
 	endif()
 endif()
 
-# カバレッジ（test.yml が集めて Codecov へ送る）。clang（Apple の clang を含む）は source-based
+# カバレッジ（cpp.yml が集めて Codecov へ送る）。clang（Apple の clang を含む）は source-based
 # coverage で、llvm-cov で集める。MSVC は Visual Studio の Microsoft.CodeCoverage.Console が
 # 実行ファイルを PDB から計装して集めるので、コンパイルは変えず、計装に要る /PROFILE を付けて
 # リンクするだけ（/PROFILE は /INCREMENTAL と両立しないので、Debug の既定の /INCREMENTAL を
@@ -243,7 +243,7 @@ if(VW_BUILD_FUZZERS)
 	vw_strict(JsonFuzzer)
 	target_link_options(JsonFuzzer PRIVATE -fsanitize=fuzzer)
 	if(VW_BUILD_TESTS)
-		# 種（要求の見本）を 1 回ずつ通すだけ。決まった時間だけ回すのは CI（test.yml）。
+		# 種（要求の見本）を 1 回ずつ通すだけ。決まった時間だけ回すのは CI（cpp.yml）。
 		add_test(NAME JsonFuzzerSeeds
 				 COMMAND JsonFuzzer -runs=0 ${CMAKE_CURRENT_SOURCE_DIR}/protocol/fixtures/requests)
 	endif()

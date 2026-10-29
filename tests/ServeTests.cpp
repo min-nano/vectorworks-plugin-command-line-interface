@@ -18,8 +18,8 @@ using VwCli::core::Phase;
 using VwCli::core::Server;
 using VwCli::core::Tool;
 using VwCli::core::ToolContext;
-using VwCli::core::ToolError;
 using VwCli::core::ToolKind;
+using VwCli::core::ToolStatus;
 namespace files = VwCli::core::files;
 using VwCli::test::TempDir;
 
@@ -80,36 +80,50 @@ Json record(const char *name) {
 	return Json::object();
 }
 
-Json first(const Json &, const ToolContext &, ToolError &) { return record("first"); }
+Json first(const Json &, const ToolContext &, ToolStatus &) { return record("first"); }
 
 // putLater は回の途中で要求を置く（並べたあとに置かれた要求は次の回に回る）。
-Json putLater(const Json &, const ToolContext &, ToolError &) {
+Json putLater(const Json &, const ToolContext &, ToolStatus &) {
 	gCaller->put("zzz", R"({"tool":"first"})");
 	return record("put_later");
 }
 
 // nests は道具の中で Vectorworks
 // がイベントを回し、刻みがまた届いたことを真似る（受け付けの入れ子）。
-Json nests(const Json &, const ToolContext &, ToolError &) {
+Json nests(const Json &, const ToolContext &, ToolStatus &) {
 	gCaller->put("c", R"({"tool":"first"})");
 	gServer->serve(gTools, kNow);
 	return record("nests");
 }
 
-Json appFails(const Json &, const ToolContext &, ToolError &error) {
-	record("app_fails");
-	error = ToolError{ErrorCode::Internal, "失敗した"};
+// quitFails は終了を頼んでから失敗する（失敗した道具の終了の依頼は出さない）。
+Json quitFails(const Json &, const ToolContext &, ToolStatus &status) {
+	record("quit_fails");
+	status.code = ErrorCode::Internal;
+	status.message = "失敗した";
+	status.quit = true;
 	return Json();
 }
 
-Json appSucceeds(const Json &, const ToolContext &, ToolError &) { return record("app_succeeds"); }
+Json quits(const Json &, const ToolContext &, ToolStatus &status) {
+	status.quit = true;
+	return record("quits");
+}
 
-Json throwsInt(const Json &, const ToolContext &, ToolError &) {
+// badDetail は detail にオブジェクトでない値を返す（道具の不具合）。
+Json badDetail(const Json &, const ToolContext &, ToolStatus &status) {
+	status.code = ErrorCode::InvalidArgs;
+	status.message = "引数が誤っています";
+	status.detail = Json::array();
+	return record("bad_detail");
+}
+
+Json throwsInt(const Json &, const ToolContext &, ToolStatus &) {
 	record("throws_int");
 	throw 42;
 }
 
-Json readContext(const Json &, const ToolContext &context, ToolError &) {
+Json readContext(const Json &, const ToolContext &context, ToolStatus &) {
 	gSession = context.session;
 	return record("context");
 }
@@ -118,8 +132,9 @@ const Tool kTools[] = {
     {"first", "", "{}", ToolKind::Read, first},
     {"put_later", "", "{}", ToolKind::Read, putLater},
     {"nests", "", "{}", ToolKind::Read, nests},
-    {"app_fails", "", "{}", ToolKind::App, appFails},
-    {"app_succeeds", "", "{}", ToolKind::App, appSucceeds},
+    {"quit_fails", "", "{}", ToolKind::App, quitFails},
+    {"quits", "", "{}", ToolKind::App, quits},
+    {"bad_detail", "", "{}", ToolKind::Read, badDetail},
     {"throws_int", "", "{}", ToolKind::Read, throwsInt},
     {"context", "", "{}", ToolKind::Read, readContext},
 };
@@ -153,13 +168,13 @@ TEST(ServeLeavesRequestsPutDuringTheRoundForTheNext) {
 	gCaller = nullptr;
 }
 
-TEST(ServeDoesNotQuitWhenTheAppToolFails) {
+TEST(ServeDoesNotQuitWhenTheToolFails) {
 	TempDir dir;
 	gCalls.clear();
 	Server server(dir.utf8Path());
 	Caller caller(dir);
 	std::string session = startSession(server, caller, "0");
-	caller.put("1", R"({"tool":"app_fails","session":")" + session + R"("})");
+	caller.put("1", R"({"tool":"quit_fails","session":")" + session + R"("})");
 	caller.put("2", R"({"tool":"first"})");
 	caller.put("3", R"({"tool":"first","session":")" + session + R"("})");
 	VwCli::core::ServeResult result = server.serve(kTools, kNow);
@@ -167,7 +182,18 @@ TEST(ServeDoesNotQuitWhenTheAppToolFails) {
 	CHECK_EQ(caller.code("1"), std::string("internal"));
 	CHECK(caller.ok("2"));
 	CHECK(caller.ok("3"));
-	CHECK_EQ(gCalls, (std::vector<std::string>{"app_fails", "first", "first"}));
+	CHECK_EQ(gCalls, (std::vector<std::string>{"quit_fails", "first", "first"}));
+}
+
+// detail がオブジェクトでなければ、道具の不具合として internal で応え、detail を付けない。
+TEST(ServeAnswersInternalForADetailThatIsNotAnObject) {
+	TempDir dir;
+	Server server(dir.utf8Path());
+	Caller caller(dir);
+	caller.put("1", R"({"tool":"bad_detail"})");
+	server.serve(kTools, kNow);
+	CHECK_EQ(caller.code("1"), std::string("internal"));
+	CHECK(!caller.response("1").find("detail"));
 }
 
 // 受け付けの入れ子では、外の回が並べた要求（b・s）も、回の途中に置かれた要求（c）も、解析せずに
@@ -273,12 +299,12 @@ TEST(ServeDoesNotQuitWhenTheReplyCannotBeWritten) {
 	Caller caller(dir);
 	std::string session = startSession(server, caller, "0");
 	std::filesystem::create_directory(dir.path() / "1.res.json.tmp");
-	caller.put("1", R"({"tool":"app_succeeds","session":")" + session + R"("})");
+	caller.put("1", R"({"tool":"quits","session":")" + session + R"("})");
 	caller.put("2", R"({"tool":"first","session":")" + session + R"("})");
 	CHECK(!server.serve(kTools, kNow).quit);
-	CHECK_EQ(gCalls, (std::vector<std::string>{"app_succeeds", "first"}));
+	CHECK_EQ(gCalls, (std::vector<std::string>{"quits", "first"}));
 	// 書ければ終了を頼み、その回の残りは取り出さない。
-	caller.put("3", R"({"tool":"app_succeeds","session":")" + session + R"("})");
+	caller.put("3", R"({"tool":"quits","session":")" + session + R"("})");
 	caller.put("4", R"({"tool":"first","session":")" + session + R"("})");
 	CHECK(server.serve(kTools, kNow).quit);
 	CHECK(caller.ok("3"));

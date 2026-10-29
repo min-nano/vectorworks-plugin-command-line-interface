@@ -28,9 +28,9 @@ using VwCli::core::Phase;
 using VwCli::core::Server;
 using VwCli::core::Tool;
 using VwCli::core::ToolContext;
-using VwCli::core::ToolError;
 using VwCli::core::ToolFn;
 using VwCli::core::ToolKind;
+using VwCli::core::ToolStatus;
 using VwCli::test::TempDir;
 
 namespace {
@@ -176,10 +176,13 @@ bool checkCase(const Json &fixture, const std::string &where) {
 		}
 		if (get(expect, "responses").isObject()) {
 			for (const Json::Member &member : get(expect, "responses").members()) {
-				good =
-				    shaped(member.second,
-					       {{"ok", T::Bool}, {"code", T::String}, {"result", std::nullopt}}, at) &&
-				    good;
+				good = shaped(member.second,
+				              {{"ok", T::Bool},
+				               {"code", T::String},
+				               {"result", std::nullopt},
+				               {"detail", T::Object}},
+				              at) &&
+				       good;
 				if (!member.second.find("ok")) {
 					failAt(at, "the expected response for " + member.first + " has no ok");
 					good = false;
@@ -198,6 +201,9 @@ struct Fake {
 	std::string inputSchema;
 	ToolKind kind;
 	std::string does;
+	// 失敗したときに返す detail（無ければ null）と、終了の依頼を立てるか。
+	Json detail;
+	bool quit = false;
 };
 
 struct Call {
@@ -209,9 +215,11 @@ std::vector<Fake> gFakes;
 std::vector<Call> gCalls;
 
 // runFake は I 番目の偽の道具。道具の中身は自分の名前を受け取らないので、番号ごとに作る。
-template <std::size_t I> Json runFake(const Json &args, const ToolContext &, ToolError &error) {
+template <std::size_t I> Json runFake(const Json &args, const ToolContext &, ToolStatus &status) {
 	const Fake &fake = gFakes.at(I);
 	gCalls.push_back({fake.name, args});
+	status.detail = fake.detail;
+	status.quit = fake.quit;
 	if (fake.does == "echo") {
 		return args;
 	}
@@ -219,11 +227,13 @@ template <std::size_t I> Json runFake(const Json &args, const ToolContext &, Too
 		return Json::object();
 	}
 	if (fake.does == "invalid_args") {
-		error = ToolError{ErrorCode::InvalidArgs, "引数が誤っています"};
+		status.code = ErrorCode::InvalidArgs;
+		status.message = "引数が誤っています";
 		return Json();
 	}
 	if (fake.does == "internal") {
-		error = ToolError{ErrorCode::Internal, "道具が失敗しました"};
+		status.code = ErrorCode::Internal;
+		status.message = "道具が失敗しました";
 		return Json();
 	}
 	if (fake.does == "null") {
@@ -260,7 +270,9 @@ std::vector<Tool> loadTools() {
 		        {"description", T::String},
 		        {"inputSchema", T::Object},
 		        {"kind", T::String},
-		        {"does", T::String}},
+		        {"does", T::String},
+		        {"detail", T::Object},
+		        {"quit", T::Bool}},
 		       "fake-tools.json");
 		std::string kind = text(entry, "kind");
 		gFakes.push_back({text(entry, "name"), text(entry, "description"),
@@ -268,7 +280,8 @@ std::vector<Tool> loadTools() {
 		                  kind == "read"    ? ToolKind::Read
 		                  : kind == "write" ? ToolKind::Write
 		                                    : ToolKind::App,
-		                  text(entry, "does")});
+		                  text(entry, "does"), get(entry, "detail"),
+		                  get(entry, "quit").isBool() && get(entry, "quit").asBool()});
 		if (kind != "read" && kind != "write" && kind != "app") {
 			failAt("fake-tools.json", "unknown kind: " + kind);
 		}
@@ -527,6 +540,11 @@ private:
 			bool ok = get(*response, "ok").isBool() && get(*response, "ok").asBool();
 			bool wantOk = get(want, "ok").isBool() && get(want, "ok").asBool();
 			bool good = ok == wantOk;
+			// detail は期待に書いたときだけ持ち、書いたものと一致する（無ければ持たない）。
+			const Json *detail = response->find("detail");
+			good = good &&
+			       (want.find("detail") ? detail && match(get(want, "detail"), *detail, session_)
+			                            : !detail);
 			if (!ok) {
 				good = good && get(*response, "error").isString() &&
 				       text(*response, "code") == text(want, "code");

@@ -112,3 +112,37 @@ func TestServeAppliesSessionAndQuitOnlyWhenTheResponseIsWritten(t *testing.T) {
 		t.Fatal("the session ended although its response could not be written")
 	}
 }
+
+// 応答はプラグインと同じに整える。detail は失敗にだけ載せ、オブジェクトでなければ internal
+// （docs/protocol.md「応答」）。
+func TestServeShapesTheDetail(t *testing.T) {
+	dir := NewDir(t)
+	s := &server{dir: dir, handle: func(tool string, _ json.RawMessage) spool.Response {
+		switch tool {
+		case "array":
+			return spool.Response{Code: spool.CodeInvalidArgs, Error: "x", Detail: json.RawMessage(`[1]`)}
+		case "object":
+			return spool.Response{Code: spool.CodeInvalidArgs, Error: "x", Detail: json.RawMessage(`{"a":1}`)}
+		case "null":
+			return spool.Response{Code: spool.CodeInvalidArgs, Error: "x", Detail: json.RawMessage(`null`)}
+		}
+		return spool.Response{OK: true, Result: json.RawMessage(`{}`), Detail: json.RawMessage(`{"a":1}`)}
+	}}
+	t.Cleanup(s.release)
+	put(t, dir, "1", `{"tool":"array"}`)
+	put(t, dir, "2", `{"tool":"object"}`)
+	put(t, dir, "3", `{"tool":"success"}`)
+	put(t, dir, "4", `{"tool":"null"}`)
+	s.serveOnce()
+	for id, want := range map[string]string{
+		"1": `{"ok":false,"code":"internal","error":"the detail of array is not an object"}`,
+		"2": `{"ok":false,"code":"invalid_args","error":"x","detail":{"a":1}}`,
+		"3": `{"ok":true,"result":{}}`,
+		"4": `{"ok":false,"code":"invalid_args","error":"x"}`,
+	} {
+		data, err := os.ReadFile(filepath.Join(dir, id+spool.ResponseSuffix))
+		if err != nil || string(data) != want {
+			t.Errorf("%s: %s %v, want %s", id, data, err, want)
+		}
+	}
+}

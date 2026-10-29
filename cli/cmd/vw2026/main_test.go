@@ -16,7 +16,6 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
-	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/launch"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
@@ -97,6 +96,8 @@ func echoBridge(t *testing.T) string {
 			return spool.Response{OK: false, Code: spool.CodeInternal, Error: "boom"}
 		case "picky":
 			return spool.Response{OK: false, Code: spool.CodeInvalidArgs, Error: "no such argument"}
+		case "explain":
+			return spool.Response{OK: false, Code: spool.CodeInternal, Error: "open", Detail: json.RawMessage(`{"reason":"documents_open"}`)}
 		}
 		out, _ := json.Marshal(map[string]any{"tool": tool, "args": args})
 		return spool.Response{OK: true, Result: out}
@@ -168,6 +169,19 @@ func TestCallToolError(t *testing.T) {
 	}
 }
 
+// 道具が失敗の detail を返せば、標準出力に出す（--raw なら応答ごと）。
+func TestCallToolErrorDetail(t *testing.T) {
+	dir := echoBridge(t)
+	r := invoke(t, opts{dir: dir}, "call", "explain")
+	if r.code != exitToolFailure || r.stdout != "{\"reason\":\"documents_open\"}\n" || !strings.Contains(r.stderr, "internal: open") {
+		t.Fatalf("%+v", r)
+	}
+	raw := invoke(t, opts{dir: dir}, "call", "--raw", "explain")
+	if raw.code != exitToolFailure || !strings.Contains(raw.stdout, `"detail":{"reason":"documents_open"}`) {
+		t.Fatalf("%+v", raw)
+	}
+}
+
 func TestCallToolUsageError(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, opts{dir: dir}, "call", "picky")
@@ -207,19 +221,6 @@ func TestLaunchStartsApp(t *testing.T) {
 	r := invoke(t, opts{vars: map[string]string{"VW2026_APP": app}, started: &started}, "launch")
 	if r.code != exitOK || len(started) != 1 || started[0] != app {
 		t.Fatalf("%+v %v", r, started)
-	}
-}
-
-// 動いている Vectorworks にプラグインが入っていない（Windows で起動を断られた）なら、
-// ブリッジが止まっているときと同じ 5 で終わる。
-func TestLaunchWhenRunningWithoutBridge(t *testing.T) {
-	app := fakeApp(t)
-	refused := func([]string) error { return fmt.Errorf("start: %w", launch.ErrAlreadyRunning) }
-	dir := filepath.Join(t.TempDir(), "spool")
-	r := invoke(t, opts{dir: dir, vars: map[string]string{"VW2026_APP": app}, start: refused}, "launch")
-	if r.code != exitDown || r.stdout != "" || !strings.Contains(r.stderr, "plug-in installed") ||
-		!strings.Contains(r.stderr, dir) {
-		t.Fatalf("%+v", r)
 	}
 }
 

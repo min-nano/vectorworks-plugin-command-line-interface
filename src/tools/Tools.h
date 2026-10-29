@@ -7,6 +7,6 @@
 
 namespace VwCli::tools {
 
-core::Json ping(const core::Json &args, const core::ToolContext &context, core::ToolError &error);
+core::Json ping(const core::Json &args, const core::ToolContext &context, core::ToolStatus &status);
 
 }

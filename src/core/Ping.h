@@ -25,6 +25,6 @@ struct PingFacts {
 
 // ping は ping の結果を返す。引数を受けないので、args にキーがあれば invalid_args で失敗する
 // （通信規則「互換性」）。
-Json ping(const Json &args, const ToolContext &context, const PingFacts &facts, ToolError &error);
+Json ping(const Json &args, const ToolContext &context, const PingFacts &facts, ToolStatus &status);
 
 }
