@@ -444,9 +444,27 @@ TEST(BridgeSpoolDirOfModuleIsNextToTheModule) {
 #endif
 }
 
+// どのモジュールの中にも無い番地（スタック）には、モジュールのパスが無い。
+TEST(FilesModulePathOfAddressOutsideModules) {
+	int local = 0;
+	CHECK(!files::modulePathOf(&local));
+}
+
+#ifndef _WIN32
+// 相対パスはいまの作業ディレクトリの下にする（Linux の実行ファイルでは dladdr が argv[0] を返す）。
+TEST(FilesAbsoluteResolvesAgainstTheWorkingDirectory) {
+	CHECK_EQ(files::absolute("/a/b").value_or(""), std::string("/a/b"));
+	CHECK(!files::absolute(""));
+	std::string cwd = VwCli::test::utf8(std::filesystem::current_path());
+	CHECK_EQ(files::absolute("build/VwCliTests").value_or(""),
+	         files::join(cwd, "build/VwCliTests"));
+}
+#endif
+
 // テストでは、このコードを含むモジュールはテストの実行ファイルなので、そのフォルダの下になる。
 TEST(BridgeDefaultSpoolDirIsNextToTheModule) {
-	std::optional<std::string> module = files::modulePath();
+	static const char anchor = 0;
+	std::optional<std::string> module = files::modulePathOf(&anchor);
 	REQUIRE(module);
 	std::filesystem::path modulePath = std::filesystem::path(
 	    std::u8string(reinterpret_cast<const char8_t *>(module->data()), module->size()));

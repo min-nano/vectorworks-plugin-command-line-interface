@@ -151,14 +151,12 @@ std::string join(const std::string &dir, std::string_view name) {
 	return path;
 }
 
-std::optional<std::string> modulePath() {
-	// モジュールの中の番地なら何でもよいので、関数ではなく静的なデータの番地を渡す。参照の数は
-	// 変えない（留めるのは Clock.cpp の startClock の受け持ち）。
-	static const char anchor = 0;
+std::optional<std::string> modulePathOf(const void *address) {
+	// 参照の数は変えない（留めるのは Clock.cpp の startClock の受け持ち）。
 	HMODULE module = nullptr;
 	constexpr DWORD kFromAddress =
 	    GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT;
-	if (::GetModuleHandleExW(kFromAddress, reinterpret_cast<LPCWSTR>(&anchor), &module) == 0) {
+	if (::GetModuleHandleExW(kFromAddress, static_cast<LPCWSTR>(address), &module) == 0) {
 		return std::nullopt;
 	}
 	// パスの長さの上限（\\?\ のパスで 32767 文字）が収まる領域を 1 度で渡す。MAX_PATH を超える

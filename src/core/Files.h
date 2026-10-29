@@ -26,11 +26,19 @@ namespace VwCli::core::files {
 // join は dir と name を OS の区切りでつなぐ。
 std::string join(const std::string &dir, std::string_view name);
 
-// modulePath は、このコードを含むモジュール（プラグインでは cli.vlb か、cli.vwlibrary の中の
-// 実行ファイル。テストではテストの実行ファイル）のパスを返す（POSIX は dladdr、Windows は
-// GetModuleHandleExW と GetModuleFileNameW の返すパス。リンクは解かない。環境変数は読まない。
-// 通信規則「スプールの場所」）。求められなければ空。
-std::optional<std::string> modulePath();
+// modulePathOf は、address を含むモジュール（プラグインでは cli.vlb か、cli.vwlibrary の中の
+// 実行ファイル。テストではテストの実行ファイル）のパスを返す（POSIX は dladdr のパスを absolute で
+// 絶対パスにしたもの、Windows は GetModuleHandleExW と GetModuleFileNameW の返すパス。リンクは
+// 解かない。環境変数は読まない。通信規則「スプールの場所」）。address がどのモジュールの中にも
+// 無い・求められなければ空。
+std::optional<std::string> modulePathOf(const void *address);
+
+#ifndef _WIN32
+// absolute は path を絶対パスにする。/ で始まればそのまま、そうでなければいまの作業ディレクトリの
+// 下（Linux の実行ファイルでは dladdr が argv[0] を返し、相対パスのことがある。呼ぶ前に作業
+// ディレクトリを変えると誤る）。path が空・作業ディレクトリを求められなければ空。
+std::optional<std::string> absolute(const std::string &path);
+#endif
 
 // makeDirectories は path を作る（親も無ければ作る。POSIX は 0700）。既にあれば何もしない。
 // 持ち主と権限は確かめない。

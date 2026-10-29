@@ -22,7 +22,7 @@ namespace VwCli::core {
 // 区切りは / と、Windows では \ も。フォルダを求められない（区切りが無い）なら空。
 std::optional<std::string> spoolDirOf(const std::string &modulePath);
 
-// defaultSpoolDir は、このコードを含むモジュールの場所（files::modulePath）から spoolDirOf で
+// defaultSpoolDir は、このコードを含むモジュールの場所（files::modulePathOf）から spoolDirOf で
 // スプールの場所を求める。環境変数は読まない。求められなければ空。
 std::optional<std::string> defaultSpoolDir();
 

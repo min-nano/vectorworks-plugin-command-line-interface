@@ -58,7 +58,10 @@ std::optional<std::string> spoolDirOf(const std::string &modulePath) {
 }
 
 std::optional<std::string> defaultSpoolDir() {
-	std::optional<std::string> module = files::modulePath();
+	// モジュールの中の番地なら何でもよいので、関数ではなく静的なデータの番地を渡す（関数の
+	// ポインタを void * にするのは処理系に依る）。
+	static const char anchor = 0;
+	std::optional<std::string> module = files::modulePathOf(&anchor);
 	if (!module) {
 		return std::nullopt;
 	}

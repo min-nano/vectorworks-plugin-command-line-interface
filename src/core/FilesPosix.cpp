@@ -80,30 +80,31 @@ std::string join(const std::string &dir, std::string_view name) {
 	return path;
 }
 
-std::optional<std::string> modulePath() {
-	// モジュールの中の番地なら何でもよいので、関数ではなく静的なデータの番地を渡す（関数の
-	// ポインタを void * にするのは処理系に依る）。
-	static const char anchor = 0;
-	Dl_info info{};
-	if (::dladdr(&anchor, &info) == 0 || !info.dli_fname || info.dli_fname[0] == '\0') {
-		return std::nullopt;
-	}
+std::optional<std::string> modulePathOf(const void *address) {
 	// リンクは解かない。バンドル（cli.vwlibrary）だけをほかの場所へのリンクにしても、そのバンドルの
 	// あるフォルダ（<Plug-Ins>/cli）を指すため。呼ぶ側は実行ファイルのリンクを解くが、その親の bin
 	// と <Plug-Ins>/cli が実体なら、両側は同じフォルダにたどり着く（通信規則「スプールの場所」）。
-	std::string path(info.dli_fname);
-	if (path.front() == '/') {
+	Dl_info info{};
+	if (::dladdr(address, &info) == 0 || !info.dli_fname) {
+		return std::nullopt;
+	}
+	return absolute(info.dli_fname);
+}
+
+std::optional<std::string> absolute(const std::string &path) {
+	if (path.empty()) {
+		return std::nullopt;
+	}
+	if (path.starts_with('/')) {
 		return path;
 	}
-	// Linux の実行ファイル（テスト）では dladdr が argv[0] を返し、相対パスのことがある。いまの
-	// 作業ディレクトリで絶対パスにする（呼ぶ前に作業ディレクトリを変えると誤る）。
 	char *cwd = ::getcwd(nullptr, 0);
 	if (!cwd) {
 		return std::nullopt;
 	}
-	std::string absolute = join(cwd, path);
+	std::string full = join(cwd, path);
 	std::free(cwd);
-	return absolute;
+	return full;
 }
 
 bool makeDirectories(const std::string &path, std::string &error) {
