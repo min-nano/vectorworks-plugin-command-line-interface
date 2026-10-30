@@ -421,10 +421,11 @@ jobs:
           asset="$(jq -r --arg t "$TARGET" '.targets[$t].asset' "$RUNNER_TEMP/vw2026.json")"
           want="$(jq -r --arg t "$TARGET" '.targets[$t].sha256' "$RUNNER_TEMP/vw2026.json")"
           curl -fL --retry 4 --retry-delay 5 -o "$RUNNER_TEMP/release.zip" "$asset"
+          # 標準入力から読ませる（Windows の Git Bash の sha256sum は、パスに \ があると行の頭に \ を付ける）。
           if command -v sha256sum > /dev/null; then
-            got="$(sha256sum "$RUNNER_TEMP/release.zip" | cut -d' ' -f1)"
+            got="$(sha256sum < "$RUNNER_TEMP/release.zip" | cut -d' ' -f1)"
           else
-            got="$(shasum -a 256 "$RUNNER_TEMP/release.zip" | cut -d' ' -f1)"
+            got="$(shasum -a 256 < "$RUNNER_TEMP/release.zip" | cut -d' ' -f1)"
           fi
           test "$got" = "$want" || { echo "sha256 $got, the manifest says $want"; exit 1; }
           if [ "$LATEST" = true ]; then

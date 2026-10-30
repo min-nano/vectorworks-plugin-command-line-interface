@@ -75,9 +75,12 @@
 		# The CLI of latest goes on from the hook of the stopped uninstall.
 		$tag = 'latest'
 	}
-	elseif (-not $tag) {
-		$tag = 'latest'
-		$argv += 'cli@latest'
+	else {
+		if (-not $tag) {
+			$tag = 'latest'
+			$argv += 'cli@latest'
+		}
+		$argv = @('install') + $argv
 	}
 
 	# The target is windows-x64 (Vectorworks runs as x64 on Windows on ARM too). The URL has the

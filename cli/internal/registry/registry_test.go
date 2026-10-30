@@ -189,3 +189,16 @@ func TestScript(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckRelative(t *testing.T) {
+	for _, path := range []string{"a", "a/b", "a/.b", "a..b"} {
+		if err := CheckRelative(path); err != nil {
+			t.Errorf("%q: %v", path, err)
+		}
+	}
+	for _, path := range []string{"", "-a", `a\b`, "/a", "../a", "a/../../b", "a/.."} {
+		if err := CheckRelative(path); err == nil {
+			t.Errorf("%q should be refused", path)
+		}
+	}
+}

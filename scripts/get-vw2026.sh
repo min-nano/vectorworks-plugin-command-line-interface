@@ -70,9 +70,12 @@ main() {
 		[ "$positional" -eq 2 ] || fail "only \"uninstall cli\" is accepted"
 		# 一時フォルダの CLI は latest のもの（手順 4 から続ける）。
 		tag=latest
-	elif [ -z "$tag" ]; then
-		tag=latest
-		set -- "$@" cli@latest
+	else
+		if [ -z "$tag" ]; then
+			tag=latest
+			set -- "$@" cli@latest
+		fi
+		set -- install "$@"
 	fi
 
 	# ターゲットは計算機で決める（Rosetta の下の端末でも、Vectorworks は arm64 で動く。
