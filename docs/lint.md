@@ -23,6 +23,11 @@
 | C++ | clang-tidy（SDK に依らない部分。`.clang-tidy` で既定の `clang-analyzer` に `bugprone` を足すだけにし、指摘は失敗にする。CMake が書き出すコンパイルの指定（`build/lint/compile_commands.json`。プラグインを外して `-DVW_BUILD_PLUGIN=OFF` で構成する）に載るファイルを検査するので、Windows の実装（`FilesWindows.cpp`）と SDK に依るファイル（`src/*.cpp`・`src/tools/*`）は検査しない） | `tools/requirements.txt`（clang-format と同じ版。`lint.sh` は PATH の版が違えば止める） | いま |
 | PowerShell | PSScriptAnalyzer（既定の規則と、整形の規則。設定は `PSScriptAnalyzerSettings.psd1`） | `scripts/powershell.ps1` の `$version` | いま |
 
+PSScriptAnalyzer は、同じファイルでもときどき解析器の中の `NullReferenceException` で落ちます（指摘ではなく、
+走らせ直すと通る。[PSScriptAnalyzer #1351](https://github.com/PowerShell/PSScriptAnalyzer/issues/1351)）。
+`scripts/powershell.ps1` の `-Mode Lint` は、その失敗だけを、どのファイルで何が落ちたかを標準エラーに書いてから
+3 回まで走らせ直します。指摘は走らせ直しません。
+
 依存を足すときの `govulncheck` は `CLAUDE.md` の手順で行い、ここには入れません（依存を足すときだけ
 実行すればよいため）。
 

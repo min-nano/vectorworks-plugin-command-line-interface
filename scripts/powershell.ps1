@@ -44,10 +44,33 @@ $settings = Join-Path (Split-Path $PSScriptRoot) 'PSScriptAnalyzerSettings.psd1'
 # 書き戻すときは BOM を付ける（.editorconfig）。
 $utf8 = [System.Text.UTF8Encoding]::new($true)
 
+# Invoke-Analyzer は 1 つのファイルを検査する。Invoke-ScriptAnalyzer は、同じファイルでもときどき解析器の
+# 中の NullReferenceException で落ちる（指摘ではなく、走らせ直すと通る。PSScriptAnalyzer #1351）。その失敗
+# だけを、どのファイルで何が落ちたかを標準エラーに書いてから、3 回まで走らせ直す。指摘は走らせ直さない。
+#
+# try / catch は 1 行に書く（整形の規則 PSPlaceCloseBrace が } と catch の間で改行するため。1 行の
+# ブロックは規則が見ない）。
+function Invoke-Analyzer {
+	param([string] $File)
+	for ($attempt = 1; ; $attempt++) {
+		try { return Invoke-ScriptAnalyzer -Path $File -Settings $settings } catch { Resolve-AnalyzerCrash $File $attempt $_ }
+	}
+}
+
+# Resolve-AnalyzerCrash は、解析器の NullReferenceException なら理由と場所を書いて戻り（走らせ直す）、
+# それ以外か 3 回目なら投げ直す。
+function Resolve-AnalyzerCrash {
+	param([string] $File, [int] $Attempt, [System.Management.Automation.ErrorRecord] $ErrorRecord)
+	if ($Attempt -ge 3 -or $ErrorRecord.Exception.Message -notlike '*Object reference not set*') {
+		throw $ErrorRecord
+	}
+	[Console]::Error.WriteLine(('{0}: PSScriptAnalyzer crashed; running it again: {1}' -f $File, $ErrorRecord.Exception))
+}
+
 $status = 0
 foreach ($file in $Path) {
 	if ($Mode -eq 'Lint') {
-		$found = Invoke-ScriptAnalyzer -Path $file -Settings $settings
+		$found = Invoke-Analyzer $file
 		if ($found) {
 			$found | ForEach-Object {
 				'{0}:{1}:{2}: {3}: {4}' -f $file, $_.Line, $_.Column, $_.RuleName, $_.Message
