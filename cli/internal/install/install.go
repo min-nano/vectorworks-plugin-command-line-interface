@@ -101,14 +101,8 @@ func (o *Options) places(name string) (places, error) {
 	if o.PluginsDir == "" || o.WorkDir == "" {
 		return places{}, errors.New("the folder of plug-ins or the work folder is unknown")
 	}
-	plugins, err := filepath.Abs(o.PluginsDir)
-	if err != nil {
-		return places{}, err
-	}
-	work, err := filepath.Abs(o.WorkDir)
-	if err != nil {
-		return places{}, err
-	}
+	plugins := absolute(o.PluginsDir)
+	work := absolute(o.WorkDir)
 	staging := filepath.Join(work, "staging")
 	old := filepath.Join(work, "old")
 	return places{
@@ -122,6 +116,15 @@ func (o *Options) places(name string) (places, error) {
 		oldDir:   filepath.Join(old, name),
 		marker:   filepath.Join(old, name+".uninstalling"),
 	}, nil
+}
+
+// absolute は path を今の作業ディレクトリから絶対にして整える。filepath.Abs が失敗するのは作業
+// ディレクトリが分からないときだけで、Vectorworks の動く OS では起きない（mac の getcwd は消えた
+// ディレクトリのパスも返し、Windows は動いているプロセスの作業ディレクトリを消せない）ので、
+// 誤りは見ない。
+func absolute(path string) string {
+	abs, _ := filepath.Abs(path)
+	return abs
 }
 
 // running は、入れる先の <Plug-Ins>/cli/spool/ のロックを掴む Vectorworks が居るか

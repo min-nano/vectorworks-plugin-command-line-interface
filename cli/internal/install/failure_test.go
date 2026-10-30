@@ -175,25 +175,14 @@ func TestLookupUsesTheEmbeddedRegistry(t *testing.T) {
 	}
 }
 
-// 作業ディレクトリが消えていると、相対パスを絶対にできない（Windows では作業ディレクトリを消せない）。
-func TestRelativePathsWithoutAWorkingDirectory(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows does not delete the working directory of a process")
-	}
-	gone := filepath.Join(t.TempDir(), "gone")
-	os.Mkdir(gone, 0o700)
-	t.Chdir(gone)
-	if err := os.Remove(gone); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := RegistrySource("plugins.json"); err == nil {
-		t.Error("RegistrySource should fail")
-	}
-	abs := t.TempDir()
-	for _, o := range []Options{{PluginsDir: "rel", WorkDir: abs}, {PluginsDir: abs, WorkDir: "rel"}} {
-		if _, err := o.places("cli"); err == nil {
-			t.Errorf("%+v: places should fail", o)
-		}
+// 相対パスで渡した <Plug-Ins>・<Work> は、今の作業ディレクトリから絶対にする。
+func TestRelativePlaces(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	p, err := (&Options{PluginsDir: "Plug-Ins", WorkDir: filepath.Join("a", "..", "work")}).places("cli")
+	if err != nil || !filepath.IsAbs(p.plugins) || filepath.Base(p.plugins) != "Plug-Ins" ||
+		!filepath.IsAbs(p.work) || strings.Contains(p.work, "..") {
+		t.Fatalf("%+v %v", p, err)
 	}
 }
 

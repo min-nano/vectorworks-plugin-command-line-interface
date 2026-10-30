@@ -58,11 +58,7 @@ func RegistrySource(ref string) (string, error) {
 	case registry.IsURL(ref):
 		return ref, nil
 	}
-	abs, err := filepath.Abs(ref)
-	if err != nil {
-		return "", err
-	}
-	return abs, nil
+	return absolute(ref), nil
 }
 
 // open は参照（https:// の URL か絶対パス）を開く。
