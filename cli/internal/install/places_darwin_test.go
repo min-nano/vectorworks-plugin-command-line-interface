@@ -30,3 +30,13 @@ func TestPlacesWhenTheOSDoesNotAnswer(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// mac は計算機の種類で決め、プロセスの種類では決めない（universal の CLI が Rosetta の下で x86_64 として
+// 動いても、Vectorworks は arm64 で動く）。
+func TestTargetFollowsTheMachine(t *testing.T) {
+	for arm64, want := range map[bool]string{true: "macos-arm64", false: "macos-x64"} {
+		if got, err := targetOf(func() bool { return arm64 }); err != nil || got != want {
+			t.Errorf("arm64 %v: %q %v", arm64, got, err)
+		}
+	}
+}

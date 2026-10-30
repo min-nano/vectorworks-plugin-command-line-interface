@@ -25,5 +25,5 @@ func DefaultPluginsDir() (string, error) {
 
 // Target は計算機からターゲットを 1 つに決める（docs/registry.md「名前・タグ・ターゲット」）。
 func Target() (string, error) {
-	return target(machineIsArm64)
+	return target()
 }

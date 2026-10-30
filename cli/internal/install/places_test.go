@@ -8,19 +8,11 @@ import (
 	"testing"
 )
 
-// mac は計算機の種類で決め、プロセスの種類では決めない（universal の CLI が Rosetta の下で x86_64 として
-// 動いても、Vectorworks は arm64 で動く）。Windows は windows-x64 だけ。
-func TestTargetFollowsTheMachine(t *testing.T) {
-	for arm64, want := range map[bool]string{true: "macos-arm64", false: "macos-x64"} {
-		if runtime.GOOS == "windows" {
-			want = "windows-x64"
-		}
-		if got, err := target(func() bool { return arm64 }); err != nil || got != want {
-			t.Errorf("arm64 %v: %q %v", arm64, got, err)
-		}
-	}
-	if _, err := Target(); err != nil {
-		t.Fatal(err)
+// Windows は windows-x64 だけ（Windows on ARM でも Vectorworks は x64 で動く）。mac は places_darwin_test.go。
+func TestTarget(t *testing.T) {
+	got, err := Target()
+	if err != nil || (runtime.GOOS == "windows" && got != "windows-x64") {
+		t.Fatalf("%q %v", got, err)
 	}
 }
 

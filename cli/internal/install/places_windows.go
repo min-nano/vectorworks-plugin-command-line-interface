@@ -41,11 +41,7 @@ func defaultPluginsDir() (string, error) {
 	return knownFolder(&folderRoamingAppData, "Nemetschek", "Vectorworks", "2026", "Plug-Ins")
 }
 
-func machineIsArm64() bool {
-	return false
-}
-
 // target は windows-x64 だけ（Windows on ARM でも Vectorworks は x64 のエミュレーションで動く）。
-func target(func() bool) (string, error) {
+func target() (string, error) {
 	return "windows-x64", nil
 }

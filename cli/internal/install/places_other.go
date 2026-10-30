@@ -18,10 +18,6 @@ func defaultPluginsDir() (string, error) {
 	return "", errUnsupported
 }
 
-func machineIsArm64() bool {
-	return false
-}
-
-func target(func() bool) (string, error) {
+func target() (string, error) {
 	return "", errUnsupported
 }

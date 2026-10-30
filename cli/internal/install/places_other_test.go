@@ -15,7 +15,7 @@ func TestPlacesOnAnotherOS(t *testing.T) {
 	if _, err := DefaultPluginsDir(); !errors.Is(err, errUnsupported) {
 		t.Error(err)
 	}
-	if _, err := Target(); !errors.Is(err, errUnsupported) || machineIsArm64() {
+	if _, err := Target(); !errors.Is(err, errUnsupported) {
 		t.Error(err)
 	}
 }
