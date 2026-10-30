@@ -360,8 +360,19 @@ jobs:
           gh release create "$TAG" dist/vw2026.json dist/cli-macos-arm64.zip dist/cli-windows-x64.zip \
             dist/get-vw2026.sh dist/get-vw2026.ps1 \
             --draft --target "$SHA" --title "$TITLE" --notes "Built from $SHA." "${kind[@]}"
-          id="$(gh api --paginate "$api/releases?per_page=100" |
-            jq -s -r --arg tag "$TAG" 'add | map(select(.draft and .tag_name == $tag)) | .[0].id')"
+          # 作ったばかりの下書きは、一覧に載るまで少しかかることがある（載る前に引くと id が無く、公開が
+          # 404 になる）。載るまで引き直し、載らなければ失敗にする。
+          id=""
+          for _ in $(seq 10); do
+            id="$(gh api --paginate "$api/releases?per_page=100" |
+              jq -s -r --arg tag "$TAG" 'add | map(select(.draft and .tag_name == $tag)) | .[0].id // empty')"
+            [ -n "$id" ] && break
+            sleep 3
+          done
+          if [ -z "$id" ]; then
+            echo "::error::the draft of $TAG does not appear in the list of releases"
+            exit 1
+          fi
           # latest にするのは、ビルドしたコミットが公開する時点の main の先頭のときだけ（失敗した古い
           # push を後から実行し直したときに、latest が古いコミットへ戻らないため）。
           latest=false
