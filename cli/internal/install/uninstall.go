@@ -54,14 +54,14 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 			}
 			return nil, fmt.Errorf("%s is not a plug-in that vw2026 installed (%s); nothing is removed", p.dest, reason)
 		}
-		if err := os.MkdirAll(p.old, 0o700); err != nil {
+		if err := mkdirAll(p.old, 0o700); err != nil {
 			return nil, err
 		}
 		if err := removeLeftover(p, name); err != nil {
 			return nil, err
 		}
 		// 印を書いてからフォルダを移す（移したあとで止まっても、次の uninstall が続きから走れる）。
-		if err := os.WriteFile(p.marker, nil, 0o600); err != nil {
+		if err := writeFile(p.marker, nil, 0o600); err != nil {
 			return nil, err
 		}
 		moved, err = o.sidestep(p.dest, p.old)
@@ -77,12 +77,10 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	case exists(p.oldDir):
 		// 前の uninstall が、フォルダを移したあとで止まった。印が無ければ、install が付け替えの
 		// 途中で止まったのと見分けられない（old が唯一の版かもしれない）。
-		if !exists(p.marker) || !validRecord(p.oldDir, name) {
+		record, err = readRecord(p.oldDir)
+		if !exists(p.marker) || err != nil || record.Name != name || !record.moduleExists(p.oldDir) {
 			return nil, fmt.Errorf("%s was left by an install or uninstall that stopped halfway, and %s is not there; "+
 				"it may be the only copy of %s. Move it back to %s or delete it", p.oldDir, p.dest, name, p.dest)
-		}
-		if record, err = readRecord(p.oldDir); err != nil {
-			return nil, err
 		}
 		resumed = true
 	default:
@@ -105,7 +103,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		_ = os.Remove(p.marker)
 		return nil, fmt.Errorf("%w; %s is put back", err, p.dest)
 	}
-	if err := os.RemoveAll(p.oldDir); err != nil {
+	if err := removeAll(p.oldDir); err != nil {
 		return nil, fmt.Errorf("%s is out of the folder of plug-ins, but %s cannot be deleted (%v); run uninstall again",
 			name, p.oldDir, err)
 	}
@@ -125,22 +123,14 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 }
 
 // removeEmptyWork は、<Work> に staging / old の空のディレクトリしか無ければ、<Work> ごと消す。
+// staging / old は空のディレクトリのときだけ消し、<Work> は空になったときだけ消える（os.Remove は
+// 空でないディレクトリを消さない）。
 func removeEmptyWork(p places) {
-	entries, err := os.ReadDir(p.work)
-	if err != nil {
-		return
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() || (entry.Name() != "staging" && entry.Name() != "old") {
-			return
-		}
-		inside, err := os.ReadDir(filepath.Join(p.work, entry.Name()))
-		if err != nil || len(inside) > 0 {
-			return
+	for _, dir := range []string{p.staging, p.old} {
+		if entries, err := os.ReadDir(dir); err == nil && len(entries) == 0 {
+			_ = os.Remove(dir)
 		}
 	}
-	_ = os.Remove(p.staging)
-	_ = os.Remove(p.old)
 	_ = os.Remove(p.work)
 }
 

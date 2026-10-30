@@ -68,10 +68,8 @@ func (o *Options) interpreter(name string) ([]string, error) {
 // scriptIn は、フックが指す zip の中のファイルが、展開したフォルダの中に実在するファイルかを
 // 確かめ、そのパスを返す。
 func scriptIn(dir string, argv []string) (string, error) {
-	script, err := registry.Script(argv)
-	if err != nil {
-		return "", err
-	}
+	// 書き方は、マニフェストと記録を読むときに Hooks.Check が確かめている。
+	script, _ := registry.Script(argv)
 	path := filepath.Join(dir, filepath.FromSlash(script))
 	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() {
@@ -135,17 +133,10 @@ func hookOutput(data []byte) (json.RawMessage, error) {
 	if data[0] != '{' {
 		return nil, errors.New("something other than a JSON object")
 	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	var object json.RawMessage
-	if err := decoder.Decode(&object); err != nil {
-		return nil, fmt.Errorf("broken JSON: %v", err)
-	}
-	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
-		return nil, errors.New("more than one JSON value")
-	}
+	// Compact は構文を確かめ、値が 2 つ以上あっても断る。
 	var compact bytes.Buffer
-	if err := json.Compact(&compact, object); err != nil {
-		return nil, err
+	if err := json.Compact(&compact, data); err != nil {
+		return nil, fmt.Errorf("broken JSON: %v", err)
 	}
 	return compact.Bytes(), nil
 }

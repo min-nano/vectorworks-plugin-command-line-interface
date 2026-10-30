@@ -23,10 +23,7 @@ const maxDocument = 1 << 20
 func (o *Options) lookup(name string) (registry.Entry, string, error) {
 	def := o.Default
 	if def == nil {
-		var err error
-		if def, err = registry.Default(); err != nil {
-			return registry.Entry{}, "", fmt.Errorf("the default registry: %w", err)
-		}
+		def = registry.Default()
 	}
 	if entry, ok := def.Plugins[name]; ok {
 		return entry, registry.DefaultName, nil
@@ -82,13 +79,9 @@ func (o *Options) open(ref string) (io.ReadCloser, error) {
 	}
 	// 転送（releases/latest/download/… など）は追うが、行き先も https:// に限る。
 	safe := *client
-	next := client.CheckRedirect
 	safe.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if req.URL.Scheme != "https" {
 			return fmt.Errorf("redirected to %s, which is not https://", req.URL.Redacted())
-		}
-		if next != nil {
-			return next(req, via)
 		}
 		if len(via) >= 10 {
 			return errors.New("stopped after 10 redirects")
@@ -130,7 +123,7 @@ func (o *Options) download(ref, path, want string) error {
 		return err
 	}
 	defer body.Close()
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	file, err := openFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}

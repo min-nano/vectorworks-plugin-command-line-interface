@@ -80,10 +80,11 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 	if err := o.download(asset.URL, p.stageZip, asset.SHA256); err != nil {
 		return nil, err
 	}
-	if err := extract(p.stageZip, p.stageDir); err != nil {
+	top, err := extract(p.stageZip, p.stageDir)
+	if err != nil {
 		return nil, fmt.Errorf("%s: %w", asset.URL, err)
 	}
-	module, err := findModule(p.stageDir, o.Target)
+	module, err := findModule(top, o.Target)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", asset.URL, err)
 	}
@@ -104,11 +105,9 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 		Module:        module,
 		Hooks:         asset.Hooks,
 	}
-	data, err := json.MarshalIndent(record, "", "\t")
-	if err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(filepath.Join(p.stageDir, RecordFile), append(data, '\n'), 0o644); err != nil {
+	// 文字列と文字列の配列だけの構造体なので、失敗しない。
+	data, _ := json.MarshalIndent(record, "", "\t")
+	if err := writeFile(filepath.Join(p.stageDir, RecordFile), append(data, '\n'), 0o644); err != nil {
 		return nil, err
 	}
 	return record, nil
@@ -118,21 +117,30 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 // シンボリックリンク・\ を区切りに使った項目は断る。権限（実行ビット）は保ち、ファイルの時刻は
 // 展開した時刻のままにする（古い時刻を付けると、付け替えの前に OS の一時フォルダの片付けで消され
 // うるため）。
-func extract(zipPath, dir string) error {
+//
+// 直下の項目の名前（モジュールを探すため）を返す。
+func extract(zipPath, dir string) ([]string, error) {
 	reader, err := zip.OpenReader(zipPath)
 	if err != nil {
-		return fmt.Errorf("not a zip: %w", err)
+		return nil, fmt.Errorf("not a zip: %w", err)
 	}
 	defer reader.Close()
-	if err := os.Mkdir(dir, 0o755); err != nil {
-		return err
+	if err := mkdirAll(dir, 0o755); err != nil {
+		return nil, err
 	}
+	seen := map[string]bool{}
+	var top []string
 	for _, file := range reader.File {
 		if err := extractFile(file, dir); err != nil {
-			return err
+			return nil, err
+		}
+		name, _, _ := strings.Cut(file.Name, "/")
+		if !seen[name] {
+			seen[name] = true
+			top = append(top, name)
 		}
 	}
-	return nil
+	return top, nil
 }
 
 func extractFile(file *zip.File, dir string) error {
@@ -154,11 +162,11 @@ func extractFile(file *zip.File, dir string) error {
 	case mode&os.ModeSymlink != 0:
 		return fmt.Errorf("the entry %q is a symbolic link", file.Name)
 	case mode.IsDir():
-		return os.MkdirAll(path, 0o755)
+		return mkdirAll(path, 0o755)
 	case !mode.IsRegular():
 		return fmt.Errorf("the entry %q is not a file", file.Name)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := mkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	// 持ち主が読み書きできるようにして、ほかの権限（実行ビット）は zip のまま保つ。
@@ -169,7 +177,7 @@ func extractFile(file *zip.File, dir string) error {
 	}
 	defer in.Close()
 	// O_EXCL で、同じ名前の項目が 2 つあれば断る。
-	out, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+	out, err := openFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
 	if err != nil {
 		return fmt.Errorf("the entry %q: %w", file.Name, err)
 	}
@@ -180,21 +188,17 @@ func extractFile(file *zip.File, dir string) error {
 	return err
 }
 
-// findModule は直下のモジュール（mac は *.vwlibrary、Windows は *.vlb）がちょうど 1 つあることを
-// 確かめ、その名前を返す。
-func findModule(dir, target string) (string, error) {
+// findModule は、直下の項目の名前 top のうちモジュール（mac は *.vwlibrary、Windows は *.vlb）が
+// ちょうど 1 つあることを確かめ、その名前を返す。
+func findModule(top []string, target string) (string, error) {
 	ext := ".vlb"
 	if strings.HasPrefix(target, "macos-") {
 		ext = ".vwlibrary"
 	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return "", err
-	}
 	var found []string
-	for _, entry := range entries {
-		if strings.EqualFold(filepath.Ext(entry.Name()), ext) {
-			found = append(found, entry.Name())
+	for _, name := range top {
+		if strings.EqualFold(filepath.Ext(name), ext) {
+			found = append(found, name)
 		}
 	}
 	switch len(found) {

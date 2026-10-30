@@ -148,18 +148,18 @@ func TestExtractRefuses(t *testing.T) {
 	dir := t.TempDir()
 	notZip := filepath.Join(dir, "x.zip")
 	os.WriteFile(notZip, []byte("not a zip"), 0o644)
-	if err := extract(notZip, filepath.Join(dir, "out")); err == nil {
+	if _, err := extract(notZip, filepath.Join(dir, "out")); err == nil {
 		t.Fatal("should refuse something that is not a zip")
 	}
 	device := filepath.Join(dir, "device.zip")
 	os.WriteFile(device, makeZip(t, []entry{{name: "dev", mode: os.ModeDevice | 0o644}}), 0o644)
-	if err := extract(device, filepath.Join(dir, "out2")); err == nil || !strings.Contains(err.Error(), "not a file") {
+	if _, err := extract(device, filepath.Join(dir, "out2")); err == nil || !strings.Contains(err.Error(), "not a file") {
 		t.Fatal(err)
 	}
 	// 項目の中のディレクトリは作る。
 	folders := filepath.Join(dir, "folders.zip")
 	os.WriteFile(folders, makeZip(t, []entry{{name: "a/", mode: os.ModeDir | 0o755}, {name: "a/b/c", body: "c"}}), 0o644)
-	if err := extract(folders, filepath.Join(dir, "out3")); err != nil || !exist(filepath.Join(dir, "out3", "a", "b", "c")) {
+	if _, err := extract(folders, filepath.Join(dir, "out3")); err != nil || !exist(filepath.Join(dir, "out3", "a", "b", "c")) {
 		t.Fatal(err)
 	}
 }

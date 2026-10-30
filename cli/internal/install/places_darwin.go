@@ -11,7 +11,7 @@ import (
 // userTempDir は利用者ごとの一時フォルダ（confstr(_CS_DARWIN_USER_TEMP_DIR)）。cgo を使わないので
 // getconf を走らせる。環境変数 TMPDIR は読まない。
 func userTempDir() (string, error) {
-	out, err := exec.Command("/usr/bin/getconf", "DARWIN_USER_TEMP_DIR").Output()
+	out, err := getconf()
 	if err != nil {
 		return "", err
 	}
@@ -25,7 +25,7 @@ func userTempDir() (string, error) {
 // defaultPluginsDir はホームの Library/Application Support の下。ホームは利用者の passwd の項目から
 // 求める（環境変数 HOME は読まない）。
 func defaultPluginsDir() (string, error) {
-	current, err := user.Current()
+	current, err := currentUser()
 	if err != nil {
 		return "", err
 	}
@@ -42,6 +42,14 @@ func machineIsArm64() bool {
 	out, err := exec.Command("/usr/sbin/sysctl", "-n", "hw.optional.arm64").Output()
 	return err == nil && strings.TrimSpace(string(out)) == "1"
 }
+
+// getconf と currentUser は、OS が答えられないときを確かめるテストが差し替える。
+var (
+	getconf = func() ([]byte, error) {
+		return exec.Command("/usr/bin/getconf", "DARWIN_USER_TEMP_DIR").Output()
+	}
+	currentUser = user.Current
+)
 
 func target(isArm64 func() bool) (string, error) {
 	if isArm64() {

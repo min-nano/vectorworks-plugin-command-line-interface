@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 // oldCLIPrefixes は、よけた CLI の名前の頭（<Work>/old/ の直下の vw2026.old-* / vw2026.exe.old-*）。
@@ -41,10 +42,8 @@ func (o *Options) sidestep(dir, old string) (*movedCLI, error) {
 	if !ok {
 		return nil, nil
 	}
-	if err := os.MkdirAll(old, 0o700); err != nil {
-		return nil, err
-	}
-	to := filepath.Join(old, filepath.Base(executable)+".old-"+o.now().UTC().Format("20060102T150405.000000000"))
+	// old は呼ぶ側（replace・Uninstall）が先に作っている。
+	to := filepath.Join(old, filepath.Base(executable)+".old-"+time.Now().UTC().Format("20060102T150405.000000000"))
 	if err := rename(executable, to); err != nil {
 		return nil, err
 	}
@@ -76,10 +75,8 @@ func within(path, dir string) (string, bool) {
 // cleanOldCLIs は <Work>/old/ の直下のよけた CLI（ファイルだけ）を消してみて、消せなかったものを
 // 返す（Windows では動いている実行ファイルを消せない）。ほかのものは消さない。
 func cleanOldCLIs(old string) []string {
-	entries, err := os.ReadDir(old)
-	if err != nil {
-		return nil
-	}
+	// 読めなければ（無ければ）消すものも無い。
+	entries, _ := os.ReadDir(old)
 	var left []string
 	for _, entry := range entries {
 		if !entry.Type().IsRegular() || !hasOldCLIPrefix(entry.Name()) {
@@ -103,8 +100,13 @@ func hasOldCLIPrefix(name string) bool {
 	return false
 }
 
-// rename と removeFile は、付け替えと後始末の失敗を確かめるテストが差し替える。
+// ファイルの操作のうち、OS の失敗（権限・ディスクの誤り）でしか失敗しないものは、テストが差し替えて
+// 失敗させる（失敗したときに <Plug-Ins> を元に戻すことを確かめるため）。
 var (
 	rename     = os.Rename
 	removeFile = os.Remove
+	removeAll  = os.RemoveAll
+	mkdirAll   = os.MkdirAll
+	writeFile  = os.WriteFile
+	openFile   = os.OpenFile
 )

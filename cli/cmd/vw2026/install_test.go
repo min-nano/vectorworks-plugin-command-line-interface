@@ -111,6 +111,10 @@ func TestDeployPlacesNotLocated(t *testing.T) {
 		t.Fatalf("%d %s", code, stderr.String())
 	}
 	stderr.Reset()
+	if code := run([]string{"install", "cli@latest"}, e); code != exitFailure || !strings.Contains(stderr.String(), "give --plugins-dir") {
+		t.Fatalf("%d %s", code, stderr.String())
+	}
+	stderr.Reset()
 	if code := run([]string{"uninstall", "cli", "--plugins-dir", t.TempDir()}, e); code != exitFailure ||
 		!strings.Contains(stderr.String(), "work folder") {
 		t.Fatalf("%d %s", code, stderr.String())

@@ -8,10 +8,7 @@ import (
 // 既定のレジストリは CLI に埋め込むので、読めなければ install cli が動かない。cli の規則は
 // latest を決まった場所で、それ以外をタグで指す（docs/registry.md「レジストリ」）。
 func TestDefaultRegistry(t *testing.T) {
-	def, err := Default()
-	if err != nil {
-		t.Fatal(err)
-	}
+	def := Default()
 	cli, ok := def.Plugins["cli"]
 	if !ok || len(def.Plugins) != 1 {
 		t.Fatalf("plugins: %v", def.Plugins)
@@ -200,5 +197,19 @@ func TestCheckRelative(t *testing.T) {
 		if err := CheckRelative(path); err == nil {
 			t.Errorf("%q should be refused", path)
 		}
+	}
+}
+
+// 間の部分が見つからなければ合わない。手元のレジストリでも相対パスは断る。読めないマニフェストは断る。
+func TestRegistryEdges(t *testing.T) {
+	if Match("a*b*c", "a-x-c") {
+		t.Error("a*b*c should not match a-x-c")
+	}
+	relative := `{"registry_version":1,"plugins":{"a":{"manifests":[{"match":"*","path":"x/{tag}.json"}]}}}`
+	if _, err := Parse([]byte(relative), false); err == nil {
+		t.Error("a relative path should be refused in a local registry too")
+	}
+	if _, err := ParseManifest([]byte("{"), false); err == nil {
+		t.Error("a broken manifest should be refused")
 	}
 }

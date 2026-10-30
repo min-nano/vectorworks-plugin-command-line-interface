@@ -69,6 +69,10 @@
 - **偽のフックはテストの実行ファイルそのもの**（`TestHookHelper`）を `Options.Interpreters` で `sh` の代わりに
   走らせる。`sh` の無い Windows でも同じテストを走らせるため。`-race` の子のプロセスが終わる前に待たない
   よう、テストは `GORACE=atexit_sleep_ms=0` を渡す（[インストール「テスト」](install-and-update.md#テスト)）。
+- **`install` / `uninstall` のコードは、どの分岐もテストで通す。** 起こせる失敗はそのまま起こし、OS の失敗でしか
+  起きないものはファイルの操作を差し替えて起こし、到達できない分岐は書かない（[インストール「テスト」](install-and-update.md#テスト)）。
+  テストから通せないのは、`main()` と、走らせる OS でしか通らない分岐（`places_*.go`・`powershell` のフック）だけで、
+  後者は macOS と Windows の `go.yml` で通る。
 - **`<Plug-Ins>` そのものが無ければ作る**（Vectorworks を一度も起動していない利用者・CI のランナー）。
 - **`get-vw2026.ps1` は ASCII だけで書き、BOM を除いて上げ、`exit` を呼ばない**（`irm … | iex` で読み崩れず、
   利用者の PowerShell を閉じないため。[インストール「初回のスクリプト」](install-and-update.md#初回のスクリプトget-vw2026sh--ps1)）。

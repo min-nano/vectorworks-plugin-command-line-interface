@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
@@ -71,8 +70,6 @@ type Options struct {
 	// フックの 1 つ目（sh・powershell）を走らせる argv の頭。nil なら OS の決まったもの。テストが
 	// 差し替える（sh の無い Windows でも同じフックを走らせるため）。
 	Interpreters map[string][]string
-	// 時刻（よけた CLI の名前）。nil なら time.Now
-	Now func() time.Time
 }
 
 // InstallResult は install の出力。
@@ -85,13 +82,6 @@ type InstallResult struct {
 	Registry   string          `json:"registry,omitempty"`
 	PluginsDir string          `json:"plugins_dir,omitempty"`
 	Hook       json.RawMessage `json:"hook,omitempty"`
-}
-
-func (o *Options) now() time.Time {
-	if o.Now == nil {
-		return time.Now()
-	}
-	return o.Now()
 }
 
 // places は、Options の場所から決まるパス。
@@ -303,7 +293,7 @@ func inspect(dest, name, source string) (*Record, error) {
 // （docs/plugin/install-and-update.md「入れ替えの手順」）。失敗したら <Plug-Ins> を元に戻す。
 func (o *Options) replace(p places, name, source, tag, previous string, asset registry.Asset) (json.RawMessage, error) {
 	for _, dir := range []string{p.staging, p.old} {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
+		if err := mkdirAll(dir, 0o700); err != nil {
 			return nil, err
 		}
 	}
@@ -341,7 +331,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 			return nil, renameError(p.dest, err)
 		}
 	}
-	if err := os.MkdirAll(p.plugins, 0o755); err != nil {
+	if err := mkdirAll(p.plugins, 0o755); err != nil {
 		return nil, o.undoSwap(p, hadOld, moved, err)
 	}
 	if err := rename(p.stageDir, p.dest); err != nil {
@@ -405,7 +395,7 @@ func (o *Options) undoHook(p places, hadOld bool, moved *movedCLI, cause error) 
 
 // removeStaging は組み立ての場所（<Work>/staging/<name>/ と <name>.zip）を消す。
 func removeStaging(p places) error {
-	if err := os.RemoveAll(p.stageDir); err != nil {
+	if err := removeAll(p.stageDir); err != nil {
 		return err
 	}
 	if err := os.Remove(p.stageZip); err != nil && !errors.Is(err, os.ErrNotExist) {

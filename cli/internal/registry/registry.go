@@ -29,9 +29,11 @@ const TagPlaceholder = "{tag}"
 //go:embed default.json
 var defaultJSON []byte
 
-// Default は既定のレジストリを返す。
-func Default() (*Registry, error) {
-	return Parse(defaultJSON, false)
+// Default は既定のレジストリを返す。埋め込んだものは TestDefaultRegistry が読めることを確かめるので、
+// 誤りは返さない（読めないのはビルドの誤りで、実行時には起きない）。
+func Default() *Registry {
+	registry, _ := Parse(defaultJSON, false)
+	return registry
 }
 
 var (
