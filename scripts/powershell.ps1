@@ -53,7 +53,7 @@ $utf8 = [System.Text.UTF8Encoding]::new($true)
 function Invoke-Analyzer {
 	param([string] $File)
 	for ($attempt = 1; ; $attempt++) {
-		try { return Invoke-ScriptAnalyzer -Path $File -Settings $settings } catch { Resolve-AnalyzerCrash $File $attempt $_ }
+		try { return Invoke-ScriptAnalyzer -Path $File -Settings $settings } catch { Resolve-AnalyzerCrash -File $File -Attempt $attempt -ErrorRecord $_ }
 	}
 }
 
@@ -70,7 +70,7 @@ function Resolve-AnalyzerCrash {
 $status = 0
 foreach ($file in $Path) {
 	if ($Mode -eq 'Lint') {
-		$found = Invoke-Analyzer $file
+		$found = Invoke-Analyzer -File $file
 		if ($found) {
 			$found | ForEach-Object {
 				'{0}:{1}:{2}: {3}: {4}' -f $file, $_.Line, $_.Column, $_.RuleName, $_.Message
