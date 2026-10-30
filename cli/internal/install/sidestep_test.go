@@ -18,10 +18,16 @@ func TestInstallSidestepsTheRunningCLI(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	h.publish(release{name: "cli", tag: "c2"})
+	// sidestep はリンクを解いた実行ファイルを移す（mac の一時ディレクトリの /var は /private/var への
+	// リンク）ので、解いたパスで比べる。
+	resolved, err := filepath.EvalSymlinks(h.fakeExecutable())
+	if err != nil {
+		t.Fatal(err)
+	}
 	var moved []string
 	original := rename
 	rename = func(from, to string) error {
-		if from == h.fakeExecutable() {
+		if from == resolved {
 			moved = append(moved, to)
 		}
 		return original(from, to)
