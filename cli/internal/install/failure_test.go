@@ -236,20 +236,6 @@ func TestUsageErrorMessage(t *testing.T) {
 	}
 }
 
-// ターゲットを渡さなければ計算機から決める（Vectorworks の無い OS では決まらない）。
-func TestInstallDecidesTheTarget(t *testing.T) {
-	_, err := Install(Options{}, "cli", "latest", false)
-	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
-		if err == nil || !strings.Contains(err.Error(), "unknown") {
-			t.Fatalf("should go past the target and fail for the missing places: %v", err)
-		}
-		return
-	}
-	if err == nil || !strings.Contains(err.Error(), "does not run on") {
-		t.Fatal(err)
-	}
-}
-
 // 名前がどのレジストリにも無い・規則が合わない・マニフェストが読めないときは、何も変えずに失敗にする。
 func TestInstallManifestErrors(t *testing.T) {
 	h := newHarness(t)

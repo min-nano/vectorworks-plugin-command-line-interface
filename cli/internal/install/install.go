@@ -61,7 +61,7 @@ type Options struct {
 	Registries []string
 	// 既定のレジストリ。nil なら CLI に埋め込んだもの
 	Default *registry.Registry
-	// ターゲット（install だけが使う）。空なら計算機から決める（Target）
+	// ターゲット（install だけが使う。本番は Target）
 	Target string
 	// https:// を取るクライアント。nil なら既定のもの
 	Client *http.Client
@@ -157,13 +157,6 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 	}
 	if !registry.ValidTag(requested) {
 		return nil, usageErrorf("invalid tag %q (use A-Z, a-z, 0-9, ., _ and -, starting with a letter or a digit)", requested)
-	}
-	if o.Target == "" {
-		target, err := Target()
-		if err != nil {
-			return nil, err
-		}
-		o.Target = target
 	}
 	p, err := o.places(name)
 	if err != nil {

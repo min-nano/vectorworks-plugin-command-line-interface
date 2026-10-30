@@ -51,14 +51,14 @@ var (
 	currentUser = user.Current
 )
 
-func target() (string, error) {
+func target() string {
 	return targetOf(machineIsArm64)
 }
 
 // targetOf は、計算機が arm64 かを答える関数からターゲットを決める（テストが関数を差し替える）。
-func targetOf(isArm64 func() bool) (string, error) {
+func targetOf(isArm64 func() bool) string {
 	if isArm64() {
-		return "macos-arm64", nil
+		return "macos-arm64"
 	}
-	return "macos-x64", nil
+	return "macos-x64"
 }

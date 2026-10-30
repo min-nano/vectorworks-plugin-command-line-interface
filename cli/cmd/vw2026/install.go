@@ -89,6 +89,7 @@ func (c *installCmd) run(e *env) int {
 		return code
 	}
 	options.Registries = c.Registry
+	options.Target = install.Target()
 	result, err := install.Install(options, name, tag, c.Check)
 	if err != nil {
 		if errors.Is(err, install.ErrRunning) {

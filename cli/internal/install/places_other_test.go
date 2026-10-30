@@ -4,6 +4,7 @@ package install
 
 import (
 	"errors"
+	"runtime"
 	"testing"
 )
 
@@ -15,7 +16,7 @@ func TestPlacesOnAnotherOS(t *testing.T) {
 	if _, err := DefaultPluginsDir(); !errors.Is(err, errUnsupported) {
 		t.Error(err)
 	}
-	if _, err := Target(); !errors.Is(err, errUnsupported) {
-		t.Error(err)
+	if target := Target(); target != runtime.GOOS+"-"+runtime.GOARCH {
+		t.Error(target)
 	}
 }

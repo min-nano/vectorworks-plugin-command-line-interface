@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -122,15 +121,9 @@ func TestDeployPlacesNotLocated(t *testing.T) {
 }
 
 // 手元のパスのレジストリ（VW2026_REGISTRY でも渡せる）から入れ、--check で新しいかを確かめる。
-// ターゲットは計算機から決めるので、Vectorworks の動く OS でだけ走らせる。
+// マニフェストには、計算機から決めたターゲットを書く。
 func TestInstallFromLocalRegistry(t *testing.T) {
-	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
-		t.Skip("the target is decided only on macOS and Windows")
-	}
-	target, err := install.Target()
-	if err != nil {
-		t.Fatal(err)
-	}
+	target := install.Target()
 	module := "demo.vlb"
 	if strings.HasPrefix(target, "macos-") {
 		module = "demo.vwlibrary/x"

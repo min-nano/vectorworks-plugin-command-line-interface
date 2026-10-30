@@ -5,14 +5,16 @@ package install
 import (
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
 // Windows は windows-x64 だけ（Windows on ARM でも Vectorworks は x64 で動く）。mac は places_darwin_test.go。
 func TestTarget(t *testing.T) {
-	got, err := Target()
-	if err != nil || (runtime.GOOS == "windows" && got != "windows-x64") {
-		t.Fatalf("%q %v", got, err)
+	got := Target()
+	want := map[string]string{"windows": "windows-x64", "darwin": "macos-"}[runtime.GOOS]
+	if !strings.HasPrefix(got, want) {
+		t.Fatal(got)
 	}
 }
 

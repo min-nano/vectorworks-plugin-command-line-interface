@@ -18,6 +18,8 @@ func defaultPluginsDir() (string, error) {
 	return "", errUnsupported
 }
 
-func target() (string, error) {
-	return "", errUnsupported
+// target は <OS>-<アーキテクチャ>。どのマニフェストにも無いので、install は「この環境には非対応」で
+// 何も変えずに終わる。
+func target() string {
+	return runtime.GOOS + "-" + runtime.GOARCH
 }

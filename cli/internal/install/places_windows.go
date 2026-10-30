@@ -42,6 +42,6 @@ func defaultPluginsDir() (string, error) {
 }
 
 // target は windows-x64 だけ（Windows on ARM でも Vectorworks は x64 のエミュレーションで動く）。
-func target() (string, error) {
-	return "windows-x64", nil
+func target() string {
+	return "windows-x64"
 }
