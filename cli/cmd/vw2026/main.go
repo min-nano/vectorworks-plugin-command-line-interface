@@ -88,7 +88,12 @@ type env struct {
 }
 
 func main() {
-	os.Exit(run(os.Args[1:], env{
+	os.Exit(run(os.Args[1:], defaultEnv()))
+}
+
+// defaultEnv は本番の外の世界。テストは使わず、場所をどれも一時ディレクトリに差し替える。
+func defaultEnv() env {
+	return env{
 		stdin:      os.Stdin,
 		stdout:     os.Stdout,
 		stderr:     os.Stderr,
@@ -97,7 +102,7 @@ func main() {
 		workDir:    install.WorkDir,
 		pluginsDir: install.DefaultPluginsDir,
 		executable: os.Executable,
-	}))
+	}
 }
 
 // cli is the whole command line.

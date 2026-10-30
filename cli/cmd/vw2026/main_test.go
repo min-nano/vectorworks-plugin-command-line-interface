@@ -631,3 +631,13 @@ func TestEnvNamesDoNotCollide(t *testing.T) {
 		}
 	}
 }
+
+// 本番の外の世界は、どの接点も埋まっている（main は run に渡すだけ）。場所を求める関数は呼ばない
+// （開発者のマシンの本物の場所を求めるだけでも、テストからは触れないようにする）。
+func TestDefaultEnv(t *testing.T) {
+	e := defaultEnv()
+	if e.stdin != os.Stdin || e.stdout != os.Stdout || e.stderr != os.Stderr || e.start == nil ||
+		e.spool == nil || e.workDir == nil || e.pluginsDir == nil || e.executable == nil {
+		t.Fatalf("%+v", e)
+	}
+}
