@@ -11,14 +11,15 @@ permissions:
   contents: read
 
 # mac と Windows のプラグインのビルド・梱包・リリース（docs/plugin/build-and-release.md）。
-# main は転がりタグ stable に、同じリポジトリの PR はブランチの head でビルドしたものを
-# dev-<slug>-<PR 番号> にプレリリースする。fork の PR・マージキュー・main 以外の手動の実行は
-# ビルドするだけで、公開しない。
-# 公開したら、資産を利用者と同じ URL から取ってきて、zip の形と bin/vw2026 version を確かめる。
+# タグはビルドごとに新しく付け、使い回さない。main は 0.0.0-<短い sha> に（latest）、同じリポジトリの
+# PR はブランチの head でビルドしたものを dev-<slug>-<PR 番号>-<短い sha> にプレリリースする。
+# fork の PR・マージキュー・main 以外の手動の実行はビルドするだけで、公開しない。
+# 公開したら、資産を利用者と同じ道筋（既定のレジストリの規則 → マニフェスト → zip）で取ってきて確かめ、
+# PR では Windows で入れ替え（install・uninstall）を確かめる。
 #
 # PR では新しい push が走っているビルドを止める（古い head の公開に意味は無い）。PR が閉じたときは
-# cleanup-dev-release.yml が同じグループで走り、走っているビルドを止めてから
-# dev-<slug>-<PR 番号> を消す。PR のグループは github.ref ではなく PR 番号で組む。マージで閉じた
+# cleanup-dev-release.yml が同じグループで走り、走っているビルドを止めてから、その PR の
+# プレリリースを消す。PR のグループは github.ref ではなく PR 番号で組む。マージで閉じた
 # PR の closed では github.ref が main になり、github.ref で組むと main の push のビルドを止めるため。
 # グループの式は cleanup-dev-release.yml と同じものにする（片方だけ変えると同じグループに入らない）。
 # 開き直し（reopened）は止めずに待つ。閉じたときの片付けが走っている最中に開き直すと、片付けを
@@ -64,12 +65,12 @@ jobs:
             branch="$HEAD_REF"
             if [ "$SAME_REPO" = true ]; then
               sha="$HEAD_SHA"
-              tag="$(scripts/dev-tag.sh "$branch" "$PR_NUMBER")"
+              tag="$(scripts/dev-tag.sh "$branch" "$PR_NUMBER" "${sha:0:7}")"
               title="Dev: $branch (${sha:0:7})"
             fi
           elif [ "$GITHUB_REF" = refs/heads/main ]; then
-            tag=stable
-            title="Stable (${sha:0:7})"
+            tag="0.0.0-${sha:0:7}"
+            title="0.0.0 (${sha:0:7})"
           fi
           version="${sha:0:7}"
           jq -nc --arg version "$version" --arg branch "$branch" '{version: $version, branch: $branch}' > build.json
@@ -87,7 +88,7 @@ jobs:
           name: build-json
           path: build.json
 
-  # mac の zip: cli.vwlibrary/・build.json・bin/vw2026（universal）。
+  # mac の zip: cli.vwlibrary/・build.json・bin/vw2026（universal）・hooks/（sh）。
   build-mac:
     needs: meta
     runs-on: macos-15
@@ -151,18 +152,25 @@ jobs:
           lipo -create -output stage/bin/vw2026 "$RUNNER_TEMP/vw2026-arm64" "$RUNNER_TEMP/vw2026-amd64"
           lipo -info stage/bin/vw2026
           stage/bin/vw2026 version
+      # フックは PATH だけを置く（docs/plugin/install-and-update.md「cli のフック」）。mac は sh のものだけ。
+      - name: hooks
+        run: |
+          set -eu
+          mkdir -p stage/hooks
+          cp scripts/hooks/install.sh scripts/hooks/uninstall.sh scripts/hooks/lib.sh stage/hooks/
+      # zip はシンボリックリンクを追って中身を入れる（-y を付けない。install はリンクを断る）。
       - name: package
         run: |
           set -eu
           mkdir -p dist
-          (cd stage && zip -qr ../dist/cli.vwlibrary.zip .)
-          unzip -Z1 dist/cli.vwlibrary.zip
+          (cd stage && zip -qr ../dist/cli-macos-arm64.zip .)
+          unzip -Z1 dist/cli-macos-arm64.zip
       - uses: actions/upload-artifact@v7
         with:
-          name: cli.vwlibrary.zip
-          path: dist/cli.vwlibrary.zip
+          name: cli-macos-arm64.zip
+          path: dist/cli-macos-arm64.zip
 
-  # Windows の zip: cli.vlb・cli.vwr・build.json・bin\vw2026.exe。
+  # Windows の zip: cli.vlb・cli.vwr・build.json・bin\vw2026.exe・hooks\（PowerShell）。
   build-windows:
     needs: meta
     runs-on: windows-latest
@@ -216,91 +224,157 @@ jobs:
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go -C cli build -trimpath \
             -ldflags "-s -w -X main.version=$VERSION" -o ../stage/bin/vw2026.exe ./cmd/vw2026
           stage/bin/vw2026.exe version
+      # フックは PATH だけを置く（docs/plugin/install-and-update.md「cli のフック」）。Windows は
+      # PowerShell のものだけ。
+      - name: hooks
+        run: |
+          set -eu
+          mkdir -p stage/hooks
+          cp scripts/hooks/install.ps1 scripts/hooks/uninstall.ps1 scripts/hooks/lib.ps1 stage/hooks/
       # .NET の ZipFile は項目の名前の区切りを / にする（Windows PowerShell 5.1 の Compress-Archive は \
-      # にするので使わない）。
+      # にするので使わない。install は \ の項目を断る）。
       - name: package
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force dist | Out-Null
           Add-Type -AssemblyName System.IO.Compression.FileSystem
-          [IO.Compression.ZipFile]::CreateFromDirectory("$PWD/stage", "$PWD/dist/cli.vlb.zip")
-          $zip = [IO.Compression.ZipFile]::OpenRead("$PWD/dist/cli.vlb.zip")
+          [IO.Compression.ZipFile]::CreateFromDirectory("$PWD/stage", "$PWD/dist/cli-windows-x64.zip")
+          $zip = [IO.Compression.ZipFile]::OpenRead("$PWD/dist/cli-windows-x64.zip")
           $zip.Entries.FullName
           $zip.Dispose()
       - uses: actions/upload-artifact@v7
         with:
-          name: cli.vlb.zip
-          path: dist/cli.vlb.zip
+          name: cli-windows-x64.zip
+          path: dist/cli-windows-x64.zip
 
+  # マニフェストを書き、下書きのリリースに資産を上げ終えてから公開する（下書きは利用者の URL から
+  # 見えないので、資産が揃わない間を見せない。latest は公開した時点で進む）。タグは使い回さない。
   release:
     needs: [meta, build-mac, build-windows]
     if: needs.meta.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      latest: ${{ steps.publish.outputs.latest }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       SHA: ${{ needs.meta.outputs.sha }}
       TAG: ${{ needs.meta.outputs.tag }}
       TITLE: ${{ needs.meta.outputs.title }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
+      # 初回のスクリプトは、ビルドしたのと同じコミットから取る。
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: |
+            scripts/get-vw2026.sh
+            scripts/get-vw2026.ps1
+          sparse-checkout-cone-mode: false
+      - run: test "$(git rev-parse HEAD)" = "$SHA"
       - uses: actions/download-artifact@v8
         with:
-          pattern: cli.*.zip
+          pattern: cli-*.zip
           path: dist
           merge-multiple: true
-      # main は stable を、PR は dev-<slug>-<PR 番号> を新しい sha へ動かす。リリースを消してから作り直すと、
-      # 作るのに失敗したり取り消されたりしたときにリリースの無いままになるので、既にあるリリースは残して
-      # 資産を入れ替える。資産は一時の名前で上げ終えてから古いものと入れ替える（上げるのに失敗しても古い
-      # 資産が残る）。本文に機械が読む情報は載せない（版は zip の中の build.json が持つ）。
-      - run: |
+      # マニフェスト（docs/registry.md「マニフェスト」）。資産は絶対の参照で、このタグのリリースを指す
+      # （同じマニフェストを latest の場所から取っても、指す zip は変わらない）。
+      - name: manifest
+        run: |
           set -eu
+          base="https://github.com/$GH_REPO/releases/download/$TAG"
+          mac="$(sha256sum dist/cli-macos-arm64.zip | cut -d' ' -f1)"
+          win="$(sha256sum dist/cli-windows-x64.zip | cut -d' ' -f1)"
+          jq -n --arg tag "$TAG" --arg base "$base" --arg mac "$mac" --arg win "$win" '{
+            manifest_version: 1,
+            tag: $tag,
+            targets: {
+              "macos-arm64": {
+                asset: ($base + "/cli-macos-arm64.zip"),
+                sha256: $mac,
+                hooks: {install: ["sh", "hooks/install.sh"], uninstall: ["sh", "hooks/uninstall.sh"]}
+              },
+              "windows-x64": {
+                asset: ($base + "/cli-windows-x64.zip"),
+                sha256: $win,
+                hooks: {install: ["powershell", "hooks/install.ps1"], uninstall: ["powershell", "hooks/uninstall.ps1"]}
+              }
+            }
+          }' > dist/vw2026.json
+          cat dist/vw2026.json
+      # 初回のスクリプト。PowerShell のものは BOM を除いて上げる（Windows PowerShell 5.1 の
+      # Invoke-RestMethod は charset の無い本文を ISO-8859-1 で読むので、BOM が iex に崩れて渡る）。
+      # 同じ理由で ASCII だけであることを確かめる。
+      - name: scripts
+        run: |
+          set -eu
+          cp scripts/get-vw2026.sh dist/
+          sed '1s/^\xEF\xBB\xBF//' scripts/get-vw2026.ps1 > dist/get-vw2026.ps1
+          if LC_ALL=C grep -n '[^[:print:][:space:]]' dist/get-vw2026.ps1; then
+            echo "get-vw2026.ps1 must be ASCII only" >&2
+            exit 1
+          fi
           ls -l dist
-          if [ "$TAG" = stable ]; then
-            kind=--latest
-          else
-            kind=--prerelease
+      # 同じタグの公開済みのリリースがあれば、タグが今回の完全な sha を指すなら何もせず（同じ sha の
+      # 実行し直し）、違えば失敗にする（短い sha が重なった。docs/plugin/build-and-release.md「リリースの形」）。
+      # 下書きのまま残ったもの（前の実行が途中で止まった）は消して作り直す。PR では、同じ PR の別のタグの
+      # 下書き（push で止められた前の実行のもの）も消す。タグは公開したときに target の sha に作られる
+      # （下書きの間はタグが無い）。
+      - id: publish
+        run: |
+          set -eu
+          api="repos/$GH_REPO"
+          releases="$(gh api --paginate "$api/releases?per_page=100" | jq -s 'add // []')"
+          published="$(printf '%s' "$releases" | jq --arg tag "$TAG" '[.[] | select(.tag_name == $tag and (.draft | not))] | length')"
+          tagged=false
+          if gh api "$api/git/ref/tags/$TAG" > /dev/null 2>&1; then
+            tagged=true
           fi
-          names="cli.vwlibrary.zip cli.vlb.zip"
-          # タグを sha へ動かす（無ければ作る）。
-          move_tag() {
-            if gh api "repos/$GH_REPO/git/ref/tags/$TAG" > /dev/null 2>&1; then
-              gh api -X PATCH "repos/$GH_REPO/git/refs/tags/$TAG" -f sha="$SHA" -F force=true > /dev/null
-            else
-              gh api -X POST "repos/$GH_REPO/git/refs" -f ref="refs/tags/$TAG" -f sha="$SHA" > /dev/null
+          if [ "$published" -gt 0 ] || [ "$tagged" = true ]; then
+            commit="$(gh api "$api/commits/$TAG" --jq .sha)"
+            if [ "$commit" != "$SHA" ]; then
+              echo "::error::the tag $TAG already points at $commit, not $SHA; lengthen the sha in the tag"
+              exit 1
             fi
-          }
-          # 名前の資産の id（無ければ空）。
-          asset_id() {
-            gh api "repos/$GH_REPO/releases/tags/$TAG" --jq ".assets[] | select(.name == \"$1\") | .id"
-          }
-          if ! gh release view "$TAG" > /dev/null 2>&1; then
-            move_tag
-            gh release create "$TAG" dist/cli.vwlibrary.zip dist/cli.vlb.zip --verify-tag \
-              --title "$TITLE" --notes "Built from $SHA." "$kind"
-            exit 0
+            if [ "$published" -gt 0 ]; then
+              echo "$TAG is already published from $SHA"
+              echo "latest=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
-          for n in $names; do
-            cp "dist/$n" "dist/next-$n"
-            stale="$(asset_id "next-$n")"
-            if [ -n "$stale" ]; then
-              gh api -X DELETE "repos/$GH_REPO/releases/assets/$stale"
-            fi
-            gh release upload "$TAG" "dist/next-$n"
-          done
-          for n in $names; do
-            old="$(asset_id "$n")"
-            if [ -n "$old" ]; then
-              gh api -X DELETE "repos/$GH_REPO/releases/assets/$old"
-            fi
-            gh api -X PATCH "repos/$GH_REPO/releases/assets/$(asset_id "next-$n")" -f name="$n" > /dev/null
-          done
-          move_tag
-          gh release edit "$TAG" --title "$TITLE" --notes "Built from $SHA." "$kind"
+          printf '%s' "$releases" |
+            jq -r --arg tag "$TAG" --arg pr "$PR_NUMBER" '.[] | select(.draft) | select(
+              if $pr == "" then .tag_name == $tag
+              else .tag_name | test("^dev-(.*-)?" + $pr + "-[0-9a-f]{7}$") end) | "\(.id) \(.tag_name)"' |
+            while read -r id name; do
+              echo "removing the draft $name"
+              gh api -X DELETE "$api/releases/$id"
+            done
+          kind=()
+          if [ -n "$PR_NUMBER" ]; then
+            kind=(--prerelease)
+          fi
+          gh release create "$TAG" dist/vw2026.json dist/cli-macos-arm64.zip dist/cli-windows-x64.zip \
+            dist/get-vw2026.sh dist/get-vw2026.ps1 \
+            --draft --target "$SHA" --title "$TITLE" --notes "Built from $SHA." "${kind[@]}"
+          id="$(gh api --paginate "$api/releases?per_page=100" |
+            jq -s -r --arg tag "$TAG" 'add | map(select(.draft and .tag_name == $tag)) | .[0].id')"
+          # latest にするのは、ビルドしたコミットが公開する時点の main の先頭のときだけ（失敗した古い
+          # push を後から実行し直したときに、latest が古いコミットへ戻らないため）。
+          latest=false
+          if [ -z "$PR_NUMBER" ] && [ "$(gh api "$api/commits/main" --jq .sha)" = "$SHA" ]; then
+            latest=true
+          fi
+          gh api -X PATCH "$api/releases/$id" -F draft=false -f make_latest="$latest" > /dev/null
+          test "$(gh api "$api/commits/$TAG" --jq .sha)" = "$SHA"
+          echo "published $TAG (latest: $latest)"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
 
-  # 公開した資産を、利用者と同じ URL（タグと資産名から決まる）から取ってきて確かめる。
+  # 公開した資産を、利用者と同じ道筋（既定のレジストリの cli の規則が指すマニフェスト → その asset）で
+  # 取ってきて確かめる。
   verify:
     needs: [meta, release]
     strategy:
@@ -308,28 +382,67 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            asset: cli.vwlibrary.zip
+            target: macos-arm64
           - os: windows-latest
-            asset: cli.vlb.zip
+            target: windows-x64
     runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
     env:
-      URL: https://github.com/${{ github.repository }}/releases/download/${{ needs.meta.outputs.tag }}/${{ matrix.asset }}
+      TAG: ${{ needs.meta.outputs.tag }}
       VERSION: ${{ needs.meta.outputs.version }}
+      LATEST: ${{ needs.release.outputs.latest }}
+      TARGET: ${{ matrix.target }}
     steps:
-      - run: curl -fL --retry 4 --retry-delay 5 -o "$RUNNER_TEMP/release.zip" "$URL"
-      # 直下は build.json と bin/ と、プラグイン（mac は cli.vwlibrary/、Windows は cli.vlb と cli.vwr）。
-      # bin/ の中は CLI だけ。
+      # 規則は CLI に埋め込むのと同じ既定のレジストリ（ビルドしたコミットのもの）から読む。
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: cli/internal/registry/default.json
+          sparse-checkout-cone-mode: false
+      - env:
+          SHA: ${{ needs.meta.outputs.sha }}
+        run: test "$(git rev-parse HEAD)" = "$SHA"
+      # マニフェストの tag が公開したタグで、zip が sha256 と合う。latest にしたときは、latest の規則でも
+      # 同じタグのマニフェストが取れる。
+      - name: manifest
+        run: |
+          set -eu
+          # 既定のレジストリの cli の規則のうち、最初に合ったものの path（docs/registry.md「規則の選び方」）。
+          manifest_url() {
+            jq -r --arg tag "$1" '.plugins.cli.manifests
+              | map(select(.match as $m | $tag | test("^" + ($m | gsub("\\."; "\\.") | gsub("\\*"; ".*")) + "$")))
+              | first | .path | gsub("\\{tag\\}"; $tag)' cli/internal/registry/default.json
+          }
+          curl -fsSL --retry 4 --retry-delay 5 -o "$RUNNER_TEMP/vw2026.json" "$(manifest_url "$TAG")"
+          cat "$RUNNER_TEMP/vw2026.json"
+          test "$(jq -r .tag "$RUNNER_TEMP/vw2026.json")" = "$TAG"
+          asset="$(jq -r --arg t "$TARGET" '.targets[$t].asset' "$RUNNER_TEMP/vw2026.json")"
+          want="$(jq -r --arg t "$TARGET" '.targets[$t].sha256' "$RUNNER_TEMP/vw2026.json")"
+          curl -fL --retry 4 --retry-delay 5 -o "$RUNNER_TEMP/release.zip" "$asset"
+          if command -v sha256sum > /dev/null; then
+            got="$(sha256sum "$RUNNER_TEMP/release.zip" | cut -d' ' -f1)"
+          else
+            got="$(shasum -a 256 "$RUNNER_TEMP/release.zip" | cut -d' ' -f1)"
+          fi
+          test "$got" = "$want" || { echo "sha256 $got, the manifest says $want"; exit 1; }
+          if [ "$LATEST" = true ]; then
+            curl -fsSL --retry 4 --retry-delay 5 -o "$RUNNER_TEMP/latest.json" "$(manifest_url latest)"
+            test "$(jq -r .tag "$RUNNER_TEMP/latest.json")" = "$TAG"
+          fi
+      # 直下は build.json と bin/・hooks/ と、プラグイン（mac は cli.vwlibrary/、Windows は cli.vlb と cli.vwr）。
+      # bin/ の中は CLI だけ、hooks/ の中はその OS のフックだけ。
       - if: runner.os == 'macOS'
         run: |
           set -eu
           zip="$RUNNER_TEMP/release.zip"
           top="$(unzip -Z1 "$zip" | cut -d/ -f1 | sort -u | tr '\n' ' ')"
-          test "$top" = "bin build.json cli.vwlibrary " || { echo "unexpected top level: $top"; exit 1; }
+          test "$top" = "bin build.json cli.vwlibrary hooks " || { echo "unexpected top level: $top"; exit 1; }
           bin="$(unzip -Z1 "$zip" | grep '^bin/.' | tr '\n' ' ')"
           test "$bin" = "bin/vw2026 " || { echo "unexpected bin/: $bin"; exit 1; }
+          hooks="$(unzip -Z1 "$zip" | grep '^hooks/.' | sort | tr '\n' ' ')"
+          test "$hooks" = "hooks/install.sh hooks/lib.sh hooks/uninstall.sh " || { echo "unexpected hooks/: $hooks"; exit 1; }
           dir="$RUNNER_TEMP/release"
           unzip -q "$zip" -d "$dir"
           codesign --verify --strict --verbose=2 "$dir/cli.vwlibrary"
@@ -347,9 +460,11 @@ jobs:
           $zip.Dispose()
           $names
           $top = ($names | ForEach-Object { ($_ -split '/')[0] } | Sort-Object -Unique) -join ' '
-          if ($top -cne 'bin build.json cli.vlb cli.vwr') { throw "unexpected top level: $top" }
+          if ($top -cne 'bin build.json cli.vlb cli.vwr hooks') { throw "unexpected top level: $top" }
           $bin = ($names | Where-Object { $_ -like 'bin/?*' }) -join ' '
           if ($bin -cne 'bin/vw2026.exe') { throw "unexpected bin/: $bin" }
+          $hooks = ($names | Where-Object { $_ -like 'hooks/?*' } | Sort-Object) -join ' '
+          if ($hooks -cne 'hooks/install.ps1 hooks/lib.ps1 hooks/uninstall.ps1') { throw "unexpected hooks/: $hooks" }
           $dir = "$env:RUNNER_TEMP/release"
           Expand-Archive -LiteralPath $zipPath -DestinationPath $dir
           "RELEASE_DIR=$dir" >> $env:GITHUB_ENV
@@ -360,3 +475,151 @@ jobs:
           test "$(jq -r .version "$RELEASE_DIR/build.json")" = "$VERSION"
           "$RELEASE_DIR/bin/vw2026" version | tee "$RUNNER_TEMP/version.json"
           test "$(jq -r .version "$RUNNER_TEMP/version.json")" = "$VERSION"
+
+  # 実物の exe の入れ替え（docs/plugin/install-and-update.md「テスト」）。PR の CLI を <Plug-Ins>\cli\ に
+  # 入れ、入った PR の CLI に uninstall cli と install cli@latest を走らせて、PR の Go のコードに動いている
+  # 自分をよけさせる（PR でよけ方を壊したら落ちる）。利用者の Path の型と既存の項目が保たれることも
+  # 実物のレジストリで確かめる。ランナーは使い捨てなので既定の場所を使い、元の値は戻さない。main では
+  # 版の違う相手が無いので走らせない。初回のスクリプトは、利用者と同じく Windows PowerShell 5.1 で、
+  # 公開したものを Invoke-RestMethod で取って走らせる。
+  install-windows:
+    needs: [meta, release]
+    if: github.event_name == 'pull_request'
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: powershell
+    env:
+      TAG: ${{ needs.meta.outputs.tag }}
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      # 各手順が読み込む関数。場所は vw2026 と同じく OS の決まった場所から求める
+      # （docs/plugin/identifiers.md「置き場所」）。
+      - name: helpers
+        run: |
+          @'
+          $plugins = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'Nemetschek\Vectorworks\2026\Plug-Ins'
+          $work = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Temp\vectorworks2026-cli'
+          $bin = Join-Path $plugins 'cli\bin'
+          $exe = Join-Path $bin 'vw2026.exe'
+
+          # vw2026 の出力の JSON をログに出して読む。終了コードが 0 でなければ止める。
+          function Read-Output($Text) {
+              $code = $LASTEXITCODE
+              Write-Host $Text
+              if ($code -ne 0) { throw "exit code $code" }
+              $Text | ConvertFrom-Json
+          }
+          # 公開した初回のスクリプトで cli@<その PR のタグ> を入れる。
+          function Invoke-Bootstrap {
+              $script = Invoke-RestMethod -UseBasicParsing "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:TAG/get-vw2026.ps1"
+              Read-Output (& ([scriptblock]::Create($script)) "cli@$env:TAG")
+          }
+          function Invoke-Installed {
+              Read-Output (& $exe $args)
+          }
+          function Get-UserPath {
+              $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
+              try {
+                  if ($null -eq $key.GetValue('Path')) { return $null }
+                  [pscustomobject]@{
+                      Kind  = $key.GetValueKind('Path')
+                      Value = $key.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+                  }
+              }
+              finally { $key.Dispose() }
+          }
+          function Set-UserPath($Value, $Kind) {
+              $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+              try { $key.SetValue('Path', $Value, $Kind) }
+              finally { $key.Dispose() }
+          }
+          function Assert-UserPath($Value, $Kind) {
+              $got = Get-UserPath
+              "Path: $($got.Kind) $($got.Value)"
+              if ($null -eq $got -or $got.Kind -ne $Kind -or $got.Value -ne $Value) {
+                  throw "expected Path: $Kind $Value"
+              }
+          }
+          function Get-MovedCli {
+              @(Get-ChildItem -LiteralPath (Join-Path $work 'old') -Filter 'vw2026.exe.old-*' -File -ErrorAction SilentlyContinue)
+          }
+          '@ | Set-Content -Encoding UTF8 "$env:RUNNER_TEMP\helpers.ps1"
+      # latest を入れる手順 5 を走らせるか。PR の CLI が読めるのは PR のマニフェストと同じ manifest_version
+      # なので、latest にマニフェストが無い（段 3b を入れる PR 自身）・版が違うときは飛ばす。
+      - id: latest
+        shell: bash
+        run: |
+          set -eu
+          base="https://github.com/$GITHUB_REPOSITORY/releases"
+          pr="$(curl -fsSL --retry 4 --retry-delay 5 "$base/download/$TAG/vw2026.json" | jq .manifest_version)"
+          latest="$(curl -fsSL "$base/latest/download/vw2026.json" 2>/dev/null | jq .manifest_version || true)"
+          echo "manifest_version: PR $pr, latest ${latest:-none}"
+          if [ "$latest" = "$pr" ]; then
+            echo "install=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "install=false" >> "$GITHUB_OUTPUT"
+          fi
+      # 1. 利用者の Path の値を消し、初回のスクリプトと同じ入り方で入れる。Path は REG_EXPAND_SZ の
+      #    <Plug-Ins>\cli\bin だけになる。
+      - name: install from the first-time script
+        run: |
+          . "$env:RUNNER_TEMP\helpers.ps1"
+          Remove-ItemProperty -Path HKCU:\Environment -Name Path -ErrorAction SilentlyContinue
+          $out = Invoke-Bootstrap
+          if ($out.outcome -ne 'installed' -or $out.tag -ne $env:TAG) { throw 'not installed' }
+          Assert-UserPath $bin ([Microsoft.Win32.RegistryValueKind]::ExpandString)
+          $version = (Get-Content -Raw (Join-Path $plugins 'cli\build.json') | ConvertFrom-Json).version
+          if ($version -ne $env:VERSION) { throw "build.json: $version" }
+      # 2. 実物のレジストリで、Path の型と既存の項目が保たれる。同じタグの install はフックだけを走らせ、
+      #    付け替えないので CLI をよけない。
+      - name: keep the kind and the entries of Path
+        run: |
+          . "$env:RUNNER_TEMP\helpers.ps1"
+          Set-UserPath 'C:\vw2026-probe-sz' ([Microsoft.Win32.RegistryValueKind]::String)
+          $out = Invoke-Installed install "cli@$env:TAG"
+          if ($out.outcome -ne 'up_to_date') { throw 'not up_to_date' }
+          Assert-UserPath "C:\vw2026-probe-sz;$bin" ([Microsoft.Win32.RegistryValueKind]::String)
+          # 項目を展開せずに残し、末尾の ; に区切りを重ねない。
+          Set-UserPath '%USERPROFILE%\vw2026-path-probe;' ([Microsoft.Win32.RegistryValueKind]::ExpandString)
+          $out = Invoke-Installed install "cli@$env:TAG"
+          Assert-UserPath "%USERPROFILE%\vw2026-path-probe;$bin" ([Microsoft.Win32.RegistryValueKind]::ExpandString)
+          # 置き直さずにもう一度走らせても同じ値のまま。
+          $out = Invoke-Installed install "cli@$env:TAG"
+          if ($out.hook.path -ne 'exists') { throw "hook: $($out.hook.path)" }
+          Assert-UserPath "%USERPROFILE%\vw2026-path-probe;$bin" ([Microsoft.Win32.RegistryValueKind]::ExpandString)
+      # 3. 入った PR の CLI で uninstall cli。動いている自分を <Work>\old\ へよけてフォルダを消し、
+      #    よけた自分は消せずに left に載る。Path からは <Plug-Ins>\cli\bin だけが除かれる。
+      - name: uninstall with the installed CLI
+        run: |
+          . "$env:RUNNER_TEMP\helpers.ps1"
+          $out = Invoke-Installed uninstall cli
+          if ($out.outcome -ne 'uninstalled') { throw 'not uninstalled' }
+          if (Test-Path -LiteralPath (Join-Path $plugins 'cli')) { throw 'cli is left' }
+          Assert-UserPath '%USERPROFILE%\vw2026-path-probe' ([Microsoft.Win32.RegistryValueKind]::ExpandString)
+          $moved = Get-MovedCli
+          $left = @($out.left)
+          if ($moved.Count -ne 1 -or $left.Count -ne 1 -or (Split-Path -Leaf $left[0]) -ne $moved[0].Name) {
+              throw "left: $($left -join ', '); in old: $($moved.Name -join ', ')"
+          }
+      # 4. 初回のスクリプトで入れ直すと、手順 3 の残り（そのプロセスは終わっている）が消える。
+      - name: install again from the first-time script
+        run: |
+          . "$env:RUNNER_TEMP\helpers.ps1"
+          $out = Invoke-Bootstrap
+          if ($out.outcome -ne 'installed') { throw 'not installed' }
+          if ((Get-MovedCli).Count -ne 0) { throw 'the moved CLI is left' }
+      # 5. 入った PR の CLI で install cli@latest。PR の Go のコードが動いている自分をよけて、フォルダを
+      #    latest のものに付け替える。比べるのはどちらも build.json の version（タグの形は版の付け方で変わる）。
+      - name: install latest with the installed CLI
+        if: steps.latest.outputs.install == 'true'
+        run: |
+          . "$env:RUNNER_TEMP\helpers.ps1"
+          $out = Invoke-Installed install cli@latest
+          if ($out.outcome -ne 'installed') { throw 'not installed' }
+          $version = (Get-Content -Raw (Join-Path $plugins 'cli\build.json') | ConvertFrom-Json).version
+          $cli = Invoke-Installed version
+          if ($cli.version -ne $version) { throw "vw2026 version $($cli.version), build.json $version" }
+          if ($version -eq $env:VERSION) { throw "latest is the PR build $version" }
+          if ((Get-MovedCli).Count -eq 0) { throw 'the CLI was not moved' }
+          if (Test-Path -LiteralPath (Join-Path $work 'old\cli')) { throw 'old\cli is left' }

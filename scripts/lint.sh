@@ -19,8 +19,8 @@ done
 # actionlint は .github/workflows を上へたどって見つけ、run: の内容も shellcheck で検査する。
 go -C tools tool actionlint || status=1
 
-# shfmt が整形するのと同じファイル（scripts/ 内のシェルスクリプト）を検査する。
-files="$(go -C tools tool shfmt -f "$root/scripts")"
+# shfmt が整形するのと同じファイル（scripts/ と tests/hooks/ 内のシェルスクリプト）を検査する。
+files="$(go -C tools tool shfmt -f "$root/scripts" "$root/tests/hooks")"
 # ファイル名に空白を含めない前提で、行ごとに引数へ分ける。
 # shellcheck disable=SC2086
 shellcheck $files || status=1

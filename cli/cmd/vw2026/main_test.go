@@ -29,6 +29,7 @@ type result struct {
 var envVars = []string{
 	"VW2026_APP", "VW2026_SESSION",
 	"VW2026_CALL_RAW", "VW2026_CALL_TIMEOUT", "VW2026_SESSION_TIMEOUT",
+	"VW2026_PLUGINS_DIR", "VW2026_REGISTRY", "VW2026_INSTALL_CHECK",
 }
 
 // opts は、テストが run に与える外の世界。零値は、何も無いスプール・環境変数なし・空の標準入力・
@@ -45,6 +46,12 @@ type opts struct {
 	// 起動（env.start）。nil なら成功し、渡された引数を started に書く。
 	start   func(argv []string) error
 	started *[]string
+	// install / uninstall の場所（env.pluginsDir・env.workDir・env.executable）。空なら一時ディレクトリ
+	// （executable はその中の偽のファイル）にする（開発者のマシンの本物の <Plug-Ins>・<Work> に
+	// 触れないように）。
+	plugins    string
+	work       string
+	executable string
 }
 
 func invoke(t *testing.T, o opts, args ...string) result {
@@ -67,6 +74,18 @@ func invoke(t *testing.T, o opts, args ...string) result {
 			return nil
 		}
 	}
+	if o.plugins == "" {
+		o.plugins = filepath.Join(t.TempDir(), "Plug-Ins")
+	}
+	if o.work == "" {
+		o.work = filepath.Join(t.TempDir(), "work")
+	}
+	if o.executable == "" {
+		o.executable = filepath.Join(t.TempDir(), "vw2026")
+		if err := os.WriteFile(o.executable, nil, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	// kong は環境変数を os から直接読むので、テストごとに置き直す（並行には走らせない）。
 	for _, name := range envVars {
 		value, ok := o.vars[name]
@@ -79,11 +98,14 @@ func invoke(t *testing.T, o opts, args ...string) result {
 	}
 	var stdout, stderr bytes.Buffer
 	code := run(args, env{
-		stdin:  o.stdin,
-		stdout: &stdout,
-		stderr: &stderr,
-		start:  o.start,
-		spool:  o.locate,
+		stdin:      o.stdin,
+		stdout:     &stdout,
+		stderr:     &stderr,
+		start:      o.start,
+		spool:      o.locate,
+		workDir:    func() (string, error) { return o.work, nil },
+		pluginsDir: func() (string, error) { return o.plugins, nil },
+		executable: func() (string, error) { return o.executable, nil },
 	})
 	return result{code, stdout.String(), stderr.String()}
 }
@@ -414,6 +436,7 @@ func TestExitCodeNumbers(t *testing.T) {
 		"Timeout":     {exitTimeout, 3},
 		"NoResponse":  {exitNoResponse, 4},
 		"Down":        {exitDown, 5},
+		"Running":     {exitRunning, 6},
 		"ToolFailure": {exitToolFailure, 21},
 		"ToolUsage":   {exitToolUsage, 22},
 		"Busy":        {exitBusy, 23},

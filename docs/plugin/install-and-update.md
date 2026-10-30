@@ -112,6 +112,11 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
    （番号は `vw2026 --help`）なら「Vectorworks を終了してからもう一度走らせる」と表示する。
 
 - CLI だけの資産は持ちません。zip から取り出します。
+- **`get-vw2026.ps1` は `exit` を呼びません。** `iex` で走らせると、`exit` は利用者の PowerShell ごと閉じるためです。
+  走らせた `install` / `uninstall` の終了コードは `$LASTEXITCODE` に残り、CLI を走らせる前の失敗（取れない・
+  引数が正しくない）は例外で止まります。引数は `$args` で受け取り（`iex` ではスクリプトの `param` が結び付かない）、
+  本体はスクリプトブロックの中で走らせて、利用者のセッションに変数を残しません。ASCII だけで書きます
+  （[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
 - 一時フォルダの CLI は、`install` の中でマニフェストと zip をもう一度取ります（スクリプトが取った
   zip は渡さない。指定を増やさないため。zip は小さい）。`install` は zip を sha256 で照らします。
 - `latest` が、スクリプトが zip を取ってから `install` がマニフェストを取るまでの間に進むと、
@@ -261,7 +266,9 @@ vw2026 install <name>@<tag>
 
 - 失敗したら（取れない・照らせない・展開できない・付け替えられない・フックが失敗した）、
   `<Plug-Ins>` を元のままにして理由を `message` に載せ、失敗の終了コードで終わります
-  （フックがフォルダの外で変えたものは除く。よけた CLI も元の場所へ戻す）。
+  （フックがフォルダの外で変えたものは除く。よけた CLI も元の場所へ戻す）。出力は
+  `{"outcome":"failed","name":…,"message":…}` で、同じ理由を標準エラーにも書きます（`uninstall` も同じ）。
+  名前やタグの形が正しくないときは、同じ出力で使い方の誤りの終了コードで終わります。
 
 ### 入れる先のフォルダ
 
@@ -281,6 +288,7 @@ vw2026 install <name>@<tag>
   まま読み込まれます（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の「開発元不明のプラグイン」のダイアログ。SDK リファレンス #258）。
   `uninstall` してから入れ直しても同じパスなので、その間に Vectorworks を起動しなければ有効のままです
   （プラグインが居ない起動でダイアログを閉じると、有効化は消える）。
+- `<Plug-Ins>` そのものが無ければ作ります（Vectorworks を一度も起動していない利用者・CI のランナー）。
 - 同じ名前のフォルダに記録が無ければ断るので、**同じ名前のフォルダへの上書きだけは CLI が防ぎます**。
   別の名前で同じプラグインが入っているか（手で入れたもの・別のレジストリの名前）は見ません。
 
@@ -465,8 +473,20 @@ vw2026 install <name>@<tag>
 ### PATH
 
 **`install` のフックのたびに確かめ、足りなければ通します**（何度走らせても同じ結果になる）。結果は出力の
-`path`（`linked` / `exists` / `added` / `not_in_path` / `conflict`）に載せます。PATH の失敗で
-フックを失敗にはしません（プラグインは動く）。
+`path` に載せます。PATH の失敗でフックを失敗にはしません（プラグインは動く）。フックを失敗にするのは、
+何も変える前の確かめ（`VW2026_HOOK_INSTALL_DIR` と `HOME` が絶対パスであること・`bin/` に CLI があること）だけです。
+
+| `path` | OS | 意味 |
+| --- | --- | --- |
+| `linked` | mac | リンクを作った（`~/.local/bin` は PATH にある） |
+| `added` | Windows | `Path` の末尾に足した |
+| `exists` | 両方 | 既にあった（mac はこのプラグインの CLI を指すリンクがあり、`~/.local/bin` は PATH にある） |
+| `not_in_path` | mac | リンクはある（作った・既にあった）が、`~/.local/bin` が PATH に無い |
+| `conflict` | 両方 | 触らなかった（mac は `~/.local/bin/vw2026` か `~/.local/bin` に別のものがある。Windows は `Path` の型が REG_SZ・REG_EXPAND_SZ のどちらでもない） |
+| `failed` | 両方 | 作れなかった・読み書きできなかった（理由は標準エラー） |
+
+- mac の `not_in_path` はリンクの状態より先に伝えます（`linked` / `exists` と重なるときは `not_in_path`）。
+  利用者が手を動かす必要があるのは PATH のほうだからです。
 
 | OS | すること | 既にあるとき |
 | --- | --- | --- |
@@ -475,7 +495,8 @@ vw2026 install <name>@<tag>
 
 - 行き先は `<Plug-Ins>/cli/bin/` で、フォルダを付け替えてもパスは変わらないので、更新で張り直す必要はありません。
 - **シェルの設定ファイル（`.zshrc` 等）は書き換えません。** `~/.local/bin` が PATH に無ければ
-  `not_in_path` とし、追加の方法を標準エラーに表示するだけです。
+  `not_in_path` とし、追加の方法を標準エラーに表示するだけです。PATH の項目は末尾の `/` の違いを
+  同じとみなして比べ、`~` や `$HOME` を含む項目は展開しません（`install` を走らせた環境の `PATH` を見る）。
 - 新しい値は **新しく開いた端末から**効きます。
 
 #### Windows の `Path` の読み書き
@@ -517,8 +538,14 @@ vw2026 install <name>@<tag>
   上限は持ちません（途中で打ち切ると、Explorer など後ろのウィンドウに知らせが届かず、そこから
   開いた端末に新しい値が効かないため）。知らせの失敗は無視します（値は書けていて、利用者が
   ログインし直せば効くため）。
-- レジストリの読み書きは関数に分け、テストでは差し替えます（下記「テスト」）。実物のレジストリでの
-  型の扱いは、下記「実物の exe の入れ替えのジョブ」で確かめます。
+- レジストリの読み書きは関数に分け、テストでは差し替えます（下記「テスト」）。読み書きと知らせは
+  置き場所（`lib.ps1` の `Get-RegistryPathStore` が返す、`Read`・`Write`・`Delete`・`Notify` を持つ
+  ハッシュテーブル）を通し、テストはフックの `-Store` に偽の置き場所を渡します（`vw2026` は渡さない）。
+  実物のレジストリでの型の扱いは、下記「実物の exe の入れ替えのジョブ」で確かめます。
+- **`powershell` のフックの標準出力は ASCII だけにします。** JSON の文字列の中の ASCII の外の文字は
+  `\uXXXX` で書きます。`[Console]::OutputEncoding` を UTF-8 にする（[レジストリ「書き方」](../registry.md#書き方)）
+  のはコンソールの無いプロセスで例外になることがあり、そのときも OEM のコードページで日本語のパスが
+  読み崩れないようにするためです（ASCII は UTF-8 としても読める）。
 
 ### `uninstall` のフック
 
@@ -536,6 +563,13 @@ vw2026 install <name>@<tag>
   - Windows: 利用者の `Path` から、`<Plug-Ins>\cli\bin` と**一致する項目だけ**を除く（比べ方と読み書きは
     `install` と同じ。[Windows の `Path` の読み書き](#windows-の-path-の読み書き)）。
 - `<Work>` の下には何も置かず、何も消しません。
+- 出力の `path` と `left`:
+
+  | `path` | OS | 意味 |
+  | --- | --- | --- |
+  | `removed` | 両方 | リンクを消した・`Path` から項目を除いた |
+  | `none` | 両方 | このプラグインの CLI を指すものが無かった（利用者のファイル・別の場所を指すリンク・型が文字列でない `Path` には触れない） |
+  | `failed` | 両方 | 消せなかった・`Path` を読み書きできなかった。`left` に、mac はリンクのパス、Windows は `HKCU\Environment\Path: <Plug-Ins>\cli\bin` を載せる |
 
 ## アンインストール（`vw2026 uninstall`）
 
@@ -632,9 +666,13 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
 
 ## テスト
 
-- **`install` / `uninstall`**: Go の単体テスト。配置を行うパッケージの関数には、場所
-  （`<Plug-Ins>`・`<Work>`）と既定のレジストリを引数で渡し、偽の HTTP サーバー（`httptest`）と一時
-  ディレクトリで確かめます（環境変数は増やさない）。押さえること:
+- **`install` / `uninstall`**: Go の単体テスト。配置を行うパッケージ（`cli/internal/install`）の関数には、場所
+  （`<Plug-Ins>`・`<Work>`）と既定のレジストリを引数（`install.Options`）で渡し、偽の HTTPS サーバー
+  （`httptest.NewTLSServer`）と一時ディレクトリで確かめます（環境変数は増やさない）。偽のフックは、テストの
+  実行ファイルそのもの（`TestHookHelper`）を `Options.Interpreters` で `sh` の代わりに走らせ、zip の中の
+  フックのファイルに書いた計画（標準出力・終了コード・環境変数の記録・ロックを待つ合図）に従わせます
+  （`sh` の無い Windows でも同じテストを走らせるため）。付け替えと後始末の失敗は、パッケージの中の
+  `rename`・`removeFile` を差し替えて起こします。押さえること:
   - レジストリの順と規則の選び方（先に見つかった名前・最初に合った規則・取れなければ次へ進まない・
     `{tag}` のある規則でのタグの照合・知らない版と項目）
   - 新しいかの判定（同じタグとターゲットで zip を取らず、付け替えずにフックだけを走らせる・同じタグでも
@@ -682,10 +720,10 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
     [通信規則「スプールの場所」](../protocol.md#スプールの場所)）で、本番では `main()` だけがこれを
     `env.spool` に入れる（`call`・`session`・`status`・`launch` が使う）。`spool.DirOf` は一時ディレクトリの
     偽の実行ファイルで確かめる。
-  - `install` / `uninstall` を足す PR で、次のように改め、`CLAUDE.md`「Go」の記述も同じ PR で直します。
-    - `<Work>` を返す `env.workDir`、既定の `<Plug-Ins>` を返す `env.pluginsDir`、走らせている CLI の
-      実行ファイルの場所を返す `env.executable` を足す。本番では `main()` だけがそれぞれを求める関数
-      （求め方は[名前と識別子「置き場所」](identifiers.md#置き場所)）を入れる。
+  - `install` / `uninstall` の場所は、`<Work>` を返す `env.workDir`、既定の `<Plug-Ins>` を返す `env.pluginsDir`、
+    走らせている CLI の実行ファイルの場所を返す `env.executable` から得ます（`CLAUDE.md`「Go」）。
+    - 本番では `main()` だけがそれぞれを求める関数（`install.WorkDir`・`install.DefaultPluginsDir`・
+      `os.Executable`。求め方は[名前と識別子「置き場所」](identifiers.md#置き場所)）を入れる。
     - テストの `invoke` は、どれも既定で一時ディレクトリ（`env.executable` はその中の偽のファイル）を返す
       関数を入れる（`env.spool` はすでにそうしている）。テストが場所を渡し忘れても、開発者のマシンの本物の
       `<Plug-Ins>`・`<Work>`・スプールに触れないためです。`--plugins-dir` は、既定以外の場所を渡したときの
@@ -702,7 +740,9 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
     固定し、Windows に入っている Pester 3.4 は使わない）。`lib.ps1` の `Path` の文字列の関数（足し方・
     除き方・比べ方。末尾の `;`・空になったとき・前後の空白と `"` を含む項目）と、`install.ps1` /
     `uninstall.ps1` の全体（レジストリの読み書きと知らせは差し替える）を
-    確かめる。Windows PowerShell 5.1 で走らせる（フックが走るのと同じもの）。どちらのフックも、
+    確かめる。全体は、偽の置き場所（`tests/hooks/FakePathStore.ps1`）を `-Store` に渡す子のプロセスで
+    走らせ、標準出力のバイト列を見る。Windows PowerShell 5.1 で走らせる（フックが走るのと同じもの。
+    `scripts/powershell.ps1 -Mode Test`）。どちらのフックも、
     標準出力が UTF-8 の JSON のオブジェクト 1 つだけであること（日本語を含むパスでも）と、`uninstall` の
     フックが外のものを消し始めたあとは失敗しないことを確かめる。
 - **実物の exe の入れ替え**: PR の `build.yml` で、`release`（PR のプレリリースを出す）の

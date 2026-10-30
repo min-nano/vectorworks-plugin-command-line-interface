@@ -21,6 +21,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/install"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/launch"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
@@ -50,7 +51,9 @@ const (
 	exitNoResponse = 4
 	// ブリッジが見つからない
 	exitDown = 5
-	// 6 は install / uninstall（未実装）が「Vectorworks が動いているので行えない」に使う。
+	// Vectorworks が動いているので、install / uninstall が何もしなかった（呼ぶ側が終了させてから
+	// 走らせ直す）。
+	exitRunning = 6
 
 	// 以下はプラグインが失敗を答えた（応答は届いている）。
 
@@ -75,25 +78,37 @@ type env struct {
 	// 場所を指せても要求が届かない。docs/protocol.md「スプールの場所」）。テストは偽のプラグインの
 	// スプールを返す。
 	spool func() (string, error)
+	// install / uninstall の作業の場所（<Work>）。本番は install.WorkDir（利用者ごとの一時フォルダの下）。
+	workDir func() (string, error)
+	// 既定の <Plug-Ins>。本番は install.DefaultPluginsDir。--plugins-dir があれば使わない。
+	pluginsDir func() (string, error)
+	// 走らせている CLI の実行ファイル。本番は os.Executable。install / uninstall が、付け替える
+	// フォルダの中にあればよける。
+	executable func() (string, error)
 }
 
 func main() {
 	os.Exit(run(os.Args[1:], env{
-		stdin:  os.Stdin,
-		stdout: os.Stdout,
-		stderr: os.Stderr,
-		start:  launch.Start,
-		spool:  spool.Dir,
+		stdin:      os.Stdin,
+		stdout:     os.Stdout,
+		stderr:     os.Stderr,
+		start:      launch.Start,
+		spool:      spool.Dir,
+		workDir:    install.WorkDir,
+		pluginsDir: install.DefaultPluginsDir,
+		executable: os.Executable,
 	}))
 }
 
 // cli is the whole command line.
 type cli struct {
-	Status  statusCmd  `cmd:"" help:"Report whether the bridge is running."`
-	Call    callCmd    `cmd:"" help:"Call one tool."`
-	Launch  launchCmd  `cmd:"" help:"Start Vectorworks."`
-	Session sessionCmd `cmd:"" help:"Occupy the bridge, or end the occupation."`
-	Version versionCmd `cmd:"" help:"Print the versions of the CLI and the protocol."`
+	Status    statusCmd    `cmd:"" help:"Report whether the bridge is running."`
+	Call      callCmd      `cmd:"" help:"Call one tool."`
+	Launch    launchCmd    `cmd:"" help:"Start Vectorworks."`
+	Session   sessionCmd   `cmd:"" help:"Occupy the bridge, or end the occupation."`
+	Install   installCmd   `cmd:"" help:"Install or update a plug-in (NAME@TAG)."`
+	Uninstall uninstallCmd `cmd:"" help:"Uninstall a plug-in."`
+	Version   versionCmd   `cmd:"" help:"Print the versions of the CLI and the protocol."`
 }
 
 func (cli) Help() string {
@@ -134,8 +149,10 @@ true or false (or 1 or 0), and --no-raw turns it off again.
 vw2026 does not wait for the bridge to start or stop: the caller runs status
 in a loop ("vw2026 help status").
 
-To update the plug-in, the caller combines the commands (install is not
-implemented yet). Quit runs only in a session and only while no drawing is
+vw2026 installs, updates, and uninstalls the plug-ins, cli included ("vw2026
+help install"). It changes nothing while Vectorworks is running with the
+bridge, and it does not quit Vectorworks. To update the plug-in while
+Vectorworks runs, the caller combines the commands. Quit runs only in a session and only while no drawing is
 open, so the caller saves and closes the drawings first. End the session on
 each failure: otherwise it stays until Vectorworks quits, and other callers
 are refused. In sh, with the waits of "vw2026 help status":
@@ -180,7 +197,7 @@ The commands exit with
 	   Vectorworks is running)
 	4  the plug-in took the request but no response came (the tool may have run)
 	5  the bridge is not running (or this vw2026 looks at another spool)
-	6  Vectorworks is running, so install or uninstall did nothing (planned)
+	6  Vectorworks is running, so install or uninstall did nothing
 	21 the tool reported a failure (internal)
 	22 the tool reported wrong usage (invalid_request, unknown_tool, or invalid_args)
 	23 refused (the tool did not run): another session occupies the bridge, the

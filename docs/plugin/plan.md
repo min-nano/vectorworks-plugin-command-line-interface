@@ -58,6 +58,23 @@
   `bin/vw2026 version`。[ビルド「CI」](build-and-release.md#ci)）。
 - **タグの slug は `scripts/dev-tag.sh` だけが作る**（[名前と識別子](identifiers.md)）。
 
+段 3b で決めたこと（真実は各ページ）:
+
+- **`install` / `uninstall` の失敗は、標準出力の `{"outcome":"failed","name":…,"message":…}` と標準エラーに書く。**
+  `message` に場所を載せる決めごと（[インストール](install-and-update.md#流れ)）を、ほかの結果と同じく
+  標準出力の JSON で読めるようにするため。指定の形の誤りも同じ出力で、終了コードだけを 2 にする。
+- **`cli` のフックの `path` に `failed` を足す**（作れなかった・読み書きできなかった。フックは失敗にしない）。
+  mac の `not_in_path` は `linked` / `exists` より先に伝える（利用者が直すのは PATH のほう）。`powershell` の
+  フックの標準出力は ASCII だけにする（[インストール「PATH」](install-and-update.md#path)）。
+- **偽のフックはテストの実行ファイルそのもの**（`TestHookHelper`）を `Options.Interpreters` で `sh` の代わりに
+  走らせる。`sh` の無い Windows でも同じテストを走らせるため。`-race` の子のプロセスが終わる前に待たない
+  よう、テストは `GORACE=atexit_sleep_ms=0` を渡す（[インストール「テスト」](install-and-update.md#テスト)）。
+- **`<Plug-Ins>` そのものが無ければ作る**（Vectorworks を一度も起動していない利用者・CI のランナー）。
+- **`get-vw2026.ps1` は ASCII だけで書き、BOM を除いて上げ、`exit` を呼ばない**（`irm … | iex` で読み崩れず、
+  利用者の PowerShell を閉じないため。[インストール「初回のスクリプト」](install-and-update.md#初回のスクリプトget-vw2026sh--ps1)）。
+- **リリースの下書きは `--target <sha>` で作り、タグは公開したときにできる**（下書きの間はタグが無い。
+  [ビルド「CI」](build-and-release.md#ci)）。
+
 段 4 で決めたこと（真実は各ページ）:
 
 - **`detail` は道具が返した失敗（`invalid_args`・`internal`）にだけ載り、オブジェクトに限る。** 道具が
