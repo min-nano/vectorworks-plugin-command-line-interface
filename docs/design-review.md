@@ -18,7 +18,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 | [A3](#a3-未決-2-が段-2-の作りを変える) | 未決 2 が段 2 の作りを変える | 段 2 の前 | 済（undo の記録が開いているかは見ない。書く道具は自分で記録を開いて閉じ、占有の中でだけ呼べる。受け付けの入れ子は `busy` で断る。[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)） |
 | [A4](#a4-終了の依頼の最中に受け付けが入れ子になりうる) | 終了の依頼の最中に受け付けが入れ子になりうる | 段 6 | 暫定（終了の依頼の最中は `write`・`app` を `busy` で断る。残すかは [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 の結果で段 6 の前に決める） |
 | [B1](#b1-更新の手順の見本が占有を残す) | 更新の手順の見本が占有を残す | 段 6 | 済（失敗の道筋で `session end` を呼ぶ形に直し、見本を `vw2026 --help` へ移した。[インストール「流れ」](plugin/install-and-update.md#流れ)） |
-| [B2](#b2-windows-の-path-の書き換えが既存の項目を壊しうる) | Windows の PATH の書き換えが既存の項目を壊しうる | 段 3b | 対応中（PowerShell をやめ、`advapi32` でレジストリを直接読み書きして型を保つと決めた。段 3b の `install-windows` ジョブが実物のレジストリで確かめたら済にする。[インストール「Windows の `Path` の読み書き」](plugin/install-and-update.md#windows-の-path-の読み書き)） |
+| [B2](#b2-windows-の-path-の書き換えが既存の項目を壊しうる) | Windows の PATH の書き換えが既存の項目を壊しうる | 段 3b | 済（展開しない値を読み、型を保って書き戻す。`.NET` の `Microsoft.Win32.RegistryKey` で読み書きし、段 3b の `install-windows` ジョブが実物のレジストリで、値が無い・REG_SZ・REG_EXPAND_SZ の場合に型と既存の項目が保たれることを確かめた。[インストール「Windows の `Path` の読み書き」](plugin/install-and-update.md#windows-の-path-の読み書き)） |
 | [B3](#b3-vw2026_app-が環境変数の名前の決まりに反する) | `VW2026_APP` が環境変数の名前の決まりに反する | 最初の配布（段 2）の前 | 済（名前は値の通じる範囲で決める、と決まりを改めた。CLAUDE.md「Go」） |
 | [B4](#b4-sdk-の調査の古い参照) | SDK の調査の古い参照 | なし | 済 |
 | [B5](#b5-段-24-では実機の確かめ方が成り立たない) | 段 2〜4 では実機の確かめ方が成り立たない | 段 2 | 済（段の入れ替えで、`install` の無い段は 2 だけになった。[実装の順序「実機の確かめ方」](plugin/plan.md#実機の確かめ方)） |
@@ -132,6 +132,10 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
   段 3b の PR の `build.yml` の `install-windows` ジョブで、値が無い・REG_SZ・REG_EXPAND_SZ の
   3 つの場合について確かめる（[インストール「テスト」](plugin/install-and-update.md#テスト)）。
   そのジョブが段 3b で入り、通ったら済にする。
+- **済。** 読み書きは `advapi32` を直接呼ぶ代わりに、`cli` のフック（`scripts/hooks/lib.ps1`）で .NET の
+  `Microsoft.Win32.RegistryKey` を使う形にした（展開しない値を読み、`GetValueKind` の型で書き戻す）。段 3b の PR
+  の `install-windows` ジョブで、値が無いときに REG_EXPAND_SZ で作り、REG_SZ と REG_EXPAND_SZ の型と既存の項目
+  （展開しない `%USERPROFILE%\…`・末尾の `;`）が保たれ、`uninstall` が一致する項目だけを除くことを確かめた。
 
 ### B3. `VW2026_APP` が環境変数の名前の決まりに反する
 
