@@ -1,0 +1,83 @@
+# 試し（PR #68 には入れない。走らせ終えたらブランチごと消す）。PSScriptAnalyzer を全部の規則
+# （PSUseCorrectCasing を含む）で、lint と同じくファイルごとに子の pwsh で繰り返し走らせ、
+# DOTNET_PROCESSOR_COUNT を 1 にしたときと既定のときで、落ちた回数と時間を比べる。
+name: lint-experiment
+
+on:
+  push:
+    branches: [claude/lint-experiment]
+
+permissions:
+  contents: read
+
+jobs:
+  experiment:
+    strategy:
+      fail-fast: false
+      matrix:
+        processors: [default, "1"]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - run: pwsh -NoProfile -File scripts/powershell.ps1 -Mode Install
+      - name: analyze repeatedly
+        shell: pwsh
+        env:
+          PROCESSORS: ${{ matrix.processors }}
+          ROUNDS: "30"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(git ls-files -co --exclude-standard -- '*.ps1' '*.psm1' '*.psd1')
+          $settings = Join-Path $PWD 'PSScriptAnalyzerSettings.psd1'
+          $child = Join-Path $env:RUNNER_TEMP 'analyze.ps1'
+          # 子は lint と同じく 1 つのファイルを検査する。落ちたら 3 で、すぐ終わる。
+          Set-Content -LiteralPath $child -Value @(
+            'param([string] $File, [string] $Settings)'
+            '$ErrorActionPreference = ''Stop'''
+            'try {'
+            '  Import-Module PSScriptAnalyzer -RequiredVersion 1.25.0'
+            '  $null = Invoke-ScriptAnalyzer -Path $File -Settings $Settings'
+            '  [Environment]::Exit(0)'
+            '} catch {'
+            '  [Console]::Error.WriteLine(("{0}: {1}: {2}" -f $File, $_.Exception.GetType().FullName, $_.Exception.Message))'
+            '  [Environment]::Exit(3)'
+            '}'
+          )
+          $counts = @{ ok = 0; crashed = 0; other = 0; hung = 0 }
+          $times = [Collections.Generic.List[double]]::new()
+          $total = [Diagnostics.Stopwatch]::StartNew()
+          for ($round = 1; $round -le [int] $env:ROUNDS; $round++) {
+            foreach ($file in $files) {
+              $info = [Diagnostics.ProcessStartInfo]::new('pwsh')
+              foreach ($arg in @('-NoProfile', '-File', $child, $file, $settings)) { $info.ArgumentList.Add($arg) }
+              if ($env:PROCESSORS -ne 'default') { $info.Environment['DOTNET_PROCESSOR_COUNT'] = $env:PROCESSORS }
+              $watch = [Diagnostics.Stopwatch]::StartNew()
+              $process = [Diagnostics.Process]::Start($info)
+              # 3 分で戻らなければ止まったとみなす（前の lint では 15 分止まった）。
+              if (-not $process.WaitForExit(180000)) {
+                $process.Kill($true)
+                $counts.hung++
+                Write-Host "round ${round}: $file hung"
+                continue
+              }
+              $watch.Stop()
+              $times.Add($watch.Elapsed.TotalSeconds)
+              switch ($process.ExitCode) {
+                0 { $counts.ok++ }
+                3 { $counts.crashed++; Write-Host "round ${round}: $file crashed" }
+                default { $counts.other++; Write-Host "round ${round}: $file exited with $($process.ExitCode)" }
+              }
+            }
+          }
+          $total.Stop()
+          $mean = ($times | Measure-Object -Average).Average
+          $lines = @(
+            "### DOTNET_PROCESSOR_COUNT=$env:PROCESSORS（$env:ROUNDS 回 × $($files.Count) ファイル）"
+            ''
+            "| 通った | 落ちた（3） | ほかの終了コード | 止まった | 全体の時間 | 1 回の平均 |"
+            '| --- | --- | --- | --- | --- | --- |'
+            ('| {0} | {1} | {2} | {3} | {4:N0} 秒 | {5:N2} 秒 |' -f $counts.ok, $counts.crashed, $counts.other, $counts.hung, $total.Elapsed.TotalSeconds, $mean)
+          )
+          $lines | Write-Host
+          $lines | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
