@@ -54,6 +54,8 @@
   （[ビルド「CMake」](build-and-release.md#cmake)）。
 - **mac のプラグインは arm64 だけ**（CLI は universal）。SDK リファレンスの `plugin/` が実機で
   読み込まれている形に合わせ、確かめていない形を配らない（[ビルド「CMake」](build-and-release.md#cmake)）。
+  Intel の mac（`macos-x64`）は、実機で確かめる環境が無いので対応を見送る（初回のスクリプトは、取りに行く
+  前に止める）。
 - **公開した資産は `build.yml` の `verify` が利用者と同じ URL から取って確かめる**（zip の形と
   `bin/vw2026 version`。[ビルド「CI」](build-and-release.md#ci)）。
 - **タグの slug は `scripts/dev-tag.sh` だけが作る**（[名前と識別子](identifiers.md)）。
