@@ -619,14 +619,20 @@ jobs:
       - name: uninstall with the installed CLI is refused
         run: |
           . "$env:RUNNER_TEMP\helpers.ps1"
-          $text = & $exe uninstall cli
+          # Windows PowerShell 5.1 は、Stop のときに exe の標準エラーを止まる誤りにするので、この呼び出しだけ
+          # Continue にする（標準エラーには、案内の文言が出る）。
+          $ErrorActionPreference = 'Continue'
+          $text = & $exe uninstall cli 2>&1 | ForEach-Object { if ($_ -is [System.Management.Automation.ErrorRecord]) { Write-Host "stderr: $_" } else { $_ } }
           $code = $LASTEXITCODE
+          $ErrorActionPreference = 'Stop'
           Write-Host $text
           $out = $text | ConvertFrom-Json
           if ($code -ne 2 -or $out.outcome -ne 'failed' -or $out.command -notlike '*get-vw2026.ps1*uninstall cli*') {
               throw "exit code $code"
           }
           if (-not (Test-Path -LiteralPath (Join-Path $plugins 'cli\vw2026-install.json'))) { throw 'cli is removed' }
+          # 2 で終わったのが正しいので、ステップの終了コード（$LASTEXITCODE）を戻す。
+          $global:LASTEXITCODE = 0
       # 4. 入った PR の CLI で、記録のタグを違うものにしてから同じビルドを入れ直す。動いている自分を
       #    <Work>\old\ へよけてフォルダを付け替え、よけた自分（動いている）は残る。
       - name: install with the installed CLI moves it aside
