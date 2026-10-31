@@ -164,9 +164,10 @@ OS タイマーの刻みの中からも呼べ、相手が居なければ `false`
     （sudo 不要）。`~/.local/bin` が PATH に無ければ、追加の方法を表示するだけでシェルの
     設定ファイルは書き換えない。
   - Windows: 利用者の PATH に `<Plug-Ins>\cli\bin` を追加する。
-- `vw2026 uninstall cli` は、フォルダ（CLI とスプールを含む）を消し、`cli` の `uninstall` のフックが
-  **自分のフォルダを指すリンク・PATH の項目だけ**を取り除きます。Windows では、走らせている CLI だけは
-  消せずに残ります（[インストール「`uninstall cli` のあとに残るもの」](plugin/install-and-update.md#uninstall-cli-のあとに残るもの)）。
+- `cli` は、入っているタグのリリースの初回のスクリプトに `uninstall` を渡して外します（そのタグの CLI が
+  フォルダの外の一時フォルダで走らせる。入っている CLI の `vw2026 uninstall cli` は何もせずに断り、このコマンドを示す）。フォルダ（CLI とスプールを
+  含む）を消し、`cli` の `uninstall` のフックが **自分のフォルダを指すリンク・PATH の項目だけ**を取り除きます
+  （[インストール「アンインストール」](plugin/install-and-update.md#アンインストールvw2026-uninstall)）。
 - 隔離属性の解除（mac）・`Unblock-File`（Windows）は持ちません。curl や Go の HTTP で取った
   ファイルには隔離属性も Web からの印も付かないためです。
 

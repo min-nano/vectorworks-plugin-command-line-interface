@@ -1,28 +1,34 @@
 # インストール・更新・アンインストール
 
-**配置はすべて `vw2026 install` / `uninstall` が行います。** このプラグイン（`cli`）も、ほかの
+**配置は `vw2026 install` / `uninstall` が行います。** このプラグイン（`cli`）も、ほかの
 プラグインも同じ手順で入ります。何を・どこから取るかは[レジストリとマニフェスト](../registry.md)が
 決め、プラグインのフォルダの外に置くもの（`cli` なら PATH）はそのプラグインのフックが
 置きます。`cli` の CLI とスプールは `cli` のフォルダの中にあり（[CLI とスプールの置き場所](#cli-とスプールの置き場所)）、
-外に置くのは PATH だけです。最初の 1 回だけは CLI がまだ無いので、取ってきて `install` を走らせるだけの短い
-スクリプト（`get-vw2026.sh` / `.ps1`）を使います。
+外に置くのは PATH だけです。`cli` を入れる最初の 1 回と、`cli` を外すときは、取ってきた CLI で `install` /
+`uninstall` を走らせるだけの短いスクリプト（`get-vw2026.sh` / `.ps1`）を使います（入れる前は CLI が無く、外した
+あとは CLI を使わないため。入っている CLI で外すと、Windows では動いている自分を消せずに残す）。
 
 | 段 | 手段 | すること |
 | --- | --- | --- |
-| 初回 | `get-vw2026.sh` / `.ps1`（curl などで取ってパイプで実行） | 一時フォルダに CLI を取り出し、`vw2026 install cli@<tag>` を走らせる |
-| インストール・更新 | `vw2026 install <name>@<tag>` | `<Plug-Ins>/<name>/` を付け替え、フックを走らせる。入っているものと同じタグなら、zip を取らず付け替えもせずに、フックだけを走らせる |
+| 初回 | `get-vw2026.sh` / `.ps1`（curl などで取ってパイプで実行） | 一時フォルダに、スクリプトを取ったリリースの CLI を取り出し、`vw2026 install cli@<そのリリースのタグ>` を走らせる |
+| インストール・更新 | `vw2026 install <name>@<tag>` | `<Plug-Ins>/<name>/` を付け替え、フックを走らせる。入っているものと同じタグなら、zip を取らず付け替えもせずに、フックだけを走らせる。`cli` の更新も同じ |
 | アンインストール | `vw2026 uninstall <name>` | フックを走らせ、`<Plug-Ins>/<name>/` を取り除く |
+| `cli` のアンインストール | 入っているタグのリリースの初回のスクリプトに `uninstall` を渡す | そのタグの CLI を一時フォルダに取り出し、`vw2026 uninstall cli` を走らせる（入っている CLI の `uninstall cli` は断り、このコマンドを示す） |
 
 ```sh
 # macOS
 curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.sh | sh
-curl -fsSL …/get-vw2026.sh | sh -s -- --plugins-dir <Plug-Ins>   # 既定以外の場所へ
+curl -fsSL …/releases/download/<tag>/get-vw2026.sh | sh                  # そのタグを入れる
+curl -fsSL …/get-vw2026.sh | sh -s -- --plugins-dir <Plug-Ins>           # 既定以外の場所へ
+curl -fsSL …/releases/download/<tag>/get-vw2026.sh | sh -s -- uninstall  # そのタグの CLI で外す
 ```
 
 ```powershell
 # Windows
 irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.ps1 | iex
-& ([scriptblock]::Create((irm …/get-vw2026.ps1))) --plugins-dir <Plug-Ins>   # 既定以外の場所へ
+irm …/releases/download/<tag>/get-vw2026.ps1 | iex                                        # そのタグを入れる
+& ([scriptblock]::Create((irm …/get-vw2026.ps1))) --plugins-dir <Plug-Ins>                 # 既定以外の場所へ
+& ([scriptblock]::Create((irm …/releases/download/<tag>/get-vw2026.ps1))) uninstall        # そのタグの CLI で外す
 ```
 
 ## 前提
@@ -33,6 +39,8 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
   変更が失敗したら、何も変えずに失敗で終わります。
 - **入れた場所を記録しません。** 既定以外の `<Plug-Ins>` を使う利用者は、`install` と
   `uninstall` に毎回 `--plugins-dir`（環境変数 `VW2026_PLUGINS_DIR`）を渡します（[設計「CLI はプリミティブに保つ」](../design.md#cli-はプリミティブに保つ)）。
+  `--plugins-dir` は絶対パスだけを受け付けます（相対パスは使い方の誤り）。今の作業ディレクトリから絶対にする
+  形は、それが分からないときに相対パスのまま名前の変更や削除へ進みうるため、持ちません。
   入れたものの記録は、プラグインのフォルダの中にだけ置きます（[レジストリ「入れたときの記録」](../registry.md#入れたときの記録)）。
 - **安定版と開発版を区別しません。** PR のプレリリースを `cli@<そのタグ>` で入れると、プラグインも
   CLI もそのビルドのものに入れ替わります。
@@ -47,7 +55,8 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
 
 **`install` / `uninstall` の作業の場所（`<Work>`）は、利用者ごとの一時フォルダの下の `vectorworks2026-cli/` です。**
 置くのは、組み立て（`staging/`）・退避（`old/<name>/` と `uninstall` の途中の印）・よけた CLI（`old/` の直下の
-`vw2026.old-*` / `vw2026.exe.old-*`）だけで、どれも `install` / `uninstall` の中でしか要らないものです。
+`vw2026.old-*` / `vw2026.exe.old-*`）・消さずに脇へ移した前の版（`old/<name>.kept-<時刻>/`。[`<Work>/old/<name>/` の片付け](#workoldname-の片付け)）だけで、
+脇へ移した前の版のほかは、どれも `install` / `uninstall` の中でしか要らないものです。
 持続する `vw2026` の場所（設定・フックが使う場所など）は持ちません。
 
 | OS | `<Work>` | 求め方 |
@@ -67,7 +76,7 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
     無ければ入っていない状態になり、`install` で入れ直します。
   - **片付けはファイルを 1 つずつ消すので、`old/<name>/` が一部だけ残ることがあります。** 退避した版を
     `<Plug-Ins>` へ戻すのは同じ回の中の失敗のときだけです。前の回が残した `old/<name>/` は、`install` では
-    消すか断るだけ（[入れ替えの手順](#入れ替えの手順)の 1）、続きから走る `uninstall` では戻さずに消すか
+    消すか脇へ移すか断るだけ（[`<Work>/old/<name>/` の片付け](#workoldname-の片付け)）、続きから走る `uninstall` では戻さずに消すか
     断るだけ（[アンインストール](#アンインストールvw2026-uninstall)の 4）で、`Plug-Ins` に戻しません。
   - **同じ回の中で戻すときも、その間に片付けが入る危うさは残ります（受け入れる）。** 退避してから戻すまでの
     間にはフックが走り、フックの時間に上限はありません（[レジストリ「書き方」](../registry.md#書き方)）。
@@ -80,7 +89,7 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
       のバンドルの中身の一部など）は、同じタグの `install` では「同じタグのとき」の道に入り、フックだけが
       走って付け替えないので直りません。`uninstall` してから入れ直します。`cli` は、`bin/vw2026` が消えて
       いれば `vw2026` を走らせられないので、[初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)に
-      `uninstall cli` を渡してから、初回のスクリプトで入れます。
+      `uninstall` を渡してから、初回のスクリプトで入れます。
   - 組み立ての途中のファイルが同じように選ばれないよう、zip を展開するときにファイルの時刻を zip の項目の
     ものに戻しません（[レジストリ「zip の形」](../registry.md#zip-の形)）。
   - `old/<name>/` は残り、印 `old/<name>.uninstalling` だけが消えたときは、`install` / `uninstall` が
@@ -93,33 +102,54 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
 
 ## 初回のスクリプト（`get-vw2026.sh` / `.ps1`）
 
-**CLI を取ってきて `install cli@<tag>` を走らせるだけ**です。配置の手順・PATH・判断は `install` と
-`cli` のフックが持ち、スクリプトは持ちません。
+**スクリプトを取ってきたリリースの CLI を取り出して、`install cli@<そのリリースのタグ>`（または `uninstall cli`）を
+走らせるだけ**です。配置の手順・PATH・判断は `install` / `uninstall` と `cli` のフックが持ち、スクリプトは持ちません。
 
-1. 引数を見て、走らせるものを決める。
-   - **最初の引数が `uninstall` なら**、受け付けるのは `uninstall cli`（と `--plugins-dir`）だけで、
-     `cli@<tag>` は足さない。`latest` の CLI を取り出して `vw2026 uninstall cli …` を走らせる（`uninstall cli`
-     がフックの途中で止まり、CLI が消えたときに抜け出すため。下記「アンインストール」）。
-   - それ以外は、引数から `cli@<tag>` の形のものを探す（無ければ `cli@latest` を足す）。ほかの名前は
-     受け付けない（このスクリプトは `cli` を入れるためのもの）。
-2. ターゲット（mac は `sysctl -n hw.optional.arm64` が 1 なら `macos-arm64`、それ以外は `macos-x64`。
+- **入れる・外すタグは、スクリプトを取ってきたリリースのタグに決まっています。** リリースは、スクリプトの
+  `@VW2026_TAG@` をそのリリースのタグに置き換えて上げます（[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
+  `releases/download/<tag>/get-vw2026.sh` を取れば `<tag>` が、`releases/latest/download/get-vw2026.sh` を取れば
+  そのとき latest のリリースのタグが入ります。どのタグを入れるかは取る URL だけで決まり、引数でタグを渡す形は
+  持ちません（取ったスクリプトと入る CLI の版がいつも揃う）。置き換えていないスクリプト（リポジトリのものを
+  そのまま走らせた）は、何もせずに断ります。
+
+1. 引数を見て、走らせるものを決める。位置の引数は `uninstall`（`uninstall cli` とも書ける）だけを受け付け、ほかの
+   位置の引数（`cli@<tag>` など）は、ほかのタグはそのタグのスクリプトを取ることを示して断る。指定は
+   `--plugins-dir`（とその値）だけを受け付け、書いた位置に依らず CLI のコマンドの後ろへそのまま渡す（`vw2026` は
+   コマンドの前の指定を受け付けないため）。ほかの指定は断る。**`--registry` は持ちません。** `install` は既定の
+   レジストリから先に引き、名前が見つかった時点で止める（[レジストリ「レジストリの順」](../registry.md#レジストリの順)）ので、
+   既定のレジストリにある `cli` には、ほかのレジストリが使われないためです（`uninstall` はレジストリを読まない）。
+   - **`uninstall` なら** `vw2026 uninstall cli <指定>` を走らせる（`cli` を外すただ 1 つの手段。一時フォルダの
+     CLI はフォルダの外で動くので、何も残さずに外せる。止まった `uninstall cli` の続きもこれで走らせる。下記
+     「アンインストール」）。入っているタグのスクリプトで外すのは、入れたものと同じ版のスクリプトと CLI が、
+     自分の書いた記録を読むためです（あとの版でスクリプトや記録の扱いが変わっても、外し方が変わらない）。
+   - それ以外は `vw2026 install cli@<そのリリースのタグ> <指定>` を走らせる。
+2. ターゲット（mac は `sysctl -n hw.optional.arm64` が 1 なら `macos-arm64`。それ以外（Intel の mac）は、リリースが
+   配らない（[名前と識別子](identifiers.md)）ので、取りに行く前に分かる文言で止める。
    Windows は `windows-x64`。[レジストリ「名前・タグ・ターゲット」](../registry.md#名前タグターゲット)）の zip を一時フォルダへ取ってきて、中の
    `bin/vw2026`（Windows は `bin\vw2026.exe`）だけを取り出す。zip の場所は既定のレジストリの `cli` の
-   規則と同じ形で決める（`latest` なら `releases/latest/download/cli-<target>.zip`、それ以外は
-   `releases/download/<tag>/cli-<target>.zip`）。JSON を読まずに済むように、マニフェストは読まない。
-3. 取り出した CLI で `install`（または `uninstall`）を走らせる（スクリプトの引数をそのまま渡す）。
+   規則と同じ形で決める（`releases/download/<そのリリースのタグ>/cli-<target>.zip`）。JSON を読まずに済むように、
+   マニフェストは読まない。
+3. 取り出した CLI で `install`（または `uninstall`）を走らせる。
 4. 一時フォルダを消し、走らせた `install` / `uninstall` の終了コードで終わる。「Vectorworks が動いている」終了コード
    （番号は `vw2026 --help`）なら「Vectorworks を終了してからもう一度走らせる」と表示する。
 
 - CLI だけの資産は持ちません。zip から取り出します。
+- **`get-vw2026.ps1` は `exit` を呼びません。** `iex` で走らせると、`exit` は利用者の PowerShell ごと閉じるためです。
+  走らせた `install` / `uninstall` の終了コードは `$LASTEXITCODE` に残り、CLI を走らせる前の失敗（取れない・
+  引数が正しくない）は例外で止まります。引数は `$args` で受け取り（`iex` ではスクリプトの `param` が結び付かない）、
+  本体はスクリプトブロックの中で走らせて、利用者のセッションに変数を残しません。ASCII だけで書きます
+  （[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
+- **`get-vw2026.ps1` は CLI の引数を、`CommandLineToArgvW` の規則で囲んだ 1 つのコマンドラインにして渡します。**
+  Windows PowerShell 5.1 の `& $exe …` は、空の引数を落とし、空白を含み `\` で終わる値（`'C:\VW Plug-Ins\'`）
+  では閉じ引用符を逃がしてしまうためです。CLI の標準出力（UTF-8 の JSON の 1 行）はそのまま渡し、標準エラーは
+  コンソールへ出します。
 - 一時フォルダの CLI は、`install` の中でマニフェストと zip をもう一度取ります（スクリプトが取った
   zip は渡さない。指定を増やさないため。zip は小さい）。`install` は zip を sha256 で照らします。
-- `latest` が、スクリプトが zip を取ってから `install` がマニフェストを取るまでの間に進むと、
-  一時フォルダの CLI と入る CLI は別のビルドになります。入れる手順はどのプラグインにも同じ
-  （ビルドに固有の置き方は、入るものの側のフックが持つ）なので、一時フォルダの CLI がその
-  `manifest_version` を読めれば正しく入ります。
-- PR のプレリリースを試すときは、そのリリースのスクリプトに `cli@<そのタグ>` を渡します
-  （スクリプトが取る zip もそのタグのものになり、`install` へもそのまま渡る）。
+- `install` にはタグをそのまま渡すので、一時フォルダの CLI と入る CLI はいつも同じビルドです（`latest` の
+  URL から取っても、スクリプトが取ってから `install` がマニフェストを取るまでの間に latest が進んで別の
+  ビルドが入ることはない）。
+- PR のプレリリースを試すときは、そのリリースのスクリプト（`releases/download/<そのタグ>/get-vw2026.sh`）を
+  取って走らせます。
 
 ## インストールと更新（`vw2026 install`）
 
@@ -131,7 +161,8 @@ vw2026 install cli@dev-feature-x-61-a1b2c3d       # PR のプレリリース
 vw2026 install cli@latest --check                 # 入れずに、新しいビルドがあるかだけ返す（動いていてもよい）
 vw2026 install cli@latest --plugins-dir <Plug-Ins>
 vw2026 install import-ifc-homeskz@latest
-vw2026 install my-plugin@2026.3.1 --registry ./plugins.json
+vw2026 install my-plugin@2026.3.1 --registry https://example.com/plugins.json
+vw2026 install my-plugin@2026.3.1 --registry file:///Users/me/plugins.json   # 手元のファイルも URL で書く
 ```
 
 - **名前とタグは必須です**（`<name>@<tag>`。既定のタグは持たない）。1 回に 1 つだけ入れます
@@ -145,10 +176,11 @@ vw2026 install my-plugin@2026.3.1 --registry ./plugins.json
   `vectorworks_running` で終わります（新しいかだけを知りたいときは `--check`）。
 - **フォルダの中身を入れ直す手段は持ちません。** 入れ直すには `uninstall` してから入れます。
   - ほかのプラグイン: `vw2026 uninstall <name>` のあと `vw2026 install <name>@<tag>`。
-  - `cli`: `uninstall cli` は CLI そのもの（`<Plug-Ins>/cli/bin/vw2026` と PATH）も消すので、続けて
-    `vw2026 install` は走らせられません。`uninstall cli` のあと、[初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)で入れます。
+  - `cli`: 入っている CLI の `uninstall cli` が示すコマンド（入っているタグのリリースの[初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)に
+    `uninstall` を渡す）で外し、続けて初回のスクリプトで入れます（入っている CLI の `uninstall cli` は
+    断る。下記「アンインストール」）。
     `<Plug-Ins>/cli/bin/vw2026` が消えた（ウイルス対策が隔離した・`install` が付け替えの途中で止まった）
-    ときも同じで、`vw2026` を走らせられないので、初回のスクリプトに `uninstall cli` を渡してから入れ直します。
+    ときも同じで、`vw2026` を走らせられないので、初回のスクリプトに `uninstall` を渡してから入れ直します。
   - どちらも同じパスに入るので、その間に Vectorworks を起動しなければ「有効化」は残ります（下記
     「入れる先のフォルダ」）。
 - 指定・環境変数・終了コードの具体的な値は `vw2026 help install` が真実です（`CLAUDE.md`「Go」）。
@@ -169,13 +201,14 @@ vw2026 install <name>@<tag>
                                      {"outcome":"vectorworks_running"}（専用の終了コード）
      （同じタグのとき）              記録の tag と target が同じで、記録の module がフォルダの中に実在するなら、
                                      入っているフォルダで記録の hooks.install だけを
-                                     走らせて終わり {"outcome":"up_to_date",…,"hook":{…}}（zip を取らず、付け替えない）
+                                     走らせ、<Work>/old/<name>/ を片付けて終わり
+                                     {"outcome":"up_to_date",…,"hook":{…}}（zip を取らず、付け替えない）
   5. zip を取って照らす               asset を <Work>/staging/<name>.zip へ。sha256 が合わなければ失敗
   6. 組み立てる                       <Work>/staging/<name>/ へ展開し、モジュールを確かめ、記録を書く
   7. プラグインのフォルダを付け替える  下記「入れ替えの手順」（直前にロックをもう一度見る。動いている CLI が
                                      その中にあれば先によける）
   8. install のフックを走らせる        失敗したら 7 を戻す（レジストリ「フック」）
-  9. 後始末                           <Work>/staging/<name>/・<Work>/staging/<name>.zip・<Work>/old/<name>/ を消し、
+  9. 後始末                           <Work>/staging/<name>/・<Work>/staging/<name>.zip を消し、<Work>/old/<name>/ を片付け、
                                      よけた CLI を消してみる
                                      {"outcome":"installed","name":…,"requested":…,"tag":…,"target":…,
                                       "registry":…,"plugins_dir":…,"hook":{…}}
@@ -183,6 +216,18 @@ vw2026 install <name>@<tag>
 
 - **GitHub の API を使いません。** レジストリの規則とマニフェストの絶対の参照で、取るものの場所が
   決まります。API の回数制限・トークンの扱い・リリース本文の読み取りが要りません。
+- **取得（レジストリ・マニフェスト・zip）に待つ上限を持ちません。** フックと同じく、待つ上限を決めて止める
+  のは呼ぶ側です（[レジストリ「書き方」](../registry.md#書き方)・[設計「CLI はプリミティブに保つ」](../design.md#cli-はプリミティブに保つ)）。
+  大きな zip を遅い回線で取る時間は CLI には決められず、止まったサーバーやプロキシの待ちは呼ぶ側が
+  打ち切ります（Ctrl-C・呼ぶ側の上限）。取得の途中で止めても、変わるのは `<Work>/staging/<name>/`・
+  `<Work>/staging/<name>.zip` だけで、次の `install` が消します。
+- **zip の取得の進み具合は標準エラーに書きます**（止まっているかを、呼ぶ側と利用者が見分けられるように。
+  標準出力は JSON の 1 行のままにする）。始めに URL と大きさ（`Content-Length` があれば）を 1 行書き、
+  取った量（大きさが分かれば全体と割合も）を、標準エラーが端末なら同じ行に 0.2 秒ごとに書き直し、端末で
+  なければ（ログ・パイプ）10 秒ごとに 1 行足します。終わりに取った量を 1 行書きます。端末かは OS に
+  尋ねて決め（mac・Linux は端末の設定を読めるか、Windows は `GetConsoleMode` が通るか。`/dev/null`・`NUL` は端末では
+  ない）、書き直しは行の頭へ戻る `\r` と空白だけで行います（VT の制御列は、Windows の古い
+  コンソールで効かないので使わない）。レジストリとマニフェスト（1 MiB まで）は示しません。
 - **新しいかは、タグとターゲットだけで比べます**（タグは使い回さないので、タグが同じならビルドも
   同じ）。マニフェストだけを取り、zip は取りません。
 - **記録の `module` がフォルダの中に無いとき**（ウイルス対策が隔離した・手で消した）は、同じタグでも
@@ -195,7 +240,7 @@ vw2026 install <name>@<tag>
   合った規則の `path` に `{tag}` があり、記録の `target` が今のターゲットと同じなら、マニフェストも
   取りません（ターゲットが違えば、入れ直すのでマニフェストを取る）。ネットワークにつながっていなくても、
   消えた PATH を置き直せます（CLI はフォルダの中にあるので、同じタグでは戻らない。消えたときは
-  [初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)に `uninstall cli` を渡してから入れ直す）（`latest` のように決まった場所を指す規則では、今のタグを知るために
+  [初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)に `uninstall` を渡してから入れ直す）（`latest` のように決まった場所を指す規則では、今のタグを知るために
   マニフェストを取る）。入っているタグは `install` / `--check` の出力の `tag` と、記録で分かります。
 - **プラグインと CLI は 1 つの zip から入り、同じフォルダと一緒に付け替わります**（`cli` の zip の
   `bin/` がそのまま `<Plug-Ins>/cli/bin/` になる）。動いているプラグインと入っている CLI は同じビルドです（[通信規則「版」](../protocol.md#版)の前提）。
@@ -261,7 +306,9 @@ vw2026 install <name>@<tag>
 
 - 失敗したら（取れない・照らせない・展開できない・付け替えられない・フックが失敗した）、
   `<Plug-Ins>` を元のままにして理由を `message` に載せ、失敗の終了コードで終わります
-  （フックがフォルダの外で変えたものは除く。よけた CLI も元の場所へ戻す）。
+  （フックがフォルダの外で変えたものは除く。よけた CLI も元の場所へ戻す）。出力は
+  `{"outcome":"failed","name":…,"message":…}` で、同じ理由を標準エラーにも書きます（`uninstall` も同じ）。
+  名前やタグの形が正しくないときは、同じ出力で使い方の誤りの終了コードで終わります。
 
 ### 入れる先のフォルダ
 
@@ -281,21 +328,23 @@ vw2026 install <name>@<tag>
   まま読み込まれます（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の「開発元不明のプラグイン」のダイアログ。SDK リファレンス #258）。
   `uninstall` してから入れ直しても同じパスなので、その間に Vectorworks を起動しなければ有効のままです
   （プラグインが居ない起動でダイアログを閉じると、有効化は消える）。
+- `<Plug-Ins>` そのものが無ければ作ります（Vectorworks を一度も起動していない利用者・CI のランナー）。
 - 同じ名前のフォルダに記録が無ければ断るので、**同じ名前のフォルダへの上書きだけは CLI が防ぎます**。
   別の名前で同じプラグインが入っているか（手で入れたもの・別のレジストリの名前）は見ません。
 
 ### 入れ替えの手順
 
-1. **組み立て**: zip を `<Work>/staging/<name>/` に展開し、直下のモジュールを確かめて、記録
-   （`vw2026-install.json`）を書く。前回の残りの `<Work>/staging/<name>/`・`<Work>/staging/<name>.zip` が
-   あれば先に消す。
-   **前回の残りの `<Work>/old/<name>/` があるとき**（前の `install` / `uninstall` が付け替えの途中で
-   止まった）:
-   - `<Plug-Ins>/<name>/` もあり、`old` の記録の `name` が一致して記録の `module` があるなら、退避の
-     残りとみなして消す。
-   - それ以外（`<Plug-Ins>/<name>/` が無い＝`old` が入っていた唯一の版かもしれない・`old` の記録が
-     読めない）は、何も変えずに `old` の場所を `message` に載せて失敗にする（戻すか消すかは利用者が
-     決める）。
+1. **組み立て**: zip を `<Work>/staging/<name>/` に展開し、直下のモジュールとフック（スクリプトが zip の中にあり、
+   インタプリタがこの OS で走ること）を確かめて、記録（`vw2026-install.json`）を書く。フックが走らないことに
+   付け替えのあとで気付くと、その間に起動した Vectorworks の下に入れ終えられない版が残るため、付け替えの前に
+   確かめる。その前に、次の順で前回の残りを片付ける。
+   1. **前回の残りの `<Work>/old/<name>/` があれば**（前の `install` / `uninstall` が付け替えの途中で
+      止まった・新しい版を残した）、下記「[`<Work>/old/<name>/` の片付け](#workoldname-の片付け)」の規則で
+      片付ける。片付けられなければ（`<Plug-Ins>/<name>/` が無い）、何も変えずに失敗にする。
+   2. 前回の残りの `<Work>/staging/<name>/`・`<Work>/staging/<name>.zip` を消す。消せなければ何も変えずに
+      失敗にする。1 で消すものは組み立ての場所を通るので、この順にすると、1 で消しきれなかったもの
+      （Windows でウイルス対策が開いているファイルなど）があれば 2 が失敗し、前の版のファイルを新しい版に
+      混ぜて組み立てない。
 2. **ロックをもう一度見て、動いている CLI をよける**: `<Plug-Ins>/cli/spool/` のロックが掴まれていれば、
    何も変えずに `vectorworks_running` で終わる（[流れ](#流れ)の 4 と同じ。2 度見る理由は[流れ](#流れ)の
    「ロックは手順 4 と付け替えの直前の 2 度見ます」）。このとき組み立てた `<Work>/staging/<name>/`・
@@ -318,7 +367,7 @@ vw2026 install <name>@<tag>
    （[流れ](#流れ)の「フックが失敗して戻す前にも、ロックを見ます」）。掴まれていれば戻さない。戻しの
    1 の名前の変更が失敗したとき（Windows で、ロックを掴む前の Vectorworks が新しい版を読み込んでいる）も、
    その先へ進まない。どちらも新しい版を `<Plug-Ins>/<name>` に残し、`<Work>/old/<name>` とよけた CLI も
-   残して（次の `install` の 1 と後始末が消す）、フックの失敗として失敗で終わる。`message` には、フックが
+   残して（同じタグで走らせ直した `install` が、フックが通ったあとで片付ける。[流れ](#流れ)の「同じタグのとき」）、フックの失敗として失敗で終わる。`message` には、フックが
    失敗したことと、Vectorworks が起動したので新しい版を残したこと、Vectorworks を終了してから同じタグで
    `install` を走らせ直す（フックだけが走る）ことを載せる。ロックが掴まれていなければ、次の順に戻す。
    1. 新しい `<Plug-Ins>/<name>` を、名前の変更で `<Work>/staging/<name>` へよける（1 回で済み、元に
@@ -327,12 +376,45 @@ vw2026 install <name>@<tag>
    2. `<Work>/old/<name>` を `<Plug-Ins>/<name>` へ戻す（最初に入れたときは無い）。
    3. 2 でよけた CLI を、戻したフォルダの元の場所へ戻す。
    4. よけた `<Work>/staging/<name>` を消す。
-5. **後始末**: `<Work>/old/<name>/` などを消し（[流れ](#流れ)の 9）、中断した `uninstall` の印
+5. **後始末**: `<Work>/staging/<name>.zip` を消し、退避した版を「[`<Work>/old/<name>/` の片付け](#workoldname-の片付け)」の
+   規則で片付け（片付けられなくても入れたことは変わらないので、標準エラーに示すだけにする）、中断した `uninstall` の印
    `<Work>/old/<name>.uninstalling` が残っていれば消し（付け替えに成功したので、もう中断した `uninstall` ではない。
    残すと、次の `install` が付け替えの途中で止まったときに、次の `uninstall` がそれを中断した `uninstall` と
    みなし、唯一残った `old/<name>/` を消してしまう）、2 でよけた CLI と前回までの残り
    （`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`）を消してみる。動いていて消せない
    ものは残し、次の `install` / `uninstall` で消す。
+
+- **中断した `uninstall` の印は、`<Plug-Ins>/<name>/` があれば、付け替えの前（同じタグのときも）に消します。**
+  `uninstall` はフォルダを移してから止まるので、`<Plug-Ins>/<name>/` があるときの印は前の回の残りです
+  （`uninstall` のフックが失敗して戻すことにも失敗し、利用者が手で戻したときなど）。後始末だけで消すと、
+  同じタグの `install` や、付け替えの前に失敗した `install` のあとに印が残り、そのあとの `install` が
+  付け替えの途中で止まったときに、次の `uninstall` が唯一残った `old/<name>/` を消してしまいます。
+
+### `<Work>/old/<name>/` の片付け
+
+**`install` のどの道（[入れ替えの手順](#入れ替えの手順)の 1 と 5・[同じタグのとき](#流れ)のフックのあと）も、
+`<Work>/old/<name>/` をこの 1 つの規則で片付けます。** 道ごとに規則を変えると、ある道が残したものを
+ほかの道が片付けられず、その名前の `install` / `uninstall` が通らなくなるためです。
+
+- 無ければ何もしない。
+- **`<Plug-Ins>/<name>/` が無ければ**、`old` が入っていた唯一の版かもしれないので、何も変えずに `old` の場所を
+  `message` に載せて失敗にする（戻すか消すかは利用者が決める）。印 `<Work>/old/<name>.uninstalling` も
+  あれば、止まった `uninstall` なので、`uninstall <name>` を走らせ直して終わらせることを示す。
+- `<Plug-Ins>/<name>/` があり、`old` の記録の `name` が一致し記録の `module` があれば、退避した版・退避の残りと
+  して消す（[消すコードの歯止め](#消すコードの歯止め)）。
+- `<Plug-Ins>/<name>/` があり、`old` の記録が無い・読めない・`module` が無いとき（`module` の無いフォルダを
+  入れ直したときの前の版・OS の片付けで一部が消えた残り）は、利用者のファイルが入っているかもしれないので
+  消さずに、`<Work>/old/<name>.kept-<時刻>/` へ名前の変更で移し、その場所を標準エラーに示す。
+  - `old/<name>/` に置いたままにしないのは、`uninstall` が `old/<name>/` を消さずに断る（[アンインストール](#アンインストールvw2026-uninstall)の 3）
+    ので、利用者が見つけて消すまでその名前を外せなくなるためです。
+  - `<name>.kept-<時刻>` は `vw2026` のどの道も消しません（利用者が消す）。`<Work>` の下なので、OS の片付けで
+    消えることもあります（[作業の場所](#作業の場所)）。名前は `.` を含むので、`<Work>/old/<name>/`（名前は `.` を
+    含まない）・印 `<name>.uninstalling`（ファイル）と重なりません。
+- **消すときは、まず `<Work>/staging/<name>/` へ名前の変更で移してから消します**（`uninstall` の手順 5 も同じ）。
+  消すのが途中で止まっても（Windows でウイルス対策が中のファイルを開いているなど）、記録だけが先に消えた
+  半分のフォルダを `old/<name>/` に残さないためです（残すと、次の回が唯一の版と見分けられない）。半分の残りは
+  組み立ての場所にあり、次の `install` の手順 1 と `uninstall` が名前のパスとして消します。移せなければ
+  何も変えずに失敗にします。
 
 - 付け替えを名前の変更で行うのは、途中で失敗したときに元へ戻せるようにするためです（ファイル
   ごとに置き換えると、半端な版が残る）。
@@ -367,10 +449,11 @@ vw2026 install <name>@<tag>
   外）。`<Plug-Ins>` は `--plugins-dir`・`VW2026_PLUGINS_DIR`・既定の場所のどれからでも来て、実行ファイルの
   パス（Windows では `Path` の項目のまま）と書き方が揃うとは限らないためです。文字列で比べると、Windows の
   大文字と小文字の違い・8.3 形式の短い名前・ジャンクションや `subst` を通したパス・末尾の区切りの有無で
-  外と判定し、よけずに付け替えの 1 つ目が失敗します（何も変わらないが、入っている CLI では `install cli` /
-  `uninstall cli` が通らなくなる）。`os.SameFile` は Windows ではボリュームとファイルの番号、mac では
+  外と判定し、よけずに付け替えの 1 つ目が失敗します（何も変わらないが、入っている CLI では `install cli` が
+  通らなくなる）。`uninstall` も同じ判定で、走らせている CLI が外すフォルダの中にあれば断ります（下記「アンインストール」）。`os.SameFile` は Windows ではボリュームとファイルの番号、mac では
   デバイスと inode で比べるので、どの書き方でも同じディレクトリなら一致します。
-- 移す先は `<Work>/old/<実行ファイルの名前>.old-<時刻>`（`vw2026.old-…` / `vw2026.exe.old-…`）です。
+- 移す先は `<Work>/old/vw2026.old-<時刻>`（Windows は `vw2026.exe.old-<時刻>`）です。名前は実行ファイルの名前に
+  依らず決めます（大文字の `VW2026.EXE` や別の名前の写しで動かしても、後始末が同じ頭で見つけて消せるように）。
   `<Work>` は前提により `<Plug-Ins>` と同じドライブにあるので、名前の変更で移せます。名前に `.` を
   含むので、`<Work>/old/<name>/`（名前は `.` を含まない）と重なりません。
 - **mac でも同じ手順を踏みます。** mac は中で何が動いていてもフォルダの名前を変えられるので要りませんが、
@@ -380,12 +463,14 @@ vw2026 install <name>@<tag>
   それらがスプールのファイルを開いている瞬間に当たると付け替えは失敗し、何も変わりません（やり直す）。
 - **失敗したら元の場所へ戻します。** 付け替えの失敗とフックの失敗のどちらでも、フォルダを戻したあとで
   CLI を元の場所（`<Plug-Ins>/<name>/` の中の同じ相対パス）へ戻します（動いていても名前の変更はできる）。
+- **よけるのは `install` だけです。** `uninstall` は、走らせている CLI が外すフォルダの中にあれば何もせずに断る
+  ので、よけません（下記「アンインストール」）。
 - **後始末で消してみて、消せなければ残します。** Windows では、移した CLI は `install` が終わるまで
   動いているので、その `install` の中では消せません。次の `install` / `uninstall` が消します
   （`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*` だけ。[消すコードの歯止め](#消すコードの歯止め)）。
 - よけてから付け替えるまでの間に止まる（Ctrl-C・電源断）と、`<Plug-Ins>/cli/` は CLI の無いまま
   残ります。このときは `vw2026` を走らせられないので、[初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)に
-  `uninstall cli` を渡してから入れ直します（一時フォルダの CLI はフォルダの外で動くので、よけずに済む）。
+  `uninstall` を渡してから入れ直します（一時フォルダの CLI はフォルダの外で動くので、よけずに済む）。
 - 初回のスクリプトから走らせたときは、動いている CLI は一時フォルダにあるので、よけません。
 
 ## CLI とスプールの置き場所
@@ -465,8 +550,20 @@ vw2026 install <name>@<tag>
 ### PATH
 
 **`install` のフックのたびに確かめ、足りなければ通します**（何度走らせても同じ結果になる）。結果は出力の
-`path`（`linked` / `exists` / `added` / `not_in_path` / `conflict`）に載せます。PATH の失敗で
-フックを失敗にはしません（プラグインは動く）。
+`path` に載せます。PATH の失敗でフックを失敗にはしません（プラグインは動く）。フックを失敗にするのは、
+何も変える前の確かめ（`VW2026_HOOK_INSTALL_DIR` と `HOME` が絶対パスであること・`bin/` に CLI があること）だけです。
+
+| `path` | OS | 意味 |
+| --- | --- | --- |
+| `linked` | mac | リンクを作った（`~/.local/bin` は PATH にある） |
+| `added` | Windows | `Path` の末尾に足した |
+| `exists` | 両方 | 既にあった（mac はこのプラグインの CLI を指すリンクがあり、`~/.local/bin` は PATH にある） |
+| `not_in_path` | mac | リンクはある（作った・既にあった）が、`~/.local/bin` が PATH に無い |
+| `conflict` | 両方 | 触らなかった（mac は `~/.local/bin/vw2026` か `~/.local/bin` に別のものがある。Windows は `Path` の型が REG_SZ・REG_EXPAND_SZ のどちらでもない） |
+| `failed` | 両方 | 作れなかった・読み書きできなかった（理由は標準エラー） |
+
+- mac の `not_in_path` はリンクの状態より先に伝えます（`linked` / `exists` と重なるときは `not_in_path`）。
+  利用者が手を動かす必要があるのは PATH のほうだからです。
 
 | OS | すること | 既にあるとき |
 | --- | --- | --- |
@@ -475,7 +572,8 @@ vw2026 install <name>@<tag>
 
 - 行き先は `<Plug-Ins>/cli/bin/` で、フォルダを付け替えてもパスは変わらないので、更新で張り直す必要はありません。
 - **シェルの設定ファイル（`.zshrc` 等）は書き換えません。** `~/.local/bin` が PATH に無ければ
-  `not_in_path` とし、追加の方法を標準エラーに表示するだけです。
+  `not_in_path` とし、追加の方法を標準エラーに表示するだけです。PATH の項目は末尾の `/` の違いを
+  同じとみなして比べ、`~` や `$HOME` を含む項目は展開しません（`install` を走らせた環境の `PATH` を見る）。
 - 新しい値は **新しく開いた端末から**効きます。
 
 #### Windows の `Path` の読み書き
@@ -495,6 +593,12 @@ vw2026 install <name>@<tag>
 - 項目は `;` で分け、**`%…%` を展開せずに比べます。** 比べる前に、項目の前後の空白を除き、
   全体を囲む `"` を 1 組だけ除き、末尾の `\` を除いて、大文字と小文字を区別せずに比べます
   （Windows が同じディレクトリとして解決する書き方の違いを、同じ項目とみなすため）。
+  - それで違えば、**実際の場所で比べます**（`hooks/lib.ps1` の `Get-PathEntryPlace`）。在るいちばん近い
+    ディレクトリを `GetFinalPathNameByHandle` で解き（ジャンクション・シンボリックリンク・8.3 形式を解き、大文字と
+    小文字を揃える）、その下の在らない部分は名前のまま付けて比べます（`uninstall` のフックが走るときは
+    `<Plug-Ins>\cli\` が無いため、在る `<Plug-Ins>` までさかのぼる）。`--plugins-dir` の書き方の違う同じ
+    `<Plug-Ins>` に入れたものを、同じ項目とみなすためです。`%…%` を含む項目・絶対でない項目・解けない
+    項目は、この比べ方でも一致とみなしません。
   `install` の「同じ項目が既にある」と `uninstall` の「一致する項目」は**同じ比べ方の関数**
   （`hooks/lib.ps1`）で判定します（片方だけが一致とみなすと、`install` が `exists` と答えた項目を
   `uninstall` が残すことになるため）。
@@ -517,8 +621,14 @@ vw2026 install <name>@<tag>
   上限は持ちません（途中で打ち切ると、Explorer など後ろのウィンドウに知らせが届かず、そこから
   開いた端末に新しい値が効かないため）。知らせの失敗は無視します（値は書けていて、利用者が
   ログインし直せば効くため）。
-- レジストリの読み書きは関数に分け、テストでは差し替えます（下記「テスト」）。実物のレジストリでの
-  型の扱いは、下記「実物の exe の入れ替えのジョブ」で確かめます。
+- レジストリの読み書きは関数に分け、テストでは差し替えます（下記「テスト」）。読み書きと知らせは
+  置き場所（`lib.ps1` の `Get-RegistryPathStore` が返す、`Read`・`Write`・`Delete`・`Notify` を持つ
+  ハッシュテーブル）を通し、テストはフックの `-Store` に偽の置き場所を渡します（`vw2026` は渡さない）。
+  実物のレジストリでの型の扱いは、下記「実物の exe の入れ替えのジョブ」で確かめます。
+- **`powershell` のフックの標準出力は ASCII だけにします。** JSON の文字列の中の ASCII の外の文字は
+  `\uXXXX` で書きます。`[Console]::OutputEncoding` を UTF-8 にする（[レジストリ「書き方」](../registry.md#書き方)）
+  のはコンソールの無いプロセスで例外になることがあり、そのときも OEM のコードページで日本語のパスが
+  読み崩れないようにするためです（ASCII は UTF-8 としても読める）。
 
 ### `uninstall` のフック
 
@@ -530,20 +640,45 @@ vw2026 install <name>@<tag>
   戻すので、プラグインは残るのに PATH だけが消えた状態になるためです。失敗にするのは、何も消す前の
   確かめ（環境変数が足りない・PowerShell が使えない）だけです。
 - **PATH の後始末**（`VW2026_HOOK_INSTALL_DIR` の `bin/` を指すものだけ）:
-  - mac: `~/.local/bin/vw2026` が**シンボリックリンクで、`<Plug-Ins>/cli/bin/` の中を指すときだけ**消す。
+  - mac: `~/.local/bin/vw2026` が**シンボリックリンクで、`<Plug-Ins>/cli/bin/vw2026` を指すときだけ**消す。
     `~/.local/bin` は、`install` のフックが作ったものでも消しません（作ったかを記録しない。ほかの
     道具も使う場所）。
+  - **指すかは、パスの文字列ではなくディレクトリの同一性で決めます**（`hooks/lib.sh` の `same_place`。CLI の
+    「[動いている CLI のよけ方](#動いている-cli-のよけ方)」と同じ考え方）。リンクの中身と `VW2026_HOOK_INSTALL_DIR` の
+    それぞれで、在るいちばん近いディレクトリどうしを `-ef`（i ノード）で比べ、その下の在らない部分は名前の
+    文字列で比べます（フックが走るときは `<Plug-Ins>/cli/` が `<Work>/old/` へ移って無いため、在る `<Plug-Ins>` まで
+    さかのぼる）。`--plugins-dir` の書き方・シンボリックリンク・大文字と小文字の違う書き方で入れたものも、同じ
+    `<Plug-Ins>` なら消します（文字列で比べると、行き先の無いリンクが残る）。`install` の「同じリンクが既にある」
+    （`exists`）も同じ比べ方です。
   - Windows: 利用者の `Path` から、`<Plug-Ins>\cli\bin` と**一致する項目だけ**を除く（比べ方と読み書きは
     `install` と同じ。[Windows の `Path` の読み書き](#windows-の-path-の読み書き)）。
 - `<Work>` の下には何も置かず、何も消しません。
+- 出力の `path` と `left`:
+
+  | `path` | OS | 意味 |
+  | --- | --- | --- |
+  | `removed` | 両方 | リンクを消した・`Path` から項目を除いた |
+  | `none` | 両方 | このプラグインの CLI を指すものが無かった（利用者のファイル・別の場所を指すリンク・型が文字列でない `Path` には触れない） |
+  | `failed` | 両方 | 消せなかった・`Path` を読み書きできなかった。`left` に、mac はリンクのパス、Windows は `HKCU\Environment\Path: <Plug-Ins>\cli\bin` を載せる |
 
 ## アンインストール（`vw2026 uninstall`）
 
 ```sh
 vw2026 uninstall import-ifc-homeskz
-vw2026 uninstall cli                          # CLI そのものも消える
-vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> から
+vw2026 uninstall import-ifc-homeskz --plugins-dir <Plug-Ins>   # 既定以外の <Plug-Ins> から
+curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI そのもの）は、入っているタグの初回のスクリプトで
 ```
+
+**走らせている CLI が外すフォルダの中にあれば、何も変えずに使い方の誤りで終わり、入っているタグ（記録の `tag`）の
+初回のスクリプトに `uninstall <name>@<そのタグ>` を渡すコマンドを標準エラーと出力の `command` に示します**
+（`--plugins-dir` を渡していれば、それも渡す）。PR のプレリリースは PR を閉じると消えるので、標準エラーには
+`latest` のスクリプトと CLI で外すコマンド（`uninstall <name>`）も添えます。
+実際に当たるのは、PATH から使う入った `cli` の `vw2026` で `uninstall cli` を走らせたときだけです（Go は名前で
+`cli` を見分けず、[動いている CLI のよけ方](#動いている-cli-のよけ方)と同じく実行ファイルの場所で決める）。
+
+- `cli` を外せば CLI は使わなくなるので、入っている CLI が自分を外す必然はありません。フォルダの外で動く
+  一時フォルダの CLI で外せば、動いている自分を消せずに残すこと（Windows）も、自分をよけることも要りません。
+- 出力は `{"outcome":"failed","name":…,"message":…,"command":…}` です。
 
 1. **Vectorworks が動いていれば何もせずに終わる**（`<Plug-Ins>/cli/spool/` のロックで判定。install と同じ終了コード）。
    `<name>` が `cli` でなければ、`<Plug-Ins>/cli/` に正しい記録が無いときも何も変えずに失敗にする
@@ -553,25 +688,42 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
    何も消さずに失敗にする（`vw2026` が入れたものではない）。
    - `<Plug-Ins>/<name>/` が無く、`<Work>/old/<name>/` に正しい記録（`name` が一致し `module` がある）が
      あり、**`<Work>/old/<name>.uninstalling`（手順 3 の印）もあれば**、前の `uninstall` が手順 3 のあとで
-     止まったとみなし、手順 4 から続ける。
+     止まったとみなし、手順 4 から続ける。続ける前に、移した先のロックも見る（`cli` は `<Plug-Ins>/cli/spool/` ごと
+     移しているので、手順 1 では見えない。掴まれていれば何もせずに `vectorworks_running` で終わる）。
    - 印が無ければ、`install` が付け替えの途中で止まった（`old` が入っていた唯一の版かもしれない）のと
      見分けられないので、何も変えずに `old` の場所を `message` に載せて失敗にする（[入れ替えの手順](#入れ替えの手順)の
      1 と同じ。戻すか消すかは利用者が決める）。
-   - どちらも無ければ何もせずに成功（`not_installed`）。
-3. 印 `<Work>/old/<name>.uninstalling`（空のファイル）を書き、走らせている CLI が `<Plug-Ins>/<name>/` の
-   中にあれば `<Work>/old/` へよけて（[動いている CLI のよけ方](#動いている-cli-のよけ方)）から、**先に**
-   `<Plug-Ins>/<name>` を `<Work>/old/<name>` へ名前を変える（前回の残りの `old/<name>` の
-   扱いは[入れ替えの手順](#入れ替えの手順)の 1 と同じ）。失敗したら（エクスプローラーやウイルス対策が
+   - どちらも無ければ何もせずに成功（`not_installed`）。前の回が消しきれなかった `<Work>/staging/<name>/`・
+     `<Work>/staging/<name>.zip` があれば消す。
+3. 走らせている CLI が `<Plug-Ins>/<name>/` の中にあれば、何も変えずに断る（上記）。印
+   `<Work>/old/<name>.uninstalling`（空のファイル）を書いてから、**先に** `<Plug-Ins>/<name>` を `<Work>/old/<name>` へ
+   名前を変える。**前回の残りの `old/<name>` があれば、
+   消さずに、何も変えずに場所を `message` に載せて失敗にする**（`uninstall` が消してよいものに入らない。
+   [消すコードの歯止め](#消すコードの歯止め)。`install` のフックが失敗して Vectorworks が起動したときに残した
+   前の版かもしれず、黙って消すと戻せない）。`message` には、入っている版のタグ・記録の `registry`・`<Plug-Ins>` で `install <name>@<tag>` を
+   走らせ直す（その `install` を終えて片付ける。別のレジストリや `<Plug-Ins>` では、[入れる先のフォルダ](#入れる先のフォルダ)の
+   確かめで断られる。[`<Work>/old/<name>/` の片付け](#workoldname-の片付け)）か、
+   消してから走らせ直すことを示す。失敗したら（エクスプローラーやウイルス対策が
    フォルダを開いているとき・カレントディレクトリがフォルダの中にあるプロセスが居るとき。
    [入れ替えの手順](#入れ替えの手順)の 3 と同じ）よけた CLI を戻し、印を消して、何も変えずに失敗にする。
 4. 記録の `hooks.uninstall` を、移した先（`<Work>/old/<name>/`）で走らせる（`VW2026_HOOK_PLUGIN_DIR` は
-   移した先、`VW2026_HOOK_INSTALL_DIR` は `<Plug-Ins>/<name>/`）。失敗したら `<Work>/old/<name>` を
-   `<Plug-Ins>/<name>` へ戻し、よけた CLI を戻し、印を消して失敗にする。
+   移した先、`VW2026_HOOK_INSTALL_DIR` は `<Plug-Ins>/<name>/`）。失敗したら、まず `<Plug-Ins>/cli/spool/` の
+   ロックを見る（`install` のフックの失敗と同じ。[入れ替えの手順](#入れ替えの手順)の 4）。`cli` は、ロックのある
+   `<Plug-Ins>/cli/spool/` ごと移しているので、移した先（`<Work>/old/cli/spool/`）のロックを見る（mac では、移す直前に
+   読み込んだプラグインが掴んだロックが、フォルダと一緒に移る）。掴まれていれば戻さず、
+   `old/<name>/` と印を残して失敗にする（Vectorworks を終了してから走らせ直すと、手順 4 から続く）。掴まれて
+   いなければ `<Work>/old/<name>` を `<Plug-Ins>/<name>` へ戻し、よけた CLI を戻し、印を消して失敗にする。
    **手順 2 で中断した回から続けたときは、失敗しても `<Plug-Ins>` へ戻しません**（`old/<name>/` と印を
    残し、場所を `message` に載せて失敗にする）。OS の一時フォルダの片付けはファイルを 1 つずつ消すので、
    続きの `old/<name>/` は記録とモジュールだけが残った壊れたフォルダかもしれず、それを `Plug-Ins` に
    戻さないためです。
-5. `<Work>/old/<name>` を消し、最後に印 `<Work>/old/<name>.uninstalling` を消す。
+5. フックが通ったあとにもロックを見る（`cli` は移した先のスプール。手順 4 と同じ）。掴まれていれば消さずに、印を
+   残して `vectorworks_running` で終わる（終了してから走らせ直すと手順 4 から続く）。`<Work>/old/<name>` を
+   `<Work>/staging/<name>/` へ名前の変更で移してから消し（[`<Work>/old/<name>/` の片付け](#workoldname-の片付け)と
+   同じ。前回の残りの `<Work>/staging/<name>/`・`<Work>/staging/<name>.zip` は先に消す）、印 `<Work>/old/<name>.uninstalling` を
+   消す。移せなければ（Windows でウイルス対策が中のファイルを開いているなど）何も消さずに印を残して失敗にし、
+   走らせ直すと手順 4 から続く（フックは走らせ直しても同じ結果になるように書く。[レジストリ「フック」](../registry.md#フック)）。
+   移したあとで消しきれなかったものは標準エラーに示し、外したことは変えない（次の `install` / `uninstall` が消す）。
 6. よけた CLI と前回までの残り（`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`）を消してみる。
    消せなかったもの（Windows で、いま走らせている CLI）は出力の `left` に載せる（失敗にはしない）。
 7. `<Work>` に `staging` / `old` の空のディレクトリしか無ければ、`<Work>` も消す。
@@ -582,10 +734,8 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
 - 手順 3 と 5 の間で止まった（Ctrl-C・電源断）ときは、もう一度 `uninstall <name>` を走らせれば
   手順 4 から続きます（手順 2）。このとき `install <name>@…` は、`<Work>/old/<name>/` だけがある状態を
   断る（[入れ替えの手順](#入れ替えの手順)の 1）ので、先に `uninstall` を終わらせます。
-  - `uninstall cli` が止まったときは、CLI がフォルダと一緒に `<Work>/old/cli/` へ移っているか、
-    `<Work>/old/` へよけられていて、PATH からは `vw2026` を走らせられません。そのときは初回のスクリプトに
-    `uninstall cli` を渡します（一時フォルダの `latest` の CLI が手順 4 から続ける）。入れ直すなら、
-    そのあと初回のスクリプトで入れます。
+  - `uninstall cli` が止まったときも、同じ初回のスクリプトに `uninstall` をもう一度渡します（一時フォルダの
+    そのタグの CLI が手順 4 から続ける）。入れ直すなら、そのあと初回のスクリプトで入れます。
 - フックが失敗してフォルダを戻すとき、フックがすでに外のものを消していると戻せません。そのため
   **`uninstall` のフックは、確かめられることを先に確かめて失敗し、外のものを消し始めたあとは失敗に
   しない**ように書きます（消せなかったものは出力の `left` に載せる。[レジストリ「フック」](../registry.md#フック)）。
@@ -603,18 +753,13 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
 
 | 残るもの | OS | 理由 | 片付け |
 | --- | --- | --- | --- |
-| `<Work>/old/vw2026.exe.old-<時刻>`（いま走らせている CLI）と、それを含む `<Work>/old/`・`<Work>` | Windows | 動いている実行ファイルは消せない。自分が終わるのを待って消す別のプロセスは残さない（頼まれていないときに動く処理を足さない）。再起動のときに消す指定（`MOVEFILE_DELAY_UNTIL_REBOOT`）は管理者の権限が要る | 出力の `left` に載る。一時フォルダの中なので、OS の片付けで消える（[作業の場所](#作業の場所)）。次に入れたときの `install` も消す |
+| `<Work>/old/vw2026.exe.old-<時刻>` のうち消せなかったもの（動いている CLI。入っている CLI で更新したときに残ったものは、そのプロセスが終わっていれば消える） | Windows | 動いている実行ファイルは消せない | 出力の `left` に載る。一時フォルダの中なので、OS の片付けで消える（[作業の場所](#作業の場所)） |
 | `~/.local/bin`（ディレクトリ） | mac | フックが作ったかを記録せず、ほかの道具も使う場所 | 残してよい |
 | ほかのプラグインのフォルダ | 両方 | `uninstall cli` はほかのプラグインを外さない（上記 `remaining`） | 先にそれぞれを `uninstall` する |
 | Vectorworks が覚えた「有効化」 | 両方 | Vectorworks の設定で、`vw2026` は触らない | 要らない（同じパスに入れ直せば、その間に起動しない限り有効のまま） |
 
-- **すぐに何も残さずに外したいとき**（Windows）は、初回のスクリプトに `uninstall cli` を渡します。走るのは
-  スクリプトの一時フォルダの CLI なので、`<Plug-Ins>/cli/` の中の CLI は動いておらず、よけずにフォルダごと消え、
-  `<Work>/old/` の前回までの残りも消せます。スクリプトの一時フォルダはスクリプトが消します。
-- この表の 1 行目は、CLI を `%LOCALAPPDATA%\vectorworks2026-cli\bin\` に置いていた設計（#61）でも同じでした
-  （`uninstall` のフックが動いている `vw2026.exe` を消せずに名前を変えて残した）。CLI をフォルダの中に置き、
-  作業の場所を一時フォルダにしたことで、残る場所が持続する場所から一時フォルダに変わり、残したものを
-  片付けるのがフックから Go の `uninstall` と OS に移りました。
+- `uninstall cli` は初回のスクリプトの一時フォルダの CLI が走らせるので、`<Plug-Ins>/cli/` の中の CLI は動いておらず、
+  フォルダごと消え、`<Work>/old/` の前回までの残りも消せます。スクリプトの一時フォルダはスクリプトが消します。
 
 ## 消すコードの歯止め
 
@@ -622,19 +767,26 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
 
 | 消すコード | 消してよいもの |
 | --- | --- |
-| `install`（組み立て・後始末・フックの失敗の戻し） | `<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ。前方一致では消さない）・`<Work>/old/<name>/`（退避した版と前回の残りは、記録の `name` が一致し、記録の `module` があり、`<Plug-Ins>/<name>/` もあるときだけ）・フックが失敗したときの新しい `<Plug-Ins>/<name>/`（自分が置いたもの）・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ。よけた CLI と前回までの残り）・付け替えに成功したあとの印 `<Work>/old/<name>.uninstalling` |
-| `uninstall` | 記録の `name` が一致し、記録の `module` がある `<Plug-Ins>/<name>/`（`<Work>/old/<name>/` へ移してから消す）・自分が書いた印 `<Work>/old/<name>.uninstalling`・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ）・空の `<Work>` |
+| `install`（組み立て・後始末・フックの失敗の戻し） | `<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ。前方一致では消さない）・`<Work>/old/<name>/`（退避した版と前回の残りは、記録の `name` が一致し、記録の `module` があり、`<Plug-Ins>/<name>/` もあるときだけ。`<Work>/staging/<name>/` へ移してから消す。条件に合わないものは消さずに `<Work>/old/<name>.kept-<時刻>/` へ移す）・フックが失敗したときの新しい `<Plug-Ins>/<name>/`（自分が置いたもの）・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ。よけた CLI と前回までの残り）・中断した `uninstall` の印 `<Work>/old/<name>.uninstalling`（付け替えに成功したあとと、`<Plug-Ins>/<name>/` があるとき。どちらも前の回の残り） |
+| `uninstall` | 記録の `name` が一致し、記録の `module` がある `<Plug-Ins>/<name>/`（`<Work>/old/<name>/` へ移し、フックのあとで `<Work>/staging/<name>/` へ移してから消す）・`<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ）・自分が書いた印 `<Work>/old/<name>.uninstalling`・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ）・空の `<Work>/staging`・`<Work>/old`・`<Work>`（中身のあるものは消さない） |
 | `cli` の `install` のフック | なし |
-| `cli` の `uninstall` のフック | `<Plug-Ins>/cli/bin/` の中を指す `~/.local/bin/vw2026`・`Path` の `<Plug-Ins>\cli\bin` と一致する項目（どちらも `VW2026_HOOK_INSTALL_DIR` から決める） |
+| `cli` の `uninstall` のフック | `<Plug-Ins>/cli/bin/vw2026` を指す `~/.local/bin/vw2026`・`Path` の `<Plug-Ins>\cli\bin` と一致する項目（どちらも `VW2026_HOOK_INSTALL_DIR` から決め、同じ場所かはディレクトリの同一性で決める） |
 
 - ほかのプラグインのフックがフォルダの外で消すものは、そのプラグインの提供側の責任です
   （[レジストリ「フック」](../registry.md#フック)）。
 
 ## テスト
 
-- **`install` / `uninstall`**: Go の単体テスト。配置を行うパッケージの関数には、場所
-  （`<Plug-Ins>`・`<Work>`）と既定のレジストリを引数で渡し、偽の HTTP サーバー（`httptest`）と一時
-  ディレクトリで確かめます（環境変数は増やさない）。押さえること:
+- **`install` / `uninstall`**: Go の単体テスト。配置を行うパッケージ（`cli/internal/install`）の関数には、場所
+  （`<Plug-Ins>`・`<Work>`）と既定のレジストリを引数（`install.Options`）で渡し、偽の HTTPS サーバー
+  （`httptest.NewTLSServer`）と一時ディレクトリで確かめます（環境変数は増やさない）。偽のフックは、テストの
+  実行ファイルそのもの（`TestHookHelper`）を `Options.Interpreters` で `sh` の代わりに走らせ、zip の中の
+  フックのファイルに書いた計画（標準出力・終了コード・環境変数の記録・ロックを待つ合図）に従わせます
+  （`sh` の無い Windows でも同じテストを走らせるため）。付け替えと後始末の失敗は、実際に起こせるもの
+  （フォルダの場所にあるファイル・中身のある zip の場所・途中で切れた本文・転送の繰り返し）はそのまま起こし、
+  OS の失敗（権限・ディスクの誤り）でしか起きないものは、パッケージの中の `rename`・`removeFile`・`removeAll`・
+  `mkdirAll`・`writeFile`・`openFile` を差し替えて起こします。到達できないコード（文字列だけの構造体の
+  `json.MarshalIndent` の失敗・確かめたばかりの記録を読み直す失敗など）は書きません。押さえること:
   - レジストリの順と規則の選び方（先に見つかった名前・最初に合った規則・取れなければ次へ進まない・
     `{tag}` のある規則でのタグの照合・知らない版と項目）
   - 新しいかの判定（同じタグとターゲットで zip を取らず、付け替えずにフックだけを走らせる・同じタグでも
@@ -651,8 +803,11 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
     `uninstall` で記録のフックを走らせる・`sh` / `powershell` の 2 つ目が zip の中に無い・`-` で始まる
     ときに断る）。偽のフックを入れた zip を偽の HTTP サーバーから配る
   - 消すコードの歯止め（記録が無い・名前が違う・モジュールが無いフォルダを消さない）
-  - 前回の残りの `<Work>/old/<name>/`（`<Plug-Ins>/<name>/` があり記録が正しければ消す・`<Plug-Ins>/<name>/`
-    が無い・記録が読めないなら何も変えずに失敗）
+  - 前回の残りの `<Work>/old/<name>/`（`<Plug-Ins>/<name>/` があり記録が正しければ消す・記録が読めない・`module` が
+    無ければ `<name>.kept-<時刻>/` へ移し、そのあとの `install` / `uninstall` が通る・`<Plug-Ins>/<name>/` が無ければ
+    何も変えずに失敗・新しい版を残した `install` のあと、`uninstall` は断り、同じタグの `install` が片付ける）
+  - 消すのが途中で止まったとき（組み立ての場所へ移せなければ何も消さない・移したあとの残りは次の回が消す・
+    付け替えの前に消しきれなければ組み立てずに失敗にし、前の版のファイルを新しい版に混ぜない）
   - `uninstall` の順序（フォルダを移せないときにフックを走らせない・フックが失敗したらフォルダを戻す・
     手順 3 のあとで止まったときに、印があれば手順 4 から続け、印が無ければ断る・続きから走った回で
     フックが失敗したら `<Plug-Ins>` へ戻さない）
@@ -661,7 +816,7 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
   - 同じタグでも記録の `module` が無ければ入れ直す・記録の `name` が違う・記録が読めないときに断る
   - 同じタグのとき（記録の `hooks.install` を走らせる・`{tag}` のある規則でターゲットも同じならマニフェストを
     取らない・ターゲットが違えば取って入れ直す）
-  - フックの失敗の戻し（新しいフォルダを名前の変更でよけてから前の版を戻す）・`registry` の比べ方（整えた文字列どうし）
+  - フックの失敗の戻し（新しいフォルダを名前の変更でよけてから前の版を戻す）・`registry` の比べ方（渡した URL の文字列どうし）・レジストリの書き方（`https://` と `file://` の URL だけ。空白で区切る。パスのままは使い方の誤り）
   - `uninstall` の出力の `remaining`（どの名前でも出す）
   - 既定のレジストリ（`cli/internal/registry/default.json`）が正しく読めること
   - タグの検査（`.`・`..`・先頭が英数字でないものを断る）とターゲットの決め方（mac は計算機の種類で
@@ -682,10 +837,10 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
     [通信規則「スプールの場所」](../protocol.md#スプールの場所)）で、本番では `main()` だけがこれを
     `env.spool` に入れる（`call`・`session`・`status`・`launch` が使う）。`spool.DirOf` は一時ディレクトリの
     偽の実行ファイルで確かめる。
-  - `install` / `uninstall` を足す PR で、次のように改め、`CLAUDE.md`「Go」の記述も同じ PR で直します。
-    - `<Work>` を返す `env.workDir`、既定の `<Plug-Ins>` を返す `env.pluginsDir`、走らせている CLI の
-      実行ファイルの場所を返す `env.executable` を足す。本番では `main()` だけがそれぞれを求める関数
-      （求め方は[名前と識別子「置き場所」](identifiers.md#置き場所)）を入れる。
+  - `install` / `uninstall` の場所は、`<Work>` を返す `env.workDir`、既定の `<Plug-Ins>` を返す `env.pluginsDir`、
+    走らせている CLI の実行ファイルの場所を返す `env.executable` から得ます（`CLAUDE.md`「Go」）。
+    - 本番では `main()` だけがそれぞれを求める関数（`install.WorkDir`・`install.DefaultPluginsDir`・
+      `os.Executable`。求め方は[名前と識別子「置き場所」](identifiers.md#置き場所)）を入れる。
     - テストの `invoke` は、どれも既定で一時ディレクトリ（`env.executable` はその中の偽のファイル）を返す
       関数を入れる（`env.spool` はすでにそうしている）。テストが場所を渡し忘れても、開発者のマシンの本物の
       `<Plug-Ins>`・`<Work>`・スプールに触れないためです。`--plugins-dir` は、既定以外の場所を渡したときの
@@ -702,35 +857,43 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
     固定し、Windows に入っている Pester 3.4 は使わない）。`lib.ps1` の `Path` の文字列の関数（足し方・
     除き方・比べ方。末尾の `;`・空になったとき・前後の空白と `"` を含む項目）と、`install.ps1` /
     `uninstall.ps1` の全体（レジストリの読み書きと知らせは差し替える）を
-    確かめる。Windows PowerShell 5.1 で走らせる（フックが走るのと同じもの）。どちらのフックも、
+    確かめる。全体は、偽の置き場所（`tests/hooks/FakePathStore.ps1`）を `-Store` に渡す子のプロセスで
+    走らせ、標準出力のバイト列を見る。Windows PowerShell 5.1 で走らせる（フックが走るのと同じもの。
+    `scripts/powershell.ps1 -Mode Test`）。どちらのフックも、
     標準出力が UTF-8 の JSON のオブジェクト 1 つだけであること（日本語を含むパスでも）と、`uninstall` の
     フックが外のものを消し始めたあとは失敗しないことを確かめる。
 - **実物の exe の入れ替え**: PR の `build.yml` で、`release`（PR のプレリリースを出す）の
   あとに Windows のジョブで確かめます。**動いている CLI をよけるのが、その PR の Go のコードになる順**に
   します（PR で[動いている CLI のよけ方](#動いている-cli-のよけ方)を壊したら、このジョブが落ちるように）。
   よけるのは走らせている CLI 自身なので、PR の CLI を `<Plug-Ins>\cli\bin\` に入れてから、その CLI に
-  付け替え（`uninstall cli` と、版の違う `install`）をさせます。
-  1. 利用者の `Path` の値を消しておく（下の 1 のため）。PR の zip から `bin\vw2026.exe` を一時フォルダへ
-     取り出し、`install cli@<その PR のタグ>` を走らせる（初回のスクリプトと同じ入り方）。
+  付け替え（タグの違う記録にしてからの `install` と、版の違う `install`）をさせます。
+  1. 利用者の `Path` の値を消しておく（下の 1 のため）。その PR のリリースの初回のスクリプトを引数なしで走らせ、
+     その PR のタグが入る（スクリプトに埋め込んだタグで `install cli@<その PR のタグ>` を走らせる）ことを確かめる。
   2. 実物のレジストリで `Path` の扱いを確かめる（下記）。走らせるのは同じタグの `install` で、付け替えない
      ので CLI はよけない。
-  3. 入った `<Plug-Ins>\cli\bin\vw2026.exe` で `uninstall cli` を走らせる。出力が `uninstalled` で、
-     `<Plug-Ins>\cli\` が無く、`Path` に `<Plug-Ins>\cli\bin` が無く、`left` に載った
-     `<Work>\old\vw2026.exe.old-*` が 1 つだけ残っていることを確かめる。
-  4. 手順 1 と同じく一時フォルダの PR の CLI で `install cli@<その PR のタグ>` を走らせ、手順 3 の残りが
-     消えたことを確かめる（手順 3 のプロセスは終わっているので消せる）。
-  5. 入った `<Plug-Ins>\cli\bin\vw2026.exe` で `install cli@latest` を走らせる。動いているのは PR の
+  3. 入った `<Plug-Ins>\cli\bin\vw2026.exe` で `uninstall cli` を走らせる。終了コードが 2 で、出力の `command` が
+     その PR のタグのリリースの初回のスクリプトに `uninstall` を渡すコマンドで、`<Plug-Ins>\cli\` が残って
+     いることを確かめる。
+  4. 記録（`vw2026-install.json`）の `tag` を別のものに書き換えてから、入った `<Plug-Ins>\cli\bin\vw2026.exe` で
+     `install cli@<その PR のタグ>` を走らせる。同じビルドを入れ直すことになり、PR の Go のコードが動いている
+     自分をよけて付け替える。出力が `installed` で、`<Work>\old\vw2026.exe.old-*` が 1 つだけ残り（動いている
+     自分は消せない）、`<Work>\old\cli\` が無いことを確かめる。
+  5. 手順 3 が示した形で、その PR のタグのリリースの初回のスクリプトに `uninstall` を渡す（その PR の
+     CLI がフォルダの外で外す。指定 `--plugins-dir` は `uninstall` の前に書き、スクリプトが後ろへ回すことも確かめる）。出力が `uninstalled` で `left` が空、`<Plug-Ins>\cli\` が無く、`Path` に `<Plug-Ins>\cli\bin` が無く、手順 4 の残り（そのプロセスは
+     終わっている）も消えたことを確かめる。
+  6. 公開した初回のスクリプトで入れ直す。
+  7. 入った `<Plug-Ins>\cli\bin\vw2026.exe` で `install cli@latest` を走らせる。動いているのは PR の
      ビルドで、PR の Go のコードが自分をよけて、フォルダを `latest` のものに付け替える。出力が
      `installed` で、`<Plug-Ins>\cli\bin\vw2026.exe version` の版が `<Plug-Ins>\cli\build.json` の
-     `version`（`latest` のビルド）と一致し、手順 4 で入った PR の `version` と違い、
+     `version`（`latest` のビルド）と一致し、手順 6 で入った PR の `version` と違い、
      `<Work>\old\vw2026.exe.old-*` が残り、`<Work>\old\cli\` が無いことを確かめる。比べるのはどちらも
      `build.json` の `version`（同じ zip から入った CLI とプラグインの版）で、タグとは比べない
      （タグの形は版の付け方で変わる。[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
-  - **PR の CLI が `latest` を入れられないとき**は、手順 5 を飛ばします。入れられないときとは次のどれかで、
+  - **PR の CLI が `latest` を入れられないとき**は、手順 7 を飛ばします。入れられないときとは次のどれかで、
     ジョブが PR のマニフェストと `latest` のマニフェストを比べて決めます。
     - `latest` にマニフェストが無い（段 3b を入れる PR 自身。`latest` がまだ `stable` で `vw2026.json` が無い）。
     - PR の CLI が `latest` の `manifest_version` を読めない。
-    手順 3 で、PR のコードが動いている自分をよけることは確かめられます。
+    手順 4 で、PR のコードが動いている自分をよけることは確かめられます。
   - `main` への push では、版の違う相手が無いので走らせません（PR で確かめてからマージする）。
   - ネットワークと公開済みのリリースに頼るのは、同じ位置にある `verify` ジョブと同じです。
   - 別の `vw2026` を動かしたまま入れ替える形は組めません（ロックが掴まれていると `install` が何もせずに
@@ -752,6 +915,6 @@ vw2026 uninstall cli --plugins-dir <Plug-Ins> # 既定以外の <Plug-Ins> か�
        まま、項目が展開されずに残り、`%USERPROFILE%\vw2026-path-probe;<Plug-Ins>\cli\bin` になる（末尾の
        `;` に区切りを重ねない）。
     4. 置き直さずにもう一度走らせても同じ値のまま（`exists`）。
-    5. 手順 3 の `uninstall cli` のあと、REG_EXPAND_SZ のまま `%USERPROFILE%\vw2026-path-probe` になる。
+    5. 手順 5 の `uninstall cli` のあと、REG_EXPAND_SZ のまま `%USERPROFILE%\vw2026-path-probe` になる。
 - **初回のスクリプト**: shellcheck・PSScriptAnalyzer。取ってきて `install` を走らせるだけなので、
   実機の確認（段 3b）で押さえます。

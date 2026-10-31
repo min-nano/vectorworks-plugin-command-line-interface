@@ -19,7 +19,9 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
    CLI に足さない（`docs/design.md「CLI はプリミティブに保つ」`）。
 3. **プラグインは単純に保つ。** 配置と更新は CLI（`vw2026 install`）が Vectorworks の終了後に行う。
    プラグインのフォルダは `vw2026` の作業の場所（利用者ごとの一時フォルダの下）と同じドライブにある前提で、その外の場合の扱いを足さない
-   （`docs/design.md「決めたこと」`）。
+   （`docs/design.md「決めたこと」`）。プラグインのフォルダの外に置くもの（PATH）は `cli` のフック
+   （`scripts/hooks/`）だけが置き、`install` の Go のコード（`cli/internal/install`）は `cli` を特別に扱わない
+   （`cli` の名前を使うのは、ロックの場所と、ほかのプラグインを `cli` のある `<Plug-Ins>` にだけ入れる確かめだけ）。
 4. **SDK 呼び出しはメインスレッドからだけ。** 受け付け用のスレッドや受け付けの中のループを
    書かない。
 5. **本番で常駐する前提（`docs/design.md「本番で常駐させる前提」`）を崩さない。** 勝手に
@@ -34,6 +36,14 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
    issue を立て、`Findings/` に反映されてから実装する。待っているものは `docs/sdk-research.md`。
 8. **新しく分かったことは書き残す。** SDK の挙動は SDK リファレンスの `Findings/`、この
    プラグイン固有のことは `docs/` へ。
+9. **利用者のものを消すコードは、次の場所だけにし、歯止めを緩めない**（`docs/plugin/install-and-update.md「消すコードの歯止め」`）。
+
+   | 消すコード | 消してよいもの |
+   | --- | --- |
+   | `install`（組み立て・後始末・フックの失敗の戻し） | `<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ。前方一致では消さない）・`<Work>/old/<name>/`（退避した版と前回の残りは、記録の `name` が一致し、記録の `module` があり、`<Plug-Ins>/<name>/` もあるときだけ。`<Work>/staging/<name>/` へ移してから消す。条件に合わないものは消さずに `<Work>/old/<name>.kept-<時刻>/` へ移す）・フックが失敗したときの新しい `<Plug-Ins>/<name>/`（自分が置いたもの）・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ。よけた CLI と前回までの残り）・中断した `uninstall` の印 `<Work>/old/<name>.uninstalling`（付け替えに成功したあとと、`<Plug-Ins>/<name>/` があるとき。どちらも前の回の残り） |
+   | `uninstall` | 記録の `name` が一致し、記録の `module` がある `<Plug-Ins>/<name>/`（`<Work>/old/<name>/` へ移し、フックのあとで `<Work>/staging/<name>/` へ移してから消す）・`<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ）・自分が書いた印 `<Work>/old/<name>.uninstalling`・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ）・空の `<Work>/staging`・`<Work>/old`・`<Work>`（中身のあるものは消さない） |
+   | `cli` の `install` のフック | なし |
+   | `cli` の `uninstall` のフック | `<Plug-Ins>/cli/bin/vw2026` を指す `~/.local/bin/vw2026`・`Path` の `<Plug-Ins>\cli\bin` と一致する項目（どちらも `VW2026_HOOK_INSTALL_DIR` から決め、同じ場所かはディレクトリの同一性で決める） |
 
 ## 整形と検査
 
@@ -44,7 +54,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   だけ書く。各言語の設定には、その言語にしかない項目だけを書く（`docs/format.md`）。
 - ツールは言語ごとに標準のもの 1 つを、ほぼ既定のまま使い、版を固定する。Go で書かれたツールは
   `tools/go.mod`、pip のツール（clang-format・clang-tidy）は `tools/requirements.txt`、
-  PSScriptAnalyzer は `scripts/powershell.ps1` に版を置く。ツールと対象は `docs/format.md`・`docs/lint.md`。
+  PSScriptAnalyzer と Pester（`cli` のフックのテスト。`hooks.yml`）は `scripts/powershell.ps1` に版を置く。ツールと対象は `docs/format.md`・`docs/lint.md`。
 - **コメントは対象のコードの直前の行に置き、コードと同じ行の末尾には書かない**（どの言語でも。
   1 行で足りるものも同じ。複数行と 1 行で置き場所が混ざると読みにくいため）。
 
@@ -64,6 +74,11 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   実行ファイルに入る推移的な依存なし）だけ。
 - 受け渡しは偽のプラグインに対する単体テストで確かめる（`cli/internal/fakeplugin`）。スプールの
   場所は、本番では実行ファイルの場所から求め（`spool.Dir`）、テストでは `env.spool` を差し替えて渡す。
+  `install` / `uninstall` の場所も同じで、本番では `main()` だけが `env.workDir`（`install.WorkDir`）・
+  `env.pluginsDir`（`install.DefaultPluginsDir`）・`env.executable`（`os.Executable`）を入れ、テストの
+  `invoke` はどれも既定で一時ディレクトリを返す（開発者のマシンの本物の `<Plug-Ins>`・`<Work>` に触れない）。
+  配置の手順は `cli/internal/install` で、場所と既定のレジストリを `install.Options` で受け取り、偽の
+  HTTPS サーバー（`httptest`）と、テストの実行ファイルを偽のフックとして走らせる `Options.Interpreters` で確かめる。
   場所を変える指定（引数・環境変数）は足さない（プラグインは自分のモジュールの場所から求めた
   `<Plug-Ins>/cli/spool` しか見ないので、本番で効かない。`docs/protocol.md「スプールの場所」`）。
 - 手書きの字句処理（`spool.NestingDepth`）は Go の標準のファジングで、`encoding/json` と同じ深さを
