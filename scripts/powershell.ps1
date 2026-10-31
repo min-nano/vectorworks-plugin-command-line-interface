@@ -7,9 +7,11 @@
 #   pwsh scripts/powershell.ps1 -Mode Lint <files>   検査の指摘を並べて、あれば 1 で終わる
 #   pwsh scripts/powershell.ps1 -Mode Test <files>   Pester でテストし、失敗があれば 1 で終わる
 #   pwsh scripts/powershell.ps1 -Mode Install        固定した版の PSScriptAnalyzer と Pester を入れる
+#
+# -Mode LintFile <file> は -Mode Lint が子のプロセスで使う（指摘があれば 1、解析器が落ちたら 3 で終わる）。
 param(
 	[Parameter(Mandatory)]
-	[ValidateSet('Check', 'Fix', 'Lint', 'Test', 'Install')]
+	[ValidateSet('Check', 'Fix', 'Lint', 'LintFile', 'Test', 'Install')]
 	[string] $Mode,
 	[Parameter(ValueFromRemainingArguments)]
 	[string[]] $Path = @()
@@ -39,38 +41,49 @@ if ($Mode -eq 'Test') {
 	exit 0
 }
 
+# Lint は、ファイルごとに子の pwsh（-Mode LintFile）で検査する。PSScriptAnalyzer は、同じファイルでもときどき
+# 解析器の中で落ちる（NullReferenceException・PowerShell の実行時の「An item with the same key has already been
+# added」でプロセスごと終わる。指摘ではなく、走らせ直すと通る。PSScriptAnalyzer #1351・#1511）。プロセスごと
+# 落ちるとスクリプトの中では受け止められないので、子が指摘（1）でも通る（0）でもなく終わったときだけ、そう書いて
+# から 3 回まで走らせ直す。指摘は走らせ直さない。
+if ($Mode -eq 'Lint') {
+	$pwsh = (Get-Process -Id $PID).Path
+	$status = 0
+	foreach ($file in $Path) {
+		for ($attempt = 1; ; $attempt++) {
+			& $pwsh -NoProfile -File $PSCommandPath -Mode LintFile $file
+			$code = $LASTEXITCODE
+			if ($code -le 1 -or $attempt -ge 3) {
+				break
+			}
+			[Console]::Error.WriteLine(('{0}: PSScriptAnalyzer crashed (exit code {1}); running it again' -f $file, $code))
+		}
+		if ($code -ne 0) {
+			$status = 1
+		}
+	}
+	exit $status
+}
+
 Import-Module PSScriptAnalyzer -RequiredVersion $version
 $settings = Join-Path (Split-Path $PSScriptRoot) 'PSScriptAnalyzerSettings.psd1'
 # 書き戻すときは BOM を付ける（.editorconfig）。
 $utf8 = [System.Text.UTF8Encoding]::new($true)
 
-# Invoke-Analyzer は 1 つのファイルを検査する。Invoke-ScriptAnalyzer は、同じファイルでもときどき解析器の
-# 中の NullReferenceException で落ちる（指摘ではなく、走らせ直すと通る。PSScriptAnalyzer #1351）。その失敗
-# だけを、どのファイルで何が落ちたかを標準エラーに書いてから、3 回まで走らせ直す。指摘は走らせ直さない。
-#
-# try / catch は 1 行に書く（整形の規則 PSPlaceCloseBrace が } と catch の間で改行するため。1 行の
-# ブロックは規則が見ない）。
-function Invoke-Analyzer {
-	param([string] $File)
-	for ($attempt = 1; ; $attempt++) {
-		try { return Invoke-ScriptAnalyzer -Path $File -Settings $settings } catch { Resolve-AnalyzerCrash -File $File -Attempt $attempt -ErrorRecord $_ }
+# 子のプロセス（LintFile）では、解析器の中の失敗（止まる誤り）を 3 で終わらせ、指摘（1）と分ける。ほかの
+# モードでは、これまでどおり止まる（break は誤りをそのまま投げる）。
+trap {
+	if ($Mode -ne 'LintFile') {
+		break
 	}
-}
-
-# Resolve-AnalyzerCrash は、解析器の NullReferenceException なら理由と場所を書いて戻り（走らせ直す）、
-# それ以外か 3 回目なら投げ直す。
-function Resolve-AnalyzerCrash {
-	param([string] $File, [int] $Attempt, [System.Management.Automation.ErrorRecord] $ErrorRecord)
-	if ($Attempt -ge 3 -or $ErrorRecord.Exception.Message -notlike '*Object reference not set*') {
-		throw $ErrorRecord
-	}
-	[Console]::Error.WriteLine(('{0}: PSScriptAnalyzer crashed; running it again: {1}' -f $File, $ErrorRecord.Exception))
+	[Console]::Error.WriteLine(('{0}: {1}' -f ($Path -join ' '), $_.Exception))
+	exit 3
 }
 
 $status = 0
 foreach ($file in $Path) {
-	if ($Mode -eq 'Lint') {
-		$found = Invoke-Analyzer -File $file
+	if ($Mode -eq 'LintFile') {
+		$found = Invoke-ScriptAnalyzer -Path $file -Settings $settings
 		if ($found) {
 			$found | ForEach-Object {
 				'{0}:{1}:{2}: {3}: {4}' -f $file, $_.Line, $_.Column, $_.RuleName, $_.Message
