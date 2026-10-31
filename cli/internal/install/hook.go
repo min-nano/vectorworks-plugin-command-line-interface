@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"unicode/utf8"
 
@@ -49,20 +47,7 @@ func (o *Options) interpreter(name string) ([]string, error) {
 	if argv, ok := o.Interpreters[name]; ok {
 		return argv, nil
 	}
-	switch {
-	case name == "sh" && runtime.GOOS != "windows":
-		return []string{"/bin/sh"}, nil
-	case name == "powershell" && runtime.GOOS == "windows":
-		root := os.Getenv("SystemRoot")
-		if root == "" {
-			root = `C:\Windows`
-		}
-		return []string{
-			filepath.Join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
-			"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
-		}, nil
-	}
-	return nil, fmt.Errorf("%s hooks do not run on %s", name, runtime.GOOS)
+	return defaultInterpreter(name)
 }
 
 // scriptIn は、フックが指す zip の中のファイルが、展開したフォルダの中に実在するファイルかを
@@ -105,10 +90,7 @@ func (o *Options) runHook(kind string, argv []string, dir string, env hookEnv) (
 	cmd.Dir = dir
 	cmd.Env = env.environ()
 	cmd.Stdout = &stdout
-	cmd.Stderr = o.Stderr
-	if o.Stderr == nil {
-		cmd.Stderr = io.Discard
-	}
+	cmd.Stderr = o.stderr()
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("the %s hook %q failed: %w", kind, strings.Join(argv, " "), err)
 	}

@@ -89,7 +89,7 @@
 | 順 | レジストリ | 補足 |
 | --- | --- | --- |
 | 1 | **既定のレジストリ**（CLI に埋め込む。`cli/internal/registry/default.json`） | 必ず先頭にあり、外せない。このリポジトリの PR で直し、CLI のビルドに入る |
-| 2〜 | `--registry <url\|path>`（何度でも書ける。環境変数 `VW2026_REGISTRY` は `,` で区切る） | 書いた順に引く。引数があれば環境変数は読まない（2 つの一覧をつながない） |
+| 2〜 | `--registry <url\|path>`（何度でも書ける。環境変数 `VW2026_REGISTRY` は `,` で区切る） | 書いた順に引く。引数があれば環境変数は読まない（2 つの一覧をつながない）。`https://` でない `<scheme>://`（`http://`・`HTTPS://` など）は、パスとして扱わずに使い方の誤りにする |
 
 - **先に見つかった名前を使います。** 名前が重なっても失敗にしません。どのレジストリの項目を
   使ったかは出力の `registry` に載せます。
@@ -153,7 +153,9 @@
   OS の一時フォルダの下で行うので、古い時刻を付けると、付け替えの前に OS の片付けで消されうるため。
   [インストール「作業の場所」](plugin/install-and-update.md#作業の場所)）。
 - **失敗にするもの**: シンボリックリンク・絶対パスや `..` を含む項目（展開先の外へ出る）・`\` を
-  区切りに使った項目（区切りは `/` に限る。Windows PowerShell 5.1 の `Compress-Archive` が作る形）。
+  区切りに使った項目（区切りは `/` に限る。Windows PowerShell 5.1 の `Compress-Archive` が作る形）・
+  512 MiB を超える zip（終わらない本文で `<Plug-Ins>` と同じドライブを埋めないため）。`./` で始まる項目
+  （`zip -r x.zip ./` が作る形）は、`./` を除いた名前として扱います。
 
 ## フック
 
@@ -187,7 +189,7 @@
   | 1 つ目 | 走るもの | 2 つ目 |
   | --- | --- | --- |
   | `sh` | `/bin/sh`（mac） | **zip の中のスクリプトの相対パス**（必須） |
-  | `powershell` | `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File`（Windows。Windows PowerShell 5.1） | **zip の中のスクリプトの相対パス**（必須） |
+  | `powershell` | System32（`FOLDERID_System`。環境変数 `SystemRoot` は読まない）の `WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File`（Windows。Windows PowerShell 5.1） | **zip の中のスクリプトの相対パス**（必須） |
   | zip の中の相対パス | その実行ファイル | — |
 
 - zip の中の相対パスは、展開したフォルダの中に実在するファイルでなければ失敗にします（絶対パス・

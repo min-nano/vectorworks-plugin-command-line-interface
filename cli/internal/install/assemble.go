@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -134,8 +135,9 @@ func extract(zipPath, dir string) ([]string, error) {
 		if err := extractFile(file, dir); err != nil {
 			return nil, err
 		}
-		name, _, _ := strings.Cut(file.Name, "/")
-		if !seen[name] {
+		// ./ で始まる項目（zip -r x.zip ./ が作る）も、整えてから一番上の名前を取る。
+		name, _, _ := strings.Cut(path.Clean(file.Name), "/")
+		if name != "." && !seen[name] {
 			seen[name] = true
 			top = append(top, name)
 		}

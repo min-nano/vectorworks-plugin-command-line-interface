@@ -118,6 +118,14 @@ func (o *Options) places(name string) (places, error) {
 	}, nil
 }
 
+// stderr は、知らせの行き先（無ければ捨てる）。
+func (o *Options) stderr() io.Writer {
+	if o.Stderr == nil {
+		return io.Discard
+	}
+	return o.Stderr
+}
+
 // absolute は path を今の作業ディレクトリから絶対にして整える。filepath.Abs が失敗するのは作業
 // ディレクトリが分からないときだけで、Vectorworks の動く OS では起きない（mac の getcwd は消えた
 // ディレクトリのパスも返し、Windows は動いているプロセスの作業ディレクトリを消せない）ので、
@@ -344,7 +352,13 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 	// 後始末。付け替えに成功したので、中断した uninstall の印も消す（残すと、次の install が付け替えの
 	// 途中で止まったときに、次の uninstall が唯一残った old/<name>/ を消してしまう）。
 	_ = os.Remove(p.stageZip)
-	_ = os.RemoveAll(p.oldDir)
+	// 退避した版は、記録の名前が一致し module があるときだけ消す（守ること 9 の歯止め）。module の無い
+	// フォルダを入れ直したときは、利用者のファイルが入っているかもしれないので残して知らせる。
+	if hadOld && !validRecord(p.oldDir, name) {
+		fmt.Fprintf(o.stderr(), "vw2026: the previous folder is left in %s (its record or module is missing); delete it when it is no longer needed\n", p.oldDir)
+	} else {
+		_ = os.RemoveAll(p.oldDir)
+	}
 	_ = os.Remove(p.marker)
 	cleanOldCLIs(p.old)
 	return hook, nil
@@ -366,9 +380,13 @@ func (o *Options) undoSwap(p places, hadOld bool, moved *movedCLI, cause error) 
 // undoHook はフックが失敗したときに前の版へ戻す。戻す前にロックを見て、Vectorworks が起動していれば
 // 新しい版を残す（動いているプラグインのロックごと消さない）。
 func (o *Options) undoHook(p places, hadOld bool, moved *movedCLI, cause error) error {
+	previous := ""
+	if hadOld {
+		previous = fmt.Sprintf(" (the previous one is in %s)", p.oldDir)
+	}
 	keep := func(reason string) error {
-		return fmt.Errorf("%w; %s, so the new version stays in %s (the previous one is in %s): quit Vectorworks, "+
-			"then run install with the same tag again (it runs only the hook)", cause, reason, p.dest, p.oldDir)
+		return fmt.Errorf("%w; %s, so the new version stays in %s%s: quit Vectorworks, "+
+			"then run install with the same tag again (it runs only the hook)", cause, reason, p.dest, previous)
 	}
 	if running(p.plugins) {
 		return keep("Vectorworks started meanwhile")

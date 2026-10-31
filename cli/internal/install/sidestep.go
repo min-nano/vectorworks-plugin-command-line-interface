@@ -43,7 +43,8 @@ func (o *Options) sidestep(dir, old string) (*movedCLI, error) {
 		return nil, nil
 	}
 	// old は呼ぶ側（replace・Uninstall）が先に作っている。
-	to := filepath.Join(old, filepath.Base(executable)+".old-"+time.Now().UTC().Format("20060102T150405.000000000"))
+	// 名前は実行ファイルの名前に依らず固定にする（cleanOldCLIs が同じ頭で消せるように）。
+	to := filepath.Join(old, oldCLIName+time.Now().UTC().Format("20060102T150405.000000000"))
 	if err := rename(executable, to); err != nil {
 		return nil, err
 	}

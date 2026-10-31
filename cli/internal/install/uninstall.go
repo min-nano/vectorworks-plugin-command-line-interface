@@ -57,8 +57,11 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		if err := mkdirAll(p.old, 0o700); err != nil {
 			return nil, err
 		}
-		if err := removeLeftover(p, name); err != nil {
-			return nil, err
+		// uninstall は <Work>/old/<name>/ を消さない（守ること 9）。install のフックが失敗して Vectorworks が
+		// 起動したときの前の版などで、黙って消すと戻せなくなるため。
+		if exists(p.oldDir) {
+			return nil, fmt.Errorf("%s is left by an install that stopped or kept the new version; nothing is removed. "+
+				"Move it back or delete it, then run uninstall again", p.oldDir)
 		}
 		// 印を書いてからフォルダを移す（移したあとで止まっても、次の uninstall が続きから走れる）。
 		if err := writeFile(p.marker, nil, 0o600); err != nil {
@@ -95,6 +98,12 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		// 続きから走った回は戻さない（OS の片付けで一部だけ残ったフォルダかもしれない）。
 		if resumed {
 			return nil, fmt.Errorf("%w; %s is left as it is (run uninstall again, or delete it and %s)", err, p.oldDir, p.marker)
+		}
+		// 戻す前にロックを見る（install の undoHook と同じ）。フックの間に起動した Vectorworks の下へ
+		// フォルダを戻さず、印を残して、終了してからの uninstall が続きから走れるようにする。
+		if running(p.plugins) {
+			return nil, fmt.Errorf("%w; Vectorworks started meanwhile, so %s stays in %s: quit Vectorworks, then run "+
+				"uninstall again (it goes on from the hook)", err, name, p.oldDir)
 		}
 		if renameErr := rename(p.oldDir, p.dest); renameErr != nil {
 			return nil, fmt.Errorf("%w; %s cannot be put back (%v): move it back to %s by hand", err, p.oldDir, renameErr, p.dest)

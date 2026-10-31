@@ -37,9 +37,10 @@ folder of plug-ins that has cli. "uninstall cli" does not refuse while other
 plug-ins remain, but without vw2026 they can no longer be uninstalled; see
 "remaining".
 
-It prints one of
+It prints one line of JSON with one of these outcomes:
 
-	{"outcome":"uninstalled","name":"cli","hook":{...},"remaining":[...],"left":[...]}
+	{"outcome":"uninstalled","name":"cli","hook":{...},
+	 "remaining":[...],"left":[...]}
 	{"outcome":"not_installed","name":"...","remaining":[...],"left":[]}
 	{"outcome":"vectorworks_running",...}
 	{"outcome":"failed","message":"..."}

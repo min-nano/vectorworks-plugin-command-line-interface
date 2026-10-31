@@ -50,15 +50,17 @@ and exits with 6, even for the same tag. It does not quit Vectorworks and does
 not wait; quit Vectorworks first (see "vw2026 --help" for the sequence). --check
 works while Vectorworks runs.
 
-It prints one of
+It prints one line of JSON with one of these outcomes:
 
-	{"outcome":"installed","name":"cli","requested":"latest","tag":"...","target":"...","registry":"default","plugins_dir":"...","hook":{...}}
+	{"outcome":"installed","name":"cli","requested":"latest","tag":"...",
+	 "target":"...","registry":"default","plugins_dir":"...","hook":{...}}
 	{"outcome":"up_to_date",...}
-	{"outcome":"available",...}               (--check: a new build is available, or none is installed)
+	{"outcome":"available",...}
 	{"outcome":"vectorworks_running",...}
 	{"outcome":"failed","message":"..."}
 
-"hook" is the output of the hook (a JSON object), absent when the plug-in has
+With --check, "available" means a new build is available, or none is
+installed. "hook" is the output of the hook (a JSON object), absent when the plug-in has
 none. On a failure (cannot download, the sha256 does not match, the zip is
 wrong, the folder cannot be replaced, the hook failed), install leaves
 <Plug-Ins> as it was, except for what the hook changed outside the folder,
@@ -66,8 +68,9 @@ writes the reason to the standard error too, and exits with 1. Replacing the
 folder fails on Windows while a program has a file in it open or has its
 current directory in it.
 
-The default <Plug-Ins> is ~/Library/Application Support/Vectorworks/2026/Plug-Ins
-on macOS and %APPDATA%\Nemetschek\Vectorworks\2026\Plug-Ins on Windows. vw2026
+The default <Plug-Ins> is
+~/Library/Application Support/Vectorworks/2026/Plug-Ins on macOS and
+%APPDATA%\Nemetschek\Vectorworks\2026\Plug-Ins on Windows. vw2026
 does not remember another one: give --plugins-dir to every install and
 uninstall. Install works in vectorworks2026-cli in the temporary folder of the
 user, which must be on the same volume as <Plug-Ins>.

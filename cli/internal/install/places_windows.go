@@ -45,3 +45,19 @@ func defaultPluginsDir() (string, error) {
 func target() string {
 	return "windows-x64"
 }
+
+// oldCLIName は、よけた CLI の名前の頭（oldCLIPrefixes の 1 つ）。
+const oldCLIName = "vw2026.exe.old-"
+
+// FOLDERID_System
+var folderSystem = syscall.GUID{Data1: 0x1AC14E77, Data2: 0x02E7, Data3: 0x4E5D, Data4: [8]byte{0xB7, 0x44, 0x2E, 0xB1, 0xAE, 0x51, 0x98, 0xB7}}
+
+// defaultInterpreter は、フックの 1 つ目を走らせる argv の頭。Windows は Windows PowerShell 5.1 だけで、
+// 場所は FOLDERID_System（System32）から求める（環境変数 SystemRoot は読まない）。
+func defaultInterpreter(name string) ([]string, error) {
+	if name != "powershell" {
+		return nil, fmt.Errorf("%s hooks do not run on Windows", name)
+	}
+	path, err := knownFolder(&folderSystem, "WindowsPowerShell", "v1.0", "powershell.exe")
+	return []string{path, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"}, err
+}

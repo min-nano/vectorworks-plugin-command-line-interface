@@ -38,7 +38,7 @@ func TestInstallSidestepsTheRunningCLI(t *testing.T) {
 	if _, err := Install(o, "cli", "c2", false); err != nil {
 		t.Fatal(err)
 	}
-	if len(moved) != 1 || !strings.HasPrefix(filepath.Base(moved[0]), "vw2026.old-") ||
+	if len(moved) != 1 || !strings.HasPrefix(filepath.Base(moved[0]), oldCLIName) ||
 		filepath.Dir(moved[0]) != filepath.Join(h.work, "old") {
 		t.Fatalf("%v", moved)
 	}

@@ -9,12 +9,17 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
 
 // maxDocument はレジストリとマニフェストの大きさの上限（どちらも小さな JSON）。
 const maxDocument = 1 << 20
+
+// maxAsset は資産（zip）の大きさの上限（docs/registry.md「zip の形」）。終わらない本文で <Plug-Ins> と
+// 同じドライブを埋めないため。テストが縮める。
+var maxAsset int64 = 512 << 20
 
 // lookup はレジストリを順に引き、名前の項目と、そのレジストリの名前（記録の registry）を返す
 // （docs/registry.md「レジストリの順」）。既定のレジストリが先頭で、名前が見つかった時点で止める。
@@ -57,6 +62,8 @@ func RegistrySource(ref string) (string, error) {
 		return "", usageErrorf("an empty registry")
 	case registry.IsURL(ref):
 		return ref, nil
+	case strings.Contains(ref, "://"):
+		return "", usageErrorf("the registry %q is a URL that does not start with https:// (only https:// is fetched)", ref)
 	}
 	return absolute(ref), nil
 }
@@ -124,9 +131,12 @@ func (o *Options) download(ref, path, want string) error {
 		return err
 	}
 	hash := sha256.New()
-	_, err = io.Copy(io.MultiWriter(file, hash), body)
+	written, err := io.Copy(io.MultiWriter(file, hash), io.LimitReader(body, maxAsset+1))
 	if closeErr := file.Close(); err == nil {
 		err = closeErr
+	}
+	if err == nil && written > maxAsset {
+		err = fmt.Errorf("larger than %d bytes", maxAsset)
 	}
 	if err != nil {
 		os.Remove(path)

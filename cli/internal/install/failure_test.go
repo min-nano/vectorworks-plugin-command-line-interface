@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
@@ -430,5 +431,137 @@ func TestUninstallCannotDeleteTheFolder(t *testing.T) {
 	removeAll = original
 	if result, err := Uninstall(h.options(), "cli"); err != nil || result.Outcome != OutcomeUninstalled || exist(old) {
 		t.Fatalf("%+v %v", result, err)
+	}
+}
+
+// 付け替えで退避したフォルダの記録の module が無ければ（利用者のファイルが入っているかもしれない）、
+// 消さずに残して知らせる（守ること 9）。
+func TestInstallKeepsAFolderWithoutModule(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	dest := filepath.Join(h.plugins, "cli")
+	os.RemoveAll(filepath.Join(dest, "cli.vwlibrary"))
+	os.WriteFile(filepath.Join(dest, "mine.txt"), []byte("mine"), 0o644)
+	var stderr bytes.Buffer
+	o := h.options()
+	o.Stderr = &stderr
+	if result, err := Install(o, "cli", "c1", false); err != nil || result.Outcome != OutcomeInstalled {
+		t.Fatalf("%+v %v", result, err)
+	}
+	old := filepath.Join(h.work, "old", "cli")
+	if data, _ := os.ReadFile(filepath.Join(old, "mine.txt")); string(data) != "mine" || !strings.Contains(stderr.String(), old) {
+		t.Fatalf("should keep %s and say so: %s", old, stderr.String())
+	}
+}
+
+// 初めて入れるときにフックが失敗し、その間に Vectorworks が起動したら、新しい版を残し、前の版の場所は示さない。
+func TestFirstInstallHookFailureWhileRunning(t *testing.T) {
+	h := newHarness(t)
+	signal := filepath.Join(h.tmp, "hook-started")
+	await := filepath.Join(h.tmp, "locked")
+	h.publish(release{name: "cli", tag: "c1", install: &hookPlan{Exit: 1, Signal: signal, Await: await}})
+	done := lockWhenSignaled(h, signal, await)
+	_, err := h.install("cli", "c1")
+	<-done
+	if err == nil || !strings.Contains(err.Error(), "Vectorworks started") || strings.Contains(err.Error(), "previous") {
+		t.Fatal(err)
+	}
+	if h.installedVersion("cli") != "c1" {
+		t.Fatal("the new version should stay")
+	}
+}
+
+// uninstall のフックが失敗し、その間に Vectorworks が起動したら、フォルダを戻さずに印を残す。
+func TestUninstallHookFailureWhileRunning(t *testing.T) {
+	h := newHarness(t)
+	h.installCLI()
+	signal := filepath.Join(h.tmp, "hook-started")
+	await := filepath.Join(h.tmp, "locked")
+	h.mustInstall(release{name: "demo", tag: "d1", uninstall: &hookPlan{Exit: 1, Signal: signal, Await: await}})
+	done := lockWhenSignaled(h, signal, await)
+	_, err := Uninstall(h.options(), "demo")
+	<-done
+	if err == nil || !strings.Contains(err.Error(), "Vectorworks started") {
+		t.Fatal(err)
+	}
+	if exist(filepath.Join(h.plugins, "demo")) || !exist(filepath.Join(h.work, "old", "demo")) ||
+		!exist(filepath.Join(h.work, "old", "demo.uninstalling")) {
+		t.Fatal("should keep the folder in old with the marker")
+	}
+}
+
+// lockWhenSignaled は、フックの合図を待ってロックを掴み、フックに知らせる。
+func lockWhenSignaled(h *harness, signal, await string) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for deadline := time.Now().Add(10 * time.Second); !exist(signal) && time.Now().Before(deadline); {
+			time.Sleep(10 * time.Millisecond)
+		}
+		h.holdLock()
+		os.WriteFile(await, nil, 0o600)
+	}()
+	return done
+}
+
+// https:// でない URL のレジストリは、パスとして扱わずに使い方の誤りにする。
+func TestRegistrySourceRefusesOtherSchemes(t *testing.T) {
+	for _, ref := range []string{"http://example.com/r.json", "HTTPS://example.com/r.json", "file:///r.json"} {
+		if _, err := RegistrySource(ref); !IsUsage(err) {
+			t.Errorf("%s: %v", ref, err)
+		}
+	}
+}
+
+// 資産が上限より大きければ、取るのを失敗にして、取ったものを残さない。
+func TestDownloadTooLarge(t *testing.T) {
+	original := maxAsset
+	maxAsset = 4
+	t.Cleanup(func() { maxAsset = original })
+	h := newHarness(t)
+	h.serve("/big.zip", []byte("0123456789"))
+	path := filepath.Join(t.TempDir(), "big.zip")
+	o := h.options()
+	if err := o.download(h.url("/big.zip"), path, sha256Hex([]byte("0123456789"))); err == nil ||
+		!strings.Contains(err.Error(), "larger") || exist(path) {
+		t.Fatal(err)
+	}
+}
+
+// ./ で始まる項目の zip（zip -r x.zip ./ が作る）も入れられる。
+func TestInstallZipWithDotSlash(t *testing.T) {
+	h := newHarness(t)
+	h.installCLI()
+	h.publish(release{name: "demo", tag: "d1", hooks: &registry.Hooks{}, entries: []entry{
+		{name: "./", mode: fs.ModeDir | 0o755},
+		{name: "./demo.vwlibrary/x", body: "m"},
+		{name: "./version.txt", body: "d1"},
+	}})
+	if result, err := h.install("demo", "d1"); err != nil || result.Outcome != OutcomeInstalled || h.installedVersion("demo") != "d1" {
+		t.Fatalf("%+v %v", result, err)
+	}
+}
+
+// よけた CLI の名前は、実行ファイルの名前（大文字の名前・別の名前の写し）に依らず決まり、後始末が消す。
+func TestSidestepNameIgnoresTheExecutableName(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1", extra: []entry{{name: "bin/VW2026-dev", body: "copy", mode: 0o755}}})
+	h.publish(release{name: "cli", tag: "c2"})
+	o := h.options()
+	o.Executable = filepath.Join(h.plugins, "cli", "bin", "VW2026-dev")
+	var moved string
+	original := rename
+	rename = func(from, to string) error {
+		if filepath.Base(from) == "VW2026-dev" {
+			moved = to
+		}
+		return original(from, to)
+	}
+	t.Cleanup(func() { rename = original })
+	if _, err := Install(o, "cli", "c2", false); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(filepath.Base(moved), oldCLIName) || exist(moved) {
+		t.Fatalf("moved to %s", moved)
 	}
 }

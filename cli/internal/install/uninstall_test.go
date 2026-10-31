@@ -171,15 +171,21 @@ func TestUninstallResumedHookFailureDoesNotRestore(t *testing.T) {
 	}
 }
 
-// 前の回の残りの old/<name>/ は、<Plug-Ins>/<name>/ があり記録が正しければ消してから進む。
-func TestUninstallLeftoverOld(t *testing.T) {
+// 前の回の残りの old/<name>/ があれば、uninstall は消さずに断る（守ること 9。install のフックが失敗して
+// Vectorworks が起動したときの前の版かもしれない）。
+func TestUninstallRefusesLeftoverOld(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
 	h.mustInstall(release{name: "demo", tag: "d1"})
 	old := filepath.Join(h.work, "old", "demo")
 	copyDir(t, filepath.Join(h.plugins, "demo"), old)
-	if result, err := Uninstall(h.options(), "demo"); err != nil || result.Outcome != OutcomeUninstalled || exist(old) {
-		t.Fatalf("%+v %v", result, err)
+	before := snapshot(t, h.plugins)
+	if _, err := Uninstall(h.options(), "demo"); err == nil || !strings.Contains(err.Error(), old) {
+		t.Fatal(err)
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
+	if !exist(filepath.Join(old, "version.txt")) || exist(filepath.Join(h.work, "old", "demo.uninstalling")) {
+		t.Fatal("removed old or left the marker")
 	}
 }
 

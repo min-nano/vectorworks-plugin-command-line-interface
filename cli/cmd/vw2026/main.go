@@ -157,8 +157,9 @@ in a loop ("vw2026 help status").
 vw2026 installs, updates, and uninstalls the plug-ins, cli included ("vw2026
 help install"). It changes nothing while Vectorworks is running with the
 bridge, and it does not quit Vectorworks. To update the plug-in while
-Vectorworks runs, the caller combines the commands. Quit runs only in a session and only while no drawing is
-open, so the caller saves and closes the drawings first. End the session on
+Vectorworks runs, the caller combines the commands. Quit runs only in a
+session and only while no drawing is open, so the caller saves and closes the
+drawings first. End the session on
 each failure: otherwise it stays until Vectorworks quits, and other callers
 are refused. In sh, with the waits of "vw2026 help status":
 
