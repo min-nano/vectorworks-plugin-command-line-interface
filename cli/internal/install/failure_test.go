@@ -607,6 +607,22 @@ func TestDiscardWithoutStaging(t *testing.T) {
 	}
 }
 
+// discard が <Work>/staging を作れなければ、old へ移したフォルダと印を残して失敗にする（走らせ直すと続きから走る）。
+func TestDiscardCannotMakeTheStaging(t *testing.T) {
+	h := newHarness(t)
+	h.installCLI()
+	h.mustInstall(release{name: "demo", tag: "d1"})
+	staging := filepath.Join(h.work, "staging")
+	os.RemoveAll(staging)
+	failMkdirAll(t, staging)
+	if _, err := Uninstall(h.options(), "demo"); err == nil || !strings.Contains(err.Error(), "run uninstall again") {
+		t.Fatal(err)
+	}
+	if !validRecord(filepath.Join(h.work, "old", "demo"), "demo") || !exist(filepath.Join(h.work, "old", "demo.uninstalling")) {
+		t.Fatal("should keep old and the marker")
+	}
+}
+
 // インタプリタを通さないフックに実行の権限が無ければ（mac）、付け替えの前に断る。
 func TestHookWithoutExecutePermission(t *testing.T) {
 	if runtime.GOOS == "windows" {
