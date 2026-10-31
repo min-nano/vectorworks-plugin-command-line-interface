@@ -249,6 +249,7 @@ func TestReadRecordRefuses(t *testing.T) {
 	for name, body := range map[string]string{
 		"no version":    `{"name":"a","registry":"default","tag":"t","target":"macos-arm64","module":"a.vwlibrary"}`,
 		"no module":     `{"record_version":1,"name":"a","registry":"default","tag":"t","target":"macos-arm64"}`,
+		"bad tag":       `{"record_version":1,"name":"a","registry":"default","tag":"../x","target":"macos-arm64","module":"a.vwlibrary"}`,
 		"bad hook":      `{"record_version":1,"name":"a","registry":"default","tag":"t","target":"macos-arm64","module":"a.vwlibrary","hooks":{"install":["sh","../x"]}}`,
 		"not an object": `[]`,
 	} {

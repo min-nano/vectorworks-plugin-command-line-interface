@@ -38,7 +38,23 @@ var ErrRunning = errors.New("Vectorworks is running: quit it, then run again")
 
 // ErrRunsInside は、uninstall が外すフォルダの中で、走らせている CLI が動いている（入れた cli の vw2026 で
 // uninstall cli を走らせた）ので、何もしなかった。フォルダの外の CLI（初回のスクリプト）で外す。
-var ErrRunsInside = errors.New("vw2026 runs from the folder it would uninstall,")
+// 返る誤りは *RunsInsideError で、errors.Is で ErrRunsInside と比べられる。
+var ErrRunsInside = errors.New("vw2026 runs from the folder it would uninstall")
+
+// RunsInsideError は ErrRunsInside の中身。Tag は入っているタグ（外すのに使う初回のスクリプトと CLI の版）。
+type RunsInsideError struct {
+	Dir string
+	Tag string
+}
+
+func (e *RunsInsideError) Error() string {
+	return fmt.Sprintf("%v, %s; nothing is removed", ErrRunsInside, e.Dir)
+}
+
+// Is は ErrRunsInside と比べさせる。
+func (e *RunsInsideError) Is(target error) bool {
+	return target == ErrRunsInside
+}
 
 // UsageError は使い方の誤り（名前・タグ・指定の形）。
 type UsageError struct {

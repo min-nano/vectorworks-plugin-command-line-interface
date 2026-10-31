@@ -5,7 +5,8 @@
 #
 #   curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.sh | sh
 #   curl -fsSL …/get-vw2026.sh | sh -s -- cli@<tag> --plugins-dir <Plug-Ins>
-#   curl -fsSL …/get-vw2026.sh | sh -s -- uninstall cli
+#   curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall cli@<tag>   # 入っているタグの CLI で外す
+#   curl -fsSL …/get-vw2026.sh | sh -s -- uninstall cli                        # latest の CLI で外す
 #
 # 本体は関数に入れ、最後の行で呼ぶ。パイプで受け取る途中で切れたときに、途中までを走らせないため。
 set -eu
@@ -50,11 +51,18 @@ main() {
 			continue
 		fi
 		if [ "$uninstall" = true ]; then
-			# cli を外す手段（入っている CLI の uninstall cli は断り、これを示す）で、止まった uninstall cli の
-			# 続きもこれで走らせる。cli だけを受け付ける。
-			if [ "$positional" -ne 2 ] || [ "$arg" != cli ]; then
-				fail "only \"uninstall cli\" is accepted"
-			fi
+			# cli を外す手段（入っている CLI の uninstall cli は断り、入っているタグでこれを示す）で、止まった
+			# uninstall cli の続きもこれで走らせる。cli だけを受け付ける。cli@<tag> なら、そのタグの CLI で外す
+			# （入っているものと同じ版の CLI が、自分の書いた記録を読む）。
+			[ "$positional" -eq 2 ] || fail "only \"uninstall cli[@<tag>]\" is accepted"
+			case "$arg" in
+			cli) ;;
+			cli@*)
+				tag="${arg#cli@}"
+				valid_tag "$tag" || fail "not a valid tag: $tag"
+				;;
+			*) fail "only \"uninstall cli[@<tag>]\" is accepted" ;;
+			esac
 			continue
 		fi
 		# このスクリプトは cli を入れるためのもので、ほかの名前は受け付けない。
@@ -67,9 +75,22 @@ main() {
 		valid_tag "$tag" || fail "not a valid tag: $tag"
 	done
 	if [ "$uninstall" = true ]; then
-		[ "$positional" -eq 2 ] || fail "only \"uninstall cli\" is accepted"
-		# 一時フォルダの CLI は latest のもの（手順 4 から続ける）。
-		tag=latest
+		[ "$positional" -eq 2 ] || fail "only \"uninstall cli[@<tag>]\" is accepted"
+		# タグが無ければ latest の CLI で外す。
+		[ -n "$tag" ] || tag=latest
+		# CLI には uninstall cli を渡す（cli@<tag> は走らせる CLI を選ぶだけ）。指定の値は置き換えない。
+		skip=false
+		for arg in "$@"; do
+			shift
+			if [ "$skip" = false ] && [ "${arg#cli@}" != "$arg" ]; then
+				arg=cli
+			fi
+			case "$arg" in
+			--plugins-dir | --registry) skip=true ;;
+			*) skip=false ;;
+			esac
+			set -- "$@" "$arg"
+		done
 	else
 		if [ -z "$tag" ]; then
 			tag=latest

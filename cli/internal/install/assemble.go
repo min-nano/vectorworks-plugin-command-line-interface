@@ -50,8 +50,11 @@ func readRecord(dir string) (*Record, error) {
 		return nil, errors.New("record_version is missing")
 	case *raw.RecordVersion != RecordVersion:
 		return nil, fmt.Errorf("unknown record_version %d (this vw2026 reads %d)", *raw.RecordVersion, RecordVersion)
-	case raw.Name == "" || raw.Registry == "" || raw.Tag == "" || raw.Target == "" || raw.Module == "":
-		return nil, errors.New("the record lacks name, registry, tag, target or module")
+	case raw.Name == "" || raw.Registry == "" || raw.Target == "" || raw.Module == "":
+		return nil, errors.New("the record lacks name, registry, target or module")
+	case !registry.ValidTag(raw.Tag):
+		// タグは初回のスクリプトの URL と、利用者に示すコマンドに入る。
+		return nil, fmt.Errorf("the record has an invalid tag %q", raw.Tag)
 	}
 	if err := raw.Hooks.Check(); err != nil {
 		return nil, err

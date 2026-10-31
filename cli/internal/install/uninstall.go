@@ -57,7 +57,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		// CLI は使わなくなるので、フォルダの外で動く CLI（初回のスクリプトの一時フォルダのもの）で外す。
 		// Windows で動いている自分を消せずに残すこともない。
 		if _, _, inside := o.runsFrom(p.dest); inside {
-			return nil, fmt.Errorf("%w %s; nothing is removed", ErrRunsInside, p.dest)
+			return nil, &RunsInsideError{Dir: p.dest, Tag: record.Tag}
 		}
 		if err := mkdirAll(p.old, 0o700); err != nil {
 			return nil, err

@@ -13,7 +13,7 @@
 | 初回 | `get-vw2026.sh` / `.ps1`（curl などで取ってパイプで実行） | 一時フォルダに CLI を取り出し、`vw2026 install cli@<tag>` を走らせる |
 | インストール・更新 | `vw2026 install <name>@<tag>` | `<Plug-Ins>/<name>/` を付け替え、フックを走らせる。入っているものと同じタグなら、zip を取らず付け替えもせずに、フックだけを走らせる。`cli` の更新も同じ |
 | アンインストール | `vw2026 uninstall <name>` | フックを走らせ、`<Plug-Ins>/<name>/` を取り除く |
-| `cli` のアンインストール | 初回のスクリプトに `uninstall cli` を渡す | 一時フォルダに CLI を取り出し、`vw2026 uninstall cli` を走らせる（入っている CLI の `uninstall cli` は断り、このスクリプトを示す） |
+| `cli` のアンインストール | 入っているタグの初回のスクリプトに `uninstall cli@<入っているタグ>` を渡す | そのタグの CLI を一時フォルダに取り出し、`vw2026 uninstall cli` を走らせる（入っている CLI の `uninstall cli` は断り、このコマンドを示す） |
 
 ```sh
 # macOS
@@ -99,10 +99,12 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
 `install` / `uninstall` と `cli` のフックが持ち、スクリプトは持ちません。
 
 1. 引数を見て、走らせるものを決める。
-   - **最初の引数が `uninstall` なら**、受け付けるのは `uninstall cli`（と `--plugins-dir`）だけで、
-     `cli@<tag>` は足さない。`latest` の CLI を取り出して `vw2026 uninstall cli …` を走らせる（`cli` を外す
-     ただ 1 つの手段。一時フォルダの CLI はフォルダの外で動くので、何も残さずに外せる。止まった `uninstall cli` の
-     続きもこれで走らせる。下記「アンインストール」）。
+   - **最初の引数が `uninstall` なら**、受け付けるのは `uninstall cli` か `uninstall cli@<tag>`（と `--plugins-dir`）
+     だけ。`cli@<tag>` ならそのタグの、無ければ `latest` の CLI を取り出して、`vw2026 uninstall cli …` を走らせる
+     （CLI には `cli@<tag>` ではなく `cli` を渡す。`cli` を外すただ 1 つの手段。一時フォルダの CLI はフォルダの外で
+     動くので、何も残さずに外せる。止まった `uninstall cli` の続きもこれで走らせる。下記「アンインストール」）。
+     入っているタグで外すのは、入れたものと同じ版のスクリプトと CLI が、自分の書いた記録を読むためです（あとの
+     版でスクリプトや記録の扱いが変わっても、外し方が変わらない）。
    - それ以外は、引数から `cli@<tag>` の形のものを探す（無ければ `cli@latest` を足す）。ほかの名前は
      受け付けない（このスクリプトは `cli` を入れるためのもの）。
 2. ターゲット（mac は `sysctl -n hw.optional.arm64` が 1 なら `macos-arm64`、それ以外は `macos-x64`。
@@ -153,8 +155,9 @@ vw2026 install my-plugin@2026.3.1 --registry ./plugins.json
   `vectorworks_running` で終わります（新しいかだけを知りたいときは `--check`）。
 - **フォルダの中身を入れ直す手段は持ちません。** 入れ直すには `uninstall` してから入れます。
   - ほかのプラグイン: `vw2026 uninstall <name>` のあと `vw2026 install <name>@<tag>`。
-  - `cli`: [初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)に `uninstall cli` を渡して外し、続けて初回のスクリプトで入れます
-    （入っている CLI の `uninstall cli` は断る。下記「アンインストール」）。
+  - `cli`: 入っている CLI の `uninstall cli` が示すコマンド（入っているタグの[初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)に
+    `uninstall cli@<そのタグ>` を渡す）で外し、続けて初回のスクリプトで入れます（入っている CLI の `uninstall cli` は
+    断る。下記「アンインストール」）。
     `<Plug-Ins>/cli/bin/vw2026` が消えた（ウイルス対策が隔離した・`install` が付け替えの途中で止まった）
     ときも同じで、`vw2026` を走らせられないので、初回のスクリプトに `uninstall cli` を渡してから入れ直します。
   - どちらも同じパスに入るので、その間に Vectorworks を起動しなければ「有効化」は残ります（下記
@@ -584,11 +587,13 @@ vw2026 install <name>@<tag>
 ```sh
 vw2026 uninstall import-ifc-homeskz
 vw2026 uninstall import-ifc-homeskz --plugins-dir <Plug-Ins>   # 既定以外の <Plug-Ins> から
-curl -fsSL …/get-vw2026.sh | sh -s -- uninstall cli             # cli（CLI そのもの）は初回のスクリプトで
+curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall cli@<tag>   # cli（CLI そのもの）は初回のスクリプトで
 ```
 
-**走らせている CLI が外すフォルダの中にあれば、何も変えずに使い方の誤りで終わり、初回のスクリプトに
-`uninstall <name>` を渡すコマンドを標準エラーと出力の `command` に示します**（`--plugins-dir` を渡していれば、それも渡す）。
+**走らせている CLI が外すフォルダの中にあれば、何も変えずに使い方の誤りで終わり、入っているタグ（記録の `tag`）の
+初回のスクリプトに `uninstall <name>@<そのタグ>` を渡すコマンドを標準エラーと出力の `command` に示します**
+（`--plugins-dir` を渡していれば、それも渡す）。PR のプレリリースは PR を閉じると消えるので、標準エラーには
+`latest` のスクリプトと CLI で外すコマンド（`uninstall <name>`）も添えます。
 実際に当たるのは、PATH から使う入った `cli` の `vw2026` で `uninstall cli` を走らせたときだけです（Go は名前で
 `cli` を見分けず、[動いている CLI のよけ方](#動いている-cli-のよけ方)と同じく実行ファイルの場所で決める）。
 
@@ -772,14 +777,14 @@ curl -fsSL …/get-vw2026.sh | sh -s -- uninstall cli             # cli（CLI �
   2. 実物のレジストリで `Path` の扱いを確かめる（下記）。走らせるのは同じタグの `install` で、付け替えない
      ので CLI はよけない。
   3. 入った `<Plug-Ins>\cli\bin\vw2026.exe` で `uninstall cli` を走らせる。終了コードが 2 で、出力の `command` が
-     初回のスクリプトに `uninstall cli` を渡すコマンドで、`<Plug-Ins>\cli\` が残っていることを確かめる。
+     その PR のタグの初回のスクリプトに `uninstall cli@<その PR のタグ>` を渡すコマンドで、`<Plug-Ins>\cli\` が残って
+     いることを確かめる。
   4. 記録（`vw2026-install.json`）の `tag` を別のものに書き換えてから、入った `<Plug-Ins>\cli\bin\vw2026.exe` で
      `install cli@<その PR のタグ>` を走らせる。同じビルドを入れ直すことになり、PR の Go のコードが動いている
      自分をよけて付け替える。出力が `installed` で、`<Work>\old\vw2026.exe.old-*` が 1 つだけ残り（動いている
      自分は消せない）、`<Work>\old\cli\` が無いことを確かめる。
-  5. PR の zip から一時フォルダへ取り出した `vw2026.exe`（初回のスクリプトと同じ形。初回のスクリプトそのものは
-     `latest` の CLI で外すので、PR のコードを確かめられない）で `uninstall cli` を走らせる。出力が `uninstalled` で
-     `left` が空、`<Plug-Ins>\cli\` が無く、`Path` に `<Plug-Ins>\cli\bin` が無く、手順 4 の残り（そのプロセスは
+  5. 手順 3 が示した形で、その PR のタグの初回のスクリプトに `uninstall cli@<その PR のタグ>` を渡す（その PR の
+     CLI がフォルダの外で外す）。出力が `uninstalled` で `left` が空、`<Plug-Ins>\cli\` が無く、`Path` に `<Plug-Ins>\cli\bin` が無く、手順 4 の残り（そのプロセスは
      終わっている）も消えたことを確かめる。
   6. 公開した初回のスクリプトで入れ直す。
   7. 入った `<Plug-Ins>\cli\bin\vw2026.exe` で `install cli@latest` を走らせる。動いているのは PR の

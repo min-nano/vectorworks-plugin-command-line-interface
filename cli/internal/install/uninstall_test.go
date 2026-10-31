@@ -206,7 +206,9 @@ func TestUninstallFromInsideTheFolder(t *testing.T) {
 	before := snapshot(t, h.plugins)
 	o := h.options()
 	o.Executable = filepath.Join(h.plugins, "cli", "bin", "vw2026")
-	if _, err := Uninstall(o, "cli"); !errors.Is(err, ErrRunsInside) {
+	_, err := Uninstall(o, "cli")
+	var inside *RunsInsideError
+	if !errors.Is(err, ErrRunsInside) || !errors.As(err, &inside) || inside.Tag != "c1" || !strings.Contains(err.Error(), "nothing is removed") {
 		t.Fatal(err)
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))

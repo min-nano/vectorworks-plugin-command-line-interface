@@ -491,7 +491,7 @@ jobs:
   # 実物の exe の入れ替え（docs/plugin/install-and-update.md「テスト」）。PR の CLI を <Plug-Ins>\cli\ に
   # 入れ、入った PR の CLI に install（タグの違う記録にしてから）と install cli@latest を走らせて、PR の Go の
   # コードに動いている自分をよけさせる（PR でよけ方を壊したら落ちる）。入った CLI の uninstall cli は断り、
-  # フォルダの外の CLI（初回のスクリプトと同じ形）で外す。利用者の Path の型と既存の項目が保たれることも
+  # 初回のスクリプト（その PR のタグの CLI がフォルダの外で走る）で外す。利用者の Path の型と既存の項目が保たれることも
   # 実物のレジストリで確かめる。ランナーは使い捨てなので既定の場所を使い、元の値は戻さない。main では
   # 版の違う相手が無いので走らせない。初回のスクリプトは、利用者と同じく Windows PowerShell 5.1 で、
   # 公開したものを Invoke-RestMethod で取って走らせる。
@@ -523,27 +523,15 @@ jobs:
               if ($code -ne 0) { throw "exit code $code" }
               $Text | ConvertFrom-Json
           }
-          # 公開した初回のスクリプトで cli@<その PR のタグ> を入れる。
+          # その PR のタグの公開した初回のスクリプトを、引数を付けて走らせる（既定は cli@<その PR のタグ> を入れる）。
           function Invoke-Bootstrap {
               $script = Invoke-RestMethod -UseBasicParsing "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:TAG/get-vw2026.ps1"
-              Read-Output (& ([scriptblock]::Create($script)) "cli@$env:TAG")
+              $arguments = $args
+              if ($arguments.Count -eq 0) { $arguments = @("cli@$env:TAG") }
+              Read-Output (& ([scriptblock]::Create($script)) @arguments)
           }
           function Invoke-Installed {
               Read-Output (& $exe $args)
-          }
-          # フォルダの外の PR の CLI（初回のスクリプトが一時フォルダに取り出すのと同じ形）。
-          $outside = Join-Path $env:RUNNER_TEMP 'outside\vw2026.exe'
-          function Invoke-Outside {
-              if (-not (Test-Path -LiteralPath $outside)) {
-                  $zip = Join-Path $env:RUNNER_TEMP 'outside.zip'
-                  Invoke-WebRequest -UseBasicParsing "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:TAG/cli-windows-x64.zip" -OutFile $zip
-                  Add-Type -AssemblyName System.IO.Compression.FileSystem
-                  New-Item -ItemType Directory -Force (Split-Path $outside) | Out-Null
-                  $archive = [IO.Compression.ZipFile]::OpenRead($zip)
-                  try { [IO.Compression.ZipFileExtensions]::ExtractToFile($archive.GetEntry('bin/vw2026.exe'), $outside) }
-                  finally { $archive.Dispose() }
-              }
-              Read-Output (& $outside $args)
           }
           function Get-UserPath {
               $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
@@ -615,7 +603,7 @@ jobs:
           $out = Invoke-Installed install "cli@$env:TAG"
           if ($out.hook.path -ne 'exists') { throw "hook: $($out.hook.path)" }
           Assert-UserPath "%USERPROFILE%\vw2026-path-probe;$bin" ([Microsoft.Win32.RegistryValueKind]::ExpandString)
-      # 3. 入った PR の CLI で uninstall cli は、何も変えずに 2 で終わり、初回のスクリプトを示す。
+      # 3. 入った PR の CLI で uninstall cli は、何も変えずに 2 で終わり、入っているタグの初回のスクリプトを示す。
       - name: uninstall with the installed CLI is refused
         run: |
           . "$env:RUNNER_TEMP\helpers.ps1"
@@ -627,7 +615,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           Write-Host $text
           $out = $text | ConvertFrom-Json
-          if ($code -ne 2 -or $out.outcome -ne 'failed' -or $out.command -notlike '*get-vw2026.ps1*uninstall cli*') {
+          if ($code -ne 2 -or $out.outcome -ne 'failed' -or $out.command -notlike "*download/$env:TAG/get-vw2026.ps1*uninstall cli@$env:TAG") {
               throw "exit code $code"
           }
           if (-not (Test-Path -LiteralPath (Join-Path $plugins 'cli\vw2026-install.json'))) { throw 'cli is removed' }
@@ -647,12 +635,13 @@ jobs:
           if ($out.outcome -ne 'installed') { throw 'not installed' }
           if ((Get-MovedCli).Count -ne 1) { throw "moved: $((Get-MovedCli).Name -join ', ')" }
           if (Test-Path -LiteralPath (Join-Path $work 'old\cli')) { throw 'old\cli is left' }
-      # 5. フォルダの外の CLI で uninstall cli。フォルダを消し、Path からは <Plug-Ins>\cli\bin だけが除かれ、
-      #    手順 4 の残り（そのプロセスは終わっている）も消えて、何も残らない。
-      - name: uninstall with a CLI outside the folder
+      # 5. 手順 3 が示した形で、初回のスクリプトに uninstall cli@<その PR のタグ> を渡す（その PR の CLI が
+      #    フォルダの外で外す）。フォルダを消し、Path からは <Plug-Ins>\cli\bin だけが除かれ、手順 4 の残り
+      #    （そのプロセスは終わっている）も消えて、何も残らない。
+      - name: uninstall with the first-time script
         run: |
           . "$env:RUNNER_TEMP\helpers.ps1"
-          $out = Invoke-Outside uninstall cli
+          $out = Invoke-Bootstrap uninstall "cli@$env:TAG"
           if ($out.outcome -ne 'uninstalled' -or @($out.left).Count -ne 0) { throw 'not uninstalled cleanly' }
           if (Test-Path -LiteralPath (Join-Path $plugins 'cli')) { throw 'cli is left' }
           Assert-UserPath '%USERPROFILE%\vw2026-path-probe' ([Microsoft.Win32.RegistryValueKind]::ExpandString)

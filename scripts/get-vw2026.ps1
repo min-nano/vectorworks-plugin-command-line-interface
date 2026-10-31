@@ -8,6 +8,7 @@
 #
 #   irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.ps1 | iex
 #   & ([scriptblock]::Create((irm .../get-vw2026.ps1))) cli@<tag> --plugins-dir <Plug-Ins>
+#   & ([scriptblock]::Create((irm .../download/<tag>/get-vw2026.ps1))) uninstall cli@<tag>
 #   & ([scriptblock]::Create((irm .../get-vw2026.ps1))) uninstall cli
 #
 # The arguments come in $args: under Invoke-Expression a param block of the script is not
@@ -48,9 +49,16 @@
 		}
 		if ($uninstall) {
 			# This is how cli is uninstalled (the installed CLI refuses "uninstall cli" and shows this
-			# script), and how a stopped "uninstall cli" goes on. It takes cli only.
-			if ($positional -ne 2 -or $arg -cne 'cli') {
-				throw 'get-vw2026: only "uninstall cli" is accepted'
+			# script with the installed tag), and how a stopped "uninstall cli" goes on. It takes cli only.
+			# With cli@<tag>, the CLI of that tag uninstalls (the same version reads its own record).
+			if ($positional -ne 2 -or -not ($arg -ceq 'cli' -or $arg.StartsWith('cli@', [StringComparison]::Ordinal))) {
+				throw 'get-vw2026: only "uninstall cli[@<tag>]" is accepted'
+			}
+			if ($arg -cne 'cli') {
+				$tag = $arg.Substring(4)
+				if ($tag -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') {
+					throw "get-vw2026: not a valid tag: $tag"
+				}
 			}
 			continue
 		}
@@ -70,10 +78,19 @@
 	$argv = @($Arguments)
 	if ($uninstall) {
 		if ($positional -ne 2) {
-			throw 'get-vw2026: only "uninstall cli" is accepted'
+			throw 'get-vw2026: only "uninstall cli[@<tag>]" is accepted'
 		}
-		# The CLI of latest goes on from the hook of the stopped uninstall.
-		$tag = 'latest'
+		# Without a tag, the CLI of latest uninstalls.
+		if (-not $tag) {
+			$tag = 'latest'
+		}
+		# The CLI gets "uninstall cli" (cli@<tag> only chooses the CLI to run). The value of a flag
+		# is left as it is.
+		$skip = $false
+		$argv = @(foreach ($arg in $Arguments) {
+				if (-not $skip -and $arg.StartsWith('cli@', [StringComparison]::Ordinal)) { 'cli' } else { $arg }
+				$skip = ($arg -ceq '--plugins-dir' -or $arg -ceq '--registry')
+			})
 	}
 	else {
 		if (-not $tag) {
