@@ -14,8 +14,9 @@ type installCmd struct {
 	Plugin     string `arg:"" placeholder:"NAME@TAG" help:"Plug-in to install and its tag, such as cli@latest."`
 	Check      bool   `env:"VW2026_INSTALL_CHECK" negatable:"" help:"Only tell whether a new build is available; change nothing."`
 	PluginsDir string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins (default: the Plug-Ins folder of Vectorworks 2026 for this user)."`
-	//: URL やパスのコンマで分けない（kong は既定で、引数と環境変数の値をコンマで分ける）。
-	Registry []string `env:"VW2026_REGISTRY" sep:"none" placeholder:"URL-OR-PATH" help:"Registry to look the name up in after the default one (repeatable)."`
+	// sep:"none" で、URL のコンマで分けない（kong は既定で、引数と環境変数の値をコンマで分ける）。空白で
+	// 分けるのは run の中（URL は空白を含まない）。
+	Registry []string `env:"VW2026_REGISTRY" sep:"none" placeholder:"URL" help:"Registry (an https:// or a file:// URL) to look the name up in after the default one (repeatable; spaces separate several)."`
 }
 
 func (installCmd) Help() string {

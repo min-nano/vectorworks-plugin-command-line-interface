@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
@@ -92,12 +93,19 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", asset.URL, err)
 	}
+	// フックのスクリプトがあることと、インタプリタがこの OS で走ることを、付け替えの前に確かめる（走らない
+	// フックに付け替えたあとで気付くと、その間に起動した Vectorworks の下に入れ終えられない版が残る）。
 	for _, hook := range [][]string{asset.Hooks.Install, asset.Hooks.Uninstall} {
 		if hook == nil {
 			continue
 		}
 		if _, err := scriptIn(p.stageDir, hook); err != nil {
 			return nil, fmt.Errorf("%s: %w", asset.URL, err)
+		}
+		if slices.Contains(registry.Interpreters, hook[0]) {
+			if _, err := o.interpreter(hook[0]); err != nil {
+				return nil, fmt.Errorf("%s: %w", asset.URL, err)
+			}
 		}
 	}
 	record := &Record{

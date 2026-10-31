@@ -136,6 +136,10 @@ func (o *Options) download(ref, path, want string) error {
 		return err
 	}
 	defer body.Close()
+	// 大きさが分かっていて上限を超えるなら、書く前に断る（LimitReader は大きさの分からない応答のため）。
+	if size > maxAsset {
+		return fmt.Errorf("%s: larger than %d bytes (%d)", ref, maxAsset, size)
+	}
 	file, err := openFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err

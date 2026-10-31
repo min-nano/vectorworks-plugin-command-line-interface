@@ -77,10 +77,12 @@ main() {
 	# ターゲットは計算機で決める（Rosetta の下の端末でも、Vectorworks は arm64 で動く。
 	# docs/registry.md「名前・タグ・ターゲット」）。
 	[ "$(uname -s)" = Darwin ] || fail "this script is for macOS; on Windows, use get-vw2026.ps1"
+	# リリースが配るのは macos-arm64 だけ（docs/plugin/identifiers.md）。ほかは取りに行く前に止める
+	# （無い zip を取りに行って、分かりにくい「取れない」で終わらないように）。
 	if [ "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" = 1 ]; then
 		target=macos-arm64
 	else
-		target=macos-x64
+		fail "cli is not built for this Mac (macos-x64, an Intel Mac); it runs on an Apple silicon Mac"
 	fi
 	# 既定のレジストリの cli の規則と同じ形の場所（マニフェストは読まない。JSON を読まずに済むように）。
 	url="$repo/releases/download/$tag/cli-$target.zip"

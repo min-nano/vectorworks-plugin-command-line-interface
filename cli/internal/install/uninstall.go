@@ -87,6 +87,10 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 			return nil, fmt.Errorf("%s was left by an install or uninstall that stopped halfway, and %s is not there; "+
 				"it may be the only copy of %s. Move it back to %s or delete it", p.oldDir, p.dest, name, p.dest)
 		}
+		// cli は、ロックのある spool ごと移しているので、始めの running では見えない（移した先を見る）。
+		if runningAfterMove(p, name) {
+			return &UninstallResult{Outcome: OutcomeRunning, Name: name, Remaining: []string{}, Left: []string{}}, ErrRunning
+		}
 		resumed = true
 	default:
 		_ = os.Remove(p.marker)
@@ -114,6 +118,13 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		}
 		_ = os.Remove(p.marker)
 		return nil, fmt.Errorf("%w; %s is put back", err, p.dest)
+	}
+	// フックの間に Vectorworks が起動していれば消さない（cli は、移したフォルダのスプールとロックを、動いている
+	// Vectorworks が使っているかもしれない）。印を残すので、終了してからの uninstall が続きから走る。
+	if runningAfterMove(p, name) {
+		return &UninstallResult{Outcome: OutcomeRunning, Name: name, Hook: hook, Remaining: []string{}, Left: []string{}},
+			fmt.Errorf("%w; it started while the uninstall hook ran, so %s stays in %s: run uninstall again after "+
+				"quitting it (it goes on from the hook)", ErrRunning, name, p.oldDir)
 	}
 	// 組み立ての場所へ移してから消す（消すのが途中で止まっても、記録の消えた半分のフォルダを old に残さない）。
 	if err := o.discard(p, name); err != nil {

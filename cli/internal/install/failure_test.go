@@ -578,10 +578,13 @@ func TestDownloadTooLarge(t *testing.T) {
 	h := newHarness(t)
 	h.serve("/big.zip", []byte("0123456789"))
 	path := filepath.Join(t.TempDir(), "big.zip")
+	var stderr bytes.Buffer
 	o := h.options()
+	o.Stderr = &stderr
+	// 大きさ（Content-Length）が分かれば、書く前に断る（取り始めない）。
 	if err := o.download(h.url("/big.zip"), path, sha256Hex([]byte("0123456789"))); err == nil ||
-		!strings.Contains(err.Error(), "larger") || exist(path) {
-		t.Fatal(err)
+		!strings.Contains(err.Error(), "larger") || exist(path) || strings.Contains(stderr.String(), "downloading") {
+		t.Fatal(err, stderr.String())
 	}
 }
 
@@ -735,13 +738,16 @@ func TestUninstallCLIHookFailureWhileLockedInOld(t *testing.T) {
 	}
 }
 
-// 大きさの上限を超えた取得は、取り終えたとは書かずに、止まったと書く。
+// 大きさの分からない応答（Content-Length が無い）が上限を超えたら、取り終えたとは書かずに、止まったと書く。
 func TestDownloadTooLargeSaysStopped(t *testing.T) {
 	original := maxAsset
 	maxAsset = 4
 	t.Cleanup(func() { maxAsset = original })
 	h := newHarness(t)
-	h.serve("/big.zip", []byte("0123456789"))
+	h.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.(http.Flusher).Flush()
+		w.Write([]byte("0123456789"))
+	})
 	var stderr bytes.Buffer
 	o := h.options()
 	o.Stderr = &stderr
@@ -773,5 +779,86 @@ func TestFindModuleChecksTheKind(t *testing.T) {
 		if c.ok && (err != nil || got != c.name) || !c.ok && (err == nil || !strings.Contains(err.Error(), "is not a")) {
 			t.Errorf("%s for %s: %q %v", c.name, c.target, got, err)
 		}
+	}
+}
+
+// フックの標準出力は上限（maxDocument）までだけを溜め、超えたら失敗にする（フックは最後まで走らせる）。
+func TestHookPrintsTooMuch(t *testing.T) {
+	h := newHarness(t)
+	h.publish(release{name: "cli", tag: "c1", install: &hookPlan{Stdout: `{"x":"` + strings.Repeat("a", maxDocument) + `"}`}})
+	if _, err := h.install("cli", "c1"); err == nil || !strings.Contains(err.Error(), "more than") {
+		t.Fatal(err)
+	}
+	if exist(filepath.Join(h.plugins, "cli")) {
+		t.Fatal("should undo the install")
+	}
+}
+
+// フックのインタプリタがこの OS で走らなければ、付け替える前に断る（<Plug-Ins> を変えない）。
+func TestHookInterpreterOfAnotherOSBeforeTheSwap(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	other := "powershell"
+	if runtime.GOOS == "windows" {
+		other = "sh"
+	}
+	hooks := registry.Hooks{Install: []string{other, "hooks/install.hook"}}
+	h.publish(release{name: "cli", tag: "c2", hooks: &hooks})
+	before := snapshot(t, h.plugins)
+	// 付け替え（<Plug-Ins>/cli の名前の変更）まで進まないことを確かめる。
+	dest := filepath.Join(h.plugins, "cli")
+	swapped := false
+	original := rename
+	rename = func(oldpath, newpath string) error {
+		if oldpath == dest {
+			swapped = true
+		}
+		return original(oldpath, newpath)
+	}
+	t.Cleanup(func() { rename = original })
+	o := h.options()
+	o.Interpreters = nil
+	if _, err := Install(o, "cli", "c2", false); err == nil || !strings.Contains(err.Error(), other) || swapped {
+		t.Fatal(err, swapped)
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
+}
+
+// 続きから走る uninstall cli は、移した先のスプールのロックが掴まれていれば何もせずに ErrRunning で終わる
+// （<Plug-Ins>/cli/spool/ はもう無いので、始めの確かめでは見えない）。
+func TestUninstallCLIResumeWhileLockedInOld(t *testing.T) {
+	h := newHarness(t)
+	h.installCLI()
+	old := filepath.Join(h.work, "old", "cli")
+	marker := filepath.Join(h.work, "old", "cli.uninstalling")
+	os.Rename(filepath.Join(h.plugins, "cli"), old)
+	os.WriteFile(marker, nil, 0o600)
+	dir := filepath.Join(old, spool.SpoolDirName)
+	os.MkdirAll(dir, 0o700)
+	fakeplugin.HoldLock(t, dir)
+	result, err := Uninstall(h.options(), "cli")
+	if !errors.Is(err, ErrRunning) || result.Outcome != OutcomeRunning || !exist(old) || !exist(marker) {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if runs := h.hookRuns("cli"); len(runs) != 1 {
+		t.Fatalf("should not run the uninstall hook: %+v", runs)
+	}
+}
+
+// フックが通っても、その間に移した先のスプールのロックが掴まれたら（cli）、消さずに印を残して ErrRunning で終わる。
+func TestUninstallCLIHookSuccessWhileLockedInOld(t *testing.T) {
+	h := newHarness(t)
+	signal := filepath.Join(h.tmp, "hook-started")
+	await := filepath.Join(h.tmp, "locked")
+	h.mustInstall(release{name: "cli", tag: "c1", uninstall: &hookPlan{Stdout: "{}", Signal: signal, Await: await}})
+	old := filepath.Join(h.work, "old", "cli")
+	done := lockAtWhenSignaled(h, filepath.Join(old, spool.SpoolDirName), signal, await)
+	result, err := Uninstall(h.options(), "cli")
+	<-done
+	if !errors.Is(err, ErrRunning) || result.Outcome != OutcomeRunning || !strings.Contains(err.Error(), old) {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if !validRecord(old, "cli") || !exist(filepath.Join(h.work, "old", "cli.uninstalling")) {
+		t.Fatal("should keep old and the marker")
 	}
 }

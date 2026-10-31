@@ -87,20 +87,43 @@ func (o *Options) runHook(kind string, argv []string, dir string, env hookEnv) (
 	} else {
 		command = append([]string{path}, argv[1:]...)
 	}
-	var stdout bytes.Buffer
+	// 受けるのは小さな JSON のオブジェクト 1 つなので、レジストリと同じ上限までだけを溜める（超えた分は
+	// 捨てて読み続け、フックを止めない。終わったあとで失敗にする）。
+	stdout := &boundedBuffer{max: maxDocument}
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Dir = dir
 	cmd.Env = env.environ()
-	cmd.Stdout = &stdout
+	cmd.Stdout = stdout
 	cmd.Stderr = o.stderr()
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("the %s hook %q failed: %w", kind, strings.Join(argv, " "), err)
 	}
-	out, err := hookOutput(stdout.Bytes())
+	if stdout.over {
+		return nil, fmt.Errorf("the %s hook %q printed more than %d bytes", kind, strings.Join(argv, " "), maxDocument)
+	}
+	out, err := hookOutput(stdout.buf.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("the %s hook %q printed %w", kind, strings.Join(argv, " "), err)
 	}
 	return out, nil
+}
+
+// boundedBuffer は、max バイトまでを溜め、超えた分は捨てて over にする io.Writer。bytes.Buffer を埋め込まない
+// （埋め込むと ReadFrom が見え、io.Copy が Write を通らずに上限なしに読む）。
+type boundedBuffer struct {
+	buf  bytes.Buffer
+	max  int
+	over bool
+}
+
+func (b *boundedBuffer) Write(p []byte) (int, error) {
+	n := len(p)
+	if room := b.max - b.buf.Len(); n > room {
+		b.over = true
+		p = p[:room]
+	}
+	b.buf.Write(p)
+	return n, nil
 }
 
 // hookOutput はフックの標準出力を、1 行の JSON のオブジェクトにする。空なら {}。先頭の BOM と
