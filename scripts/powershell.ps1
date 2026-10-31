@@ -71,19 +71,24 @@ $settings = Join-Path (Split-Path $PSScriptRoot) 'PSScriptAnalyzerSettings.psd1'
 $utf8 = [System.Text.UTF8Encoding]::new($true)
 
 # 子のプロセス（LintFile）では、解析器の中の失敗（止まる誤り）を 3 で終わらせ、指摘（1）と分ける。ほかの
-# モードでは、これまでどおり止まる（break は誤りをそのまま投げる）。
+# モードでは、これまでどおり止まる（break は誤りをそのまま投げる）。exit ではなく [Environment]::Exit で
+# プロセスをすぐ終わらせる（exit は後片付けで、落ちた解析器のまだ動いているスレッドを待ち、15 分ほど
+# 戻らないことがあった）。
 trap {
 	if ($Mode -ne 'LintFile') {
 		break
 	}
 	[Console]::Error.WriteLine(('{0}: {1}' -f ($Path -join ' '), $_.Exception))
-	exit 3
+	[Environment]::Exit(3)
 }
 
 $status = 0
 foreach ($file in $Path) {
 	if ($Mode -eq 'LintFile') {
-		$found = Invoke-ScriptAnalyzer -Path $file -Settings $settings
+		# PSUseCorrectCasing は検査から外す。整形（Invoke-Formatter）が同じ設定で当てる規則なので、
+		# 大文字と小文字の違いは format.sh の確かめが見つける。検査では、この規則がコマンドの情報を引く
+		# ところでときどき落ちる（CommandInfo.get_Parameters の NullReferenceException）。
+		$found = Invoke-ScriptAnalyzer -Path $file -Settings $settings -ExcludeRule PSUseCorrectCasing
 		if ($found) {
 			$found | ForEach-Object {
 				'{0}:{1}:{2}: {3}: {4}' -f $file, $_.Line, $_.Column, $_.RuleName, $_.Message
