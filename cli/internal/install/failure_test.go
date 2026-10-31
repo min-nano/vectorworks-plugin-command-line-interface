@@ -3,6 +3,7 @@ package install
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"net/http"
@@ -189,7 +190,8 @@ func TestRelativePlaces(t *testing.T) {
 	}
 }
 
-// 走らせられないフック（ほかの OS のもの）は、フックの失敗として戻す。
+// 走らせられないフック（ほかの OS のもの）は、付け替える前に断る。記録に写したフックが走らない
+// （ほかの OS から写したフォルダ）ときは、フックの失敗として戻す。
 func TestHookOfAnotherOS(t *testing.T) {
 	h := newHarness(t)
 	interpreter, script := "powershell", "hooks/install.ps1"
@@ -207,6 +209,16 @@ func TestHookOfAnotherOS(t *testing.T) {
 	}
 	if exist(filepath.Join(h.plugins, "cli")) {
 		t.Fatal("left the plug-in")
+	}
+
+	h.mustInstall(release{name: "cli", tag: "c2"})
+	dest := filepath.Join(h.plugins, "cli")
+	record, _ := readRecord(dest)
+	record.Hooks.Uninstall = []string{interpreter, "hooks/uninstall.hook"}
+	data, _ := json.Marshal(record)
+	os.WriteFile(filepath.Join(dest, RecordFile), data, 0o644)
+	if _, err := Uninstall(o, "cli"); err == nil || !strings.Contains(err.Error(), "do not run") || !validRecord(dest, "cli") {
+		t.Fatal(err)
 	}
 }
 
