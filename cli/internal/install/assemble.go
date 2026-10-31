@@ -2,6 +2,7 @@ package install
 
 import (
 	"archive/zip"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -157,13 +158,19 @@ func extract(zipPath, dir string) ([]string, error) {
 	return top, nil
 }
 
+// errOutside は、展開先の外へ出る項目。
+var errOutside = errors.New("outside the folder")
+
 func extractFile(file *zip.File, dir string) error {
 	name := strings.TrimSuffix(file.Name, "/")
-	if err := registry.CheckInside(name); err != nil {
-		return fmt.Errorf("the entry %q: %w", file.Name, err)
+	rel := filepath.FromSlash(name)
+	// 規則は registry.CheckInside が持つ。filepath.IsLocal はその規則に含まれる確かめで、展開先のパスを
+	// 組み立てるこの場所でも見えるように並べる（コード スキャンが、展開先の外へ出ないことを読めるように）。
+	if err := registry.CheckInside(name); err != nil || !filepath.IsLocal(rel) {
+		return fmt.Errorf("the entry %q: %w", file.Name, cmp.Or(err, errOutside))
 	}
 	mode := file.Mode()
-	path := filepath.Join(dir, filepath.FromSlash(name))
+	path := filepath.Join(dir, rel)
 	switch {
 	case mode&os.ModeSymlink != 0:
 		return fmt.Errorf("the entry %q is a symbolic link", file.Name)
