@@ -35,9 +35,10 @@ main() {
 	latest="$repo/releases/latest/download/get-vw2026.sh"
 	valid_tag "$tag" || fail "this script is not the one a release published; use $latest"
 
-	# 位置の引数は uninstall（uninstall cli）だけを受け付ける。指定（--plugins-dir・--registry とその値、ほかの -…）は、
-	# 書いた位置に依らず、CLI のコマンドの後ろへそのまま渡す（vw2026 はコマンドの前の指定を受け付けない）。
-	# --name=value の形は 1 つの引数で、ここでは指定として渡す。
+	# 位置の引数は uninstall（uninstall cli）だけ、指定は --plugins-dir（--plugins-dir=<dir> も）だけを
+	# 受け付ける。--registry は持たない（install は既定のレジストリから先に引き、cli は既定のレジストリに
+	# あるので、ほかのレジストリは使われない。uninstall はレジストリを読まない）。指定は、書いた位置に依らず
+	# CLI のコマンドの後ろへそのまま渡す（vw2026 はコマンドの前の指定を受け付けない）。
 	command=install
 	positional=0
 	skip=false
@@ -47,8 +48,9 @@ main() {
 			skip=false
 		else
 			case "$arg" in
-			--plugins-dir | --registry) skip=true ;;
-			-*) ;;
+			--plugins-dir) skip=true ;;
+			--plugins-dir=*) ;;
+			-*) fail "unknown flag: $arg (this script takes only --plugins-dir)" ;;
 			*)
 				positional=$((positional + 1))
 				if [ "$positional" -eq 1 ] && [ "$arg" = uninstall ]; then

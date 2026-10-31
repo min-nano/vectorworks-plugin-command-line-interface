@@ -36,9 +36,11 @@
 		throw "get-vw2026: this script is not the one a release published; use $repo/releases/latest/download/get-vw2026.ps1"
 	}
 
-	# The only positional argument is uninstall (or uninstall cli). The flags (--plugins-dir and
-	# --registry with their values, any other -...) go after the command of the CLI wherever they
-	# are written (vw2026 takes no flag before the command); --name=value is one argument, a flag.
+	# The only positional argument is uninstall (or uninstall cli), and the only flag is
+	# --plugins-dir (or --plugins-dir=<dir>). There is no --registry: install looks the name up in the
+	# default registry first, which has cli, so no other registry is used; uninstall reads no
+	# registry. The flag goes after the command of the CLI wherever it is written (vw2026 takes no
+	# flag before the command).
 	$uninstall = $false
 	$positional = 0
 	$skip = $false
@@ -48,10 +50,13 @@
 				$arg
 				continue
 			}
-			if ($arg.StartsWith('-')) {
-				$skip = ($arg -ceq '--plugins-dir' -or $arg -ceq '--registry')
+			if ($arg -ceq '--plugins-dir' -or $arg.StartsWith('--plugins-dir=', [StringComparison]::Ordinal)) {
+				$skip = ($arg -ceq '--plugins-dir')
 				$arg
 				continue
+			}
+			if ($arg.StartsWith('-')) {
+				throw "get-vw2026: unknown flag: $arg (this script takes only --plugins-dir)"
 			}
 			$positional++
 			if ($positional -eq 1 -and $arg -ceq 'uninstall') {
