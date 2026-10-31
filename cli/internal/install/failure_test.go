@@ -659,3 +659,42 @@ func TestUninstallCannotEmptyTheStaging(t *testing.T) {
 		t.Fatal("should keep old and the marker")
 	}
 }
+
+// 付け替えの前に前回の残りの old を片付けるとき、組み立ての場所へ移したものを消しきれなければ（Windows で
+// ウイルス対策が開いているファイルなど）、組み立てずに失敗にする（前の版のファイルを新しい版に混ぜない）。
+func TestInstallDoesNotMixTheLeftoverIntoTheNewVersion(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.publish(release{name: "cli", tag: "c2"})
+	dest := filepath.Join(h.plugins, "cli")
+	old := filepath.Join(h.work, "old", "cli")
+	copyDir(t, dest, old)
+	os.WriteFile(filepath.Join(old, "stale.txt"), []byte("old"), 0o644)
+	stage := filepath.Join(h.work, "staging", "cli")
+	// stale.txt だけが消せない（ほかは消える）。
+	original := removeAll
+	removeAll = func(path string) error {
+		if path == stage && exist(filepath.Join(stage, "stale.txt")) {
+			entries, _ := os.ReadDir(stage)
+			for _, entry := range entries {
+				if entry.Name() != "stale.txt" {
+					original(filepath.Join(stage, entry.Name()))
+				}
+			}
+			return errInjected
+		}
+		return original(path)
+	}
+	t.Cleanup(func() { removeAll = original })
+	before := snapshot(t, h.plugins)
+	if _, err := h.install("cli", "c2"); !errors.Is(err, errInjected) {
+		t.Fatal(err)
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
+	// 消せるようになれば、次の install が残りを消して入れる。
+	removeAll = original
+	h.mustInstall(release{name: "cli", tag: "c2"})
+	if exist(filepath.Join(dest, "stale.txt")) || exist(stage) {
+		t.Fatal("the leftover is in the new version or left in staging")
+	}
+}

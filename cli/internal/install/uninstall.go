@@ -63,12 +63,12 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 			return nil, err
 		}
 		// uninstall は <Work>/old/<name>/ を消さない（守ること 9）。install のフックが失敗して Vectorworks が
-		// 起動したときの前の版などで、黙って消すと戻せなくなるため。同じタグの install が、その install を
-		// 終えて片付ける。
+		// 起動したときの前の版などで、黙って消すと戻せなくなるため。同じタグ・同じレジストリ・同じ
+		// <Plug-Ins> の install が、その install を終えて片付ける。
 		if exists(p.oldDir) {
 			return nil, fmt.Errorf("%s is left by an install that stopped or kept the new version; nothing is removed. "+
-				"Run install %s@%s again to finish that install (it cleans this up), or delete it, then run uninstall again",
-				p.oldDir, name, record.Tag)
+				"Run install %s@%s again (from the registry %s, into %s) to finish that install (it cleans this up), "+
+				"or delete it, then run uninstall again", p.oldDir, name, record.Tag, record.Registry, p.plugins)
 		}
 		// 印を書いてからフォルダを移す（移したあとで止まっても、次の uninstall が続きから走れる）。
 		if err := writeFile(p.marker, nil, 0o600); err != nil {

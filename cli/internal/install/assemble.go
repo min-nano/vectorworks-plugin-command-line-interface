@@ -118,9 +118,9 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 }
 
 // extract は zip を dir へ展開する（docs/registry.md「zip の形」）。展開先の外へ出る項目・
-// シンボリックリンク・\ を区切りに使った項目・展開すると maxExtracted を超える zip は断る。権限（実行ビット）は保ち、ファイルの時刻は
-// 展開した時刻のままにする（古い時刻を付けると、付け替えの前に OS の一時フォルダの片付けで消され
-// うるため）。
+// シンボリックリンク・\ を区切りに使った項目・展開すると maxExtracted を超える zip は断る。
+// 権限（実行ビット）は保ち、ファイルの時刻は展開した時刻のままにする（古い時刻を付けると、
+// 付け替えの前に OS の一時フォルダの片付けで消されうるため）。
 //
 // 直下の項目の名前（モジュールを探すため）を返す。
 func extract(zipPath, dir string) ([]string, error) {

@@ -478,7 +478,8 @@ func TestInstallHookFailureWhileRunningKeepsTheNewVersion(t *testing.T) {
 	}
 	release()
 	// Vectorworks を終了しても、install を終えるまで uninstall は old を消さずに断り、同じタグの install を示す。
-	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "install cli@c2") {
+	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "install cli@c2") ||
+		!strings.Contains(err.Error(), "registry default") || !strings.Contains(err.Error(), h.plugins) {
 		t.Fatal(err)
 	}
 	// 同じタグで走らせ直すと、フックだけが走り、退避した前の版を片付ける。

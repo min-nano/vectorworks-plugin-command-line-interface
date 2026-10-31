@@ -328,11 +328,13 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 			return nil, err
 		}
 	}
-	// 前回の残りの組み立てを消す（名前をそのまま組み立てたパスだけ）。
-	if err := removeStaging(p); err != nil {
+	// 前回の残りの old を片付けてから、組み立ての場所（名前をそのまま組み立てたパスだけ）を消す。
+	// settleOld が消すものは組み立ての場所を通るので、この順にすると、消しきれなかったものがあれば
+	// removeStaging が失敗し、前の版のファイルを新しい版に混ぜて組み立てない。
+	if err := o.settleOld(p, name); err != nil {
 		return nil, err
 	}
-	if err := o.settleOld(p, name); err != nil {
+	if err := removeStaging(p); err != nil {
 		return nil, err
 	}
 
