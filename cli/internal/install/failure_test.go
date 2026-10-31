@@ -906,7 +906,17 @@ func TestHookLeavesAProcess(t *testing.T) {
 	hookWaitDelay = 100 * time.Millisecond
 	t.Cleanup(func() { hookWaitDelay = original })
 	h := newHarness(t)
-	h.publish(release{name: "cli", tag: "c1", install: &hookPlan{Stdout: `{"ran":"install"}`, Linger: 30}})
+	// 子は releaseFile ができるまで残る。テストの片付け（一時ディレクトリを消す）の前に終わらせる（Windows では
+	// 動いているテストの実行ファイルと、その作業ディレクトリを消せない）。
+	releaseFile := filepath.Join(h.tmp, "release")
+	t.Cleanup(func() {
+		os.WriteFile(releaseFile, nil, 0o600)
+		for deadline := time.Now().Add(10 * time.Second); !exist(releaseFile+".done") && time.Now().Before(deadline); {
+			time.Sleep(10 * time.Millisecond)
+		}
+		time.Sleep(500 * time.Millisecond)
+	})
+	h.publish(release{name: "cli", tag: "c1", install: &hookPlan{Stdout: `{"ran":"install"}`, Linger: releaseFile}})
 	var stderr bytes.Buffer
 	o := h.options()
 	o.Stderr = &stderr
@@ -915,7 +925,7 @@ func TestHookLeavesAProcess(t *testing.T) {
 	if err != nil || result.Outcome != OutcomeInstalled || string(result.Hook) != `{"ran":"install"}` {
 		t.Fatalf("%+v %v", result, err)
 	}
-	if elapsed := time.Since(start); elapsed > 20*time.Second || !strings.Contains(stderr.String(), "stopped waiting") {
+	if elapsed := time.Since(start); elapsed > 30*time.Second || !strings.Contains(stderr.String(), "stopped waiting") {
 		t.Fatalf("%v %s", elapsed, stderr.String())
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -261,16 +260,8 @@ func TestIsTerminal(t *testing.T) {
 	if isTerminal(device) {
 		t.Error("the null device is not a terminal")
 	}
-	// mac と Linux では、疑似端末（/dev/ptmx）は端末。Windows のテストにはコンソールが無いので見ない。
-	if runtime.GOOS == "windows" {
-		return
-	}
-	pty, err := os.OpenFile("/dev/ptmx", os.O_RDWR, 0)
-	if err != nil {
-		t.Skipf("no pseudo terminal: %v", err)
-	}
-	defer pty.Close()
-	if !isTerminal(pty) {
+	// 疑似端末は端末（mac・Linux。terminal_*_test.go）。
+	if !isTerminal(openTerminal(t)) {
 		t.Error("a pseudo terminal is a terminal")
 	}
 }

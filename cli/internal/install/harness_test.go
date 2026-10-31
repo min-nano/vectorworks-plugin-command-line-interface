@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -43,8 +41,9 @@ type hookPlan struct {
 	Signal string `json:"signal,omitempty"`
 	// 作られるまで待つファイル（テストがロックを掴むのを待つ）
 	Await string `json:"await,omitempty"`
-	// 標準出力と標準エラーを受け継いだ子を後ろに残す（その秒数だけ眠る。TestHookLinger）
-	Linger int `json:"linger,omitempty"`
+	// 標準出力と標準エラーを受け継いだ子を後ろに残す。子はこのファイルができるまで待ち、終わる前に
+	// <このファイル>.done を作る（TestHookLinger）
+	Linger string `json:"linger,omitempty"`
 }
 
 // hookRun は偽のフックが 1 回走ったときの記録。
@@ -111,9 +110,11 @@ func TestHookHelper(t *testing.T) {
 			}
 		}
 	}
-	if plan.Linger > 0 {
+	if plan.Linger != "" {
 		child := exec.Command(os.Args[0], "-test.run=^TestHookLinger$")
-		child.Env = append(os.Environ(), fmt.Sprintf("VW2026_TEST_LINGER=%d", plan.Linger))
+		child.Env = append(os.Environ(), "VW2026_TEST_LINGER="+plan.Linger)
+		// 作業ディレクトリをプラグインのフォルダの外にする（Windows で、テストの片付けが消せなくならないように）。
+		child.Dir = os.TempDir()
 		child.Stdout = os.Stdout
 		child.Stderr = os.Stderr
 		child.Start()
@@ -123,14 +124,17 @@ func TestHookHelper(t *testing.T) {
 	os.Exit(plan.Exit)
 }
 
-// TestHookLinger は、フックが後ろに残す子として走る（VW2026_TEST_LINGER の秒数だけ眠る）。テストとして
-// 走ったとき（環境変数が無い）は何もしない。
+// TestHookLinger は、フックが後ろに残す子として走る（VW2026_TEST_LINGER のファイルができるまで待ち、
+// 終わる前に <そのファイル>.done を作る）。テストとして走ったとき（環境変数が無い）は何もしない。
 func TestHookLinger(t *testing.T) {
-	seconds, err := strconv.Atoi(os.Getenv("VW2026_TEST_LINGER"))
-	if err != nil {
+	release := os.Getenv("VW2026_TEST_LINGER")
+	if release == "" {
 		return
 	}
-	time.Sleep(time.Duration(seconds) * time.Second)
+	for deadline := time.Now().Add(60 * time.Second); !exist(release) && time.Now().Before(deadline); {
+		time.Sleep(10 * time.Millisecond)
+	}
+	os.WriteFile(release+".done", nil, 0o600)
 }
 
 // harness は一時ディレクトリの <Plug-Ins>・<Work> と、リリースを配る偽の HTTPS サーバー。
