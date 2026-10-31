@@ -245,8 +245,8 @@ func TestInstallManifestErrors(t *testing.T) {
 	if _, err := h.install("nowhere", "1"); err == nil || !strings.Contains(err.Error(), "no registry") {
 		t.Error(err)
 	}
-	narrow := filepath.Join(h.tmp, "narrow.json")
-	os.WriteFile(narrow, []byte(`{"registry_version":1,"plugins":{"other":{"manifests":[{"match":"v*","path":"`+
+	narrow := fileURL(filepath.Join(h.tmp, "narrow.json"))
+	os.WriteFile(filepath.Join(h.tmp, "narrow.json"), []byte(`{"registry_version":1,"plugins":{"other":{"manifests":[{"match":"v*","path":"`+
 		h.url("/other/{tag}.json")+`"}]}}}`), 0o644)
 	o := h.options()
 	o.Registries = []string{narrow}
@@ -568,15 +568,6 @@ func lockAtWhenSignaled(h *harness, dir, signal, await string) <-chan struct{} {
 		os.WriteFile(await, nil, 0o600)
 	}()
 	return done
-}
-
-// https:// でない URL のレジストリは、パスとして扱わずに使い方の誤りにする。
-func TestRegistrySourceRefusesOtherSchemes(t *testing.T) {
-	for _, ref := range []string{"http://example.com/r.json", "HTTPS://example.com/r.json", "file:///r.json"} {
-		if _, err := RegistrySource(ref); !IsUsage(err) {
-			t.Errorf("%s: %v", ref, err)
-		}
-	}
 }
 
 // 資産が上限より大きければ、取るのを失敗にして、取ったものを残さない。

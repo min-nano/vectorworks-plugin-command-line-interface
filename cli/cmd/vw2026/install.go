@@ -28,12 +28,15 @@ tag are required; there is no default tag.
 	vw2026 install cli@latest
 	vw2026 install cli@dev-feature-x-61-a1b2c3d
 	vw2026 install cli@latest --check
-	vw2026 install my-plugin@2026.3.1 --registry ./plugins.json
+	vw2026 install my-plugin@2026.3.1 --registry https://example.com/plugins.json
+	vw2026 install my-plugin@2026.3.1 --registry file:///Users/me/plugins.json
 
 Install looks the name up in the registry built into vw2026, then in each
---registry in order (an https:// URL or a path, taken as it is: a comma does
-not separate; VW2026_REGISTRY gives one registry), and uses the first one that
-has it. The first rule of that entry
+--registry in order, and uses the first one that has it. A registry is an
+https:// or a file:// URL; write a path as file:///... (on Windows
+file:///C:/...), with %20 for a space. --registry can be repeated, and spaces
+separate registries in a value (a URL has no space), so VW2026_REGISTRY can
+hold several. The first rule of that entry
 that matches the tag gives the manifest; the manifest gives the zip and its
 sha256. The plug-in goes into <Plug-Ins>/<NAME>/ with a record of the install
 (vw2026-install.json), replacing the folder as a whole, and then its install
@@ -103,7 +106,10 @@ func (c *installCmd) run(e *env) int {
 	if code != exitOK {
 		return code
 	}
-	options.Registries = c.Registry
+	// URL は空白を含まないので、値の中の空白で分ける（VW2026_REGISTRY に複数を書ける）。
+	for _, value := range c.Registry {
+		options.Registries = append(options.Registries, strings.Fields(value)...)
+	}
 	options.Target = install.Target()
 	result, err := install.Install(options, name, tag, c.Check)
 	if err != nil {

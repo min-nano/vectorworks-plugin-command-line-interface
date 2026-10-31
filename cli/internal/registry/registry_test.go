@@ -105,9 +105,13 @@ func TestParse(t *testing.T) {
 	if _, err := Parse([]byte(good), true); err != nil {
 		t.Fatalf("unknown fields are ignored: %v", err)
 	}
-	local := `{"registry_version":1,"plugins":{"a":{"manifests":[{"match":"*","path":"` + absPath("{tag}.json") + `"}]}}}`
+	local := `{"registry_version":1,"plugins":{"a":{"manifests":[{"match":"*","path":"` + fileURL("{tag}.json") + `"}]}}}`
 	if _, err := Parse([]byte(local), false); err != nil {
-		t.Fatalf("a local registry can refer to a path: %v", err)
+		t.Fatalf("a local registry can refer to a file:// URL: %v", err)
+	}
+	path := `{"registry_version":1,"plugins":{"a":{"manifests":[{"match":"*","path":"` + absPath("{tag}.json") + `"}]}}}`
+	if _, err := Parse([]byte(path), false); err == nil {
+		t.Fatal("a path that is not a file:// URL should fail")
 	}
 	for name, data := range map[string]string{
 		"not JSON":            `{`,
@@ -118,7 +122,7 @@ func TestParse(t *testing.T) {
 		"bad match":           `{"registry_version":1,"plugins":{"a":{"manifests":[{"match":"a/b","path":"https://x"}]}}}`,
 		"http":                `{"registry_version":1,"plugins":{"a":{"manifests":[{"match":"*","path":"http://x"}]}}}`,
 		"relative":            `{"registry_version":1,"plugins":{"a":{"manifests":[{"match":"*","path":"x/{tag}.json"}]}}}`,
-		"remote to a path":    local,
+		"remote to a file":    local,
 		"one bad of two":      `{"registry_version":1,"plugins":{"a":{"manifests":[{"match":"*","path":"https://x"}]},"b":{"manifests":[{"match":"*","path":"ftp://x"}]}}}`,
 		"empty URL":           `{"registry_version":1,"plugins":{"a":{"manifests":[{"match":"*","path":"https://"}]}}}`,
 		"a string as version": `{"registry_version":"1","plugins":{}}`,
@@ -144,14 +148,17 @@ func TestParseManifest(t *testing.T) {
 		strings.Join(asset.Hooks.Install, " ") != "sh hooks/install.sh" || asset.Hooks.Uninstall != nil {
 		t.Fatalf("%+v", m)
 	}
-	if _, err := ParseManifest([]byte(manifestJSON(absPath("a.zip"), sha, "")), false); err != nil {
-		t.Fatalf("a local manifest can refer to a path: %v", err)
+	if _, err := ParseManifest([]byte(manifestJSON(fileURL("a.zip"), sha, "")), false); err != nil {
+		t.Fatalf("a local manifest can refer to a file:// URL: %v", err)
+	}
+	if _, err := ParseManifest([]byte(manifestJSON(absPath("a.zip"), sha, "")), false); err == nil {
+		t.Fatal("a path that is not a file:// URL should fail")
 	}
 	for name, data := range map[string]string{
 		"unknown version": `{"manifest_version":2,"tag":"t1","targets":{}}`,
 		"no version":      `{"tag":"t1","targets":{}}`,
 		"bad tag":         `{"manifest_version":1,"tag":"..","targets":{}}`,
-		"remote to path":  manifestJSON(absPath("a.zip"), sha, ""),
+		"remote to file":  manifestJSON(fileURL("a.zip"), sha, ""),
 		"relative asset":  manifestJSON("a.zip", sha, ""),
 		"upper sha":       manifestJSON("https://x/a.zip", strings.ToUpper(sha), ""),
 		"short sha":       manifestJSON("https://x/a.zip", sha[:63], ""),
@@ -215,5 +222,51 @@ func TestRegistryEdges(t *testing.T) {
 	}
 	if _, err := ParseManifest([]byte("{"), false); err == nil {
 		t.Error("a broken manifest should be refused")
+	}
+}
+
+// file:// の URL を、mac・Linux と Windows のパスにする。%XX を解き、Windows は C: の前の / を除き、
+// ホストのあるものは共有フォルダにする。
+func TestFilePath(t *testing.T) {
+	for _, c := range []struct {
+		ref     string
+		windows bool
+		want    string
+	}{
+		{"file:///Users/me/a%20b/r.json", false, "/Users/me/a b/r.json"},
+		{"file://localhost/Users/me/r.json", false, "/Users/me/r.json"},
+		{"file:///%E3%81%82/r.json", false, "/あ/r.json"},
+		{"file:///a,b/r.json", false, "/a,b/r.json"},
+		{"file:///C:/Users/me/a%20b/r.json", true, `C:\Users\me\a b\r.json`},
+		{"file://server/share/r.json", true, `\\server\share\r.json`},
+		{"file://localhost/c:/r.json", true, `c:\r.json`},
+	} {
+		if got, err := filePath(c.ref, c.windows); err != nil || got != c.want {
+			t.Errorf("%s (windows %v): %q %v", c.ref, c.windows, got, err)
+		}
+	}
+	for _, c := range []struct {
+		ref     string
+		windows bool
+	}{
+		{"https://x/r.json", false},
+		{"file://server/share/r.json", false},
+		{"file:r.json", false},
+		{"file://localhost", false},
+		{"file:///r.json?x=1", false},
+		{"file:///r.json?", false},
+		{"file:///r.json#x", false},
+		{"file:///a%zz", false},
+		{"file:///a b/r.json", false},
+		{"file:///Users/me/r.json", true},
+		{"file:///C:", true},
+		{"file:///1:/r.json", true},
+	} {
+		if got, err := filePath(c.ref, c.windows); err == nil {
+			t.Errorf("%s (windows %v) should fail: %q", c.ref, c.windows, got)
+		}
+	}
+	if _, err := FilePath(fileURL("r.json")); err != nil {
+		t.Error(err)
 	}
 }

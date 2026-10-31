@@ -8,8 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
@@ -30,6 +28,13 @@ var maxExtracted int64 = 2 << 30
 // 見つかる前に取れない・読めないレジストリがあれば、そこで失敗にする（飛ばすと、どの項目が勝つかが
 // ネットワークの状態で変わる）。
 func (o *Options) lookup(name string) (registry.Entry, string, error) {
+	// 書き方の誤りは、どのレジストリを引くかに依らず、先に使い方の誤りにする（既定のレジストリで見つかる
+	// 名前でも、正しくない --registry を黙って通さない）。
+	for _, ref := range o.Registries {
+		if err := checkRegistry(ref); err != nil {
+			return registry.Entry{}, "", err
+		}
+	}
 	def := o.Default
 	if def == nil {
 		def = registry.Default()
@@ -37,11 +42,7 @@ func (o *Options) lookup(name string) (registry.Entry, string, error) {
 	if entry, ok := def.Plugins[name]; ok {
 		return entry, registry.DefaultName, nil
 	}
-	for _, ref := range o.Registries {
-		source, err := RegistrySource(ref)
-		if err != nil {
-			return registry.Entry{}, "", err
-		}
+	for _, source := range o.Registries {
 		data, err := o.fetch(source)
 		if err != nil {
 			return registry.Entry{}, "", fmt.Errorf("registry: %w", err)
@@ -57,29 +58,32 @@ func (o *Options) lookup(name string) (registry.Entry, string, error) {
 	return registry.Entry{}, "", fmt.Errorf("%s is in no registry", name)
 }
 
-// RegistrySource は --registry に渡したものを、記録に残す形に整える。https:// の URL はそのまま
-// （大文字と小文字も含めて）、パスは今の作業ディレクトリから絶対にして整える（docs/registry.md
-// 「入れたときの記録」）。記録の registry と比べるのは、この整えた文字列どうしだけ。
-func RegistrySource(ref string) (string, error) {
+// checkRegistry は --registry に渡したものが https:// か file:// の URL かを確かめる（docs/registry.md
+// 「参照の書き方」）。パスはそのままでは受け付けない（file:///… と書く）。記録の registry には、渡した
+// 文字列をそのまま残し、比べるのもその文字列どうしだけ。
+func checkRegistry(ref string) error {
 	switch {
-	case ref == "":
-		return "", usageErrorf("an empty registry")
 	case registry.IsURL(ref):
-		return ref, nil
-	case strings.Contains(ref, "://"):
-		return "", usageErrorf("the registry %q is a URL that does not start with https:// (only https:// is fetched)", ref)
+		return nil
+	case registry.IsFileURL(ref):
+		if _, err := registry.FilePath(ref); err != nil {
+			return usageErrorf("the registry: %v", err)
+		}
+		return nil
 	}
-	return absolute(ref), nil
+	return usageErrorf("the registry %q is not an https:// or a file:// URL (write a path as file:///…, "+
+		"with %%20 for a space)", ref)
 }
 
-// open は参照（https:// の URL か絶対パス）を開き、大きさ（分からなければ -1）も返す。
+// open は参照（https:// か file:// の URL）を開き、大きさ（分からなければ -1）も返す。
 func (o *Options) open(ref string) (io.ReadCloser, int64, error) {
 	if !registry.IsURL(ref) {
-		if !filepath.IsAbs(ref) {
-			return nil, 0, fmt.Errorf("%q is neither an https:// URL nor an absolute path", ref)
+		path, err := registry.FilePath(ref)
+		if err != nil {
+			return nil, 0, err
 		}
 		// 手元のファイルはすぐに読めるので、大きさは示さない。
-		file, err := os.Open(ref)
+		file, err := os.Open(path)
 		return file, -1, err
 	}
 	client := http.DefaultClient

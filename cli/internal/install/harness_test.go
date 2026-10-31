@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -441,6 +442,15 @@ func failRename(t *testing.T, from string) {
 		return original(oldpath, newpath)
 	}
 	t.Cleanup(func() { rename = original })
+}
+
+// fileURL は、絶対パス path を指す file:// の URL（Windows は file:///C:/…。空白などは %XX にする）。
+func fileURL(path string) string {
+	slashed := filepath.ToSlash(path)
+	if !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed
+	}
+	return (&url.URL{Scheme: "file", Path: slashed}).String()
 }
 
 func sha256Hex(data []byte) string {

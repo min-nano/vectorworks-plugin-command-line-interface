@@ -91,18 +91,18 @@ func TestOpenRefusesRedirectsAndErrors(t *testing.T) {
 	}
 }
 
-func TestRegistrySource(t *testing.T) {
-	if _, err := RegistrySource(""); !IsUsage(err) {
-		t.Fatalf("an empty registry is wrong usage: %v", err)
+// --registry は https:// か file:// の URL だけ。パス・ほかの scheme・空・正しくない file:// は使い方の誤り。
+func TestCheckRegistry(t *testing.T) {
+	for _, ref := range []string{"https://Example.com/R.json", fileURL(filepath.Join(t.TempDir(), "a b", "r.json"))} {
+		if err := checkRegistry(ref); err != nil {
+			t.Errorf("%s: %v", ref, err)
+		}
 	}
-	if got, _ := RegistrySource("https://Example.com/R.json"); got != "https://Example.com/R.json" {
-		t.Fatalf("a URL is kept as it is: %s", got)
-	}
-	dir := t.TempDir()
-	t.Chdir(dir)
-	got, err := RegistrySource(filepath.Join("a", "..", "plugins.json"))
-	if err != nil || !filepath.IsAbs(got) || filepath.Base(got) != "plugins.json" || strings.Contains(got, "..") {
-		t.Fatalf("%s %v", got, err)
+	for _, ref := range []string{"", "plugins.json", filepath.Join(t.TempDir(), "r.json"), "http://example.com/r.json",
+		"HTTPS://example.com/r.json", "file:///r.json?x", "ftp://x/r.json"} {
+		if err := checkRegistry(ref); !IsUsage(err) {
+			t.Errorf("%q: %v", ref, err)
+		}
 	}
 }
 
@@ -264,15 +264,16 @@ func TestReadRecordRefuses(t *testing.T) {
 // 名前が見つかる前の --registry が読めない（壊れている）なら、そこで失敗にする。
 func TestLookupBrokenRegistry(t *testing.T) {
 	h := newHarness(t)
-	broken := filepath.Join(h.tmp, "broken.json")
-	os.WriteFile(broken, []byte(`{"registry_version":1,"plugins":{"x":{"manifests":[]}}}`), 0o644)
+	broken := fileURL(filepath.Join(h.tmp, "broken.json"))
+	os.WriteFile(filepath.Join(h.tmp, "broken.json"), []byte(`{"registry_version":1,"plugins":{"x":{"manifests":[]}}}`), 0o644)
 	o := h.options()
 	o.Registries = []string{broken}
 	if _, _, err := o.lookup("other"); err == nil || !strings.Contains(err.Error(), broken) {
 		t.Fatal(err)
 	}
+	// 正しくない --registry は、既定のレジストリにある名前でも使い方の誤り。
 	o.Registries = []string{""}
-	if _, _, err := o.lookup("other"); !IsUsage(err) {
+	if _, _, err := o.lookup("cli"); !IsUsage(err) {
 		t.Fatal(err)
 	}
 }

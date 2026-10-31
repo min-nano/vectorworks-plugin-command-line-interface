@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 )
 
@@ -165,12 +167,68 @@ func Match(pattern, s string) bool {
 	return len(s) >= len(last) && strings.HasSuffix(s, last)
 }
 
-// IsURL は参照が https:// の URL か。
+// IsURL は参照が https:// の URL か（遠くのもの）。
 func IsURL(ref string) bool {
 	return strings.HasPrefix(ref, "https://")
 }
 
-// checkRef は参照が絶対（https:// の URL か絶対パス）かを確かめる。remote なら https:// だけ。
+// IsFileURL は参照が file:// の URL か（手元のもの）。
+func IsFileURL(ref string) bool {
+	return strings.HasPrefix(ref, "file://")
+}
+
+// FilePath は file:// の URL を、この OS のパスにする（docs/registry.md「参照の書き方」）。
+func FilePath(ref string) (string, error) {
+	return filePath(ref, runtime.GOOS == "windows")
+}
+
+// filePath は file:// の URL を、windows なら Windows の、そうでなければ mac・Linux のパスにする。
+// %XX は解く（空白は %20 と書く）。ホストは、Windows の共有フォルダ（\\host\share）を指すときだけ書ける
+// （localhost は書かないのと同じ）。問い合わせ・断片の付いたもの・相対のものは断る。
+func filePath(ref string, windows bool) (string, error) {
+	switch {
+	case !IsFileURL(ref):
+		return "", fmt.Errorf("%q is not a file:// URL", ref)
+	case strings.ContainsAny(ref, " \t\r\n"):
+		// URL は空白を含まない（引数と環境変数の値は空白で区切る）。
+		return "", fmt.Errorf("%q has a space (write it as %%20)", ref)
+	}
+	u, err := url.Parse(ref)
+	if err != nil {
+		return "", fmt.Errorf("%q is not a URL (write a space as %%20): %w", ref, err)
+	}
+	host := u.Host
+	if host == "localhost" {
+		host = ""
+	}
+	switch {
+	case u.RawQuery != "" || u.ForceQuery || u.Fragment != "":
+		return "", fmt.Errorf("%q has a query or a fragment", ref)
+	case !strings.HasPrefix(u.Path, "/"):
+		return "", fmt.Errorf("%q has no absolute path (write file:///…)", ref)
+	case host != "" && !windows:
+		return "", fmt.Errorf("%q names the host %s (only a shared folder on Windows has one)", ref, host)
+	}
+	if !windows {
+		return u.Path, nil
+	}
+	path := strings.ReplaceAll(u.Path, "/", `\`)
+	if host != "" {
+		return `\\` + host + path, nil
+	}
+	// file:///C:/… の C: の前の / を除く。ドライブの無いものは絶対ではない。
+	if len(path) < 4 || path[2] != ':' || path[3] != '\\' || !isLetter(path[1]) {
+		return "", fmt.Errorf("%q has no drive (write file:///C:/…)", ref)
+	}
+	return path[1:], nil
+}
+
+func isLetter(c byte) bool {
+	return 'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z'
+}
+
+// checkRef は参照が https:// か file:// の URL かを確かめる。remote なら https:// だけ（遠くのものが
+// 利用者の手元のファイルを指さないため）。
 func checkRef(ref string, remote bool) error {
 	switch {
 	case IsURL(ref):
@@ -180,10 +238,11 @@ func checkRef(ref string, remote bool) error {
 		return nil
 	case remote:
 		return fmt.Errorf("%q is not an https:// URL (a remote file can refer only to https://)", ref)
-	case filepath.IsAbs(ref):
-		return nil
+	case IsFileURL(ref):
+		_, err := FilePath(ref)
+		return err
 	}
-	return fmt.Errorf("%q is neither an https:// URL nor an absolute path", ref)
+	return fmt.Errorf("%q is neither an https:// nor a file:// URL", ref)
 }
 
 // Manifest は 1 つのリリースのマニフェスト（vw2026.json）。

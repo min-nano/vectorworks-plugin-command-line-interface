@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -120,8 +121,9 @@ func TestDeployPlacesNotLocated(t *testing.T) {
 	}
 }
 
-// 手元のパスのレジストリ（VW2026_REGISTRY でも渡せる）から入れ、--check で新しいかを確かめる。
-// マニフェストには、計算機から決めたターゲットを書く。パスのコンマでは分けない（引数でも環境変数でも）。
+// 手元のファイル（file:// の URL）のレジストリ（VW2026_REGISTRY でも渡せる）から入れ、--check で新しいかを
+// 確かめる。マニフェストには、計算機から決めたターゲットを書く。値は空白で分け（VW2026_REGISTRY に 2 つ）、
+// コンマでは分けない。パスの空白は %20。パスのままは使い方の誤り。
 func TestInstallFromLocalRegistry(t *testing.T) {
 	target := install.Target()
 	module := "demo.vlb"
@@ -133,26 +135,32 @@ func TestInstallFromLocalRegistry(t *testing.T) {
 	f, _ := w.Create(module)
 	f.Write([]byte("module"))
 	w.Close()
-	tmp := filepath.Join(t.TempDir(), "a,b")
+	tmp := filepath.Join(t.TempDir(), "a,b c")
 	os.Mkdir(tmp, 0o755)
 	zipPath := filepath.Join(tmp, "demo.zip")
 	os.WriteFile(zipPath, buf.Bytes(), 0o644)
 	sum := sha256.Sum256(buf.Bytes())
 	manifest, _ := json.Marshal(map[string]any{
 		"manifest_version": 1, "tag": "d1",
-		"targets": map[string]any{target: map[string]any{"asset": zipPath, "sha256": hex.EncodeToString(sum[:])}},
+		"targets": map[string]any{target: map[string]any{"asset": fileURL(zipPath), "sha256": hex.EncodeToString(sum[:])}},
 	})
 	os.WriteFile(filepath.Join(tmp, "d1.json"), manifest, 0o644)
 	registry, _ := json.Marshal(map[string]any{
 		"registry_version": 1,
-		"plugins":          map[string]any{"demo": map[string]any{"manifests": []any{map[string]any{"match": "*", "path": filepath.Join(tmp, "{tag}.json")}}}},
+		"plugins": map[string]any{"demo": map[string]any{"manifests": []any{map[string]any{"match": "*",
+			"path": strings.Replace(fileURL(filepath.Join(tmp, "x.json")), "x.json", "{tag}.json", 1)}}}},
 	})
-	registryPath := filepath.Join(tmp, "plugins.json")
-	os.WriteFile(registryPath, registry, 0o644)
+	os.WriteFile(filepath.Join(tmp, "plugins.json"), registry, 0o644)
+	registryPath := fileURL(filepath.Join(tmp, "plugins.json"))
+	other := filepath.Join(tmp, "other.json")
+	os.WriteFile(other, []byte(`{"registry_version":1,"plugins":{}}`), 0o644)
 	plugins := t.TempDir()
 	fakeInstalled(t, plugins, "cli")
 
-	vars := map[string]string{"VW2026_REGISTRY": registryPath}
+	if r := invoke(t, opts{plugins: plugins}, "install", "demo@d1", "--registry", filepath.Join(tmp, "plugins.json")); r.code != exitUsage {
+		t.Fatalf("a path: %+v", r)
+	}
+	vars := map[string]string{"VW2026_REGISTRY": fileURL(other) + " " + registryPath}
 	r := invoke(t, opts{plugins: plugins, vars: vars}, "install", "demo@d1", "--check")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"outcome":"available"`) || exist(filepath.Join(plugins, "demo")) {
 		t.Fatalf("--check: %+v", r)
@@ -200,6 +208,15 @@ func TestUninstallFromInsideShowsTheScript(t *testing.T) {
 	if !exist(filepath.Join(plugins, "cli", install.RecordFile)) {
 		t.Fatal("removed cli")
 	}
+}
+
+// fileURL は、絶対パス path を指す file:// の URL（Windows は file:///C:/…。空白などは %XX にする）。
+func fileURL(path string) string {
+	slashed := filepath.ToSlash(path)
+	if !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed
+	}
+	return (&url.URL{Scheme: "file", Path: slashed}).String()
 }
 
 func TestUninstallScript(t *testing.T) {

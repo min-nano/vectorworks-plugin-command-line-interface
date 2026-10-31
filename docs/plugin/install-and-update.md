@@ -154,7 +154,8 @@ vw2026 install cli@dev-feature-x-61-a1b2c3d       # PR のプレリリース
 vw2026 install cli@latest --check                 # 入れずに、新しいビルドがあるかだけ返す（動いていてもよい）
 vw2026 install cli@latest --plugins-dir <Plug-Ins>
 vw2026 install import-ifc-homeskz@latest
-vw2026 install my-plugin@2026.3.1 --registry ./plugins.json
+vw2026 install my-plugin@2026.3.1 --registry https://example.com/plugins.json
+vw2026 install my-plugin@2026.3.1 --registry file:///Users/me/plugins.json   # 手元のファイルも URL で書く
 ```
 
 - **名前とタグは必須です**（`<name>@<tag>`。既定のタグは持たない）。1 回に 1 つだけ入れます
@@ -802,7 +803,7 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
   - 同じタグでも記録の `module` が無ければ入れ直す・記録の `name` が違う・記録が読めないときに断る
   - 同じタグのとき（記録の `hooks.install` を走らせる・`{tag}` のある規則でターゲットも同じならマニフェストを
     取らない・ターゲットが違えば取って入れ直す）
-  - フックの失敗の戻し（新しいフォルダを名前の変更でよけてから前の版を戻す）・`registry` の比べ方（整えた文字列どうし）
+  - フックの失敗の戻し（新しいフォルダを名前の変更でよけてから前の版を戻す）・`registry` の比べ方（渡した URL の文字列どうし）・レジストリの書き方（`https://` と `file://` の URL だけ。空白で区切る。パスのままは使い方の誤り）
   - `uninstall` の出力の `remaining`（どの名前でも出す）
   - 既定のレジストリ（`cli/internal/registry/default.json`）が正しく読めること
   - タグの検査（`.`・`..`・先頭が英数字でないものを断る）とターゲットの決め方（mac は計算機の種類で

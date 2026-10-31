@@ -601,7 +601,8 @@ func TestInstallUsageErrors(t *testing.T) {
 func TestLookup(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
-	local := filepath.Join(h.tmp, "plugins.json")
+	localPath := filepath.Join(h.tmp, "plugins.json")
+	local := fileURL(localPath)
 	write := func(path, body string) {
 		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 			t.Fatal(err)
@@ -611,7 +612,7 @@ func TestLookup(t *testing.T) {
 		return `{"registry_version":1,"plugins":{"` + name + `":{"manifests":[{"match":"*","path":"` + path + `"}]}}}`
 	}
 	// 既定のレジストリの名前は上書きできない。
-	write(local, extra("cli", "https://example.invalid/{tag}.json"))
+	write(localPath, extra("cli", "https://example.invalid/{tag}.json"))
 	o := h.options()
 	o.Registries = []string{local}
 	entry, source, err := o.lookup("cli")
@@ -626,13 +627,13 @@ func TestLookup(t *testing.T) {
 		t.Fatal("should fail on the missing registry")
 	}
 	// 先に見つかった名前を使う。
-	write(local, extra("other", "https://example.invalid/{tag}.json"))
+	write(localPath, extra("other", "https://example.invalid/{tag}.json"))
 	o.Registries = []string{h.url("/registry.json"), local}
 	if _, source, err := o.lookup("other"); err != nil || source != h.url("/registry.json") {
 		t.Fatalf("%s %v", source, err)
 	}
-	// https:// で取ったレジストリは手元のパスを指せない。
-	h.serve("/local.json", []byte(extra("other", strings.ReplaceAll(filepath.Join(h.tmp, "{tag}.json"), `\`, "/"))))
+	// https:// で取ったレジストリは手元のファイルを指せない。
+	h.serve("/local.json", []byte(extra("other", fileURL(filepath.Join(h.tmp, "{tag}.json")))))
 	o.Registries = []string{h.url("/local.json")}
 	if _, _, err := o.lookup("other"); err == nil {
 		t.Fatal("a remote registry should not refer to a path")
@@ -649,8 +650,8 @@ func TestLookup(t *testing.T) {
 func TestInstallRuleSelection(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
-	registryPath := filepath.Join(h.tmp, "plugins.json")
-	os.WriteFile(registryPath, []byte(`{"registry_version":1,"plugins":{"other":{"manifests":[`+
+	registryPath := fileURL(filepath.Join(h.tmp, "plugins.json"))
+	os.WriteFile(filepath.Join(h.tmp, "plugins.json"), []byte(`{"registry_version":1,"plugins":{"other":{"manifests":[`+
 		`{"match":"stable","path":"`+h.url("/other/missing.json")+`"},`+
 		`{"match":"*","path":"`+h.url("/other/{tag}/vw2026.json")+`"}]}}}`), 0o644)
 	o := h.options()
@@ -667,16 +668,9 @@ func TestInstallRuleSelection(t *testing.T) {
 	if _, err := Install(o, "other", "o2", false); err == nil || !strings.Contains(err.Error(), `"o1"`) {
 		t.Fatal(err)
 	}
-	// 入れた記録には、整えたレジストリの場所を残す。
+	// 入れた記録には、渡したレジストリの URL をそのまま残す。
 	result, err := Install(o, "other", "o1", false)
 	if err != nil || result.Registry != registryPath {
-		t.Fatalf("%+v %v", result, err)
-	}
-	// 同じファイルを相対パスで渡しても、整えた文字列は同じ。
-	t.Chdir(h.tmp)
-	o.Registries = []string{"plugins.json"}
-	h.publish(release{name: "other", tag: "o3"})
-	if result, err := Install(o, "other", "o3", false); err != nil || result.Outcome != OutcomeInstalled {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
@@ -692,22 +686,23 @@ func TestInstallUnsupportedTarget(t *testing.T) {
 	}
 }
 
-// 手元のパスのマニフェストと資産も取れる（社内のファイル共有など）。
+// 手元のファイル（file:// の URL）のマニフェストと資産も取れる（社内のファイル共有など）。空白は %20。
 func TestInstallFromPaths(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
 	zip := makeZip(t, []entry{{name: "local.vwlibrary/x", body: "m"}, {name: "version.txt", body: "l1"}})
-	zipPath := filepath.Join(h.tmp, "local.zip")
+	dir := filepath.Join(h.tmp, "a b")
+	os.Mkdir(dir, 0o755)
+	zipPath := filepath.Join(dir, "local.zip")
 	os.WriteFile(zipPath, zip, 0o644)
 	sum := sha256Hex(zip)
-	manifest := filepath.Join(h.tmp, "l1.json")
-	os.WriteFile(manifest, []byte(`{"manifest_version":1,"tag":"l1","targets":{"`+testTarget+`":{"asset":`+
-		jsonString(zipPath)+`,"sha256":"`+sum+`"}}}`), 0o644)
-	registryPath := filepath.Join(h.tmp, "plugins.json")
+	os.WriteFile(filepath.Join(dir, "l1.json"), []byte(`{"manifest_version":1,"tag":"l1","targets":{"`+testTarget+`":{"asset":`+
+		jsonString(fileURL(zipPath))+`,"sha256":"`+sum+`"}}}`), 0o644)
+	registryPath := filepath.Join(dir, "plugins.json")
 	os.WriteFile(registryPath, []byte(`{"registry_version":1,"plugins":{"local":{"manifests":[{"match":"*","path":`+
-		jsonString(filepath.Join(h.tmp, "{tag}.json"))+`}]}}}`), 0o644)
+		jsonString(strings.Replace(fileURL(filepath.Join(dir, "x.json")), "x.json", "{tag}.json", 1))+`}]}}}`), 0o644)
 	o := h.options()
-	o.Registries = []string{registryPath}
+	o.Registries = []string{fileURL(registryPath)}
 	result, err := Install(o, "local", "l1", false)
 	if err != nil || result.Outcome != OutcomeInstalled || result.Hook != nil || h.installedVersion("local") != "l1" {
 		t.Fatalf("%+v %v", result, err)
