@@ -101,25 +101,21 @@ func TestUninstallRenameFailure(t *testing.T) {
 	h.installCLI()
 	failRename(t, filepath.Join(h.plugins, "cli"))
 	before := snapshot(t, h.plugins)
-	o := h.options()
-	o.Executable = filepath.Join(h.plugins, "cli", "bin", "vw2026")
-	if _, err := Uninstall(o, "cli"); err == nil || !strings.Contains(err.Error(), "current directory") {
+	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "current directory") {
 		t.Fatal(err)
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
-	if len(h.hookRuns("cli")) != 1 || exist(filepath.Join(h.work, "old", "cli.uninstalling")) || len(oldCLIs(t, h)) != 0 {
-		t.Fatal("ran the hook, left the marker, or did not put the CLI back")
+	if len(h.hookRuns("cli")) != 1 || exist(filepath.Join(h.work, "old", "cli.uninstalling")) {
+		t.Fatal("ran the hook or left the marker")
 	}
 }
 
-// フックが失敗したら、フォルダとよけた CLI を戻し、印を消す。
+// フックが失敗したら、フォルダを戻し、印を消す。
 func TestUninstallHookFailureRestores(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1", uninstall: &hookPlan{Exit: 1}})
 	before := snapshot(t, h.plugins)
-	o := h.options()
-	o.Executable = filepath.Join(h.plugins, "cli", "bin", "vw2026")
-	if _, err := Uninstall(o, "cli"); err == nil {
+	if _, err := Uninstall(h.options(), "cli"); err == nil {
 		t.Fatal("should fail")
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
@@ -198,6 +194,28 @@ func TestUninstallStaleMarker(t *testing.T) {
 	os.WriteFile(marker, nil, 0o600)
 	result, err := Uninstall(h.options(), "demo")
 	if err != nil || result.Outcome != OutcomeNotInstall || !reflect.DeepEqual(result.Remaining, []string{"cli"}) || exist(marker) {
+		t.Fatalf("%+v %v", result, err)
+	}
+}
+
+// 走らせている CLI が外すフォルダの中にあれば（入れた cli の vw2026 で uninstall cli）、何も変えずに
+// ErrRunsInside で断る（フォルダの外の CLI、初回のスクリプトで外す）。リンクを通して走らせても同じ。
+func TestUninstallFromInsideTheFolder(t *testing.T) {
+	h := newHarness(t)
+	h.installCLI()
+	before := snapshot(t, h.plugins)
+	o := h.options()
+	o.Executable = filepath.Join(h.plugins, "cli", "bin", "vw2026")
+	if _, err := Uninstall(o, "cli"); !errors.Is(err, ErrRunsInside) {
+		t.Fatal(err)
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
+	if len(h.hookRuns("cli")) != 1 || exist(filepath.Join(h.work, "old", "cli.uninstalling")) {
+		t.Fatal("ran the hook or left the marker")
+	}
+	// フォルダの外の CLI なら外せる。
+	o.Executable = filepath.Join(h.tmp, "elsewhere", "vw2026")
+	if result, err := Uninstall(o, "cli"); err != nil || result.Outcome != OutcomeUninstalled {
 		t.Fatalf("%+v %v", result, err)
 	}
 }

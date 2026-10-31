@@ -36,6 +36,10 @@ const (
 // ErrRunning は、ロックを掴む Vectorworks が居るので何もしなかった（専用の終了コード）。
 var ErrRunning = errors.New("Vectorworks is running: quit it, then run again")
 
+// ErrRunsInside は、uninstall が外すフォルダの中で、走らせている CLI が動いている（入れた cli の vw2026 で
+// uninstall cli を走らせた）ので、何もしなかった。フォルダの外の CLI（初回のスクリプト）で外す。
+var ErrRunsInside = errors.New("vw2026 runs from the folder it would uninstall,")
+
 // UsageError は使い方の誤り（名前・タグ・指定の形）。
 type UsageError struct {
 	msg string

@@ -50,8 +50,8 @@ main() {
 			continue
 		fi
 		if [ "$uninstall" = true ]; then
-			# uninstall cli がフックの途中で止まり、CLI が消えたときに抜け出すためのもので、cli だけを
-			# 受け付ける。
+			# cli を外す手段（入っている CLI の uninstall cli は断り、これを示す）で、止まった uninstall cli の
+			# 続きもこれで走らせる。cli だけを受け付ける。
 			if [ "$positional" -ne 2 ] || [ "$arg" != cli ]; then
 				fail "only \"uninstall cli\" is accepted"
 			fi

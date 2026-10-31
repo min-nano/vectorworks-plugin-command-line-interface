@@ -41,7 +41,6 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	}
 
 	var record *Record
-	var moved *movedCLI
 	resumed := false
 	switch {
 	case exists(p.dest):
@@ -53,6 +52,12 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 				reason = fmt.Sprintf("its module %s is missing; run install to repair it first", record.Module)
 			}
 			return nil, fmt.Errorf("%s is not a plug-in that vw2026 installed (%s); nothing is removed", p.dest, reason)
+		}
+		// 走らせている CLI がフォルダの中にあれば（入れた cli の vw2026 で uninstall cli）、外さない。外すと
+		// CLI は使わなくなるので、フォルダの外で動く CLI（初回のスクリプトの一時フォルダのもの）で外す。
+		// Windows で動いている自分を消せずに残すこともない。
+		if _, _, inside := o.runsFrom(p.dest); inside {
+			return nil, fmt.Errorf("%w %s; nothing is removed", ErrRunsInside, p.dest)
 		}
 		if err := mkdirAll(p.old, 0o700); err != nil {
 			return nil, err
@@ -67,13 +72,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		if err := writeFile(p.marker, nil, 0o600); err != nil {
 			return nil, err
 		}
-		moved, err = o.sidestep(p.dest, p.old)
-		if err != nil {
-			_ = os.Remove(p.marker)
-			return nil, err
-		}
 		if err := rename(p.dest, p.oldDir); err != nil {
-			moved.restore()
 			_ = os.Remove(p.marker)
 			return nil, renameError(p.dest, err)
 		}
@@ -108,7 +107,6 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		if renameErr := rename(p.oldDir, p.dest); renameErr != nil {
 			return nil, fmt.Errorf("%w; %s cannot be put back (%v): move it back to %s by hand", err, p.oldDir, renameErr, p.dest)
 		}
-		moved.restore()
 		_ = os.Remove(p.marker)
 		return nil, fmt.Errorf("%w; %s is put back", err, p.dest)
 	}

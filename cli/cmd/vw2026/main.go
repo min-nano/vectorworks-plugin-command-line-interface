@@ -154,9 +154,10 @@ true or false (or 1 or 0), and --no-raw turns it off again.
 vw2026 does not wait for the bridge to start or stop: the caller runs status
 in a loop ("vw2026 help status").
 
-vw2026 installs, updates, and uninstalls the plug-ins, cli included ("vw2026
-help install"). It changes nothing while Vectorworks is running with the
-bridge, and it does not quit Vectorworks. To update the plug-in while
+vw2026 installs, updates, and uninstalls the plug-ins ("vw2026 help
+install"). It updates cli itself too; the first-time script installs cli and
+uninstalls it ("vw2026 help uninstall"). It changes nothing while Vectorworks
+is running with the bridge, and it does not quit Vectorworks. To update the plug-in while
 Vectorworks runs, the caller combines the commands. Quit runs only in a
 session and only while no drawing is open, so the caller saves and closes the
 drawings first. End the session on

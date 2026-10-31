@@ -317,7 +317,7 @@ func TestInstallCannotRemoveTheStaging(t *testing.T) {
 	}
 }
 
-// 走らせている CLI をよけられなければ、付け替えずに失敗にする（install も uninstall も）。
+// 走らせている CLI をよけられなければ、付け替えずに失敗にする。
 func TestCannotSidestepTheCLI(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -329,12 +329,9 @@ func TestCannotSidestepTheCLI(t *testing.T) {
 	if _, err := Install(o, "cli", "c2", false); err == nil {
 		t.Error("install should fail")
 	}
-	if _, err := Uninstall(o, "cli"); err == nil {
-		t.Error("uninstall should fail")
-	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
-	if exist(filepath.Join(h.work, "old", "cli.uninstalling")) || exist(filepath.Join(h.work, "staging", "cli")) {
-		t.Error("left the marker or the staging folder")
+	if exist(filepath.Join(h.work, "staging", "cli")) {
+		t.Error("left the staging folder")
 	}
 }
 

@@ -180,3 +180,35 @@ func exist(path string) bool {
 	_, err := os.Lstat(path)
 	return err == nil
 }
+
+// 入れた cli の vw2026（フォルダの中の実行ファイル）で uninstall cli を走らせると、何も変えずに 2 で
+// 終わり、外すための初回のスクリプトを示す。
+func TestUninstallFromInsideShowsTheScript(t *testing.T) {
+	plugins := t.TempDir()
+	fakeInstalled(t, plugins, "cli")
+	executable := filepath.Join(plugins, "cli", "bin", "vw2026")
+	os.MkdirAll(filepath.Dir(executable), 0o755)
+	os.WriteFile(executable, nil, 0o700)
+	r := invoke(t, opts{plugins: plugins, executable: executable}, "uninstall", "cli")
+	var out map[string]string
+	if r.code != exitUsage || json.Unmarshal([]byte(r.stdout), &out) != nil || out["outcome"] != "failed" ||
+		!strings.Contains(out["command"], "get-vw2026") || !strings.Contains(r.stderr, out["command"]) {
+		t.Fatalf("%+v", r)
+	}
+	if !exist(filepath.Join(plugins, "cli", install.RecordFile)) {
+		t.Fatal("removed cli")
+	}
+}
+
+func TestUninstallScript(t *testing.T) {
+	for _, c := range []struct{ goos, dir, want string }{
+		{"darwin", "", "curl -fsSL " + releaseBase + "get-vw2026.sh | sh -s -- uninstall cli"},
+		{"darwin", "/a b/it's", "curl -fsSL " + releaseBase + `get-vw2026.sh | sh -s -- uninstall cli --plugins-dir '/a b/it'\''s'`},
+		{"windows", "", "& ([scriptblock]::Create((irm " + releaseBase + "get-vw2026.ps1))) uninstall cli"},
+		{"windows", `C:\a b\it's`, "& ([scriptblock]::Create((irm " + releaseBase + `get-vw2026.ps1))) uninstall cli --plugins-dir 'C:\a b\it''s'`},
+	} {
+		if got := uninstallScript(c.goos, "cli", c.dir); got != c.want {
+			t.Errorf("%s %q:\n got %s\nwant %s", c.goos, c.dir, got, c.want)
+		}
+	}
+}

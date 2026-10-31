@@ -47,8 +47,8 @@
 			continue
 		}
 		if ($uninstall) {
-			# This is the way out when "uninstall cli" stopped in its hook and the CLI is gone, so it
-			# takes cli only.
+			# This is how cli is uninstalled (the installed CLI refuses "uninstall cli" and shows this
+			# script), and how a stopped "uninstall cli" goes on. It takes cli only.
 			if ($positional -ne 2 -or $arg -cne 'cli') {
 				throw 'get-vw2026: only "uninstall cli" is accepted'
 			}

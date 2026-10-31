@@ -30,15 +30,7 @@ func (m *movedCLI) restore() {
 // ファイル（動いている実行ファイル）を含むフォルダの名前を変えられないが、実行ファイルそのものは
 // 同じボリュームの別のディレクトリへ移せる。mac でも同じ手順を踏む（OS で分けない）。
 func (o *Options) sidestep(dir, old string) (*movedCLI, error) {
-	if o.Executable == "" {
-		return nil, nil
-	}
-	executable := o.Executable
-	// mac の ~/.local/bin/vw2026 はリンクなので、解いた先で決める。
-	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
-		executable = resolved
-	}
-	rel, ok := within(executable, dir)
+	executable, rel, ok := o.runsFrom(dir)
 	if !ok {
 		return nil, nil
 	}
@@ -49,6 +41,21 @@ func (o *Options) sidestep(dir, old string) (*movedCLI, error) {
 		return nil, err
 	}
 	return &movedCLI{from: filepath.Join(dir, rel), to: to}, nil
+}
+
+// runsFrom は、走らせている CLI の実行ファイル（リンクを解いたもの）が dir の中にあるかと、その場所と
+// dir からの相対パスを返す。Executable が空なら中にない。
+func (o *Options) runsFrom(dir string) (executable, rel string, ok bool) {
+	if o.Executable == "" {
+		return "", "", false
+	}
+	executable = o.Executable
+	// mac の ~/.local/bin/vw2026 はリンクなので、解いた先で決める。
+	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
+		executable = resolved
+	}
+	rel, ok = within(executable, dir)
+	return executable, rel, ok
 }
 
 // within は、path が dir の中にあれば dir からの相対パスを返す。パスの文字列ではなく
