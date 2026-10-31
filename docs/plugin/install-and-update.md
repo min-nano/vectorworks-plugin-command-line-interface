@@ -10,21 +10,25 @@
 
 | 段 | 手段 | すること |
 | --- | --- | --- |
-| 初回 | `get-vw2026.sh` / `.ps1`（curl などで取ってパイプで実行） | 一時フォルダに CLI を取り出し、`vw2026 install cli@<tag>` を走らせる |
+| 初回 | `get-vw2026.sh` / `.ps1`（curl などで取ってパイプで実行） | 一時フォルダに、スクリプトを取ったリリースの CLI を取り出し、`vw2026 install cli@<そのリリースのタグ>` を走らせる |
 | インストール・更新 | `vw2026 install <name>@<tag>` | `<Plug-Ins>/<name>/` を付け替え、フックを走らせる。入っているものと同じタグなら、zip を取らず付け替えもせずに、フックだけを走らせる。`cli` の更新も同じ |
 | アンインストール | `vw2026 uninstall <name>` | フックを走らせ、`<Plug-Ins>/<name>/` を取り除く |
-| `cli` のアンインストール | 入っているタグの初回のスクリプトに `uninstall cli@<入っているタグ>` を渡す | そのタグの CLI を一時フォルダに取り出し、`vw2026 uninstall cli` を走らせる（入っている CLI の `uninstall cli` は断り、このコマンドを示す） |
+| `cli` のアンインストール | 入っているタグのリリースの初回のスクリプトに `uninstall` を渡す | そのタグの CLI を一時フォルダに取り出し、`vw2026 uninstall cli` を走らせる（入っている CLI の `uninstall cli` は断り、このコマンドを示す） |
 
 ```sh
 # macOS
 curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.sh | sh
-curl -fsSL …/get-vw2026.sh | sh -s -- --plugins-dir <Plug-Ins>   # 既定以外の場所へ
+curl -fsSL …/releases/download/<tag>/get-vw2026.sh | sh                  # そのタグを入れる
+curl -fsSL …/get-vw2026.sh | sh -s -- --plugins-dir <Plug-Ins>           # 既定以外の場所へ
+curl -fsSL …/releases/download/<tag>/get-vw2026.sh | sh -s -- uninstall  # そのタグの CLI で外す
 ```
 
 ```powershell
 # Windows
 irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.ps1 | iex
-& ([scriptblock]::Create((irm …/get-vw2026.ps1))) --plugins-dir <Plug-Ins>   # 既定以外の場所へ
+irm …/releases/download/<tag>/get-vw2026.ps1 | iex                                        # そのタグを入れる
+& ([scriptblock]::Create((irm …/get-vw2026.ps1))) --plugins-dir <Plug-Ins>                 # 既定以外の場所へ
+& ([scriptblock]::Create((irm …/releases/download/<tag>/get-vw2026.ps1))) uninstall        # そのタグの CLI で外す
 ```
 
 ## 前提
@@ -83,7 +87,7 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
       のバンドルの中身の一部など）は、同じタグの `install` では「同じタグのとき」の道に入り、フックだけが
       走って付け替えないので直りません。`uninstall` してから入れ直します。`cli` は、`bin/vw2026` が消えて
       いれば `vw2026` を走らせられないので、[初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)に
-      `uninstall cli` を渡してから、初回のスクリプトで入れます。
+      `uninstall` を渡してから、初回のスクリプトで入れます。
   - 組み立ての途中のファイルが同じように選ばれないよう、zip を展開するときにファイルの時刻を zip の項目の
     ものに戻しません（[レジストリ「zip の形」](../registry.md#zip-の形)）。
   - `old/<name>/` は残り、印 `old/<name>.uninstalling` だけが消えたときは、`install` / `uninstall` が
@@ -96,25 +100,31 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
 
 ## 初回のスクリプト（`get-vw2026.sh` / `.ps1`）
 
-**CLI を取ってきて `install cli@<tag>`（または `uninstall cli`）を走らせるだけ**です。配置の手順・PATH・判断は
-`install` / `uninstall` と `cli` のフックが持ち、スクリプトは持ちません。
+**スクリプトを取ってきたリリースの CLI を取り出して、`install cli@<そのリリースのタグ>`（または `uninstall cli`）を
+走らせるだけ**です。配置の手順・PATH・判断は `install` / `uninstall` と `cli` のフックが持ち、スクリプトは持ちません。
 
-1. 引数を見て、走らせるものを決める。
-   - **最初の位置の引数が `uninstall` なら**、受け付けるのは `uninstall cli` か `uninstall cli@<tag>`（と `--plugins-dir`）
-     だけ。`cli@<tag>` ならそのタグの、無ければ `latest` の CLI を取り出して、`vw2026 uninstall cli <指定>` を走らせる
-     （CLI には `cli@<tag>` ではなく `cli` を渡す。指定は `uninstall` の前に書かれていても後ろへ回す。`vw2026` は
-     コマンドの前の指定を受け付けないため。`cli` を外すただ 1 つの手段。一時フォルダの CLI はフォルダの外で
-     動くので、何も残さずに外せる。止まった `uninstall cli` の続きもこれで走らせる。下記「アンインストール」）。
-     入っているタグで外すのは、入れたものと同じ版のスクリプトと CLI が、自分の書いた記録を読むためです（あとの
-     版でスクリプトや記録の扱いが変わっても、外し方が変わらない）。
-   - それ以外は、引数から `cli@<tag>` の形のものを探す（無ければ `cli@latest` を足す）。ほかの名前は
-     受け付けない（このスクリプトは `cli` を入れるためのもの）。
+- **入れる・外すタグは、スクリプトを取ってきたリリースのタグに決まっています。** リリースは、スクリプトの
+  `@VW2026_TAG@` をそのリリースのタグに置き換えて上げます（[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
+  `releases/download/<tag>/get-vw2026.sh` を取れば `<tag>` が、`releases/latest/download/get-vw2026.sh` を取れば
+  そのとき latest のリリースのタグが入ります。どのタグを入れるかは取る URL だけで決まり、引数でタグを渡す形は
+  持ちません（取ったスクリプトと入る CLI の版がいつも揃う）。置き換えていないスクリプト（リポジトリのものを
+  そのまま走らせた）は、何もせずに断ります。
+
+1. 引数を見て、走らせるものを決める。位置の引数は `uninstall`（`uninstall cli` とも書ける）だけを受け付け、ほかの
+   位置の引数（`cli@<tag>` など）は、ほかのタグはそのタグのスクリプトを取ることを示して断る。指定（`--plugins-dir`・
+   `--registry` とその値）は、書いた位置に依らず CLI のコマンドの後ろへそのまま渡す（`vw2026` はコマンドの前の
+   指定を受け付けないため）。
+   - **`uninstall` なら** `vw2026 uninstall cli <指定>` を走らせる（`cli` を外すただ 1 つの手段。一時フォルダの
+     CLI はフォルダの外で動くので、何も残さずに外せる。止まった `uninstall cli` の続きもこれで走らせる。下記
+     「アンインストール」）。入っているタグのスクリプトで外すのは、入れたものと同じ版のスクリプトと CLI が、
+     自分の書いた記録を読むためです（あとの版でスクリプトや記録の扱いが変わっても、外し方が変わらない）。
+   - それ以外は `vw2026 install cli@<そのリリースのタグ> <指定>` を走らせる。
 2. ターゲット（mac は `sysctl -n hw.optional.arm64` が 1 なら `macos-arm64`、それ以外は `macos-x64`。
    Windows は `windows-x64`。[レジストリ「名前・タグ・ターゲット」](../registry.md#名前タグターゲット)）の zip を一時フォルダへ取ってきて、中の
    `bin/vw2026`（Windows は `bin\vw2026.exe`）だけを取り出す。zip の場所は既定のレジストリの `cli` の
-   規則と同じ形で決める（`latest` なら `releases/latest/download/cli-<target>.zip`、それ以外は
-   `releases/download/<tag>/cli-<target>.zip`）。JSON を読まずに済むように、マニフェストは読まない。
-3. 取り出した CLI で `install`（または `uninstall`）を走らせる（スクリプトの引数をそのまま渡す）。
+   規則と同じ形で決める（`releases/download/<そのリリースのタグ>/cli-<target>.zip`）。JSON を読まずに済むように、
+   マニフェストは読まない。
+3. 取り出した CLI で `install`（または `uninstall`）を走らせる。
 4. 一時フォルダを消し、走らせた `install` / `uninstall` の終了コードで終わる。「Vectorworks が動いている」終了コード
    （番号は `vw2026 --help`）なら「Vectorworks を終了してからもう一度走らせる」と表示する。
 
@@ -126,12 +136,11 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
   （[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
 - 一時フォルダの CLI は、`install` の中でマニフェストと zip をもう一度取ります（スクリプトが取った
   zip は渡さない。指定を増やさないため。zip は小さい）。`install` は zip を sha256 で照らします。
-- `latest` が、スクリプトが zip を取ってから `install` がマニフェストを取るまでの間に進むと、
-  一時フォルダの CLI と入る CLI は別のビルドになります。入れる手順はどのプラグインにも同じ
-  （ビルドに固有の置き方は、入るものの側のフックが持つ）なので、一時フォルダの CLI がその
-  `manifest_version` を読めれば正しく入ります。
-- PR のプレリリースを試すときは、そのリリースのスクリプトに `cli@<そのタグ>` を渡します
-  （スクリプトが取る zip もそのタグのものになり、`install` へもそのまま渡る）。
+- `install` にはタグをそのまま渡すので、一時フォルダの CLI と入る CLI はいつも同じビルドです（`latest` の
+  URL から取っても、スクリプトが取ってから `install` がマニフェストを取るまでの間に latest が進んで別の
+  ビルドが入ることはない）。
+- PR のプレリリースを試すときは、そのリリースのスクリプト（`releases/download/<そのタグ>/get-vw2026.sh`）を
+  取って走らせます。
 
 ## インストールと更新（`vw2026 install`）
 
@@ -157,11 +166,11 @@ vw2026 install my-plugin@2026.3.1 --registry ./plugins.json
   `vectorworks_running` で終わります（新しいかだけを知りたいときは `--check`）。
 - **フォルダの中身を入れ直す手段は持ちません。** 入れ直すには `uninstall` してから入れます。
   - ほかのプラグイン: `vw2026 uninstall <name>` のあと `vw2026 install <name>@<tag>`。
-  - `cli`: 入っている CLI の `uninstall cli` が示すコマンド（入っているタグの[初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)に
-    `uninstall cli@<そのタグ>` を渡す）で外し、続けて初回のスクリプトで入れます（入っている CLI の `uninstall cli` は
+  - `cli`: 入っている CLI の `uninstall cli` が示すコマンド（入っているタグのリリースの[初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)に
+    `uninstall` を渡す）で外し、続けて初回のスクリプトで入れます（入っている CLI の `uninstall cli` は
     断る。下記「アンインストール」）。
     `<Plug-Ins>/cli/bin/vw2026` が消えた（ウイルス対策が隔離した・`install` が付け替えの途中で止まった）
-    ときも同じで、`vw2026` を走らせられないので、初回のスクリプトに `uninstall cli` を渡してから入れ直します。
+    ときも同じで、`vw2026` を走らせられないので、初回のスクリプトに `uninstall` を渡してから入れ直します。
   - どちらも同じパスに入るので、その間に Vectorworks を起動しなければ「有効化」は残ります（下記
     「入れる先のフォルダ」）。
 - 指定・環境変数・終了コードの具体的な値は `vw2026 help install` が真実です（`CLAUDE.md`「Go」）。
@@ -220,7 +229,7 @@ vw2026 install <name>@<tag>
   合った規則の `path` に `{tag}` があり、記録の `target` が今のターゲットと同じなら、マニフェストも
   取りません（ターゲットが違えば、入れ直すのでマニフェストを取る）。ネットワークにつながっていなくても、
   消えた PATH を置き直せます（CLI はフォルダの中にあるので、同じタグでは戻らない。消えたときは
-  [初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)に `uninstall cli` を渡してから入れ直す）（`latest` のように決まった場所を指す規則では、今のタグを知るために
+  [初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)に `uninstall` を渡してから入れ直す）（`latest` のように決まった場所を指す規則では、今のタグを知るために
   マニフェストを取る）。入っているタグは `install` / `--check` の出力の `tag` と、記録で分かります。
 - **プラグインと CLI は 1 つの zip から入り、同じフォルダと一緒に付け替わります**（`cli` の zip の
   `bin/` がそのまま `<Plug-Ins>/cli/bin/` になる）。動いているプラグインと入っている CLI は同じビルドです（[通信規則「版」](../protocol.md#版)の前提）。
@@ -442,7 +451,7 @@ vw2026 install <name>@<tag>
   （`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*` だけ。[消すコードの歯止め](#消すコードの歯止め)）。
 - よけてから付け替えるまでの間に止まる（Ctrl-C・電源断）と、`<Plug-Ins>/cli/` は CLI の無いまま
   残ります。このときは `vw2026` を走らせられないので、[初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)に
-  `uninstall cli` を渡してから入れ直します（一時フォルダの CLI はフォルダの外で動くので、よけずに済む）。
+  `uninstall` を渡してから入れ直します（一時フォルダの CLI はフォルダの外で動くので、よけずに済む）。
 - 初回のスクリプトから走らせたときは、動いている CLI は一時フォルダにあるので、よけません。
 
 ## CLI とスプールの置き場所
@@ -625,7 +634,7 @@ vw2026 install <name>@<tag>
 ```sh
 vw2026 uninstall import-ifc-homeskz
 vw2026 uninstall import-ifc-homeskz --plugins-dir <Plug-Ins>   # 既定以外の <Plug-Ins> から
-curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall cli@<tag>   # cli（CLI そのもの）は初回のスクリプトで
+curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI そのもの）は、入っているタグの初回のスクリプトで
 ```
 
 **走らせている CLI が外すフォルダの中にあれば、何も変えずに使い方の誤りで終わり、入っているタグ（記録の `tag`）の
@@ -688,8 +697,8 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall cli@<tag>   # c
 - 手順 3 と 5 の間で止まった（Ctrl-C・電源断）ときは、もう一度 `uninstall <name>` を走らせれば
   手順 4 から続きます（手順 2）。このとき `install <name>@…` は、`<Work>/old/<name>/` だけがある状態を
   断る（[入れ替えの手順](#入れ替えの手順)の 1）ので、先に `uninstall` を終わらせます。
-  - `uninstall cli` が止まったときも、初回のスクリプトに `uninstall cli` をもう一度渡します（一時フォルダの
-    `latest` の CLI が手順 4 から続ける）。入れ直すなら、そのあと初回のスクリプトで入れます。
+  - `uninstall cli` が止まったときも、同じ初回のスクリプトに `uninstall` をもう一度渡します（一時フォルダの
+    そのタグの CLI が手順 4 から続ける）。入れ直すなら、そのあと初回のスクリプトで入れます。
 - フックが失敗してフォルダを戻すとき、フックがすでに外のものを消していると戻せません。そのため
   **`uninstall` のフックは、確かめられることを先に確かめて失敗し、外のものを消し始めたあとは失敗に
   しない**ように書きます（消せなかったものは出力の `left` に載せる。[レジストリ「フック」](../registry.md#フック)）。
@@ -821,19 +830,19 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall cli@<tag>   # c
   します（PR で[動いている CLI のよけ方](#動いている-cli-のよけ方)を壊したら、このジョブが落ちるように）。
   よけるのは走らせている CLI 自身なので、PR の CLI を `<Plug-Ins>\cli\bin\` に入れてから、その CLI に
   付け替え（タグの違う記録にしてからの `install` と、版の違う `install`）をさせます。
-  1. 利用者の `Path` の値を消しておく（下の 1 のため）。公開した初回のスクリプトで `install cli@<その PR のタグ>`
-     を走らせる。
+  1. 利用者の `Path` の値を消しておく（下の 1 のため）。その PR のリリースの初回のスクリプトを引数なしで走らせ、
+     その PR のタグが入る（スクリプトに埋め込んだタグで `install cli@<その PR のタグ>` を走らせる）ことを確かめる。
   2. 実物のレジストリで `Path` の扱いを確かめる（下記）。走らせるのは同じタグの `install` で、付け替えない
      ので CLI はよけない。
   3. 入った `<Plug-Ins>\cli\bin\vw2026.exe` で `uninstall cli` を走らせる。終了コードが 2 で、出力の `command` が
-     その PR のタグの初回のスクリプトに `uninstall cli@<その PR のタグ>` を渡すコマンドで、`<Plug-Ins>\cli\` が残って
+     その PR のタグのリリースの初回のスクリプトに `uninstall` を渡すコマンドで、`<Plug-Ins>\cli\` が残って
      いることを確かめる。
   4. 記録（`vw2026-install.json`）の `tag` を別のものに書き換えてから、入った `<Plug-Ins>\cli\bin\vw2026.exe` で
      `install cli@<その PR のタグ>` を走らせる。同じビルドを入れ直すことになり、PR の Go のコードが動いている
      自分をよけて付け替える。出力が `installed` で、`<Work>\old\vw2026.exe.old-*` が 1 つだけ残り（動いている
      自分は消せない）、`<Work>\old\cli\` が無いことを確かめる。
-  5. 手順 3 が示した形で、その PR のタグの初回のスクリプトに `uninstall cli@<その PR のタグ>` を渡す（その PR の
-     CLI がフォルダの外で外す）。出力が `uninstalled` で `left` が空、`<Plug-Ins>\cli\` が無く、`Path` に `<Plug-Ins>\cli\bin` が無く、手順 4 の残り（そのプロセスは
+  5. 手順 3 が示した形で、その PR のタグのリリースの初回のスクリプトに `uninstall` を渡す（その PR の
+     CLI がフォルダの外で外す。指定 `--plugins-dir` は `uninstall` の前に書き、スクリプトが後ろへ回すことも確かめる）。出力が `uninstalled` で `left` が空、`<Plug-Ins>\cli\` が無く、`Path` に `<Plug-Ins>\cli\bin` が無く、手順 4 の残り（そのプロセスは
      終わっている）も消えたことを確かめる。
   6. 公開した初回のスクリプトで入れ直す。
   7. 入った `<Plug-Ins>\cli\bin\vw2026.exe` で `install cli@latest` を走らせる。動いているのは PR の

@@ -1,15 +1,17 @@
 ﻿# The first-time script for Windows (docs/plugin/install-and-update.md). It only fetches the CLI
-# and runs "vw2026 install cli@<tag>" (or "uninstall cli"); the steps, the Path, and the
-# decisions belong to install and to the hooks of cli. It runs on Windows PowerShell 5.1.
+# of the release that it came from and runs "vw2026 install cli@<the tag of the release>" (or
+# "uninstall cli"); the steps, the Path, and the decisions belong to install and to the hooks of
+# cli. The tag is that of the release the script came from; for another tag, fetch the script of
+# that tag. It runs on Windows PowerShell 5.1.
 #
 # This file is ASCII only, and the release uploads it without the BOM. Invoke-RestMethod in
 # Windows PowerShell 5.1 decodes a body without a charset (a release asset) as ISO-8859-1, so a
 # BOM or any non-ASCII text would reach Invoke-Expression garbled.
 #
 #   irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.ps1 | iex
-#   & ([scriptblock]::Create((irm .../get-vw2026.ps1))) cli@<tag> --plugins-dir <Plug-Ins>
-#   & ([scriptblock]::Create((irm .../download/<tag>/get-vw2026.ps1))) uninstall cli@<tag>
-#   & ([scriptblock]::Create((irm .../get-vw2026.ps1))) uninstall cli
+#   irm .../releases/download/<tag>/get-vw2026.ps1 | iex
+#   & ([scriptblock]::Create((irm .../get-vw2026.ps1))) --plugins-dir <Plug-Ins>
+#   & ([scriptblock]::Create((irm .../releases/download/<tag>/get-vw2026.ps1))) uninstall
 #
 # The arguments come in $args: under Invoke-Expression a param block of the script is not
 # bound. The body runs in a script block so that its variables and $ErrorActionPreference stay
@@ -24,98 +26,54 @@
 	$ProgressPreference = 'SilentlyContinue'
 	$repo = 'https://github.com/min-nano/vectorworks-plugin-command-line-interface'
 
-	# Look at the positional arguments in order. The argument after a flag that takes a value
-	# (--plugins-dir, --registry) is its value; --name=value is one argument, a flag here.
+	# The release replaces the tag with its own when it publishes the script
+	# (docs/plugin/build-and-release.md). The script of any release installs and uninstalls the cli
+	# of that release.
+	$tag = '@VW2026_TAG@'
+	# Only the characters of a tag (docs/registry.md), as it goes into the URL; this also refuses
+	# the script of the repository, which no release has replaced.
+	if ($tag -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') {
+		throw "get-vw2026: this script is not the one a release published; use $repo/releases/latest/download/get-vw2026.ps1"
+	}
+
+	# The only positional argument is uninstall (or uninstall cli). The flags (--plugins-dir and
+	# --registry with their values, any other -...) go after the command of the CLI wherever they
+	# are written (vw2026 takes no flag before the command); --name=value is one argument, a flag.
 	$uninstall = $false
-	$tag = ''
 	$positional = 0
 	$skip = $false
-	foreach ($arg in $Arguments) {
-		if ($skip) {
-			$skip = $false
-			continue
-		}
-		if ($arg -ceq '--plugins-dir' -or $arg -ceq '--registry') {
-			$skip = $true
-			continue
-		}
-		if ($arg.StartsWith('-')) {
-			continue
-		}
-		$positional++
-		if ($positional -eq 1 -and $arg -ceq 'uninstall') {
-			$uninstall = $true
-			continue
-		}
-		if ($uninstall) {
-			# This is how cli is uninstalled (the installed CLI refuses "uninstall cli" and shows this
-			# script with the installed tag), and how a stopped "uninstall cli" goes on. It takes cli only.
-			# With cli@<tag>, the CLI of that tag uninstalls (the same version reads its own record).
-			if ($positional -ne 2 -or -not ($arg -ceq 'cli' -or $arg.StartsWith('cli@', [StringComparison]::Ordinal))) {
-				throw 'get-vw2026: only "uninstall cli[@<tag>]" is accepted'
+	$flags = @(foreach ($arg in $Arguments) {
+			if ($skip) {
+				$skip = $false
+				$arg
+				continue
 			}
-			if ($arg -cne 'cli') {
-				$tag = $arg.Substring(4)
-				if ($tag -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') {
-					throw "get-vw2026: not a valid tag: $tag"
-				}
+			if ($arg.StartsWith('-')) {
+				$skip = ($arg -ceq '--plugins-dir' -or $arg -ceq '--registry')
+				$arg
+				continue
 			}
-			continue
-		}
-		# The script installs cli, and no other name.
-		if (-not $arg.StartsWith('cli@', [StringComparison]::Ordinal)) {
-			throw "get-vw2026: only cli@<tag> is accepted: $arg"
-		}
-		if ($tag) {
-			throw 'get-vw2026: give cli@<tag> only once'
-		}
-		$tag = $arg.Substring(4)
-		# Only the characters of a tag (docs/registry.md), as it goes into the URL.
-		if ($tag -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') {
-			throw "get-vw2026: not a valid tag: $tag"
-		}
-	}
-	$argv = @($Arguments)
+			$positional++
+			if ($positional -eq 1 -and $arg -ceq 'uninstall') {
+				$uninstall = $true
+				continue
+			}
+			# "uninstall cli" is the same (the form of "vw2026 uninstall cli").
+			if ($positional -eq 2 -and $uninstall -and $arg -ceq 'cli') {
+				continue
+			}
+			throw "get-vw2026: unexpected argument: $arg (this script installs cli@$tag; for another tag, use $repo/releases/download/<tag>/get-vw2026.ps1)"
+		})
 	if ($uninstall) {
-		if ($positional -ne 2) {
-			throw 'get-vw2026: only "uninstall cli[@<tag>]" is accepted'
-		}
-		# Without a tag, the CLI of latest uninstalls.
-		if (-not $tag) {
-			$tag = 'latest'
-		}
-		# The CLI gets "uninstall cli" (cli@<tag> only chooses the CLI to run), then the flags. A flag
-		# written before the positional arguments goes after them too (vw2026 takes no flag before
-		# uninstall). The value of a flag is left as it is.
-		$skip = $false
-		$flags = @(foreach ($arg in $Arguments) {
-				if ($skip) {
-					$skip = $false
-					$arg
-				}
-				elseif ($arg.StartsWith('-')) {
-					$skip = ($arg -ceq '--plugins-dir' -or $arg -ceq '--registry')
-					$arg
-				}
-			})
 		$argv = @('uninstall', 'cli') + $flags
 	}
 	else {
-		if (-not $tag) {
-			$tag = 'latest'
-			$argv += 'cli@latest'
-		}
-		$argv = @('install') + $argv
+		$argv = @('install', "cli@$tag") + $flags
 	}
 
 	# The target is windows-x64 (Vectorworks runs as x64 on Windows on ARM too). The URL has the
 	# shape of the rules of cli in the default registry; the script does not read the manifest.
-	if ($tag -ceq 'latest') {
-		$url = "$repo/releases/latest/download/cli-windows-x64.zip"
-	}
-	else {
-		$url = "$repo/releases/download/$tag/cli-windows-x64.zip"
-	}
+	$url = "$repo/releases/download/$tag/cli-windows-x64.zip"
 
 	# Windows PowerShell 5.1 may not use TLS 1.2 by default.
 	[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12

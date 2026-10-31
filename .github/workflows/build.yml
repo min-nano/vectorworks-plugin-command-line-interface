@@ -305,14 +305,21 @@ jobs:
             }
           }' > dist/vw2026.json
           cat dist/vw2026.json
-      # 初回のスクリプト。PowerShell のものは BOM を除いて上げる（Windows PowerShell 5.1 の
-      # Invoke-RestMethod は charset の無い本文を ISO-8859-1 で読むので、BOM が iex に崩れて渡る）。
-      # 同じ理由で ASCII だけであることを確かめる。
+      # 初回のスクリプト。@VW2026_TAG@ をこのリリースのタグに置き換える（どのリリースから取ったスクリプトも、
+      # そのリリースの cli を入れる。タグは英数字と . _ - だけなので、sed の置き換えにそのまま書ける）。
+      # PowerShell のものは BOM を除いて上げる（Windows PowerShell 5.1 の Invoke-RestMethod は charset の
+      # 無い本文を ISO-8859-1 で読むので、BOM が iex に崩れて渡る）。同じ理由で ASCII だけであることを確かめる。
       - name: scripts
         run: |
           set -eu
-          cp scripts/get-vw2026.sh dist/
-          sed '1s/^\xEF\xBB\xBF//' scripts/get-vw2026.ps1 > dist/get-vw2026.ps1
+          sed "s/@VW2026_TAG@/$TAG/g" scripts/get-vw2026.sh > dist/get-vw2026.sh
+          sed -e '1s/^\xEF\xBB\xBF//' -e "s/@VW2026_TAG@/$TAG/g" scripts/get-vw2026.ps1 > dist/get-vw2026.ps1
+          for script in dist/get-vw2026.sh dist/get-vw2026.ps1; do
+            if ! grep -qF "'$TAG'" "$script" || grep -qF '@VW2026_TAG@' "$script"; then
+              echo "$script does not have the tag $TAG" >&2
+              exit 1
+            fi
+          done
           if LC_ALL=C grep -n '[^[:print:][:space:]]' dist/get-vw2026.ps1; then
             echo "get-vw2026.ps1 must be ASCII only" >&2
             exit 1
@@ -523,11 +530,10 @@ jobs:
               if ($code -ne 0) { throw "exit code $code" }
               $Text | ConvertFrom-Json
           }
-          # その PR のタグの公開した初回のスクリプトを、引数を付けて走らせる（既定は cli@<その PR のタグ> を入れる）。
+          # その PR のタグの公開した初回のスクリプトを、引数を付けて走らせる（引数が無ければ、そのタグの cli を入れる）。
           function Invoke-Bootstrap {
               $script = Invoke-RestMethod -UseBasicParsing "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:TAG/get-vw2026.ps1"
               $arguments = $args
-              if ($arguments.Count -eq 0) { $arguments = @("cli@$env:TAG") }
               Read-Output (& ([scriptblock]::Create($script)) @arguments)
           }
           function Invoke-Installed {
@@ -615,7 +621,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           Write-Host $text
           $out = $text | ConvertFrom-Json
-          if ($code -ne 2 -or $out.outcome -ne 'failed' -or $out.command -notlike "*download/$env:TAG/get-vw2026.ps1*uninstall cli@$env:TAG") {
+          if ($code -ne 2 -or $out.outcome -ne 'failed' -or $out.command -notlike "*download/$env:TAG/get-vw2026.ps1))) uninstall") {
               throw "exit code $code"
           }
           if (-not (Test-Path -LiteralPath (Join-Path $plugins 'cli\vw2026-install.json'))) { throw 'cli is removed' }
@@ -635,14 +641,14 @@ jobs:
           if ($out.outcome -ne 'installed') { throw 'not installed' }
           if ((Get-MovedCli).Count -ne 1) { throw "moved: $((Get-MovedCli).Name -join ', ')" }
           if (Test-Path -LiteralPath (Join-Path $work 'old\cli')) { throw 'old\cli is left' }
-      # 5. 手順 3 が示した形で、初回のスクリプトに uninstall cli@<その PR のタグ> を渡す（その PR の CLI が
+      # 5. 手順 3 が示した形で、その PR のタグの初回のスクリプトに uninstall を渡す（その PR の CLI が
       #    フォルダの外で外す）。フォルダを消し、Path からは <Plug-Ins>\cli\bin だけが除かれ、手順 4 の残り
       #    （そのプロセスは終わっている）も消えて、何も残らない。指定（既定と同じ場所の --plugins-dir）は
       #    uninstall の前に書く（スクリプトが uninstall cli の後ろへ回す）。
       - name: uninstall with the first-time script
         run: |
           . "$env:RUNNER_TEMP\helpers.ps1"
-          $out = Invoke-Bootstrap --plugins-dir $plugins uninstall "cli@$env:TAG"
+          $out = Invoke-Bootstrap --plugins-dir $plugins uninstall
           if ($out.outcome -ne 'uninstalled' -or @($out.left).Count -ne 0) { throw 'not uninstalled cleanly' }
           if (Test-Path -LiteralPath (Join-Path $plugins 'cli')) { throw 'cli is left' }
           Assert-UserPath '%USERPROFILE%\vw2026-path-probe' ([Microsoft.Win32.RegistryValueKind]::ExpandString)

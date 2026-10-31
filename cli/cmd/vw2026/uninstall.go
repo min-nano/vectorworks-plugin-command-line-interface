@@ -30,15 +30,16 @@ for the vw2026 on the PATH (<Plug-Ins>/cli/bin/vw2026): once cli is
 uninstalled, vw2026 is not used any more. It changes nothing, exits with 2,
 and shows the first-time script of the installed tag to run instead, which
 uninstalls cli with a vw2026 of that tag outside the folder (and leaves nothing
-behind). On macOS and on Windows:
+behind; the script of a release always uses the vw2026 of that release). On
+macOS and on Windows:
 
-	curl -fsSL ` + releases + `download/<TAG>/get-vw2026.sh | sh -s -- uninstall cli@<TAG>
-	& ([scriptblock]::Create((irm ` + releases + `download/<TAG>/get-vw2026.ps1))) uninstall cli@<TAG>
+	curl -fsSL ` + releases + `download/<TAG>/get-vw2026.sh | sh -s -- uninstall
+	& ([scriptblock]::Create((irm ` + releases + `download/<TAG>/get-vw2026.ps1))) uninstall
 
 A prerelease is deleted when its pull request closes; then use the script of
 latest, which uninstalls with the vw2026 of latest:
 
-	curl -fsSL ` + releases + `latest/download/get-vw2026.sh | sh -s -- uninstall cli
+	curl -fsSL ` + releases + `latest/download/get-vw2026.sh | sh -s -- uninstall
 
 Uninstall first moves the folder out of <Plug-Ins>, then runs the uninstall
 hook of the installed version (for cli, it takes vw2026 off the PATH), then
@@ -86,11 +87,11 @@ func (c *uninstallCmd) run(e *env) int {
 	case errors.As(err, &inside):
 		// 入れた cli の vw2026 では外さず、入っているタグの初回のスクリプトと CLI で外すよう案内する。
 		// PR のプレリリースは PR を閉じると消えるので、latest で外すコマンドも示す。
-		command := uninstallScript(runtime.GOOS, c.Name, inside.Tag, c.PluginsDir)
+		command := uninstallScript(runtime.GOOS, inside.Tag, c.PluginsDir)
 		fmt.Fprintf(e.stderr, "vw2026: %v. vw2026 is not used once %s is uninstalled; run the first-time script "+
 			"of the installed tag instead:\n\t%s\nIf that release no longer exists (a prerelease is deleted when "+
 			"its pull request closes), use latest:\n\t%s\n",
-			err, c.Name, command, uninstallScript(runtime.GOOS, c.Name, "latest", c.PluginsDir))
+			err, c.Name, command, uninstallScript(runtime.GOOS, "latest", c.PluginsDir))
 		emit(e, map[string]any{"outcome": "failed", "name": c.Name, "message": err.Error(), "command": command})
 		return exitUsage
 	case err != nil:
@@ -102,22 +103,22 @@ func (c *uninstallCmd) run(e *env) int {
 // releases は、初回のスクリプトを置くリリースの場所。
 const releases = "https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/"
 
-// uninstallScript は、goos で tag の初回のスクリプトに uninstall <name>@<tag> を渡すコマンド（スクリプトは
-// そのタグの CLI で外す）。tag が latest なら latest のスクリプトと CLI で外す（uninstall <name>）。
+// uninstallScript は、goos で tag のリリースの初回のスクリプトに uninstall を渡すコマンド（どのリリースの
+// スクリプトも、そのリリースの CLI で cli を外す）。tag が latest なら latest のリリースのもの。
 // --plugins-dir を渡されていれば、そのまま渡す（シェルの引用符で囲む）。
-func uninstallScript(goos, name, tag, pluginsDir string) string {
-	base, target := releases+"download/"+tag+"/", name+"@"+tag
+func uninstallScript(goos, tag, pluginsDir string) string {
+	base := releases + "download/" + tag + "/"
 	if tag == "latest" {
-		base, target = releases+"latest/download/", name
+		base = releases + "latest/download/"
 	}
 	if goos == "windows" {
-		command := "& ([scriptblock]::Create((irm " + base + "get-vw2026.ps1))) uninstall " + target
+		command := "& ([scriptblock]::Create((irm " + base + "get-vw2026.ps1))) uninstall"
 		if pluginsDir != "" {
 			command += " --plugins-dir '" + strings.ReplaceAll(pluginsDir, "'", "''") + "'"
 		}
 		return command
 	}
-	command := "curl -fsSL " + base + "get-vw2026.sh | sh -s -- uninstall " + target
+	command := "curl -fsSL " + base + "get-vw2026.sh | sh -s -- uninstall"
 	if pluginsDir != "" {
 		command += " --plugins-dir '" + strings.ReplaceAll(pluginsDir, "'", `'\''`) + "'"
 	}

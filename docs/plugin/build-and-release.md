@@ -136,7 +136,9 @@ PATH だけを置きます（[インストール「CLI とスプールの置き�
   head は信頼できないコードで、`github.head_ref` はどのリポジトリのブランチかを区別しない。
 - 資産: `vw2026.json`（マニフェスト）・`cli-macos-arm64.zip` / `cli-windows-x64.zip`・
   `get-vw2026.{sh,ps1}`（初回のスクリプト。利用者は `releases/latest/download/` のものを使う）。
-  初回のスクリプトはビルドしたコミットの `scripts/get-vw2026.{sh,ps1}` を上げる。PowerShell のものは ASCII だけで書き、
+  初回のスクリプトはビルドしたコミットの `scripts/get-vw2026.{sh,ps1}` の `@VW2026_TAG@` をそのリリースのタグに置き換えて
+  上げる（どのリリースから取ったスクリプトも、そのリリースの `cli` を入れる・外す。置き換えたかは `release` が確かめる。
+  [インストール「初回のスクリプト」](install-and-update.md#初回のスクリプトget-vw2026sh--ps1)）。PowerShell のものは ASCII だけで書き、
   BOM を除いて上げる（Windows PowerShell 5.1 の `Invoke-RestMethod` は charset の無い本文を ISO-8859-1 で読むので、
   BOM や ASCII の外の文字が `iex` に崩れて渡る。`release` が確かめる）。段 2 の `build.yml` は転がりタグ `stable` と
   `dev-<slug>-<PR 番号>` を作り直して zip だけを上げていた。**`stable` のリリースとタグは、段 3b をマージしたあと、main の最初の

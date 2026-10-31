@@ -192,7 +192,7 @@ func TestUninstallFromInsideShowsTheScript(t *testing.T) {
 	r := invoke(t, opts{plugins: plugins, executable: executable}, "uninstall", "cli")
 	var out map[string]string
 	if r.code != exitUsage || json.Unmarshal([]byte(r.stdout), &out) != nil || out["outcome"] != "failed" ||
-		!strings.Contains(out["command"], "download/t1/get-vw2026") || !strings.Contains(out["command"], "uninstall cli@t1") ||
+		!strings.Contains(out["command"], "download/t1/get-vw2026") || !strings.HasSuffix(out["command"], " uninstall") ||
 		!strings.Contains(r.stderr, out["command"]) || !strings.Contains(r.stderr, "latest/download") {
 		t.Fatalf("%+v", r)
 	}
@@ -205,13 +205,13 @@ func TestUninstallScript(t *testing.T) {
 	tagged := releases + "download/t1/"
 	latest := releases + "latest/download/"
 	for _, c := range []struct{ goos, tag, dir, want string }{
-		{"darwin", "t1", "", "curl -fsSL " + tagged + "get-vw2026.sh | sh -s -- uninstall cli@t1"},
-		{"darwin", "latest", "", "curl -fsSL " + latest + "get-vw2026.sh | sh -s -- uninstall cli"},
-		{"darwin", "t1", "/a b/it's", "curl -fsSL " + tagged + `get-vw2026.sh | sh -s -- uninstall cli@t1 --plugins-dir '/a b/it'\''s'`},
-		{"windows", "t1", "", "& ([scriptblock]::Create((irm " + tagged + "get-vw2026.ps1))) uninstall cli@t1"},
-		{"windows", "latest", `C:\a b\it's`, "& ([scriptblock]::Create((irm " + latest + `get-vw2026.ps1))) uninstall cli --plugins-dir 'C:\a b\it''s'`},
+		{"darwin", "t1", "", "curl -fsSL " + tagged + "get-vw2026.sh | sh -s -- uninstall"},
+		{"darwin", "latest", "", "curl -fsSL " + latest + "get-vw2026.sh | sh -s -- uninstall"},
+		{"darwin", "t1", "/a b/it's", "curl -fsSL " + tagged + `get-vw2026.sh | sh -s -- uninstall --plugins-dir '/a b/it'\''s'`},
+		{"windows", "t1", "", "& ([scriptblock]::Create((irm " + tagged + "get-vw2026.ps1))) uninstall"},
+		{"windows", "latest", `C:\a b\it's`, "& ([scriptblock]::Create((irm " + latest + `get-vw2026.ps1))) uninstall --plugins-dir 'C:\a b\it''s'`},
 	} {
-		if got := uninstallScript(c.goos, "cli", c.tag, c.dir); got != c.want {
+		if got := uninstallScript(c.goos, c.tag, c.dir); got != c.want {
 			t.Errorf("%s %s %q:\n got %s\nwant %s", c.goos, c.tag, c.dir, got, c.want)
 		}
 	}
