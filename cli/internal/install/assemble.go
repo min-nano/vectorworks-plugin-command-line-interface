@@ -2,7 +2,6 @@ package install
 
 import (
 	"archive/zip"
-	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -145,11 +144,10 @@ func extract(zipPath, dir string) ([]string, error) {
 	seen := map[string]bool{}
 	var top []string
 	for _, file := range reader.File {
-		if err := extractFile(file, dir); err != nil {
+		name, err := extractFile(file, dir)
+		if err != nil {
 			return nil, err
 		}
-		// ./ で始まる項目（zip -r x.zip ./ が作る）も、整えてから一番上の名前を取る。
-		name, _, _ := strings.Cut(path.Clean(file.Name), "/")
 		if name != "." && !seen[name] {
 			seen[name] = true
 			top = append(top, name)
@@ -158,19 +156,24 @@ func extract(zipPath, dir string) ([]string, error) {
 	return top, nil
 }
 
-// errOutside は、展開先の外へ出る項目。
-var errOutside = errors.New("outside the folder")
-
-func extractFile(file *zip.File, dir string) error {
+// extractFile は項目を 1 つ dir へ展開し、その一番上の名前を返す（findModule が dir の中で使うので、
+// 名前を確かめたあとの値から作る）。
+func extractFile(file *zip.File, dir string) (string, error) {
 	name := strings.TrimSuffix(file.Name, "/")
-	rel := filepath.FromSlash(name)
-	// 規則は registry.CheckInside が持つ。filepath.IsLocal はその規則に含まれる確かめで、展開先のパスを
-	// 組み立てるこの場所でも見えるように並べる（コード スキャンが、展開先の外へ出ないことを読めるように）。
-	if err := registry.CheckInside(name); err != nil || !filepath.IsLocal(rel) {
-		return fmt.Errorf("the entry %q: %w", file.Name, cmp.Or(err, errOutside))
+	if err := registry.CheckInside(name); err != nil {
+		return "", fmt.Errorf("the entry %q: %w", file.Name, err)
 	}
+	// ./ で始まる項目（zip -r x.zip ./ が作る）も、整えてから一番上の名前を取る。
+	top, _, _ := strings.Cut(path.Clean(name), "/")
+	if err := writeEntry(file, filepath.Join(dir, filepath.FromSlash(name))); err != nil {
+		return "", err
+	}
+	return top, nil
+}
+
+// writeEntry は、確かめた項目を path に書く（フォルダなら作る）。
+func writeEntry(file *zip.File, path string) error {
 	mode := file.Mode()
-	path := filepath.Join(dir, rel)
 	switch {
 	case mode&os.ModeSymlink != 0:
 		return fmt.Errorf("the entry %q is a symbolic link", file.Name)
