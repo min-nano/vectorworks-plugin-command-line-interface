@@ -555,6 +555,72 @@ func TestFirstInstallHookFailureWhileRunning(t *testing.T) {
 	if h.installedVersion("cli") != "c1" {
 		t.Fatal("the new version should stay")
 	}
+	// 取った zip は残さない（同じタグで走らせ直す install は zip を取らず、消す道を通らない）。
+	if exist(filepath.Join(h.work, "staging", "cli.zip")) {
+		t.Fatal("should remove the downloaded zip")
+	}
+}
+
+// 新しい版を残した install のあと、同じタグの install は、フックが通ったら組み立ての場所の残りも消す。
+func TestInstallSameTagCleansTheStaging(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	leftovers := []string{filepath.Join(h.work, "staging", "cli", "x"), filepath.Join(h.work, "staging", "cli.zip")}
+	for _, path := range leftovers {
+		os.MkdirAll(filepath.Dir(path), 0o700)
+		os.WriteFile(path, nil, 0o600)
+	}
+	if result, err := h.install("cli", "c1"); err != nil || result.Outcome != OutcomeUpToDate {
+		t.Fatalf("%+v %v", result, err)
+	}
+	for _, path := range leftovers {
+		if exist(path) {
+			t.Fatal("left", path)
+		}
+	}
+}
+
+// uninstall が空の <Work>/staging を消したあとも、old へ移したフォルダを組み立ての場所を通して消せる
+// （discard が <Work>/staging を作る）。uninstall cli と、同じタグの install の片付けの両方。
+func TestDiscardWithoutStaging(t *testing.T) {
+	h := newHarness(t)
+	h.installCLI()
+	h.mustInstall(release{name: "demo", tag: "d1"})
+	if result, err := Uninstall(h.options(), "demo"); err != nil || result.Outcome != OutcomeUninstalled ||
+		exist(filepath.Join(h.work, "staging")) {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if result, err := Uninstall(h.options(), "cli"); err != nil || result.Outcome != OutcomeUninstalled {
+		t.Fatalf("%+v %v", result, err)
+	}
+
+	h.installCLI()
+	installed := filepath.Join(h.plugins, "cli")
+	old := filepath.Join(h.work, "old", "cli")
+	os.MkdirAll(filepath.Dir(old), 0o700)
+	if err := os.CopyFS(old, os.DirFS(installed)); err != nil {
+		t.Fatal(err)
+	}
+	os.RemoveAll(filepath.Join(h.work, "staging"))
+	if result, err := h.install("cli", "c1"); err != nil || result.Outcome != OutcomeUpToDate || exist(old) {
+		t.Fatalf("%+v %v", result, err)
+	}
+}
+
+// インタプリタを通さないフックに実行の権限が無ければ（mac）、付け替えの前に断る。
+func TestHookWithoutExecutePermission(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not decide by the permission whether a file runs")
+	}
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	before := snapshot(t, h.plugins)
+	h.publish(release{name: "cli", tag: "c2", hooks: &registry.Hooks{Install: []string{"hooks/setup"}},
+		extra: []entry{{name: "hooks/setup", body: "#!/bin/sh\n", mode: 0o644}}})
+	if _, err := h.install("cli", "c2"); err == nil || !strings.Contains(err.Error(), "permission to execute") {
+		t.Fatal(err)
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
 // uninstall のフックが失敗し、その間に Vectorworks が起動したら、フォルダを戻さずに印を残す。
@@ -881,7 +947,8 @@ func TestUninstallCLIHookSuccessWhileLockedInOld(t *testing.T) {
 	done := lockAtWhenSignaled(h, filepath.Join(old, spool.SpoolDirName), signal, await)
 	result, err := Uninstall(h.options(), "cli")
 	<-done
-	if !errors.Is(err, ErrRunning) || result.Outcome != OutcomeRunning || !strings.Contains(err.Error(), old) {
+	// フォルダを移してフックも走らせたので、「何もしなかった」の ErrRunning にはしない。
+	if err == nil || errors.Is(err, ErrRunning) || result != nil || !strings.Contains(err.Error(), old) {
 		t.Fatalf("%+v %v", result, err)
 	}
 	if !validRecord(old, "cli") || !exist(filepath.Join(h.work, "old", "cli.uninstalling")) {

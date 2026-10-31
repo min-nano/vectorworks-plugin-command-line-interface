@@ -272,8 +272,10 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		if err := o.settleOld(p, name); err != nil {
 			fmt.Fprintf(o.stderr(), "vw2026: %v\n", err)
 		}
-		// その install がよけた CLI も、付け替えの後始末と同じく消してみる（動いていて消せなければ残す）。
+		// その install がよけた CLI と組み立ての場所の残りも、付け替えの後始末と同じく消してみる（動いていて
+		// 消せなければ残す）。
 		cleanOldCLIs(p.old)
+		_ = removeStaging(p)
 		result.Outcome = OutcomeUpToDate
 		result.Hook = hook
 		return result, nil
@@ -418,6 +420,8 @@ func (o *Options) undoHook(p places, hadOld bool, moved *movedCLI, cause error) 
 		previous = fmt.Sprintf(" (the previous one is in %s)", p.oldDir)
 	}
 	keep := func(reason string) error {
+		// 取った zip はもう要らない（同じタグで走らせ直す install は zip を取らない）。
+		_ = os.Remove(p.stageZip)
 		return fmt.Errorf("%w; %s, so the new version stays in %s%s: quit Vectorworks, "+
 			"then run install with the same tag again (it runs only the hook)", cause, reason, p.dest, previous)
 	}
@@ -489,6 +493,10 @@ func (o *Options) settleOld(p places, name string) error {
 // 次の install・uninstall が組み立ての場所として消す。移せなければ何も変えずに失敗にする。
 func (o *Options) discard(p places, name string) error {
 	if err := removeStaging(p); err != nil {
+		return err
+	}
+	// uninstall は空の <Work>/staging を消すので、どの道から来ても、ここで作る。
+	if err := mkdirAll(p.staging, 0o700); err != nil {
 		return err
 	}
 	if err := rename(p.oldDir, p.stageDir); err != nil {

@@ -242,6 +242,8 @@ vw2026 install <name>@<tag>
   消えた PATH を置き直せます（CLI はフォルダの中にあるので、同じタグでは戻らない。消えたときは
   [初回のスクリプト](#初回のスクリプトget-vw2026sh--ps1)に `uninstall` を渡してから入れ直す）（`latest` のように決まった場所を指す規則では、今のタグを知るために
   マニフェストを取る）。入っているタグは `install` / `--check` の出力の `tag` と、記録で分かります。
+  フックが通ったら、付け替えの後始末と同じく、`<Work>/old/<name>/`（[`<Work>/old/<name>/` の片付け](#workoldname-の片付け)）・
+  よけた CLI・前回の残りの `<Work>/staging/<name>/`・`<Work>/staging/<name>.zip` を片付けます。
 - **プラグインと CLI は 1 つの zip から入り、同じフォルダと一緒に付け替わります**（`cli` の zip の
   `bin/` がそのまま `<Plug-Ins>/cli/bin/` になる）。動いているプラグインと入っている CLI は同じビルドです（[通信規則「版」](../protocol.md#版)の前提）。
 - 初回でも Vectorworks が動いていれば何もせずに終わり、CLI も置きません（何も変えない）。
@@ -335,7 +337,7 @@ vw2026 install <name>@<tag>
 ### 入れ替えの手順
 
 1. **組み立て**: zip を `<Work>/staging/<name>/` に展開し、直下のモジュールとフック（スクリプトが zip の中にあり、
-   インタプリタがこの OS で走ること）を確かめて、記録（`vw2026-install.json`）を書く。フックが走らないことに
+   インタプリタがこの OS で走ること。インタプリタを通さないものは、mac では実行の権限があること）を確かめて、記録（`vw2026-install.json`）を書く。フックが走らないことに
    付け替えのあとで気付くと、その間に起動した Vectorworks の下に入れ終えられない版が残るため、付け替えの前に
    確かめる。その前に、次の順で前回の残りを片付ける。
    1. **前回の残りの `<Work>/old/<name>/` があれば**（前の `install` / `uninstall` が付け替えの途中で
@@ -367,7 +369,8 @@ vw2026 install <name>@<tag>
    （[流れ](#流れ)の「フックが失敗して戻す前にも、ロックを見ます」）。掴まれていれば戻さない。戻しの
    1 の名前の変更が失敗したとき（Windows で、ロックを掴む前の Vectorworks が新しい版を読み込んでいる）も、
    その先へ進まない。どちらも新しい版を `<Plug-Ins>/<name>` に残し、`<Work>/old/<name>` とよけた CLI も
-   残して（同じタグで走らせ直した `install` が、フックが通ったあとで片付ける。[流れ](#流れ)の「同じタグのとき」）、フックの失敗として失敗で終わる。`message` には、フックが
+   残して（同じタグで走らせ直した `install` が、フックが通ったあとで片付ける。[流れ](#流れ)の「同じタグのとき」）、取った
+   `<Work>/staging/<name>.zip` は消して（同じタグの `install` は zip を取らない）、フックの失敗として失敗で終わる。`message` には、フックが
    失敗したことと、Vectorworks が起動したので新しい版を残したこと、Vectorworks を終了してから同じタグで
    `install` を走らせ直す（フックだけが走る）ことを載せる。ロックが掴まれていなければ、次の順に戻す。
    1. 新しい `<Plug-Ins>/<name>` を、名前の変更で `<Work>/staging/<name>` へよける（1 回で済み、元に
@@ -694,7 +697,7 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
      見分けられないので、何も変えずに `old` の場所を `message` に載せて失敗にする（[入れ替えの手順](#入れ替えの手順)の
      1 と同じ。戻すか消すかは利用者が決める）。
    - どちらも無ければ何もせずに成功（`not_installed`）。前の回が消しきれなかった `<Work>/staging/<name>/`・
-     `<Work>/staging/<name>.zip` があれば消す。
+     `<Work>/staging/<name>.zip` と、続ける先の無い印 `<Work>/old/<name>.uninstalling`（前の回の残り）があれば消す。
 3. 走らせている CLI が `<Plug-Ins>/<name>/` の中にあれば、何も変えずに断る（上記）。印
    `<Work>/old/<name>.uninstalling`（空のファイル）を書いてから、**先に** `<Plug-Ins>/<name>` を `<Work>/old/<name>` へ
    名前を変える。**前回の残りの `old/<name>` があれば、
@@ -718,9 +721,10 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
    続きの `old/<name>/` は記録とモジュールだけが残った壊れたフォルダかもしれず、それを `Plug-Ins` に
    戻さないためです。
 5. フックが通ったあとにもロックを見る（`cli` は移した先のスプール。手順 4 と同じ）。掴まれていれば消さずに、印を
-   残して `vectorworks_running` で終わる（終了してから走らせ直すと手順 4 から続く）。`<Work>/old/<name>` を
+   残して失敗にする（フォルダを移してフックも走らせたので、「何もしなかった」の `vectorworks_running` にはしない。
+   終了してから走らせ直すと手順 4 から続く）。`<Work>/old/<name>` を
    `<Work>/staging/<name>/` へ名前の変更で移してから消し（[`<Work>/old/<name>/` の片付け](#workoldname-の片付け)と
-   同じ。前回の残りの `<Work>/staging/<name>/`・`<Work>/staging/<name>.zip` は先に消す）、印 `<Work>/old/<name>.uninstalling` を
+   同じ。前回の残りの `<Work>/staging/<name>/`・`<Work>/staging/<name>.zip` は先に消し、`<Work>/staging` が無ければ作る）、印 `<Work>/old/<name>.uninstalling` を
    消す。移せなければ（Windows でウイルス対策が中のファイルを開いているなど）何も消さずに印を残して失敗にし、
    走らせ直すと手順 4 から続く（フックは走らせ直しても同じ結果になるように書く。[レジストリ「フック」](../registry.md#フック)）。
    移したあとで消しきれなかったものは標準エラーに示し、外したことは変えない（次の `install` / `uninstall` が消す）。
@@ -768,7 +772,7 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
 | 消すコード | 消してよいもの |
 | --- | --- |
 | `install`（組み立て・後始末・フックの失敗の戻し） | `<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ。前方一致では消さない）・`<Work>/old/<name>/`（退避した版と前回の残りは、記録の `name` が一致し、記録の `module` があり、`<Plug-Ins>/<name>/` もあるときだけ。`<Work>/staging/<name>/` へ移してから消す。条件に合わないものは消さずに `<Work>/old/<name>.kept-<時刻>/` へ移す）・フックが失敗したときの新しい `<Plug-Ins>/<name>/`（自分が置いたもの）・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ。よけた CLI と前回までの残り）・中断した `uninstall` の印 `<Work>/old/<name>.uninstalling`（付け替えに成功したあとと、`<Plug-Ins>/<name>/` があるとき。どちらも前の回の残り） |
-| `uninstall` | 記録の `name` が一致し、記録の `module` がある `<Plug-Ins>/<name>/`（`<Work>/old/<name>/` へ移し、フックのあとで `<Work>/staging/<name>/` へ移してから消す）・`<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ）・自分が書いた印 `<Work>/old/<name>.uninstalling`・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ）・空の `<Work>/staging`・`<Work>/old`・`<Work>`（中身のあるものは消さない） |
+| `uninstall` | 記録の `name` が一致し、記録の `module` がある `<Plug-Ins>/<name>/`（`<Work>/old/<name>/` へ移し、フックのあとで `<Work>/staging/<name>/` へ移してから消す）・`<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ）・自分が書いた印 `<Work>/old/<name>.uninstalling`・`<Plug-Ins>/<name>/` も `<Work>/old/<name>/` も無いときの前の回の印 `<Work>/old/<name>.uninstalling`・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ）・空の `<Work>/staging`・`<Work>/old`・`<Work>`（中身のあるものは消さない） |
 | `cli` の `install` のフック | なし |
 | `cli` の `uninstall` のフック | `<Plug-Ins>/cli/bin/vw2026` を指す `~/.local/bin/vw2026`・`Path` の `<Plug-Ins>\cli\bin` と一致する項目（どちらも `VW2026_HOOK_INSTALL_DIR` から決め、同じ場所かはディレクトリの同一性で決める） |
 

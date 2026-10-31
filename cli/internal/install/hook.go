@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -53,7 +54,8 @@ func (o *Options) interpreter(name string) ([]string, error) {
 }
 
 // scriptIn は、フックが指す zip の中のファイルが、展開したフォルダの中に実在するファイルかを
-// 確かめ、そのパスを返す。
+// 確かめ、そのパスを返す。インタプリタを通さないもの（1 つ目が zip の中のパス）は、mac では実行の権限も
+// 確かめる（Windows では権限で走るかが決まらない）。
 func scriptIn(dir string, argv []string) (string, error) {
 	// 書き方は、マニフェストと記録を読むときに Hooks.Check が確かめている。
 	script, _ := registry.Script(argv)
@@ -61,6 +63,9 @@ func scriptIn(dir string, argv []string) (string, error) {
 	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() {
 		return "", fmt.Errorf("the hook %q is not a file in the zip", script)
+	}
+	if runtime.GOOS != "windows" && !slices.Contains(registry.Interpreters, argv[0]) && info.Mode().Perm()&0o111 == 0 {
+		return "", fmt.Errorf("the hook %q has no permission to execute in the zip (give it one, or run it with sh)", script)
 	}
 	return path, nil
 }

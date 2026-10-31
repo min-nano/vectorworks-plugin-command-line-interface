@@ -35,7 +35,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		return nil, err
 	}
 	if running(p.plugins) {
-		return runningResult(name, nil), ErrRunning
+		return runningResult(name), ErrRunning
 	}
 	if err := checkCLI(p.plugins, name); err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		}
 		// cli は、ロックのある spool ごと移しているので、始めの running では見えない（移した先を見る）。
 		if runningAfterMove(p, name) {
-			return runningResult(name, nil), ErrRunning
+			return runningResult(name), ErrRunning
 		}
 		resumed = true
 	default:
@@ -120,11 +120,11 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		return nil, fmt.Errorf("%w; %s is put back", err, p.dest)
 	}
 	// フックの間に Vectorworks が起動していれば消さない（cli は、移したフォルダのスプールとロックを、動いている
-	// Vectorworks が使っているかもしれない）。印を残すので、終了してからの uninstall が続きから走る。
+	// Vectorworks が使っているかもしれない）。印を残すので、終了してからの uninstall が続きから走る。フォルダを
+	// 移してフックも走らせたので、「何もしなかった」の ErrRunning（終了コード 6）ではなく、失敗にする。
 	if runningAfterMove(p, name) {
-		return runningResult(name, hook),
-			fmt.Errorf("%w; it started while the uninstall hook ran, so %s stays in %s: run uninstall again after "+
-				"quitting it (it goes on from the hook)", ErrRunning, name, p.oldDir)
+		return nil, fmt.Errorf("the uninstall hook ran, but Vectorworks started meanwhile, so %s stays in %s: quit "+
+			"Vectorworks, then run uninstall again (it goes on from the hook)", name, p.oldDir)
 	}
 	// 組み立ての場所へ移してから消す（消すのが途中で止まっても、記録の消えた半分のフォルダを old に残さない）。
 	if err := o.discard(p, name); err != nil {
@@ -147,8 +147,8 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 }
 
 // runningResult は、Vectorworks が動いていて止めたときの出力（どこで分かっても同じ形にする）。
-func runningResult(name string, hook json.RawMessage) *UninstallResult {
-	return &UninstallResult{Outcome: OutcomeRunning, Name: name, Hook: hook, Remaining: []string{}, Left: []string{}}
+func runningResult(name string) *UninstallResult {
+	return &UninstallResult{Outcome: OutcomeRunning, Name: name, Remaining: []string{}, Left: []string{}}
 }
 
 // runningAfterMove は、フォルダを old へ移したあとで、Vectorworks がロックを掴んでいるか。cli は、ロックの
