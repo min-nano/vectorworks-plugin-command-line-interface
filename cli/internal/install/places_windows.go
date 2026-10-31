@@ -29,7 +29,17 @@ func knownFolder(id *syscall.GUID, sub ...string) (string, error) {
 	if hr != 0 {
 		return "", fmt.Errorf("SHGetKnownFolderPath: HRESULT 0x%08x", uint32(hr))
 	}
-	return filepath.Join(append([]string{syscall.UTF16ToString(unsafe.Slice(path, 32768))}, sub...)...), nil
+	return filepath.Join(append([]string{utf16PtrToString(path)}, sub...)...), nil
+}
+
+// utf16PtrToString は、NUL で終わる UTF-16 の文字列を読む。SHGetKnownFolderPath が返す領域は文字列の
+// 長さしかないので、先に NUL までの長さを数え、その長さだけのスライスを作る（領域の外を覆わない）。
+func utf16PtrToString(p *uint16) string {
+	n := 0
+	for ptr := unsafe.Pointer(p); *(*uint16)(ptr) != 0; ptr = unsafe.Add(ptr, 2) {
+		n++
+	}
+	return syscall.UTF16ToString(unsafe.Slice(p, n))
 }
 
 // userTempDir は %LOCALAPPDATA%\Temp（%TEMP% の既定の場所）。環境変数 TMP / TEMP は読まない。

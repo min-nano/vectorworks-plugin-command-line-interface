@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -76,7 +77,8 @@ func (o *Options) runHook(kind string, argv []string, dir string, env hookEnv) (
 		return nil, fmt.Errorf("the %s hook: %w", kind, err)
 	}
 	var command []string
-	if argv[0] == "sh" || argv[0] == "powershell" {
+	// 1 つ目が zip の外のインタプリタなら、2 つ目が zip の中のスクリプト（scriptIn・registry.Script と同じ一覧で決める）。
+	if slices.Contains(registry.Interpreters, argv[0]) {
 		head, err := o.interpreter(argv[0])
 		if err != nil {
 			return nil, fmt.Errorf("the %s hook: %w", kind, err)

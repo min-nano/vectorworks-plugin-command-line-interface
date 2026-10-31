@@ -121,7 +121,7 @@ func TestDeployPlacesNotLocated(t *testing.T) {
 }
 
 // 手元のパスのレジストリ（VW2026_REGISTRY でも渡せる）から入れ、--check で新しいかを確かめる。
-// マニフェストには、計算機から決めたターゲットを書く。
+// マニフェストには、計算機から決めたターゲットを書く。パスのコンマでは分けない（引数でも環境変数でも）。
 func TestInstallFromLocalRegistry(t *testing.T) {
 	target := install.Target()
 	module := "demo.vlb"
@@ -133,7 +133,8 @@ func TestInstallFromLocalRegistry(t *testing.T) {
 	f, _ := w.Create(module)
 	f.Write([]byte("module"))
 	w.Close()
-	tmp := t.TempDir()
+	tmp := filepath.Join(t.TempDir(), "a,b")
+	os.Mkdir(tmp, 0o755)
 	zipPath := filepath.Join(tmp, "demo.zip")
 	os.WriteFile(zipPath, buf.Bytes(), 0o644)
 	sum := sha256.Sum256(buf.Bytes())

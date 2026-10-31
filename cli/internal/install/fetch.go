@@ -140,13 +140,14 @@ func (o *Options) download(ref, path, want string) error {
 	// 取った量を標準エラーに示す（待つ上限は持たないので、止まっているかを呼ぶ側が見分けられるように）。
 	progress := o.startProgress(ref, size)
 	written, err := io.Copy(io.MultiWriter(file, hash, progress), io.LimitReader(body, maxAsset+1))
-	progress.finish(err)
-	if closeErr := file.Close(); err == nil {
-		err = closeErr
-	}
 	if err == nil && written > maxAsset {
 		err = fmt.Errorf("larger than %d bytes", maxAsset)
 	}
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	// 終わりの行は、大きさの上限と書き込みも確かめてから書く（失敗したのに取り終えたとは書かない）。
+	progress.finish(err)
 	if err != nil {
 		os.Remove(path)
 		return fmt.Errorf("%s: %w", ref, err)

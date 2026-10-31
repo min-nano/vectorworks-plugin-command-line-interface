@@ -13,7 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
 // errInjected は、テストが差し替えたファイルの操作が返す失敗。
@@ -550,13 +552,19 @@ func TestUninstallHookFailureWhileRunning(t *testing.T) {
 
 // lockWhenSignaled は、フックの合図を待ってロックを掴み、フックに知らせる。
 func lockWhenSignaled(h *harness, signal, await string) <-chan struct{} {
+	return lockAtWhenSignaled(h, filepath.Join(h.plugins, CLIName, spool.SpoolDirName), signal, await)
+}
+
+// lockAtWhenSignaled は、フックの合図を待ってスプール dir のロックを掴み、フックに知らせる。
+func lockAtWhenSignaled(h *harness, dir, signal, await string) <-chan struct{} {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		for deadline := time.Now().Add(10 * time.Second); !exist(signal) && time.Now().Before(deadline); {
 			time.Sleep(10 * time.Millisecond)
 		}
-		h.holdLock()
+		os.MkdirAll(dir, 0o700)
+		fakeplugin.HoldLock(h.t, dir)
 		os.WriteFile(await, nil, 0o600)
 	}()
 	return done
@@ -696,5 +704,83 @@ func TestInstallDoesNotMixTheLeftoverIntoTheNewVersion(t *testing.T) {
 	h.mustInstall(release{name: "cli", tag: "c2"})
 	if exist(filepath.Join(dest, "stale.txt")) || exist(stage) {
 		t.Fatal("the leftover is in the new version or left in staging")
+	}
+}
+
+// <Plug-Ins>/<name>/ があるなら、中断した uninstall の印は前の回の残りなので、同じタグの道でも、付け替えの
+// 前に失敗した回でも消す（残すと、あとの install が付け替えの途中で止まったときに、次の uninstall が唯一
+// 残った版を消しうる）。
+func TestInstallRemovesAStaleMarkerOnEveryPath(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	marker := filepath.Join(h.work, "old", "cli.uninstalling")
+	os.WriteFile(marker, nil, 0o600)
+	if result, err := h.install("cli", "c1"); err != nil || result.Outcome != OutcomeUpToDate || exist(marker) {
+		t.Fatalf("same tag: %+v %v", result, err)
+	}
+	os.WriteFile(marker, nil, 0o600)
+	h.publish(release{name: "cli", tag: "c2", sha: strings.Repeat("0", 64)})
+	if _, err := h.install("cli", "c2"); err == nil || exist(marker) {
+		t.Fatalf("failed before the swap: %v", err)
+	}
+}
+
+// uninstall cli では、ロックのある <Plug-Ins>/cli/spool/ ごと old へ移すので、フックが失敗して戻す前には
+// 移した先のスプールのロックを見る（mac では、移す直前に読み込んだプラグインのロックがフォルダと一緒に移る）。
+func TestUninstallCLIHookFailureWhileLockedInOld(t *testing.T) {
+	h := newHarness(t)
+	signal := filepath.Join(h.tmp, "hook-started")
+	await := filepath.Join(h.tmp, "locked")
+	h.mustInstall(release{name: "cli", tag: "c1", uninstall: &hookPlan{Exit: 1, Signal: signal, Await: await}})
+	old := filepath.Join(h.work, "old", "cli")
+	done := lockAtWhenSignaled(h, filepath.Join(old, spool.SpoolDirName), signal, await)
+	_, err := Uninstall(h.options(), "cli")
+	<-done
+	if err == nil || !strings.Contains(err.Error(), "Vectorworks started") {
+		t.Fatal(err)
+	}
+	if exist(filepath.Join(h.plugins, "cli")) || !exist(old) || !exist(filepath.Join(h.work, "old", "cli.uninstalling")) {
+		t.Fatal("should keep the folder in old with the marker")
+	}
+}
+
+// 大きさの上限を超えた取得は、取り終えたとは書かずに、止まったと書く。
+func TestDownloadTooLargeSaysStopped(t *testing.T) {
+	original := maxAsset
+	maxAsset = 4
+	t.Cleanup(func() { maxAsset = original })
+	h := newHarness(t)
+	h.serve("/big.zip", []byte("0123456789"))
+	var stderr bytes.Buffer
+	o := h.options()
+	o.Stderr = &stderr
+	if err := o.download(h.url("/big.zip"), filepath.Join(t.TempDir(), "big.zip"), ""); err == nil {
+		t.Fatal("should fail")
+	}
+	if got := stderr.String(); strings.Contains(got, "downloaded") || !strings.Contains(got, "stopped after") {
+		t.Fatalf("%q", got)
+	}
+}
+
+// モジュールは、拡張子だけでなく、mac はフォルダ（バンドル）、Windows はファイルであることも確かめる。
+func TestFindModuleChecksTheKind(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "file.vwlibrary"), nil, 0o644)
+	os.Mkdir(filepath.Join(dir, "folder.vwlibrary"), 0o755)
+	os.WriteFile(filepath.Join(dir, "file.vlb"), nil, 0o644)
+	os.Mkdir(filepath.Join(dir, "folder.vlb"), 0o755)
+	for _, c := range []struct {
+		name, target string
+		ok           bool
+	}{
+		{"folder.vwlibrary", "macos-arm64", true},
+		{"file.vwlibrary", "macos-arm64", false},
+		{"file.vlb", "windows-x64", true},
+		{"folder.vlb", "windows-x64", false},
+	} {
+		got, err := findModule(dir, []string{c.name}, c.target)
+		if c.ok && (err != nil || got != c.name) || !c.ok && (err == nil || !strings.Contains(err.Error(), "is not a")) {
+			t.Errorf("%s for %s: %q %v", c.name, c.target, got, err)
+		}
 	}
 }

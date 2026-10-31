@@ -88,7 +88,7 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", asset.URL, err)
 	}
-	module, err := findModule(top, o.Target)
+	module, err := findModule(p.stageDir, top, o.Target)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", asset.URL, err)
 	}
@@ -194,12 +194,13 @@ func extractFile(file *zip.File, dir string) error {
 	return err
 }
 
-// findModule は、直下の項目の名前 top のうちモジュール（mac は *.vwlibrary、Windows は *.vlb）が
-// ちょうど 1 つあることを確かめ、その名前を返す。
-func findModule(top []string, target string) (string, error) {
-	ext := ".vlb"
+// findModule は、dir に展開した直下の項目の名前 top のうちモジュール（mac は *.vwlibrary のフォルダ、
+// Windows は *.vlb のファイル）がちょうど 1 つあることを確かめ、その名前を返す。拡張子だけでなく、
+// フォルダかファイルかも見る（Vectorworks が読み込めない形の zip を入れない）。
+func findModule(dir string, top []string, target string) (string, error) {
+	ext, folder, kind := ".vlb", false, "file"
 	if strings.HasPrefix(target, "macos-") {
-		ext = ".vwlibrary"
+		ext, folder, kind = ".vwlibrary", true, "folder"
 	}
 	var found []string
 	for _, name := range top {
@@ -211,6 +212,11 @@ func findModule(top []string, target string) (string, error) {
 	case 0:
 		return "", fmt.Errorf("the zip has no *%s at the top", ext)
 	case 1:
+		// 展開した直後なので在る。在るかどうかの失敗も、形の違いと同じに断る。
+		info, err := os.Lstat(filepath.Join(dir, found[0]))
+		if err != nil || info.IsDir() != folder {
+			return "", fmt.Errorf("%s at the top of the zip is not a %s (a *%s is a %s)", found[0], kind, ext, kind)
+		}
 		return found[0], nil
 	}
 	return "", fmt.Errorf("the zip has %d *%s at the top (%s); it must have exactly one", len(found), ext,

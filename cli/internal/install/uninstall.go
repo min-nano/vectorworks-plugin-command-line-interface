@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
 // UninstallResult は uninstall の出力。
@@ -104,7 +105,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		}
 		// 戻す前にロックを見る（install の undoHook と同じ）。フックの間に起動した Vectorworks の下へ
 		// フォルダを戻さず、印を残して、終了してからの uninstall が続きから走れるようにする。
-		if running(p.plugins) {
+		if runningAfterMove(p, name) {
 			return nil, fmt.Errorf("%w; Vectorworks started meanwhile, so %s stays in %s: quit Vectorworks, then run "+
 				"uninstall again (it goes on from the hook)", err, name, p.oldDir)
 		}
@@ -132,6 +133,16 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		Remaining: installedIn(p.plugins),
 		Left:      left,
 	}, nil
+}
+
+// runningAfterMove は、フォルダを old へ移したあとで、Vectorworks がロックを掴んでいるか。cli は、ロックの
+// ある <Plug-Ins>/cli/spool/ ごと移しているので、移した先のスプールを見る（mac では、移す直前に読み込んだ
+// プラグインが掴んだロックが、フォルダと一緒に移る）。ほかの名前は <Plug-Ins>/cli/spool/ を見る。
+func runningAfterMove(p places, name string) bool {
+	if name == CLIName {
+		return spool.Open(filepath.Join(p.oldDir, spool.SpoolDirName)).Running
+	}
+	return running(p.plugins)
 }
 
 // removeEmptyWork は、<Work> に staging / old の空のディレクトリしか無ければ、<Work> ごと消す。

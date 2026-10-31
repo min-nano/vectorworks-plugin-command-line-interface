@@ -17,12 +17,101 @@ function Get-PathEntryKey {
 	return $key.TrimEnd('\')
 }
 
-# Test-PathEntry は、Path の項目 $Entry が $Dir と同じ項目か。
+# Get-FinalDirectory は、在るディレクトリ $Dir の実際のパス（GetFinalPathNameByHandle。ジャンクション・
+# シンボリックリンク・8.3 形式を解き、大文字と小文字を揃える）。開けなければ $null。
+function Get-FinalDirectory {
+	param([string] $Dir)
+	if (-not ('Vw2026Hook.FileMethods' -as [type])) {
+		Add-Type -Namespace Vw2026Hook -Name FileMethods -MemberDefinition @'
+[DllImport("kernel32.dll", EntryPoint = "CreateFileW", CharSet = CharSet.Unicode, SetLastError = true)]
+public static extern IntPtr CreateFile(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
+[DllImport("kernel32.dll", EntryPoint = "GetFinalPathNameByHandleW", CharSet = CharSet.Unicode, SetLastError = true)]
+public static extern uint GetFinalPathNameByHandle(IntPtr handle, System.Text.StringBuilder path, uint size, uint flags);
+[DllImport("kernel32.dll", SetLastError = true)]
+public static extern bool CloseHandle(IntPtr handle);
+'@ | Out-Null
+	}
+	$native = [Vw2026Hook.FileMethods]
+	# 読み書きを求めずに開く（属性だけ）。共有はすべて許し、ディレクトリを開くので FILE_FLAG_BACKUP_SEMANTICS。
+	$handle = $native::CreateFile($Dir, 0, 7, [IntPtr]::Zero, 3, 0x02000000, [IntPtr]::Zero)
+	if ($handle -eq [IntPtr] -1) {
+		return $null
+	}
+	try {
+		$builder = [Text.StringBuilder]::new(32768)
+		$length = $native::GetFinalPathNameByHandle($handle, $builder, $builder.Capacity, 0)
+		if ($length -eq 0 -or $length -ge $builder.Capacity) {
+			return $null
+		}
+		$path = $builder.ToString()
+	}
+	finally {
+		[void] $native::CloseHandle($handle)
+	}
+	# \\?\C:\… は C:\…、\\?\UNC\server\… は \\server\… にする。
+	if ($path.StartsWith('\\?\UNC\', [StringComparison]::OrdinalIgnoreCase)) {
+		return '\\' + $path.Substring(8)
+	}
+	if ($path.StartsWith('\\?\', [StringComparison]::Ordinal)) {
+		return $path.Substring(4)
+	}
+	return $path
+}
+
+# Get-PathEntryPlace は、比べるための項目 $Key（Get-PathEntryKey の形）の実際の場所。在るいちばん近い
+# ディレクトリを Get-FinalDirectory で解き、その下の在らない部分は名前のまま付ける（uninstall のフックは
+# フォルダを移したあとで走り、<Plug-Ins>\cli\ はもう無いので、在る親までさかのぼる）。%…% を含む項目・
+# 絶対でない項目・解けないものは $null（同じとみなさない）。
+function Get-PathEntryPlace {
+	param([string] $Key)
+	if ($Key.Contains('%')) {
+		return $null
+	}
+	# 書き方の誤り（使えない文字など）や、解くための呼び出しの失敗は、同じとみなさない。
+	try {
+		if (-not [IO.Path]::IsPathRooted($Key)) {
+			return $null
+		}
+		$dir = [IO.Path]::GetFullPath($Key)
+		# 末尾の \ を除く（ルートの C:\ は除かない。C: は「C ドライブの今のディレクトリ」になるため）。
+		if ($dir.Length -gt [IO.Path]::GetPathRoot($dir).Length) {
+			$dir = $dir.TrimEnd('\')
+		}
+		$rest = ''
+		while ($dir -and -not [IO.Directory]::Exists($dir)) {
+			$rest = '\' + [IO.Path]::GetFileName($dir) + $rest
+			$dir = [IO.Path]::GetDirectoryName($dir)
+		}
+		if (-not $dir) {
+			return $null
+		}
+		$final = Get-FinalDirectory $dir
+	}
+	catch {
+		return $null
+	}
+	if ($null -eq $final) {
+		return $null
+	}
+	return $final.TrimEnd('\') + $rest
+}
+
+# Test-PathEntry は、Path の項目 $Entry が $Dir と同じ項目か。まず Get-PathEntryKey の形を大文字と小文字を
+# 区別せずに比べ、違えば実際の場所（Get-PathEntryPlace）で比べる（同じディレクトリを別の書き方、たとえば
+# ジャンクション・8.3 形式・--plugins-dir の書き方で指したものを同じとみなす。CLI の within と同じ考え方）。
 function Test-PathEntry {
 	param([string] $Entry, [string] $Dir)
 	$a = Get-PathEntryKey $Entry
 	$b = Get-PathEntryKey $Dir
-	return $a.Length -gt 0 -and [string]::Equals($a, $b, [StringComparison]::OrdinalIgnoreCase)
+	if ($a.Length -eq 0) {
+		return $false
+	}
+	if ([string]::Equals($a, $b, [StringComparison]::OrdinalIgnoreCase)) {
+		return $true
+	}
+	$placeA = Get-PathEntryPlace $a
+	$placeB = Get-PathEntryPlace $b
+	return $null -ne $placeA -and $null -ne $placeB -and [string]::Equals($placeA, $placeB, [StringComparison]::OrdinalIgnoreCase)
 }
 
 # Test-PathValue は、Path の値 $Value に $Dir と同じ項目があるか。

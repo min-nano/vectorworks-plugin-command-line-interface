@@ -94,6 +94,20 @@ Describe 'Test-PathEntry' {
 		Test-PathEntry '' 'C:\x' | Should -BeFalse
 		Test-PathEntry 'C:\x\bin2' 'C:\x\bin' | Should -BeFalse
 	}
+	It 'matches the same directory written another way, also below a folder that is gone' {
+		$real = Join-Path $TestDrive 'real'
+		New-Item -ItemType Directory -Path (Join-Path $real 'cli\bin') -Force | Out-Null
+		$junction = Join-Path $TestDrive 'junction'
+		New-Item -ItemType Junction -Path $junction -Target $real | Out-Null
+		Test-PathEntry "$junction\cli\bin" "$real\cli\bin" | Should -BeTrue
+		Test-PathEntry "$junction\gone\bin" "$real\gone\bin" | Should -BeTrue
+		Test-PathEntry "$junction\gone\bin" "$real\gone\bin2" | Should -BeFalse
+		Test-PathEntry $junction "$real\cli" | Should -BeFalse
+	}
+	It 'does not match a relative entry or one that is not a path' {
+		Test-PathEntry 'cli\bin' (Join-Path $PWD 'cli\bin') | Should -BeFalse
+		Test-PathEntry 'C:\a|b' 'C:\a' | Should -BeFalse
+	}
 }
 
 Describe 'Get-PathWithEntry' {

@@ -77,17 +77,36 @@ dir_in_path() {
 	return 1
 }
 
-# link_points_to は、$1 がシンボリックリンクで、その中身（解かない）がちょうど $2 か。
-link_points_to() {
-	[ -L "$1" ] && [ "$(readlink "$1")" = "$2" ]
+# same_place は、絶対パス $1 と $2 が同じ場所を指すか。それぞれの、在るいちばん近いディレクトリどうしを
+# 同一性（-ef。i ノードで比べる）で比べ、その下の在らない部分は名前の文字列で比べる。同じディレクトリを
+# 別の書き方（シンボリックリンク・大文字と小文字・--plugins-dir の書き方）で指しても同じとみなすため
+# （CLI の within と同じ考え方）。uninstall のフックはフォルダを移したあとで走り、<Plug-Ins>/cli/ はもう
+# 無いので、在る親までさかのぼる。相対パスは同じとみなさない。
+same_place() {
+	case $1 in /*) ;; *) return 1 ;; esac
+	case $2 in /*) ;; *) return 1 ;; esac
+	same_place_a="$(strip_slashes "$1")"
+	same_place_b="$(strip_slashes "$2")"
+	same_place_rest_a=""
+	same_place_rest_b=""
+	while [ ! -d "$same_place_a" ]; do
+		same_place_rest_a="/${same_place_a##*/}$same_place_rest_a"
+		same_place_a="${same_place_a%/*}"
+		[ -n "$same_place_a" ] || same_place_a=/
+	done
+	while [ ! -d "$same_place_b" ]; do
+		same_place_rest_b="/${same_place_b##*/}$same_place_rest_b"
+		same_place_b="${same_place_b%/*}"
+		[ -n "$same_place_b" ] || same_place_b=/
+	done
+	# -ef は POSIX に無いが、mac の /bin/sh（と bash・dash・zsh）は持つ。
+	# shellcheck disable=SC3013
+	[ "$same_place_rest_a" = "$same_place_rest_b" ] && [ "$same_place_a" -ef "$same_place_b" ]
 }
 
-# link_points_into は、$1 がシンボリックリンクで、その中身（解かない）がディレクトリ $2 の中を
-# 指すか。uninstall は、別の場所を指すリンクと利用者のファイルに触れないために、これで決める。
-link_points_into() {
-	[ -L "$1" ] || return 1
-	case $(readlink "$1") in
-	"$2"/*) return 0 ;;
-	*) return 1 ;;
-	esac
+# link_points_to は、$1 がシンボリックリンクで、その中身（解かない）が $2 と同じ場所を指すか（same_place）。
+# install の「同じリンクが既にある」と uninstall の「このプラグインの CLI を指すリンク」は、同じこの関数で
+# 決める（片方だけが一致とみなすと、install が exists と答えたリンクを uninstall が残すため）。
+link_points_to() {
+	[ -L "$1" ] && same_place "$(readlink "$1")" "$2"
 }

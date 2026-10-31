@@ -92,6 +92,22 @@ if dir_in_path /x/y; then
 fi
 PATH="$PATH_SAVED"
 
+# same_place は、在る親どうしを同一性で、その下を文字列で比べる。
+mkdir -p "$work/same/real/a"
+ln -s "$work/same/real" "$work/same/link"
+same_place "$work/same/real/a" "$work/same/link/a" || fail "same_place through a link"
+same_place "$work/same/real/gone/x" "$work/same/link/gone/x" || fail "same_place below a missing folder"
+same_place "$work/same/real/a/" "$work/same/real/a" || fail "same_place with a trailing slash"
+if same_place "$work/same/real/gone/x" "$work/same/link/gone/y"; then
+	fail "same_place matched another name below a missing folder"
+fi
+if same_place "$work/same/real/a" "$work/same/real"; then
+	fail "same_place matched a parent"
+fi
+if same_place "same/real/a" "same/real/a"; then
+	fail "same_place matched a relative path"
+fi
+
 # --- install.sh ---
 
 setup linked
@@ -182,6 +198,24 @@ expect "uninstall: output" "$out" '{"path":"removed","left":[]}'
 uninstall_hook "$moved"
 expect "uninstall again: code" "$code" 0
 expect "uninstall again: output" "$out" '{"path":"none","left":[]}'
+
+# 同じ <Plug-Ins> を別の書き方（シンボリックリンク）で指して入れたものも、移したあとに消す。install の
+# 「同じリンクが既にある」も同じ比べ方。
+setup uninstall-other-spelling
+ln -s "$case_dir/Plug-Ins" "$case_dir/Plug-Ins-link"
+hook_home="$home"
+hook_path="$home/.local/bin:/usr/bin:/bin"
+hook_install_dir="$case_dir/Plug-Ins-link/cli"
+run_hook install "$plugin"
+expect "install through a link: output" "$out" '{"path":"linked"}'
+install_hook
+expect "install again with the real path: output" "$out" '{"path":"exists"}'
+moved="$case_dir/work/old/cli"
+mkdir -p "$case_dir/work/old"
+mv "$plugin" "$moved"
+uninstall_hook "$moved"
+expect "uninstall with the real path: output" "$out" '{"path":"removed","left":[]}'
+[ -L "$link" ] && fail "uninstall with the real path: the link is left"
 
 setup uninstall-other-link
 mkdir -p "$home/.local/bin"

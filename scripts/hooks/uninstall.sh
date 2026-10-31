@@ -1,6 +1,7 @@
 #!/bin/sh
-# cli の uninstall のフック（mac）。~/.local/bin/vw2026 が <Plug-Ins>/cli/bin/ の中を指すリンクの
-# ときだけ消し、標準出力に {"path":…,"left":[…]} を 1 つだけ書く
+# cli の uninstall のフック（mac）。~/.local/bin/vw2026 が <Plug-Ins>/cli/bin/vw2026 を指すリンク（同じ
+# ディレクトリを別の書き方で指すものも含む。lib.sh の link_points_to）のときだけ消し、標準出力に
+# {"path":…,"left":[…]} を 1 つだけ書く
 # （docs/plugin/install-and-update.md「`uninstall` のフック」）。
 #
 #   removed  リンクを消した
@@ -21,7 +22,7 @@ link="$home/.local/bin/vw2026"
 
 state=none
 left=""
-if link_points_into "$link" "$install_dir/bin"; then
+if link_points_to "$link" "$install_dir/bin/vw2026"; then
 	rm -f "$link" 2>/dev/null
 	if [ -L "$link" ]; then
 		state=failed

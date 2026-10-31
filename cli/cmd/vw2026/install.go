@@ -11,10 +11,11 @@ import (
 )
 
 type installCmd struct {
-	Plugin     string   `arg:"" placeholder:"NAME@TAG" help:"Plug-in to install and its tag, such as cli@latest."`
-	Check      bool     `env:"VW2026_INSTALL_CHECK" negatable:"" help:"Only tell whether a new build is available; change nothing."`
-	PluginsDir string   `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins (default: the Plug-Ins folder of Vectorworks 2026 for this user)."`
-	Registry   []string `env:"VW2026_REGISTRY" placeholder:"URL-OR-PATH" help:"Registry to look the name up in after the default one (repeatable)."`
+	Plugin     string `arg:"" placeholder:"NAME@TAG" help:"Plug-in to install and its tag, such as cli@latest."`
+	Check      bool   `env:"VW2026_INSTALL_CHECK" negatable:"" help:"Only tell whether a new build is available; change nothing."`
+	PluginsDir string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins (default: the Plug-Ins folder of Vectorworks 2026 for this user)."`
+	//: URL やパスのコンマで分けない（kong は既定で、引数と環境変数の値をコンマで分ける）。
+	Registry []string `env:"VW2026_REGISTRY" sep:"none" placeholder:"URL-OR-PATH" help:"Registry to look the name up in after the default one (repeatable)."`
 }
 
 func (installCmd) Help() string {
@@ -30,8 +31,9 @@ tag are required; there is no default tag.
 	vw2026 install my-plugin@2026.3.1 --registry ./plugins.json
 
 Install looks the name up in the registry built into vw2026, then in each
---registry in order (an https:// URL or a path; with VW2026_REGISTRY, separated
-by commas), and uses the first one that has it. The first rule of that entry
+--registry in order (an https:// URL or a path, taken as it is: a comma does
+not separate; VW2026_REGISTRY gives one registry), and uses the first one that
+has it. The first rule of that entry
 that matches the tag gives the manifest; the manifest gives the zip and its
 sha256. The plug-in goes into <Plug-Ins>/<NAME>/ with a record of the install
 (vw2026-install.json), replacing the folder as a whole, and then its install
