@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/install"
@@ -79,7 +81,9 @@ user, which must be on the same volume as <Plug-Ins>.
 
 Install has no time limit on the network or the hook: stop it (Ctrl-C) or limit
 it from the caller. Stopped while it downloads, it has changed only the work
-folder.
+folder. While it downloads the zip, it writes how much has arrived to the
+standard error: one line rewritten in place on a terminal, otherwise a line
+every 10 seconds, then "downloaded <size>".
 
 Do not run install or uninstall at the same time as another install or
 uninstall. Exit status: 0 success (including up_to_date and available), 1
@@ -132,7 +136,19 @@ func deployOptions(e *env, pluginsDir string) (install.Options, int) {
 		WorkDir:    work,
 		Executable: executable,
 		Stderr:     e.stderr,
+		Terminal:   isTerminal(e.stderr),
 	}, exitOK
+}
+
+// isTerminal は、w が端末（文字型のデバイス）か。取得の進み具合を同じ行に書き直すかを決める
+// （ログやパイプには 1 行ずつ足す）。
+func isTerminal(w io.Writer) bool {
+	file, ok := w.(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := file.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
 // deployFailed は失敗を標準出力の JSON（message）と標準エラーに書き、終了コードを返す。

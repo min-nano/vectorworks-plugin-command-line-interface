@@ -85,8 +85,10 @@ type Options struct {
 	Target string
 	// https:// を取るクライアント。nil なら既定のもの
 	Client *http.Client
-	// フックの標準エラーの行き先。nil なら捨てる
+	// フックの標準エラー・知らせ・取得の進み具合の行き先。nil なら捨てる
 	Stderr io.Writer
+	// Stderr が端末か。端末なら、取得の進み具合を同じ行に書き直す（端末でなければ 1 行ずつ足す）
+	Terminal bool
 	// フックの 1 つ目（sh・powershell）を走らせる argv の頭。nil なら OS の決まったもの。テストが
 	// 差し替える（sh の無い Windows でも同じフックを走らせるため）。
 	Interpreters map[string][]string

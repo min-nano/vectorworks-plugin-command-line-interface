@@ -216,3 +216,30 @@ func TestUninstallScript(t *testing.T) {
 		}
 	}
 }
+
+// 端末（文字型のデバイス）のときだけ、取得の進み具合を同じ行に書き直す。
+func TestIsTerminal(t *testing.T) {
+	if isTerminal(&bytes.Buffer{}) {
+		t.Error("a buffer is not a terminal")
+	}
+	file, err := os.Create(filepath.Join(t.TempDir(), "log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isTerminal(file) {
+		t.Error("a file is not a terminal")
+	}
+	file.Close()
+	if isTerminal(file) {
+		t.Error("a closed file is not a terminal")
+	}
+	// os.DevNull は文字型のデバイス（/dev/null・NUL）。
+	device, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer device.Close()
+	if !isTerminal(device) {
+		t.Error("a character device is a terminal")
+	}
+}

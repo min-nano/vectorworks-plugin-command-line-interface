@@ -72,13 +72,15 @@ func RegistrySource(ref string) (string, error) {
 	return absolute(ref), nil
 }
 
-// open は参照（https:// の URL か絶対パス）を開く。
-func (o *Options) open(ref string) (io.ReadCloser, error) {
+// open は参照（https:// の URL か絶対パス）を開き、大きさ（分からなければ -1）も返す。
+func (o *Options) open(ref string) (io.ReadCloser, int64, error) {
 	if !registry.IsURL(ref) {
 		if !filepath.IsAbs(ref) {
-			return nil, fmt.Errorf("%q is neither an https:// URL nor an absolute path", ref)
+			return nil, 0, fmt.Errorf("%q is neither an https:// URL nor an absolute path", ref)
 		}
-		return os.Open(ref)
+		// 手元のファイルはすぐに読めるので、大きさは示さない。
+		file, err := os.Open(ref)
+		return file, -1, err
 	}
 	client := http.DefaultClient
 	if o.Client != nil {
@@ -97,18 +99,18 @@ func (o *Options) open(ref string) (io.ReadCloser, error) {
 	}
 	resp, err := safe.Get(ref)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, fmt.Errorf("GET %s: %s", ref, resp.Status)
+		return nil, 0, fmt.Errorf("GET %s: %s", ref, resp.Status)
 	}
-	return resp.Body, nil
+	return resp.Body, resp.ContentLength, nil
 }
 
 // fetch はレジストリかマニフェストを読む。
 func (o *Options) fetch(ref string) ([]byte, error) {
-	body, err := o.open(ref)
+	body, _, err := o.open(ref)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +127,7 @@ func (o *Options) fetch(ref string) ([]byte, error) {
 
 // download は資産を path へ取り、sha256 を照らす。合わなければ取ったものを消して失敗にする。
 func (o *Options) download(ref, path, want string) error {
-	body, err := o.open(ref)
+	body, size, err := o.open(ref)
 	if err != nil {
 		return err
 	}
@@ -135,7 +137,10 @@ func (o *Options) download(ref, path, want string) error {
 		return err
 	}
 	hash := sha256.New()
-	written, err := io.Copy(io.MultiWriter(file, hash), io.LimitReader(body, maxAsset+1))
+	// 取った量を標準エラーに示す（待つ上限は持たないので、止まっているかを呼ぶ側が見分けられるように）。
+	progress := o.startProgress(ref, size)
+	written, err := io.Copy(io.MultiWriter(file, hash, progress), io.LimitReader(body, maxAsset+1))
+	progress.finish(err)
 	if closeErr := file.Close(); err == nil {
 		err = closeErr
 	}
