@@ -34,13 +34,18 @@ func (o *Options) sidestep(dir, old string) (*movedCLI, error) {
 	if !ok {
 		return nil, nil
 	}
-	// old は呼ぶ側（replace・Uninstall）が先に作っている。
+	// old は呼ぶ側（replace）が先に作っている。
 	// 名前は実行ファイルの名前に依らず固定にする（cleanOldCLIs が同じ頭で消せるように）。
-	to := filepath.Join(old, oldCLIName+time.Now().UTC().Format("20060102T150405.000000000"))
+	to := filepath.Join(old, oldCLIName+stamp())
 	if err := rename(executable, to); err != nil {
 		return nil, err
 	}
 	return &movedCLI{from: filepath.Join(dir, rel), to: to}, nil
+}
+
+// stamp は、<Work>/old/ の中で重ならない名前に付ける時刻。
+func stamp() string {
+	return time.Now().UTC().Format("20060102T150405.000000000")
 }
 
 // runsFrom は、走らせている CLI の実行ファイル（リンクを解いたもの）が dir の中にあるかと、その場所と

@@ -63,10 +63,12 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 			return nil, err
 		}
 		// uninstall は <Work>/old/<name>/ を消さない（守ること 9）。install のフックが失敗して Vectorworks が
-		// 起動したときの前の版などで、黙って消すと戻せなくなるため。
+		// 起動したときの前の版などで、黙って消すと戻せなくなるため。同じタグの install が、その install を
+		// 終えて片付ける。
 		if exists(p.oldDir) {
 			return nil, fmt.Errorf("%s is left by an install that stopped or kept the new version; nothing is removed. "+
-				"Move it back or delete it, then run uninstall again", p.oldDir)
+				"Run install %s@%s again to finish that install (it cleans this up), or delete it, then run uninstall again",
+				p.oldDir, name, record.Tag)
 		}
 		// 印を書いてからフォルダを移す（移したあとで止まっても、次の uninstall が続きから走れる）。
 		if err := writeFile(p.marker, nil, 0o600); err != nil {
@@ -87,6 +89,8 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		resumed = true
 	default:
 		_ = os.Remove(p.marker)
+		// 前の回が消しきれなかった組み立ての場所（discard の残り）も消す。
+		_ = removeStaging(p)
 		return &UninstallResult{Outcome: OutcomeNotInstall, Name: name, Remaining: installedIn(p.plugins), Left: []string{}}, nil
 	}
 
@@ -110,7 +114,8 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		_ = os.Remove(p.marker)
 		return nil, fmt.Errorf("%w; %s is put back", err, p.dest)
 	}
-	if err := removeAll(p.oldDir); err != nil {
+	// 組み立ての場所へ移してから消す（消すのが途中で止まっても、記録の消えた半分のフォルダを old に残さない）。
+	if err := o.discard(p, name); err != nil {
 		return nil, fmt.Errorf("%s is out of the folder of plug-ins, but %s cannot be deleted (%v); run uninstall again",
 			name, p.oldDir, err)
 	}

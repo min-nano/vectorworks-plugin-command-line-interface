@@ -118,7 +118,7 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 }
 
 // extract は zip を dir へ展開する（docs/registry.md「zip の形」）。展開先の外へ出る項目・
-// シンボリックリンク・\ を区切りに使った項目は断る。権限（実行ビット）は保ち、ファイルの時刻は
+// シンボリックリンク・\ を区切りに使った項目・展開すると maxExtracted を超える zip は断る。権限（実行ビット）は保ち、ファイルの時刻は
 // 展開した時刻のままにする（古い時刻を付けると、付け替えの前に OS の一時フォルダの片付けで消され
 // うるため）。
 //
@@ -129,6 +129,15 @@ func extract(zipPath, dir string) ([]string, error) {
 		return nil, fmt.Errorf("not a zip: %w", err)
 	}
 	defer reader.Close()
+	// 展開した大きさの合計を、展開する前に項目の大きさで確かめる（archive/zip は、項目の大きさを超えて
+	// 読ませない）。
+	var total uint64
+	for _, file := range reader.File {
+		if file.UncompressedSize64 > uint64(maxExtracted)-total {
+			return nil, fmt.Errorf("the zip expands to more than %d bytes", maxExtracted)
+		}
+		total += file.UncompressedSize64
+	}
 	if err := mkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
@@ -150,16 +159,8 @@ func extract(zipPath, dir string) ([]string, error) {
 
 func extractFile(file *zip.File, dir string) error {
 	name := strings.TrimSuffix(file.Name, "/")
-	switch {
-	case strings.Contains(file.Name, `\`):
-		return fmt.Errorf("the entry %q uses \\ (the separator is /)", file.Name)
-	case name == "" || strings.HasPrefix(name, "/") || !filepath.IsLocal(filepath.FromSlash(name)):
-		return fmt.Errorf("the entry %q is outside the folder", file.Name)
-	}
-	for _, part := range strings.Split(name, "/") {
-		if part == ".." {
-			return fmt.Errorf("the entry %q is outside the folder", file.Name)
-		}
+	if err := registry.CheckInside(name); err != nil {
+		return fmt.Errorf("the entry %q: %w", file.Name, err)
 	}
 	mode := file.Mode()
 	path := filepath.Join(dir, filepath.FromSlash(name))

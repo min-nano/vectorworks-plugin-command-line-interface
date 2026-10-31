@@ -72,7 +72,7 @@ func TestExtractRefusesDotDotInside(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "x.zip")
 	os.WriteFile(path, makeZip(t, []entry{{name: "a/../b", body: "x"}}), 0o644)
-	if _, err := extract(path, filepath.Join(dir, "out")); err == nil || !strings.Contains(err.Error(), "outside") {
+	if _, err := extract(path, filepath.Join(dir, "out")); err == nil || !strings.Contains(err.Error(), "contains ..") {
 		t.Fatal(err)
 	}
 }
@@ -411,28 +411,61 @@ func TestUninstallCannotPutTheFolderBack(t *testing.T) {
 	}
 }
 
-// 移したフォルダを消せなければ、印を残して失敗にし、もう一度走らせると続きから消す。
+// フックのあとで移したフォルダを組み立ての場所へ移せなければ（Windows で中のファイルが開かれている）、
+// 何も消さずに印を残して失敗にし、もう一度走らせると続きから消す。
 func TestUninstallCannotDeleteTheFolder(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
 	old := filepath.Join(h.work, "old", "cli")
 	marker := filepath.Join(h.work, "old", "cli.uninstalling")
-	original := removeAll
-	failRemoveAll(t, old)
+	original := rename
+	failRenameTo(t, old, filepath.Join(h.work, "staging", "cli"))
 	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "run uninstall again") {
 		t.Fatal(err)
 	}
-	if !exist(marker) || !exist(old) || exist(filepath.Join(h.plugins, "cli")) {
-		t.Fatal("should keep the marker and old")
+	if !exist(marker) || !validRecord(old, "cli") || exist(filepath.Join(h.plugins, "cli")) {
+		t.Fatal("should keep the marker and the whole of old")
 	}
-	removeAll = original
+	rename = original
 	if result, err := Uninstall(h.options(), "cli"); err != nil || result.Outcome != OutcomeUninstalled || exist(old) {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
 
+// 組み立ての場所へ移したあとで消すのが途中で止まっても、外したことは変わらず（old にも印にも残らない）、
+// 残りは次の uninstall が消す。
+func TestUninstallLeavesWhatCannotBeDeletedInStaging(t *testing.T) {
+	h := newHarness(t)
+	h.installCLI()
+	stage := filepath.Join(h.work, "staging", "cli")
+	// 移したあと（中身があるとき）だけ失敗させる（移す前の、前回の残りを消す呼び出しは通す）。
+	original := removeAll
+	removeAll = func(path string) error {
+		if path == stage && exist(stage) {
+			return errInjected
+		}
+		return original(path)
+	}
+	t.Cleanup(func() { removeAll = original })
+	var stderr bytes.Buffer
+	o := h.options()
+	o.Stderr = &stderr
+	if result, err := Uninstall(o, "cli"); err != nil || result.Outcome != OutcomeUninstalled {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if !exist(stage) || exist(filepath.Join(h.work, "old", "cli")) || exist(filepath.Join(h.work, "old", "cli.uninstalling")) ||
+		!strings.Contains(stderr.String(), stage) {
+		t.Fatalf("should leave only the staging folder and say so: %s", stderr.String())
+	}
+	removeAll = original
+	if result, err := Uninstall(h.options(), "cli"); err != nil || result.Outcome != OutcomeNotInstall || exist(stage) {
+		t.Fatalf("%+v %v", result, err)
+	}
+}
+
 // 付け替えで退避したフォルダの記録の module が無ければ（利用者のファイルが入っているかもしれない）、
-// 消さずに残して知らせる（守ること 9）。
+// 消さずに <Work>/old/<name>.kept-<時刻>/ へ移して知らせる（守ること 9）。old/<name>/ には残さないので、
+// 次の install・uninstall も通る。
 func TestInstallKeepsAFolderWithoutModule(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -445,9 +478,37 @@ func TestInstallKeepsAFolderWithoutModule(t *testing.T) {
 	if result, err := Install(o, "cli", "c1", false); err != nil || result.Outcome != OutcomeInstalled {
 		t.Fatalf("%+v %v", result, err)
 	}
+	kept, _ := filepath.Glob(filepath.Join(h.work, "old", "cli.kept-*"))
+	if len(kept) != 1 || exist(filepath.Join(h.work, "old", "cli")) || !strings.Contains(stderr.String(), kept[0]) {
+		t.Fatalf("should move the previous folder aside and say so: %v %s", kept, stderr.String())
+	}
+	if data, _ := os.ReadFile(filepath.Join(kept[0], "mine.txt")); string(data) != "mine" {
+		t.Fatal("lost the file")
+	}
+	h.mustInstall(release{name: "cli", tag: "c2"})
+	if result, err := Uninstall(h.options(), "cli"); err != nil || result.Outcome != OutcomeUninstalled {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if !exist(filepath.Join(kept[0], "mine.txt")) {
+		t.Fatal("removed the kept folder")
+	}
+}
+
+// 退避したフォルダを脇へ移せなければ、入れたことは変えずに知らせ、old/<name>/ に残す。
+func TestInstallCannotMoveAsideAFolderWithoutModule(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
 	old := filepath.Join(h.work, "old", "cli")
-	if data, _ := os.ReadFile(filepath.Join(old, "mine.txt")); string(data) != "mine" || !strings.Contains(stderr.String(), old) {
-		t.Fatalf("should keep %s and say so: %s", old, stderr.String())
+	failRename(t, old)
+	var stderr bytes.Buffer
+	o := h.options()
+	o.Stderr = &stderr
+	if result, err := Install(o, "cli", "c1", false); err != nil || result.Outcome != OutcomeInstalled {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if !exist(old) || !strings.Contains(stderr.String(), old) {
+		t.Fatalf("should leave old and say so: %s", stderr.String())
 	}
 }
 
@@ -560,5 +621,41 @@ func TestSidestepNameIgnoresTheExecutableName(t *testing.T) {
 	}
 	if !strings.HasPrefix(filepath.Base(moved), oldCLIName) || exist(moved) {
 		t.Fatalf("moved to %s", moved)
+	}
+}
+
+// 展開した大きさの合計が上限を超える zip は、何も展開せずに断る（小さな zip が大きく展開されないように）。
+func TestExtractTooLarge(t *testing.T) {
+	original := maxExtracted
+	maxExtracted = 5
+	t.Cleanup(func() { maxExtracted = original })
+	dir := t.TempDir()
+	path := filepath.Join(dir, "x.zip")
+	os.WriteFile(path, makeZip(t, []entry{{name: "a", body: "abc"}, {name: "b", body: "abc"}}), 0o644)
+	out := filepath.Join(dir, "out")
+	if _, err := extract(path, out); err == nil || !strings.Contains(err.Error(), "expands to more than 5 bytes") {
+		t.Fatal(err)
+	}
+	if exist(out) {
+		t.Fatal("extracted something")
+	}
+	maxExtracted = 6
+	if _, err := extract(path, out); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// フックのあとで組み立ての場所を空けられなければ（zip の場所が中身のあるフォルダ）、移したフォルダを
+// 消さずに印を残して失敗にする。
+func TestUninstallCannotEmptyTheStaging(t *testing.T) {
+	h := newHarness(t)
+	h.installCLI()
+	old := filepath.Join(h.work, "old", "cli")
+	os.MkdirAll(filepath.Join(h.work, "staging", "cli.zip", "x"), 0o700)
+	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "run uninstall again") {
+		t.Fatal(err)
+	}
+	if !validRecord(old, "cli") || !exist(filepath.Join(h.work, "old", "cli.uninstalling")) {
+		t.Fatal("should keep old and the marker")
 	}
 }

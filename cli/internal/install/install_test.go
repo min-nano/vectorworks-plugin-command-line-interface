@@ -1,6 +1,7 @@
 package install
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -456,13 +457,14 @@ func TestInstallHookFailureWhileRunningKeepsTheNewVersion(t *testing.T) {
 	plan := hookPlan{Exit: 1, Signal: signal, Await: await}
 	h.publish(release{name: "cli", tag: "c2", install: &plan})
 	done := make(chan struct{})
+	var release func()
 	go func() {
 		defer close(done)
 		// フックの合図を待つ
 		for !exist(signal) {
 			time.Sleep(10 * time.Millisecond)
 		}
-		h.holdLock()
+		release = h.holdLock()
 		os.WriteFile(await, nil, 0o600)
 	}()
 	_, err := h.install("cli", "c2")
@@ -470,10 +472,44 @@ func TestInstallHookFailureWhileRunningKeepsTheNewVersion(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "Vectorworks started") {
 		t.Fatal(err)
 	}
-	if h.installedVersion("cli") != "c2" || !exist(filepath.Join(h.work, "old", "cli")) {
+	old := filepath.Join(h.work, "old", "cli")
+	if h.installedVersion("cli") != "c2" || !exist(old) {
 		t.Fatal("the new version should stay, and the previous one in old")
 	}
-	// Vectorworks を終了してから同じタグで走らせ直すと、フックだけが走る（old の残りは次の install が消す）。
+	release()
+	// Vectorworks を終了しても、install を終えるまで uninstall は old を消さずに断り、同じタグの install を示す。
+	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "install cli@c2") {
+		t.Fatal(err)
+	}
+	// 同じタグで走らせ直すと、フックだけが走り、退避した前の版を片付ける。
+	os.WriteFile(filepath.Join(h.plugins, "cli", "hooks", "install.hook"), []byte(planJSON(t, hookPlan{Stdout: "{}"})), 0o644)
+	if result, err := h.install("cli", "c2"); err != nil || result.Outcome != OutcomeUpToDate {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if exist(old) {
+		t.Fatal("left the previous version")
+	}
+	if result, err := Uninstall(h.options(), "cli"); err != nil || result.Outcome != OutcomeUninstalled {
+		t.Fatalf("%+v %v", result, err)
+	}
+}
+
+// 同じタグでフックだけを走らせた回で退避した前の版を片付けられなくても、up_to_date のまま知らせる。
+func TestInstallSameTagCannotSettleOld(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	old := filepath.Join(h.work, "old", "cli")
+	copyDir(t, filepath.Join(h.plugins, "cli"), old)
+	failRename(t, old)
+	var stderr bytes.Buffer
+	o := h.options()
+	o.Stderr = &stderr
+	if result, err := Install(o, "cli", "c1", false); err != nil || result.Outcome != OutcomeUpToDate {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if !exist(old) || !strings.Contains(stderr.String(), old) {
+		t.Fatalf("should leave old and say so: %s", stderr.String())
+	}
 }
 
 // 付け替えに成功した install は、残っていた中断した uninstall の印を消す。
@@ -488,8 +524,8 @@ func TestInstallRemovesUninstallMarker(t *testing.T) {
 	}
 }
 
-// 前の回が残した <Work>/old/<name>/: <Plug-Ins>/<name>/ があり記録が正しければ消し、それ以外は
-// 何も変えずに断る。
+// 前の回が残した <Work>/old/<name>/: <Plug-Ins>/<name>/ があり記録が正しければ消し、記録が正しくなければ
+// 脇へ移す。<Plug-Ins>/<name>/ が無ければ何も変えずに断る。
 func TestInstallLeftoverOld(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -502,19 +538,26 @@ func TestInstallLeftoverOld(t *testing.T) {
 
 	copyDir(t, filepath.Join(h.plugins, "cli"), old)
 	os.WriteFile(filepath.Join(old, RecordFile), []byte("{"), 0o644)
-	h.publish(release{name: "cli", tag: "c3"})
-	before := snapshot(t, h.plugins)
-	if _, err := h.install("cli", "c3"); err == nil || !strings.Contains(err.Error(), old) {
-		t.Fatal(err)
+	h.mustInstall(release{name: "cli", tag: "c3"})
+	kept, _ := filepath.Glob(filepath.Join(h.work, "old", "cli.kept-*"))
+	if exist(old) || len(kept) != 1 || !exist(filepath.Join(kept[0], RecordFile)) {
+		t.Fatalf("should move old aside: %v", kept)
 	}
-	sameSnapshot(t, before, snapshot(t, h.plugins))
 
 	// <Plug-Ins>/<name>/ が無ければ、old が唯一の版かもしれない。
-	os.RemoveAll(old)
 	if err := os.Rename(filepath.Join(h.plugins, "cli"), old); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.install("cli", "c3"); err == nil || !strings.Contains(err.Error(), old) {
+	h.publish(release{name: "cli", tag: "c4"})
+	if _, err := h.install("cli", "c4"); err == nil || !strings.Contains(err.Error(), "only copy") {
+		t.Fatal(err)
+	}
+	if !exist(filepath.Join(old, "version.txt")) || exist(filepath.Join(h.plugins, "cli")) {
+		t.Fatal("changed something")
+	}
+	// 印もあれば、止まった uninstall の続きを示す。
+	os.WriteFile(filepath.Join(h.work, "old", "cli.uninstalling"), nil, 0o600)
+	if _, err := h.install("cli", "c4"); err == nil || !strings.Contains(err.Error(), "run uninstall cli again") {
 		t.Fatal(err)
 	}
 	if !exist(filepath.Join(old, "version.txt")) || exist(filepath.Join(h.plugins, "cli")) {

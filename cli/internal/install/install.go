@@ -261,6 +261,11 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		if err != nil {
 			return nil, err
 		}
+		// 新しい版を残した install（フックの間に Vectorworks が起動した）の続きなら、退避した前の版が残って
+		// いる。フックが通ったので片付ける。
+		if err := o.settleOld(p, name); err != nil {
+			fmt.Fprintf(o.stderr(), "vw2026: %v\n", err)
+		}
 		result.Outcome = OutcomeUpToDate
 		result.Hook = hook
 		return result, nil
@@ -325,7 +330,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 	if err := removeStaging(p); err != nil {
 		return nil, err
 	}
-	if err := removeLeftover(p, name); err != nil {
+	if err := o.settleOld(p, name); err != nil {
 		return nil, err
 	}
 
@@ -372,12 +377,10 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 	// 後始末。付け替えに成功したので、中断した uninstall の印も消す（残すと、次の install が付け替えの
 	// 途中で止まったときに、次の uninstall が唯一残った old/<name>/ を消してしまう）。
 	_ = os.Remove(p.stageZip)
-	// 退避した版は、記録の名前が一致し module があるときだけ消す（守ること 9 の歯止め）。module の無い
-	// フォルダを入れ直したときは、利用者のファイルが入っているかもしれないので残して知らせる。
-	if hadOld && !validRecord(p.oldDir, name) {
-		fmt.Fprintf(o.stderr(), "vw2026: the previous folder is left in %s (its record or module is missing); delete it when it is no longer needed\n", p.oldDir)
-	} else {
-		_ = os.RemoveAll(p.oldDir)
+	// 退避した版は settleOld の規則で片付ける（守ること 9 の歯止め）。片付けられなくても入れたことは
+	// 変わらないので、知らせるだけにする（次の install が片付ける）。
+	if err := o.settleOld(p, name); err != nil {
+		fmt.Fprintf(o.stderr(), "vw2026: %v\n", err)
 	}
 	_ = os.Remove(p.marker)
 	cleanOldCLIs(p.old)
@@ -438,18 +441,54 @@ func removeStaging(p places) error {
 	return nil
 }
 
-// removeLeftover は前の install / uninstall が付け替えの途中で止まって残した <Work>/old/<name>/ を
-// 片付ける。<Plug-Ins>/<name>/ もあり、記録が正しければ退避の残りとして消す。それ以外は唯一の版
-// かもしれないので、何も変えずに失敗にする。
-func removeLeftover(p places, name string) error {
-	if !exists(p.oldDir) {
+// settleOld は <Work>/old/<name>/ を片付ける。install のどの道（付け替えの前・付け替えのあと・同じタグで
+// フックだけを走らせたあと）もこれだけを使う（docs/plugin/install-and-update.md「<Work>/old/<name>/ の
+// 片付け」）。
+//
+//   - <Plug-Ins>/<name>/ が無ければ、old が唯一の版かもしれないので、何も変えずに失敗にする（印があれば、
+//     止まった uninstall の続きを示す）。
+//   - 記録の名前が一致し module があれば、消す（守ること 9）。
+//   - そうでなければ（module の無いフォルダを入れ直した前の版など。利用者のファイルが入っているかも
+//     しれない）、消さずに <Work>/old/<name>.kept-<時刻>/ へ移して知らせる。old/<name>/ に置いたままに
+//     すると、次の install・uninstall が通らないため。
+func (o *Options) settleOld(p places, name string) error {
+	switch {
+	case !exists(p.oldDir):
 		return nil
+	case !exists(p.dest) && exists(p.marker):
+		return fmt.Errorf("%s was left by an uninstall that stopped halfway; run uninstall %s again to finish it",
+			p.oldDir, name)
+	case !exists(p.dest):
+		return fmt.Errorf("%s was left by an install or uninstall that stopped halfway; it may be the only copy of %s. "+
+			"Move it back to %s or delete it, then run again", p.oldDir, name, p.dest)
+	case validRecord(p.oldDir, name):
+		return o.discard(p, name)
 	}
-	if exists(p.dest) && validRecord(p.oldDir, name) {
-		return os.RemoveAll(p.oldDir)
+	kept := filepath.Join(p.old, name+".kept-"+stamp())
+	if err := rename(p.oldDir, kept); err != nil {
+		return renameError(p.oldDir, err)
 	}
-	return fmt.Errorf("%s was left by an install or uninstall that stopped halfway; it may be the only copy of %s. "+
-		"Move it back to %s or delete it, then run again", p.oldDir, name, p.dest)
+	fmt.Fprintf(o.stderr(), "vw2026: the previous folder of %s has no valid record or module, so it is kept in %s "+
+		"(it may hold your files); delete it when it is no longer needed\n", name, kept)
+	return nil
+}
+
+// discard は、確かめた <Work>/old/<name>/ を組み立ての場所（<Work>/staging/<name>/）へ名前の変更で
+// 移してから消す。消すのが途中で止まっても（Windows でウイルス対策がファイルを開いているなど）、半分
+// 消えたフォルダは old に残らず（記録が先に消えて、次の回が唯一の版と見分けられなくなることがない）、
+// 次の install・uninstall が組み立ての場所として消す。移せなければ何も変えずに失敗にする。
+func (o *Options) discard(p places, name string) error {
+	if err := removeStaging(p); err != nil {
+		return err
+	}
+	if err := rename(p.oldDir, p.stageDir); err != nil {
+		return renameError(p.oldDir, err)
+	}
+	if err := removeAll(p.stageDir); err != nil {
+		fmt.Fprintf(o.stderr(), "vw2026: %s cannot be deleted yet (%v); the next install or uninstall of %s deletes it\n",
+			p.stageDir, err, name)
+	}
+	return nil
 }
 
 // renameError は付け替えの 1 つ目（<Plug-Ins>/<name> を移す）が失敗したときの文言。Windows では、

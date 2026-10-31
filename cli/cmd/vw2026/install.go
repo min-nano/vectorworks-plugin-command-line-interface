@@ -40,8 +40,10 @@ has cli.
 
 When the installed plug-in already has the tag (and the target), install
 neither downloads the zip nor replaces the folder: it runs the install hook of
-the installed version again and prints up_to_date. To reinstall the same tag,
-uninstall first. The tag latest names whatever the release calls latest, so
+the installed version again and prints up_to_date (this also finishes an
+install whose hook failed while Vectorworks started: once the hook succeeds, it
+cleans up the previous version left in the work folder). To reinstall the same
+tag, uninstall first. The tag latest names whatever the release calls latest, so
 install fetches the manifest to learn the tag.
 
 Install changes nothing while Vectorworks is running with the bridge (it holds
@@ -74,6 +76,10 @@ The default <Plug-Ins> is
 does not remember another one: give --plugins-dir to every install and
 uninstall. Install works in vectorworks2026-cli in the temporary folder of the
 user, which must be on the same volume as <Plug-Ins>.
+
+Install has no time limit on the network or the hook: stop it (Ctrl-C) or limit
+it from the caller. Stopped while it downloads, it has changed only the work
+folder.
 
 Do not run install or uninstall at the same time as another install or
 uninstall. Exit status: 0 success (including up_to_date and available), 1

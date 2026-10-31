@@ -84,13 +84,21 @@
 		if (-not $tag) {
 			$tag = 'latest'
 		}
-		# The CLI gets "uninstall cli" (cli@<tag> only chooses the CLI to run). The value of a flag
-		# is left as it is.
+		# The CLI gets "uninstall cli" (cli@<tag> only chooses the CLI to run), then the flags. A flag
+		# written before the positional arguments goes after them too (vw2026 takes no flag before
+		# uninstall). The value of a flag is left as it is.
 		$skip = $false
-		$argv = @(foreach ($arg in $Arguments) {
-				if (-not $skip -and $arg.StartsWith('cli@', [StringComparison]::Ordinal)) { 'cli' } else { $arg }
-				$skip = ($arg -ceq '--plugins-dir' -or $arg -ceq '--registry')
+		$flags = @(foreach ($arg in $Arguments) {
+				if ($skip) {
+					$skip = $false
+					$arg
+				}
+				elseif ($arg.StartsWith('-')) {
+					$skip = ($arg -ceq '--plugins-dir' -or $arg -ceq '--registry')
+					$arg
+				}
 			})
+		$argv = @('uninstall', 'cli') + $flags
 	}
 	else {
 		if (-not $tag) {

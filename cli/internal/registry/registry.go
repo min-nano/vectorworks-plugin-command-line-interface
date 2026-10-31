@@ -293,13 +293,21 @@ func Script(argv []string) (string, error) {
 	return script, nil
 }
 
-// CheckRelative は、zip の中の相対パス（区切りは /）が展開先の外へ出ないことを確かめる。
+// CheckRelative は、フックが渡すスクリプトの相対パスを確かめる。CheckInside に加えて、- で始まるもの
+// （インタープリターが指定と読む）も断る。
 func CheckRelative(path string) error {
+	if strings.HasPrefix(path, "-") {
+		return fmt.Errorf("%q starts with -", path)
+	}
+	return CheckInside(path)
+}
+
+// CheckInside は、zip の中の相対パス（区切りは /）が展開先の外へ出ないことを確かめる。zip の項目の
+// 名前（install の展開）とフックのスクリプトのパスの両方が使う（規則を 1 か所に保つ）。
+func CheckInside(path string) error {
 	switch {
 	case path == "":
 		return errors.New("empty path")
-	case strings.HasPrefix(path, "-"):
-		return fmt.Errorf("%q starts with -", path)
 	case strings.Contains(path, `\`):
 		return fmt.Errorf("%q uses \\ (the separator is /)", path)
 	case strings.HasPrefix(path, "/") || !filepath.IsLocal(filepath.FromSlash(path)):

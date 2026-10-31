@@ -637,11 +637,12 @@ jobs:
           if (Test-Path -LiteralPath (Join-Path $work 'old\cli')) { throw 'old\cli is left' }
       # 5. 手順 3 が示した形で、初回のスクリプトに uninstall cli@<その PR のタグ> を渡す（その PR の CLI が
       #    フォルダの外で外す）。フォルダを消し、Path からは <Plug-Ins>\cli\bin だけが除かれ、手順 4 の残り
-      #    （そのプロセスは終わっている）も消えて、何も残らない。
+      #    （そのプロセスは終わっている）も消えて、何も残らない。指定（既定と同じ場所の --plugins-dir）は
+      #    uninstall の前に書く（スクリプトが uninstall cli の後ろへ回す）。
       - name: uninstall with the first-time script
         run: |
           . "$env:RUNNER_TEMP\helpers.ps1"
-          $out = Invoke-Bootstrap uninstall "cli@$env:TAG"
+          $out = Invoke-Bootstrap --plugins-dir $plugins uninstall "cli@$env:TAG"
           if ($out.outcome -ne 'uninstalled' -or @($out.left).Count -ne 0) { throw 'not uninstalled cleanly' }
           if (Test-Path -LiteralPath (Join-Path $plugins 'cli')) { throw 'cli is left' }
           Assert-UserPath '%USERPROFILE%\vw2026-path-probe' ([Microsoft.Win32.RegistryValueKind]::ExpandString)

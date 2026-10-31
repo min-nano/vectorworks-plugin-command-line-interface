@@ -198,6 +198,10 @@ func TestCheckRelative(t *testing.T) {
 			t.Errorf("%q should be refused", path)
 		}
 	}
+	// zip の項目の名前は - で始まってもよい。
+	if err := CheckInside("-a"); err != nil {
+		t.Error(err)
+	}
 }
 
 // 間の部分が見つからなければ合わない。手元のレジストリでも相対パスは断る。読めないマニフェストは断る。

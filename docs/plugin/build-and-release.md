@@ -31,7 +31,7 @@
 | `lint.yml`（既存） | push / PR・マージキュー | `scripts/lint.sh`（[検査](../lint.md)。go vet・actionlint・shellcheck・clang-tidy（無 SDK）・PSScriptAnalyzer） |
 | `build.yml` | push（main）/ PR・マージキュー / 手動 | mac と Windows のビルド・梱包・リリースと、公開した資産の確かめ（下記） |
 | `hooks.yml` | push / PR・マージキュー | `cli` のフック（`scripts/hooks/`）のテスト。macOS で `tests/hooks/hooks_test.sh`（`sh`）、Windows で `tests/hooks/Hooks.Tests.ps1`（Pester。版は `scripts/powershell.ps1` の `$pesterVersion` で、`-Mode Install` が入れ、`-Mode Test` が走らせる。Windows PowerShell 5.1）を走らせる（[インストール「テスト」](install-and-update.md#テスト)） |
-| `cleanup-dev-release.yml` | PR が閉じたとき | その PR のプレリリース（`dev-<slug>-<PR 番号>-<短い sha>`。タグの末尾の `-<PR 番号>-<短い sha>` で見分ける。ブランチの名前が変わって slug が違うものも含む）をリリースとタグごとすべて消す。**その PR の下書きのリリースも、タグ名で見分けて消す**（push で止められた `release` の下書きは、まだタグが無いので、タグで探すだけでは漏れる）。`build.yml` と同じ `concurrency` のグループ（`build-<PR 番号>`。両方に同じ式を書く）で走り、その PR の走っているビルドを止めてから消す（消したあとに公開されないため）。グループは `github.ref` ではなく PR 番号で組む（マージで閉じた PR では `github.ref` が `refs/heads/main` になり、main の push のビルドを止めて main のリリースが作られないため）。`build.yml` は開き直し（`reopened`）では走っている片付けを止めずに待つ（途中で止めるとタグや消しかけのリリースが残るため） |
+| `cleanup-dev-release.yml` | PR が閉じたとき | その PR のプレリリース（`dev-<slug>-<PR 番号>-<短い sha>`。タグの末尾の `-<PR 番号>-<短い sha>` で見分ける。ブランチの名前が変わって slug が違うものも含む。段 3b より前の形 `dev-<slug>-<PR 番号>` のものも、その頃から開いている PR のために当てる）をリリースとタグごとすべて消す。**その PR の下書きのリリースも、タグ名で見分けて消す**（push で止められた `release` の下書きは、まだタグが無いので、タグで探すだけでは漏れる）。`build.yml` と同じ `concurrency` のグループ（`build-<PR 番号>`。両方に同じ式を書く）で走り、その PR の走っているビルドを止めてから消す（消したあとに公開されないため）。グループは `github.ref` ではなく PR 番号で組む（マージで閉じた PR では `github.ref` が `refs/heads/main` になり、main の push のビルドを止めて main のリリースが作られないため）。`build.yml` は開き直し（`reopened`）では走っている片付けを止めずに待つ（途中で止めるとタグや消しかけのリリースが残るため） |
 
 `build.yml` のジョブ:
 

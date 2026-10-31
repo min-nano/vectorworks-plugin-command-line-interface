@@ -21,6 +21,10 @@ const maxDocument = 1 << 20
 // 同じドライブを埋めないため。テストが縮める。
 var maxAsset int64 = 512 << 20
 
+// maxExtracted は zip を展開した大きさの合計の上限（docs/registry.md「zip の形」）。小さな zip が大きく
+// 展開されて、<Work> のあるドライブを埋めないため。テストが縮める。
+var maxExtracted int64 = 2 << 30
+
 // lookup はレジストリを順に引き、名前の項目と、そのレジストリの名前（記録の registry）を返す
 // （docs/registry.md「レジストリの順」）。既定のレジストリが先頭で、名前が見つかった時点で止める。
 // 見つかる前に取れない・読めないレジストリがあれば、そこで失敗にする（飛ばすと、どの項目が勝つかが

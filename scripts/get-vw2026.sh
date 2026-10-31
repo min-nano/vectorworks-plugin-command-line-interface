@@ -78,19 +78,23 @@ main() {
 		[ "$positional" -eq 2 ] || fail "only \"uninstall cli[@<tag>]\" is accepted"
 		# タグが無ければ latest の CLI で外す。
 		[ -n "$tag" ] || tag=latest
-		# CLI には uninstall cli を渡す（cli@<tag> は走らせる CLI を選ぶだけ）。指定の値は置き換えない。
+		# CLI には uninstall cli と指定を渡す（cli@<tag> は走らせる CLI を選ぶだけ）。指定は、位置の引数の
+		# 前に書かれていても後ろへ回す（vw2026 は uninstall の前の指定を受け付けない）。指定の値はそのまま。
 		skip=false
 		for arg in "$@"; do
 			shift
-			if [ "$skip" = false ] && [ "${arg#cli@}" != "$arg" ]; then
-				arg=cli
+			if [ "$skip" = true ]; then
+				skip=false
+			else
+				case "$arg" in
+				--plugins-dir | --registry) skip=true ;;
+				-*) ;;
+				*) continue ;;
+				esac
 			fi
-			case "$arg" in
-			--plugins-dir | --registry) skip=true ;;
-			*) skip=false ;;
-			esac
 			set -- "$@" "$arg"
 		done
+		set -- uninstall cli "$@"
 	else
 		if [ -z "$tag" ]; then
 			tag=latest
