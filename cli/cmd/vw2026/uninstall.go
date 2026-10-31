@@ -45,7 +45,9 @@ Uninstall first moves the folder out of <Plug-Ins>, then runs the uninstall
 hook of the installed version (for cli, it takes vw2026 off the PATH), then
 deletes the folder. If the hook fails, the folder goes back. If uninstall
 stops after moving the folder (Ctrl-C, power loss), run it again: it goes on
-from the hook.
+from the hook. If Vectorworks starts while the hook runs, the folder stays
+moved out and uninstall fails (exit status 1); quit Vectorworks, then run
+uninstall again: it goes on from the hook.
 
 Like install, uninstall changes nothing while Vectorworks is running with the
 bridge (exit status 6), and a plug-in other than cli is uninstalled only from a

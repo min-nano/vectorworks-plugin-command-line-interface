@@ -25,9 +25,6 @@ func target() string {
 	return runtime.GOOS + "-" + runtime.GOARCH
 }
 
-// oldCLIName は、よけた CLI の名前の頭（oldCLIPrefixes の 1 つ）。
-const oldCLIName = "vw2026.old-"
-
 // defaultInterpreter は、フックの 1 つ目を走らせる argv の頭。/bin/sh だけ。
 func defaultInterpreter(name string) ([]string, error) {
 	if name == "sh" {

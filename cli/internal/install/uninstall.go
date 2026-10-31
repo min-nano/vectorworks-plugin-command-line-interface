@@ -42,14 +42,15 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	}
 
 	var record *Record
+	var ok bool
 	resumed := false
 	switch {
 	case exists(p.dest):
 		// 安全弁: 記録の名前がフォルダ名と一致し、記録の module が実在するときだけ進む。
-		record, err = readRecord(p.dest)
-		if err != nil || record.Name != name || !record.moduleExists(p.dest) {
+		record, ok = checkedRecord(p.dest, name)
+		if !ok {
 			reason := "its record is missing, unreadable or for another name, or its module is missing"
-			if err == nil && !record.moduleExists(p.dest) && record.Name == name {
+			if record != nil && record.Name == name {
 				reason = fmt.Sprintf("its module %s is missing; run install to repair it first", record.Module)
 			}
 			return nil, fmt.Errorf("%s is not a plug-in that vw2026 installed (%s); nothing is removed", p.dest, reason)
@@ -82,8 +83,8 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	case exists(p.oldDir):
 		// 前の uninstall が、フォルダを移したあとで止まった。印が無ければ、install が付け替えの
 		// 途中で止まったのと見分けられない（old が唯一の版かもしれない）。
-		record, err = readRecord(p.oldDir)
-		if !exists(p.marker) || err != nil || record.Name != name || !record.moduleExists(p.oldDir) {
+		record, ok = checkedRecord(p.oldDir, name)
+		if !exists(p.marker) || !ok {
 			return nil, fmt.Errorf("%s was left by an install or uninstall that stopped halfway, and %s is not there; "+
 				"it may be the only copy of %s. Move it back to %s or delete it", p.oldDir, p.dest, name, p.dest)
 		}

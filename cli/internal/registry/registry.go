@@ -114,7 +114,7 @@ func Parse(data []byte, remote bool) (*Registry, error) {
 			if !matchPattern.MatchString(rule.Match) {
 				return nil, fmt.Errorf("%s: manifests[%d]: invalid match %q", name, i, rule.Match)
 			}
-			if err := checkRef(strings.ReplaceAll(rule.Path, TagPlaceholder, "tag"), remote); err != nil {
+			if err := CheckRef(strings.ReplaceAll(rule.Path, TagPlaceholder, "tag"), remote); err != nil {
 				return nil, fmt.Errorf("%s: manifests[%d]: path: %w", name, i, err)
 			}
 			entry.Manifests = append(entry.Manifests, Rule{Match: rule.Match, Path: rule.Path})
@@ -227,9 +227,9 @@ func isLetter(c byte) bool {
 	return 'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z'
 }
 
-// checkRef は参照が https:// か file:// の URL かを確かめる。remote なら https:// だけ（遠くのものが
-// 利用者の手元のファイルを指さないため）。
-func checkRef(ref string, remote bool) error {
+// CheckRef は参照が https:// か file:// の URL かを確かめる。remote なら https:// だけ（遠くのものが
+// 利用者の手元のファイルを指さないため）。--registry に渡したものも、レジストリの中の参照も、これで確かめる。
+func CheckRef(ref string, remote bool) error {
 	switch {
 	case IsURL(ref):
 		if len(ref) == len("https://") {
@@ -293,7 +293,7 @@ func ParseManifest(data []byte, remote bool) (*Manifest, error) {
 	}
 	manifest := &Manifest{Tag: raw.Tag, Targets: map[string]Asset{}}
 	for target, asset := range raw.Targets {
-		if err := checkRef(asset.Asset, remote); err != nil {
+		if err := CheckRef(asset.Asset, remote); err != nil {
 			return nil, fmt.Errorf("%s: asset: %w", target, err)
 		}
 		if !sha256Hex.MatchString(asset.SHA256) {

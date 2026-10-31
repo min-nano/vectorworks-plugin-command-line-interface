@@ -73,10 +73,20 @@ func (r *Record) moduleExists(dir string) bool {
 	return exists(filepath.Join(dir, r.Module))
 }
 
+// checkedRecord は dir の記録を読み（読めなければ nil）、記録の名前が name で、記録の module が実在するかを
+// 返す。消すコードの歯止め（守ること 9）の確かめは、どこもこれだけを使う。
+func checkedRecord(dir, name string) (*Record, bool) {
+	record, err := readRecord(dir)
+	if err != nil {
+		return nil, false
+	}
+	return record, record.Name == name && record.moduleExists(dir)
+}
+
 // validRecord は、dir に名前の一致する記録があり、記録の module が実在するか。
 func validRecord(dir, name string) bool {
-	record, err := readRecord(dir)
-	return err == nil && record.Name == name && record.moduleExists(dir)
+	_, ok := checkedRecord(dir, name)
+	return ok
 }
 
 // assemble は zip を取って照らし、<Work>/staging/<name>/ に展開して、モジュールとフックを確かめ、

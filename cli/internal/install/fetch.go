@@ -62,17 +62,10 @@ func (o *Options) lookup(name string) (registry.Entry, string, error) {
 // 「参照の書き方」）。パスはそのままでは受け付けない（file:///… と書く）。記録の registry には、渡した
 // 文字列をそのまま残し、比べるのもその文字列どうしだけ。
 func checkRegistry(ref string) error {
-	switch {
-	case registry.IsURL(ref):
-		return nil
-	case registry.IsFileURL(ref):
-		if _, err := registry.FilePath(ref); err != nil {
-			return usageErrorf("the registry: %v", err)
-		}
-		return nil
+	if err := registry.CheckRef(ref, false); err != nil {
+		return usageErrorf("the registry: %v (write a path as file:///…, with %%20 for a space)", err)
 	}
-	return usageErrorf("the registry %q is not an https:// or a file:// URL (write a path as file:///…, "+
-		"with %%20 for a space)", ref)
+	return nil
 }
 
 // open は参照（https:// か file:// の URL）を開き、大きさ（分からなければ -1）も返す。
@@ -157,11 +150,11 @@ func (o *Options) download(ref, path, want string) error {
 	// 終わりの行は、大きさの上限と書き込みも確かめてから書く（失敗したのに取り終えたとは書かない）。
 	progress.finish(err)
 	if err != nil {
-		os.Remove(path)
+		_ = removeFile(path)
 		return fmt.Errorf("%s: %w", ref, err)
 	}
 	if got := hex.EncodeToString(hash.Sum(nil)); got != want {
-		os.Remove(path)
+		_ = removeFile(path)
 		return fmt.Errorf("the sha256 of %s is %s, not %s as the manifest says", ref, got, want)
 	}
 	return nil

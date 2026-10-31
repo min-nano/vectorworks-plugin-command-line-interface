@@ -54,8 +54,8 @@ func (o *Options) interpreter(name string) ([]string, error) {
 }
 
 // scriptIn は、フックが指す zip の中のファイルが、展開したフォルダの中に実在するファイルかを
-// 確かめ、そのパスを返す。インタプリタを通さないもの（1 つ目が zip の中のパス）は、mac では実行の権限も
-// 確かめる（Windows では権限で走るかが決まらない）。
+// 確かめ、そのパスを返す。インタプリタを通さないもの（1 つ目が zip の中のパス）は、この OS が直接走らせ
+// られるか（mac は実行の権限、Windows は拡張子）も確かめる。
 func scriptIn(dir string, argv []string) (string, error) {
 	// 書き方は、マニフェストと記録を読むときに Hooks.Check が確かめている。
 	script, _ := registry.Script(argv)
@@ -64,11 +64,23 @@ func scriptIn(dir string, argv []string) (string, error) {
 	if err != nil || !info.Mode().IsRegular() {
 		return "", fmt.Errorf("the hook %q is not a file in the zip", script)
 	}
-	if runtime.GOOS != "windows" && !slices.Contains(registry.Interpreters, argv[0]) && info.Mode().Perm()&0o111 == 0 {
+	switch {
+	case slices.Contains(registry.Interpreters, argv[0]):
+	// Windows は権限では決まらず、拡張子で決まる。PATHEXT は読まない（.vbs・.js なども載るが、それらは
+	// CreateProcess では走らない）。
+	case runtime.GOOS == "windows":
+		if !slices.Contains(windowsRunnable, strings.ToLower(filepath.Ext(script))) {
+			return "", fmt.Errorf("the hook %q does not run on Windows (use %s, or run a script with powershell)",
+				script, strings.Join(windowsRunnable, ", "))
+		}
+	case info.Mode().Perm()&0o111 == 0:
 		return "", fmt.Errorf("the hook %q has no permission to execute in the zip (give it one, or run it with sh)", script)
 	}
 	return path, nil
 }
+
+// windowsRunnable は、Windows がインタプリタを通さずに走らせるフックの拡張子（.cmd・.bat は cmd.exe が走らせる）。
+var windowsRunnable = []string{".exe", ".com", ".cmd", ".bat"}
 
 // runHook はフックを 1 つ走らせ、標準出力の JSON のオブジェクトを返す（docs/registry.md「書き方」）。
 // argv が nil なら走らせずに nil。作業ディレクトリはプラグインのフォルダ、標準入力は閉じて渡し、

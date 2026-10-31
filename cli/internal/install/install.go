@@ -168,7 +168,7 @@ func checkCLI(plugins, name string) error {
 		return nil
 	}
 	dir := filepath.Join(plugins, CLIName)
-	if record, err := readRecord(dir); err != nil || record.Name != CLIName || !record.moduleExists(dir) {
+	if !validRecord(dir, CLIName) {
 		return fmt.Errorf("%s has no cli that vw2026 installed; vw2026 installs and uninstalls a plug-in only in the "+
 			"folder of plug-ins that has cli (it tells whether Vectorworks is running from the lock in %s)",
 			plugins, filepath.Join(dir, spool.SpoolDirName))
@@ -383,7 +383,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 		name: name, tag: tag, previous: previous, target: o.Target, pluginDir: p.dest, installDir: p.dest,
 	})
 	if err != nil {
-		return nil, o.undoHook(p, hadOld, moved, err)
+		return nil, o.undoHook(p, name, hadOld, moved, err)
 	}
 
 	// 後始末。付け替えに成功したので、中断した uninstall の印も消す（残すと、次の install が付け替えの
@@ -414,7 +414,7 @@ func (o *Options) undoSwap(p places, hadOld bool, moved *movedCLI, cause error) 
 
 // undoHook はフックが失敗したときに前の版へ戻す。戻す前にロックを見て、Vectorworks が起動していれば
 // 新しい版を残す（動いているプラグインのロックごと消さない）。
-func (o *Options) undoHook(p places, hadOld bool, moved *movedCLI, cause error) error {
+func (o *Options) undoHook(p places, name string, hadOld bool, moved *movedCLI, cause error) error {
 	previous := ""
 	if hadOld {
 		previous = fmt.Sprintf(" (the previous one is in %s)", p.oldDir)
@@ -425,7 +425,8 @@ func (o *Options) undoHook(p places, hadOld bool, moved *movedCLI, cause error) 
 		return fmt.Errorf("%w; %s, so the new version stays in %s%s: quit Vectorworks, "+
 			"then run install with the same tag again (it runs only the hook)", cause, reason, p.dest, previous)
 	}
-	if running(p.plugins) {
+	// cli は、付け替えの直前に前の版を読み込んだ Vectorworks のロックが old/cli/spool/ へ移っているので、そこも見る。
+	if running(p.plugins) || runningAfterMove(p, name) {
 		return keep("Vectorworks started meanwhile")
 	}
 	// 新しい版は名前の変更でよける（消すのはあと。削除が途中で止まると、半分消えたプラグインが
@@ -449,7 +450,7 @@ func removeStaging(p places) error {
 	if err := removeAll(p.stageDir); err != nil {
 		return err
 	}
-	if err := os.Remove(p.stageZip); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := removeFile(p.stageZip); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	return nil
@@ -475,6 +476,11 @@ func (o *Options) settleOld(p places, name string) error {
 	case !exists(p.dest):
 		return fmt.Errorf("%s was left by an install or uninstall that stopped halfway; it may be the only copy of %s. "+
 			"Move it back to %s or delete it, then run again", p.oldDir, name, p.dest)
+	// 動いている Vectorworks が使っているかもしれないものは、消しも移しもしない。cli は、付け替えの直前に前の版を
+	// 読み込んだ Vectorworks のロックが、フォルダと一緒に old/cli/spool/ へ移っている（runningAfterMove）。
+	case runningAfterMove(p, name):
+		return fmt.Errorf("%s is left because Vectorworks is running and may use it; quit Vectorworks, then run "+
+			"install %s with the same tag again to clean it up", p.oldDir, name)
 	case validRecord(p.oldDir, name):
 		return o.discard(p, name)
 	}

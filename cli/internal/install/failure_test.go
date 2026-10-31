@@ -623,6 +623,22 @@ func TestDiscardCannotMakeTheStaging(t *testing.T) {
 	}
 }
 
+// インタプリタを通さないフックが Windows の走らせない拡張子なら、付け替えの前に断る。
+func TestHookNotRunnableOnWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("only Windows decides by the extension whether a file runs")
+	}
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	before := snapshot(t, h.plugins)
+	h.publish(release{name: "cli", tag: "c2", hooks: &registry.Hooks{Install: []string{"hooks/install.sh"}},
+		extra: []entry{{name: "hooks/install.sh", body: "#!/bin/sh\n", mode: 0o755}}})
+	if _, err := h.install("cli", "c2"); err == nil || !strings.Contains(err.Error(), "does not run on Windows") {
+		t.Fatal(err)
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
+}
+
 // インタプリタを通さないフックに実行の権限が無ければ（mac）、付け替えの前に断る。
 func TestHookWithoutExecutePermission(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -969,6 +985,77 @@ func TestUninstallCLIHookSuccessWhileLockedInOld(t *testing.T) {
 	}
 	if !validRecord(old, "cli") || !exist(filepath.Join(h.work, "old", "cli.uninstalling")) {
 		t.Fatal("should keep old and the marker")
+	}
+}
+
+// sha256 が合わず、取った zip を消せなくても失敗で終わり、次の install が組み立ての場所の残りとして消す。
+func TestDownloadMismatchCannotRemove(t *testing.T) {
+	h := newHarness(t)
+	h.publish(release{name: "cli", tag: "c1", sha: strings.Repeat("0", 64)})
+	zip := filepath.Join(h.work, "staging", "cli.zip")
+	original := removeFile
+	// 組み立ての前の片付け（まだ無い zip を消す）は通し、取ったあとの zip だけを消せなくする。
+	removeFile = func(path string) error {
+		if path == zip && exist(path) {
+			return errInjected
+		}
+		return original(path)
+	}
+	t.Cleanup(func() { removeFile = original })
+	if _, err := h.install("cli", "c1"); err == nil || !strings.Contains(err.Error(), "sha256") || !exist(zip) {
+		t.Fatal(err)
+	}
+	removeFile = original
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	if exist(zip) {
+		t.Fatal("left the zip")
+	}
+}
+
+// cli の install のフックの間に、前の版を読み込んだ Vectorworks のロックが old/cli/spool/ にあれば（付け替えの
+// 直前に起動した）、フックが失敗しても戻さずに新しい版を残す。
+func TestInstallCLIHookFailureWhileLockedInOld(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	signal := filepath.Join(h.tmp, "hook-started")
+	await := filepath.Join(h.tmp, "locked")
+	h.publish(release{name: "cli", tag: "c2", install: &hookPlan{Exit: 1, Signal: signal, Await: await}})
+	old := filepath.Join(h.work, "old", "cli")
+	done := lockAtWhenSignaled(h, filepath.Join(old, spool.SpoolDirName), signal, await)
+	_, err := h.install("cli", "c2")
+	<-done
+	if err == nil || !strings.Contains(err.Error(), "Vectorworks started") {
+		t.Fatal(err)
+	}
+	if h.installedVersion("cli") != "c2" || !validRecord(old, "cli") {
+		t.Fatal("should keep the new version and the previous one in old")
+	}
+}
+
+// フックが通っても、old/cli/spool/ のロックが掴まれていれば、退避した版を消さずに知らせる。同じタグの install も
+// 同じ（終了してから走らせ直すと片付ける）。
+func TestInstallCLIKeepsOldWhileLockedInOld(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	signal := filepath.Join(h.tmp, "hook-started")
+	await := filepath.Join(h.tmp, "locked")
+	h.publish(release{name: "cli", tag: "c2", install: &hookPlan{Stdout: "{}", Signal: signal, Await: await}})
+	old := filepath.Join(h.work, "old", "cli")
+	done := lockAtWhenSignaled(h, filepath.Join(old, spool.SpoolDirName), signal, await)
+	var stderr bytes.Buffer
+	o := h.options()
+	o.Stderr = &stderr
+	result, err := Install(o, "cli", "c2", false)
+	<-done
+	if err != nil || result.Outcome != OutcomeInstalled || !validRecord(old, "cli") ||
+		!strings.Contains(stderr.String(), "Vectorworks is running") {
+		t.Fatalf("%+v %v %s", result, err, stderr.String())
+	}
+	stderr.Reset()
+	h.publish(release{name: "cli", tag: "c2"})
+	if result, err := Install(o, "cli", "c2", false); err != nil || result.Outcome != OutcomeUpToDate ||
+		!validRecord(old, "cli") || !strings.Contains(stderr.String(), "Vectorworks is running") {
+		t.Fatalf("%+v %v %s", result, err, stderr.String())
 	}
 }
 

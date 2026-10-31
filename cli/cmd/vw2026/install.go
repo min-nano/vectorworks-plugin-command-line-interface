@@ -74,9 +74,12 @@ installed. "hook" is the output of the hook (a JSON object), absent when the plu
 none. On a failure (cannot download, the sha256 does not match, the zip is
 wrong, the folder cannot be replaced, the hook failed), install leaves
 <Plug-Ins> as it was, except for what the hook changed outside the folder,
-writes the reason to the standard error too, and exits with 1. Replacing the
-folder fails on Windows while a program has a file in it open or has its
-current directory in it.
+writes the reason to the standard error too, and exits with 1. The exception is
+a hook that fails while Vectorworks starts: Vectorworks may use the new version,
+so install leaves it in <Plug-Ins>, says so in the message, and exits with 1;
+quit Vectorworks, then run install with the same tag again (it runs only the
+hook). Replacing the folder fails on Windows while a program has a file in it
+open or has its current directory in it.
 
 The default <Plug-Ins> is
 ~/Library/Application Support/Vectorworks/2026/Plug-Ins on macOS and

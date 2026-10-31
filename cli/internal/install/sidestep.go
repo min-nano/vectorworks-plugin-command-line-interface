@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -12,6 +13,15 @@ import (
 // oldCLIPrefixes は、よけた CLI の名前の頭（<Work>/old/ の直下の vw2026.old-* / vw2026.exe.old-*）。
 // 名前に . を含むので、<Work>/old/<name>/（名前は . を含まない）と重ならない。
 var oldCLIPrefixes = []string{"vw2026.old-", "vw2026.exe.old-"}
+
+// oldCLIName は、この OS でよけた CLI に付ける名前の頭（oldCLIPrefixes の 1 つ。Windows だけ実行ファイルの
+// 名前に .exe が付く）。後始末が探す頭と同じ一覧から選ぶので、食い違わない。
+var oldCLIName = func() string {
+	if runtime.GOOS == "windows" {
+		return oldCLIPrefixes[1]
+	}
+	return oldCLIPrefixes[0]
+}()
 
 // movedCLI は、よけた CLI の元の場所と移した先。nil ならよけていない。
 type movedCLI struct {
