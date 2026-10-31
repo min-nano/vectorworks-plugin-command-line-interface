@@ -120,11 +120,18 @@ type places struct {
 }
 
 func (o *Options) places(name string) (places, error) {
-	if o.PluginsDir == "" || o.WorkDir == "" {
+	// 場所は絶対パスだけを受け付ける（今の作業ディレクトリから絶対にすると、それが分からないときに
+	// 相対パスのまま名前の変更や削除へ進みうる。消すコードの歯止めに関わるため、組み立てない）。
+	switch {
+	case o.PluginsDir == "" || o.WorkDir == "":
 		return places{}, errors.New("the folder of plug-ins or the work folder is unknown")
+	case !filepath.IsAbs(o.PluginsDir):
+		return places{}, usageErrorf("the folder of plug-ins %q is not an absolute path", o.PluginsDir)
+	case !filepath.IsAbs(o.WorkDir):
+		return places{}, fmt.Errorf("the work folder %q is not an absolute path", o.WorkDir)
 	}
-	plugins := absolute(o.PluginsDir)
-	work := absolute(o.WorkDir)
+	plugins := filepath.Clean(o.PluginsDir)
+	work := filepath.Clean(o.WorkDir)
 	staging := filepath.Join(work, "staging")
 	old := filepath.Join(work, "old")
 	return places{
@@ -146,15 +153,6 @@ func (o *Options) stderr() io.Writer {
 		return io.Discard
 	}
 	return o.Stderr
-}
-
-// absolute は path を今の作業ディレクトリから絶対にして整える。filepath.Abs が失敗するのは作業
-// ディレクトリが分からないときだけで、Vectorworks の動く OS では起きない（mac の getcwd は消えた
-// ディレクトリのパスも返し、Windows は動いているプロセスの作業ディレクトリを消せない）ので、
-// 誤りは見ない。
-func absolute(path string) string {
-	abs, _ := filepath.Abs(path)
-	return abs
 }
 
 // running は、入れる先の <Plug-Ins>/cli/spool/ のロックを掴む Vectorworks が居るか
@@ -274,6 +272,8 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		if err := o.settleOld(p, name); err != nil {
 			fmt.Fprintf(o.stderr(), "vw2026: %v\n", err)
 		}
+		// その install がよけた CLI も、付け替えの後始末と同じく消してみる（動いていて消せなければ残す）。
+		cleanOldCLIs(p.old)
 		result.Outcome = OutcomeUpToDate
 		result.Hook = hook
 		return result, nil
@@ -402,7 +402,7 @@ func (o *Options) undoSwap(p places, hadOld bool, moved *movedCLI, cause error) 
 	if hadOld {
 		if err := rename(p.oldDir, p.dest); err != nil {
 			return fmt.Errorf("cannot put %s into %s (%v), nor put the previous version back (%v); "+
-				"move %s back to %s by hand", p.stageDir, p.dest, cause, err, p.oldDir, p.dest)
+				"move %s back to %s by hand%s", p.stageDir, p.dest, cause, err, p.oldDir, p.dest, moved.where())
 		}
 	}
 	moved.restore()
@@ -431,8 +431,8 @@ func (o *Options) undoHook(p places, hadOld bool, moved *movedCLI, cause error) 
 	}
 	if hadOld {
 		if err := rename(p.oldDir, p.dest); err != nil {
-			return fmt.Errorf("%w; the previous version cannot be put back (%v): move %s back to %s by hand",
-				cause, err, p.oldDir, p.dest)
+			return fmt.Errorf("%w; the previous version cannot be put back (%v): move %s back to %s by hand%s",
+				cause, err, p.oldDir, p.dest, moved.where())
 		}
 	}
 	moved.restore()

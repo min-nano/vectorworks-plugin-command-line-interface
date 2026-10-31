@@ -139,3 +139,11 @@ func TestSidestepFollowsTheLink(t *testing.T) {
 		t.Fatal("not restored")
 	}
 }
+
+// よけていなければ、手で戻す手順に CLI の場所を足さない。
+func TestMovedCLIWhereWhenNotMoved(t *testing.T) {
+	var moved *movedCLI
+	if got := moved.where(); got != "" {
+		t.Fatal(got)
+	}
+}

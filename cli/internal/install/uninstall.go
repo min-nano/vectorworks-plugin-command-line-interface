@@ -35,7 +35,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		return nil, err
 	}
 	if running(p.plugins) {
-		return &UninstallResult{Outcome: OutcomeRunning, Name: name, Remaining: []string{}, Left: []string{}}, ErrRunning
+		return runningResult(name, nil), ErrRunning
 	}
 	if err := checkCLI(p.plugins, name); err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		}
 		// cli は、ロックのある spool ごと移しているので、始めの running では見えない（移した先を見る）。
 		if runningAfterMove(p, name) {
-			return &UninstallResult{Outcome: OutcomeRunning, Name: name, Remaining: []string{}, Left: []string{}}, ErrRunning
+			return runningResult(name, nil), ErrRunning
 		}
 		resumed = true
 	default:
@@ -122,7 +122,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	// フックの間に Vectorworks が起動していれば消さない（cli は、移したフォルダのスプールとロックを、動いている
 	// Vectorworks が使っているかもしれない）。印を残すので、終了してからの uninstall が続きから走る。
 	if runningAfterMove(p, name) {
-		return &UninstallResult{Outcome: OutcomeRunning, Name: name, Hook: hook, Remaining: []string{}, Left: []string{}},
+		return runningResult(name, hook),
 			fmt.Errorf("%w; it started while the uninstall hook ran, so %s stays in %s: run uninstall again after "+
 				"quitting it (it goes on from the hook)", ErrRunning, name, p.oldDir)
 	}
@@ -144,6 +144,11 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		Remaining: installedIn(p.plugins),
 		Left:      left,
 	}, nil
+}
+
+// runningResult は、Vectorworks が動いていて止めたときの出力（どこで分かっても同じ形にする）。
+func runningResult(name string, hook json.RawMessage) *UninstallResult {
+	return &UninstallResult{Outcome: OutcomeRunning, Name: name, Hook: hook, Remaining: []string{}, Left: []string{}}
 }
 
 // runningAfterMove は、フォルダを old へ移したあとで、Vectorworks がロックを掴んでいるか。cli は、ロックの

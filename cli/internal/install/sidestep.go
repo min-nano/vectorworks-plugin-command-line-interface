@@ -1,6 +1,7 @@
 package install
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -23,6 +24,15 @@ func (m *movedCLI) restore() {
 	if m != nil {
 		_ = rename(m.to, m.from)
 	}
+}
+
+// where は、フォルダを手で戻すよう示す文言に足す、よけた CLI の場所（よけていなければ空）。フォルダを戻すと
+// CLI の元の場所ができるので、続けて CLI を戻せる（よけた CLI は戻した版のフォルダには無い）。
+func (m *movedCLI) where() string {
+	if m == nil {
+		return ""
+	}
+	return fmt.Sprintf(", then move the running vw2026 back from %s to %s", m.to, m.from)
 }
 
 // sidestep は、走らせている CLI の実行ファイルが dir の中にあれば、old へ名前の変更で移す

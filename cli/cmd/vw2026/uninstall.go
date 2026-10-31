@@ -11,7 +11,7 @@ import (
 
 type uninstallCmd struct {
 	Name       string `arg:"" help:"Plug-in to uninstall, such as cli."`
-	PluginsDir string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins (default: the Plug-Ins folder of Vectorworks 2026 for this user)."`
+	PluginsDir string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins, as an absolute path (default: the Plug-Ins folder of Vectorworks 2026 for this user)."`
 }
 
 func (uninstallCmd) Help() string {

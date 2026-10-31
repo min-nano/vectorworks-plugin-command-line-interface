@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -251,13 +252,25 @@ func TestIsTerminal(t *testing.T) {
 	if isTerminal(file) {
 		t.Error("a closed file is not a terminal")
 	}
-	// os.DevNull は文字型のデバイス（/dev/null・NUL）。
+	// os.DevNull は文字型のデバイス（/dev/null・NUL）だが、端末ではない。
 	device, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer device.Close()
-	if !isTerminal(device) {
-		t.Error("a character device is a terminal")
+	if isTerminal(device) {
+		t.Error("the null device is not a terminal")
+	}
+	// mac と Linux では、疑似端末（/dev/ptmx）は端末。Windows のテストにはコンソールが無いので見ない。
+	if runtime.GOOS == "windows" {
+		return
+	}
+	pty, err := os.OpenFile("/dev/ptmx", os.O_RDWR, 0)
+	if err != nil {
+		t.Skipf("no pseudo terminal: %v", err)
+	}
+	defer pty.Close()
+	if !isTerminal(pty) {
+		t.Error("a pseudo terminal is a terminal")
 	}
 }

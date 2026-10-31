@@ -19,6 +19,8 @@
 # PowerShell of the user: the exit code of install or uninstall is left in $LASTEXITCODE, and a
 # failure before the CLI runs stops the script with an exception.
 & {
+	# $LASTEXITCODE is set like a native command would set it, for the caller to read.
+	[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidGlobalVars', '')]
 	param([string[]] $Arguments)
 
 	$ErrorActionPreference = 'Stop'
@@ -103,7 +105,31 @@
 			$archive.Dispose()
 		}
 
-		& $exe $argv
+		# Windows PowerShell 5.1 quotes the arguments of a native command its own way: it drops an
+		# empty argument, and in a value with a space a trailing \ escapes the closing quote. So the
+		# command line is built here by the rules of CommandLineToArgvW. The standard output of the
+		# CLI (one line of JSON in UTF-8) is passed on; the standard error goes to the console.
+		$quoted = foreach ($arg in $argv) {
+			if ($arg.Length -gt 0 -and $arg -notmatch '[\s"]') {
+				$arg
+				continue
+			}
+			$escaped = [regex]::Replace($arg, '(\\*)"', { param($match) $match.Groups[1].Value * 2 + '\"' })
+			'"' + [regex]::Replace($escaped, '(\\+)$', { param($match) $match.Groups[1].Value * 2 }) + '"'
+		}
+		$info = [Diagnostics.ProcessStartInfo]::new($exe)
+		$info.Arguments = $quoted -join ' '
+		$info.UseShellExecute = $false
+		$info.RedirectStandardOutput = $true
+		$info.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
+		$process = [Diagnostics.Process]::Start($info)
+		$output = $process.StandardOutput.ReadToEnd()
+		$process.WaitForExit()
+		# The exit code of install or uninstall is left in $LASTEXITCODE (as for a native command).
+		$global:LASTEXITCODE = $process.ExitCode
+		if ($output) {
+			$output.TrimEnd("`r", "`n")
+		}
 		if ($LASTEXITCODE -eq 6) {
 			[Console]::Error.WriteLine('get-vw2026: Vectorworks is running. Quit Vectorworks and run this script again.')
 		}

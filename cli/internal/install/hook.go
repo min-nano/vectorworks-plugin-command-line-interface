@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
@@ -95,7 +96,15 @@ func (o *Options) runHook(kind string, argv []string, dir string, env hookEnv) (
 	cmd.Env = env.environ()
 	cmd.Stdout = stdout
 	cmd.Stderr = o.stderr()
-	if err := cmd.Run(); err != nil {
+	// フックが終わったあとは、後ろに残った子（フックが & で起こしたもの）が標準出力・標準エラーを
+	// 持ち続けても待たずにパイプを閉じる。フックそのものの時間には上限を持たない（docs/registry.md「書き方」）。
+	cmd.WaitDelay = hookWaitDelay
+	err = cmd.Run()
+	if errors.Is(err, exec.ErrWaitDelay) {
+		fmt.Fprintf(o.stderr(), "vw2026: the %s hook left a process that keeps its output open; vw2026 stopped waiting for it\n", kind)
+		err = nil
+	}
+	if err != nil {
 		return nil, fmt.Errorf("the %s hook %q failed: %w", kind, strings.Join(argv, " "), err)
 	}
 	if stdout.over {
@@ -107,6 +116,9 @@ func (o *Options) runHook(kind string, argv []string, dir string, env hookEnv) (
 	}
 	return out, nil
 }
+
+// hookWaitDelay は、フックが終わってから、残った子が持つ標準出力・標準エラーを待つ上限。テストが縮める。
+var hookWaitDelay = 5 * time.Second
 
 // boundedBuffer は、max バイトまでを溜め、超えた分は捨てて over にする io.Writer。bytes.Buffer を埋め込まない
 // （埋め込むと ReadFrom が見え、io.Copy が Write を通らずに上限なしに読む）。

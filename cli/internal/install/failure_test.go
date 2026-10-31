@@ -179,13 +179,17 @@ func TestLookupUsesTheEmbeddedRegistry(t *testing.T) {
 	}
 }
 
-// 相対パスで渡した <Plug-Ins>・<Work> は、今の作業ディレクトリから絶対にする。
+// <Plug-Ins>・<Work> は絶対パスだけ（相対の <Plug-Ins> は使い方の誤り）。整えた形で使う。
 func TestRelativePlaces(t *testing.T) {
 	dir := t.TempDir()
-	t.Chdir(dir)
-	p, err := (&Options{PluginsDir: "Plug-Ins", WorkDir: filepath.Join("a", "..", "work")}).places("cli")
-	if err != nil || !filepath.IsAbs(p.plugins) || filepath.Base(p.plugins) != "Plug-Ins" ||
-		!filepath.IsAbs(p.work) || strings.Contains(p.work, "..") {
+	if _, err := (&Options{PluginsDir: "Plug-Ins", WorkDir: dir}).places("cli"); !IsUsage(err) {
+		t.Fatalf("a relative folder of plug-ins is wrong usage: %v", err)
+	}
+	if _, err := (&Options{PluginsDir: dir, WorkDir: "work"}).places("cli"); err == nil {
+		t.Fatal("a relative work folder should fail")
+	}
+	p, err := (&Options{PluginsDir: filepath.Join(dir, "a", "..", "Plug-Ins"), WorkDir: filepath.Join(dir, "work") + string(filepath.Separator)}).places("cli")
+	if err != nil || p.plugins != filepath.Join(dir, "Plug-Ins") || p.work != filepath.Join(dir, "work") {
 		t.Fatalf("%+v %v", p, err)
 	}
 }
@@ -370,8 +374,11 @@ func TestInstallCannotPutTheOldVersionBack(t *testing.T) {
 	old := filepath.Join(h.work, "old", "cli")
 	failRename(t, filepath.Join(h.work, "staging", "cli"))
 	failRename(t, old)
-	if _, err := h.install("cli", "c2"); err == nil || !strings.Contains(err.Error(), "by hand") ||
-		!strings.Contains(err.Error(), old) {
+	// 走らせている CLI をよけていれば、その場所も示す（戻した版のフォルダには CLI が無いため）。
+	o := h.options()
+	o.Executable = h.fakeExecutable()
+	if _, err := Install(o, "cli", "c2", false); err == nil || !strings.Contains(err.Error(), "by hand") ||
+		!strings.Contains(err.Error(), old) || !strings.Contains(err.Error(), "move the running vw2026 back") {
 		t.Fatal(err)
 	}
 }
@@ -395,7 +402,14 @@ func TestInstallHookFailureCannotUndo(t *testing.T) {
 			h.publish(release{name: "cli", tag: "c2", install: &hookPlan{Exit: 1}})
 			move := c.move(h)
 			failRenameTo(t, move[0], move[1])
-			if _, err := h.install("cli", "c2"); err == nil || !strings.Contains(err.Error(), c.want) {
+			o := h.options()
+			o.Executable = h.fakeExecutable()
+			_, err := Install(o, "cli", "c2", false)
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatal(err)
+			}
+			// 前の版を戻せないときは、よけた CLI の場所も示す。
+			if name == "old version" && !strings.Contains(err.Error(), "move the running vw2026 back") {
 				t.Fatal(err)
 			}
 		})
@@ -872,5 +886,36 @@ func TestUninstallCLIHookSuccessWhileLockedInOld(t *testing.T) {
 	}
 	if !validRecord(old, "cli") || !exist(filepath.Join(h.work, "old", "cli.uninstalling")) {
 		t.Fatal("should keep old and the marker")
+	}
+}
+
+// 同じタグでフックだけを走らせた回も、前の install がよけた CLI を消してみる。
+func TestInstallSameTagCleansMovedCLIs(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	moved := filepath.Join(h.work, "old", oldCLIName+"20260101T000000.000000000")
+	os.WriteFile(moved, nil, 0o700)
+	if result, err := h.install("cli", "c1"); err != nil || result.Outcome != OutcomeUpToDate || exist(moved) {
+		t.Fatalf("%+v %v", result, err)
+	}
+}
+
+// フックが後ろに子を残して終わっても（標準出力を持ち続ける）、待たずに入れ終え、そう知らせる。
+func TestHookLeavesAProcess(t *testing.T) {
+	original := hookWaitDelay
+	hookWaitDelay = 100 * time.Millisecond
+	t.Cleanup(func() { hookWaitDelay = original })
+	h := newHarness(t)
+	h.publish(release{name: "cli", tag: "c1", install: &hookPlan{Stdout: `{"ran":"install"}`, Linger: 30}})
+	var stderr bytes.Buffer
+	o := h.options()
+	o.Stderr = &stderr
+	start := time.Now()
+	result, err := Install(o, "cli", "c1", false)
+	if err != nil || result.Outcome != OutcomeInstalled || string(result.Hook) != `{"ran":"install"}` {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if elapsed := time.Since(start); elapsed > 20*time.Second || !strings.Contains(stderr.String(), "stopped waiting") {
+		t.Fatalf("%v %s", elapsed, stderr.String())
 	}
 }

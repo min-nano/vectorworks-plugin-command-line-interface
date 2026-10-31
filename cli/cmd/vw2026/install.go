@@ -13,7 +13,7 @@ import (
 type installCmd struct {
 	Plugin     string `arg:"" placeholder:"NAME@TAG" help:"Plug-in to install and its tag, such as cli@latest."`
 	Check      bool   `env:"VW2026_INSTALL_CHECK" negatable:"" help:"Only tell whether a new build is available; change nothing."`
-	PluginsDir string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins (default: the Plug-Ins folder of Vectorworks 2026 for this user)."`
+	PluginsDir string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins, as an absolute path (default: the Plug-Ins folder of Vectorworks 2026 for this user)."`
 	// sep:"none" で、URL のコンマで分けない（kong は既定で、引数と環境変数の値をコンマで分ける）。空白で
 	// 分けるのは run の中（URL は空白を含まない）。
 	Registry []string `env:"VW2026_REGISTRY" sep:"none" placeholder:"URL" help:"Registry (an https:// or a file:// URL) to look the name up in after the default one (repeatable; spaces separate several)."`
@@ -149,15 +149,11 @@ func deployOptions(e *env, pluginsDir string) (install.Options, int) {
 	}, exitOK
 }
 
-// isTerminal は、w が端末（文字型のデバイス）か。取得の進み具合を同じ行に書き直すかを決める
-// （ログやパイプには 1 行ずつ足す）。
+// isTerminal は、w が端末か。取得の進み具合を同じ行に書き直すかを決める（ログ・パイプ・/dev/null や NUL の
+// ような端末でない文字型のデバイスには 1 行ずつ足す）。端末かは OS に尋ねる（terminal_*.go）。
 func isTerminal(w io.Writer) bool {
 	file, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	info, err := file.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
+	return ok && terminal(file.Fd())
 }
 
 // deployFailed は失敗を標準出力の JSON（message）と標準エラーに書き、終了コードを返す。
