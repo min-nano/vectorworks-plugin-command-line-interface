@@ -2,6 +2,7 @@ package install
 
 import (
 	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,6 +40,8 @@ func readRecord(dir string) (*Record, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 先頭の BOM は許す（利用者が BOM を書くエディタで保存した記録も読む。フックの出力と同じ）。
+	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	var raw struct {
 		RecordVersion *int `json:"record_version"`
 		Record

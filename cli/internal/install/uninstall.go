@@ -43,15 +43,13 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	var record *Record
 	var ok bool
 	resumed := false
-	destInfo, destErr := os.Lstat(p.dest)
+	// install と同じ pluginFolder で決める（リンク・ファイルは断り、調べられなければ入っていないとみなさない）。
+	found, err := pluginFolder(p.dest)
+	if err != nil {
+		return nil, fmt.Errorf("%w; nothing is removed", err)
+	}
 	switch {
-	case destErr == nil:
-		// install の inspect と同じく、シンボリックリンク（記録のあるフォルダを指すものでも）やファイルは
-		// vw2026 が入れたフォルダとみなさない（リンクの先の作業用のコピーなどで、フックを走らせない）。
-		if !destInfo.IsDir() {
-			return nil, fmt.Errorf("%s is not a folder that vw2026 installed (it is not a plain folder); nothing is removed",
-				p.dest)
-		}
+	case found:
 		// 安全弁: 記録の名前がフォルダ名と一致し、記録の module が実在するときだけ進む。
 		record, ok = checkedRecord(p.dest, name)
 		if !ok {

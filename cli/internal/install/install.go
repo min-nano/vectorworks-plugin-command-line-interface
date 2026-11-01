@@ -267,8 +267,14 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 	}
 	if upToDate {
 		// 同じタグなら、zip を取らず付け替えもせずに、記録に写したフックだけを走らせる。
+		// 新しい版を残した install（フックの間に Vectorworks が起動した）を終える回なら、前の版は old にある。その
+		// タグを前のタグとして渡す（フックが前の版から移す処理を飛ばさないように）。
+		previous := installed.Tag
+		if old, ok := checkedRecord(p.oldDir, name); ok {
+			previous = old.Tag
+		}
 		hook, err := o.runHook("install", installed.Hooks.Install, p.dest, hookEnv{
-			name: name, tag: installed.Tag, previous: installed.Tag, target: o.Target,
+			name: name, tag: installed.Tag, previous: previous, target: o.Target,
 			pluginDir: p.dest, installDir: p.dest,
 		})
 		if err != nil {
@@ -307,15 +313,8 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 // inspect は入れる先のフォルダを確かめる（docs/plugin/install-and-update.md「入れる先のフォルダ」）。
 // 無ければ nil。記録が無い・読めない・名前か出どころが違えば、何も変えないように失敗にする。
 func inspect(dest, name, source string) (*Record, error) {
-	info, err := os.Lstat(dest)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
+	if found, err := pluginFolder(dest); err != nil || !found {
 		return nil, err
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("%s is not a folder that vw2026 installed; vw2026 does not touch it", dest)
 	}
 	record, err := readRecord(dest)
 	if errors.Is(err, os.ErrNotExist) {
@@ -333,6 +332,23 @@ func inspect(dest, name, source string) (*Record, error) {
 			dest, record.Registry, source)
 	}
 	return record, nil
+}
+
+// pluginFolder は、<Plug-Ins>/<name> が在るか。在ってもシンボリックリンク（記録のあるフォルダを指すものでも）・
+// ファイルなら、vw2026 が入れたフォルダとみなさずに誤りにする（リンクの先の作業用のコピーなどに触れない）。
+// 無い以外の理由で調べられなければ（権限・届かない共有）、その誤りを返す（無いとみなして進まない）。install と
+// uninstall はどちらもこれだけで決める（守ること 9 の歯止め）。
+func pluginFolder(dest string) (bool, error) {
+	info, err := os.Lstat(dest)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return false, nil
+	case err != nil:
+		return false, err
+	case !info.IsDir():
+		return false, fmt.Errorf("%s is not a folder that vw2026 installed (not a plain folder); vw2026 does not touch it", dest)
+	}
+	return true, nil
 }
 
 // replace は zip を取って組み立て、プラグインのフォルダを付け替えてフックを走らせる

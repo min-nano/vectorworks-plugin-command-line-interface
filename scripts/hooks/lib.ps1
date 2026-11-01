@@ -7,14 +7,30 @@
 # フックの -Store に渡して差し替える。Windows PowerShell 5.1 で動かす。
 
 # Get-PathEntryKey は、比べるための項目の形。前後の空白を除き、全体を囲む " を 1 組だけ除き、末尾の
-# \ を除く。%…% は展開しない（大文字と小文字は Test-PathEntryTarget が区別せずに比べる）。
+# \ を除く（ドライブの根の C:\ は \ を 1 つ残す。C: は「C ドライブの今のディレクトリ」になるため）。%…% は
+# 展開しない（大文字と小文字は Test-PathEntryTarget が区別せずに比べる）。
 function Get-PathEntryKey {
 	param([string] $Entry)
 	$key = $Entry.Trim()
 	if ($key.Length -ge 2 -and $key.StartsWith('"') -and $key.EndsWith('"')) {
 		$key = $key.Substring(1, $key.Length - 2)
 	}
-	return $key.TrimEnd('\')
+	$trimmed = $key.TrimEnd('\')
+	if ($trimmed.Length -eq 2 -and $trimmed[1] -eq ':' -and $key.Length -gt 2) {
+		return $trimmed + '\'
+	}
+	return $trimmed
+}
+
+# Test-PathEntryAbsolute は、項目の形 $Key が絶対パスか。C: のようなドライブだけのもの・C:x のような
+# ドライブの今のディレクトリからのものは、IsPathRooted が真でも絶対ではない（フックの今のディレクトリで
+# 解かれてしまう）。
+function Test-PathEntryAbsolute {
+	param([string] $Key)
+	if (-not [IO.Path]::IsPathRooted($Key)) {
+		return $false
+	}
+	return -not ($Key.Length -ge 2 -and $Key[1] -eq ':' -and ($Key.Length -eq 2 -or $Key[2] -ne '\'))
 }
 
 # Get-FinalDirectory は、在るディレクトリ $Dir の実際のパス（GetFinalPathNameByHandle。ジャンクション・
@@ -69,7 +85,7 @@ function Get-PathEntryPlace {
 	}
 	# 書き方の誤り（使えない文字など）や、解くための呼び出しの失敗は、同じとみなさない。
 	try {
-		if (-not [IO.Path]::IsPathRooted($Key)) {
+		if (-not (Test-PathEntryAbsolute $Key)) {
 			return $null
 		}
 		$dir = [IO.Path]::GetFullPath($Key)
@@ -101,16 +117,36 @@ function Get-PathEntryPlace {
 function Get-PathEntryTarget {
 	param([string] $Dir)
 	$key = Get-PathEntryKey $Dir
-	return [pscustomobject]@{ Key = $key; Root = (Get-PathEntryRoot $key); Place = (Get-PathEntryPlace $key) }
+	$root = Get-PathEntryRoot $key
+	return [pscustomobject]@{
+		Key   = $key
+		Root  = $root
+		Local = (Test-LocalFixedDrive $root)
+		Place = (Get-PathEntryPlace $key)
+	}
+}
+
+# Test-LocalFixedDrive は、根 $Root（Get-PathEntryRoot の形）が、この計算機の固定ドライブ（C: など）か。
+# ネットワークドライブ・取り外せるドライブ・共有（\\server\share）・分からないものは偽。
+function Test-LocalFixedDrive {
+	param([string] $Root)
+	if ($null -eq $Root -or $Root.Length -ne 2 -or $Root[1] -ne ':') {
+		return $false
+	}
+	try {
+		return [IO.DriveInfo]::new($Root).DriveType -eq [IO.DriveType]::Fixed
+	}
+	catch {
+		return $false
+	}
 }
 
 # Get-PathEntryRoot は、比べるための項目 $Key の根（C: や \\server\share。文字列だけで求め、ディスクに触れない）。
-# 根の違う項目は開かずに違うとみなす（届かない共有の項目ごとに SMB の待ちで止まらないため。根の違う書き方、
-# たとえば subst のドライブで同じディレクトリを指すものは同じとみなさない）。分からなければ $null。
+# 分からなければ $null。
 function Get-PathEntryRoot {
 	param([string] $Key)
 	try {
-		if ($Key.Contains('%') -or -not [IO.Path]::IsPathRooted($Key)) {
+		if ($Key.Contains('%') -or -not (Test-PathEntryAbsolute $Key)) {
 			return $null
 		}
 		return [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($Key)).TrimEnd('\')
@@ -136,8 +172,15 @@ function Test-PathEntryTarget {
 	if ($null -eq $Target.Place) {
 		return $false
 	}
+	# <Plug-Ins>\cli\bin がこの計算機の固定ドライブにあるときは、根の違う項目を開かずに違うとみなす（届かない
+	# 共有の項目ごとに SMB の待ちで止まらないため。別の根から同じ固定ドライブのディレクトリを指す書き方、たとえば
+	# subst のドライブや \\localhost\c$ は同じとみなさない）。共有・ネットワークドライブにあるとき（AppData を
+	# リダイレクトしたときなど）は、別の根（共有を割り当てたドライブなど）から届く項目があるので、どれも開いて比べる。
 	$root = Get-PathEntryRoot $key
-	if ($null -eq $root -or -not [string]::Equals($root, $Target.Root, [StringComparison]::OrdinalIgnoreCase)) {
+	if ($null -eq $root) {
+		return $false
+	}
+	if ($Target.Local -and -not [string]::Equals($root, $Target.Root, [StringComparison]::OrdinalIgnoreCase)) {
 		return $false
 	}
 	$place = Get-PathEntryPlace $key
@@ -335,10 +378,12 @@ function Uninstall-PathEntry {
 		return 'none'
 	}
 	$value = [string] $current.Value
-	if (-not (Test-PathValue $value $Dir)) {
+	# 1 回だけたどる（項目ごとの場所を求めるのは遅い共有で時間がかかる）。除いても同じなら、一致する項目は無い
+	# （; で分けてつなぎ直すと元の値に戻る）。
+	$rest = Get-PathWithoutEntry $value $Dir
+	if ($rest -ceq $value) {
 		return 'none'
 	}
-	$rest = Get-PathWithoutEntry $value $Dir
 	try { & $Store.Write $rest $kind } catch { Write-HookException 'cannot write Path' $_; return 'failed' }
 	Invoke-PathNotify $Store
 	return 'removed'

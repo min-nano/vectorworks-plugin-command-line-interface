@@ -113,6 +113,24 @@ Describe 'Test-PathEntryTarget' {
 		Test-PathEntryTarget 'c:\X\y\..\BIN' $target | Should -BeTrue
 		Should -Invoke Get-PathEntryPlace -Times 2 -Exactly
 	}
+	It 'opens entries on other roots when the folder is on a share, such as a redirected AppData' {
+		Mock Get-PathEntryPlace { '\\srv\home\u\cli\bin' }
+		$target = Get-PathEntryTarget '\\srv\home\u\cli\bin'
+		$target.Local | Should -BeFalse
+		Test-PathEntryTarget 'H:\u\cli\bin' $target | Should -BeTrue
+		Should -Invoke Get-PathEntryPlace -Times 2 -Exactly
+	}
+	It 'keeps the backslash of a drive root, and does not take a drive alone as absolute' {
+		Get-PathEntryKey ' "C:\\" ' | Should -BeExactly 'C:\'
+		Get-PathEntryKey 'C:' | Should -BeExactly 'C:'
+		Test-PathEntryAbsolute 'C:\' | Should -BeTrue
+		Test-PathEntryAbsolute '\\srv\share\x' | Should -BeTrue
+		Test-PathEntryAbsolute 'C:' | Should -BeFalse
+		Test-PathEntryAbsolute 'C:x\bin' | Should -BeFalse
+		Get-PathEntryPlace 'C:' | Should -BeNullOrEmpty
+		Get-PathEntryRoot 'C:x' | Should -BeNullOrEmpty
+		Test-LocalFixedDrive '\\srv\share' | Should -BeFalse
+	}
 	It 'does not match a relative entry or one that is not a path' {
 		Test-PathEntryTarget 'cli\bin' (Get-PathEntryTarget (Join-Path $PWD 'cli\bin')) | Should -BeFalse
 		Test-PathEntryTarget 'C:\a|b' (Get-PathEntryTarget 'C:\a') | Should -BeFalse

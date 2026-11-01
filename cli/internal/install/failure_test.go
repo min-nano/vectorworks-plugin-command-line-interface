@@ -1114,6 +1114,78 @@ func TestInstallCLIKeepsOldWhileLockedInOld(t *testing.T) {
 	}
 }
 
+// <Plug-Ins>/<name> を、無い以外の理由で調べられなければ（ここでは <Plug-Ins> がファイル）、uninstall は入って
+// いないとみなさずに失敗にし、何も消さない（印も残す）。
+func TestUninstallCannotLookAtTheFolder(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports a path below a file as not found")
+	}
+	h := newHarness(t)
+	plugins := filepath.Join(h.tmp, "file")
+	os.WriteFile(plugins, nil, 0o600)
+	marker := filepath.Join(h.work, "old", "cli.uninstalling")
+	os.MkdirAll(filepath.Dir(marker), 0o700)
+	os.WriteFile(marker, nil, 0o600)
+	o := h.options()
+	o.PluginsDir = plugins
+	if result, err := Uninstall(o, "cli"); err == nil || result != nil || !exist(marker) {
+		t.Fatalf("%+v %v", result, err)
+	}
+}
+
+// 記録の先頭の BOM は許す（BOM を書くエディタで保存した記録も読む）。
+func TestRecordWithBOM(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	path := filepath.Join(h.plugins, "cli", RecordFile)
+	data, _ := os.ReadFile(path)
+	os.WriteFile(path, append([]byte("\xef\xbb\xbf"), data...), 0o644)
+	if result, err := h.install("cli", "c1"); err != nil || result.Outcome != OutcomeUpToDate {
+		t.Fatalf("%+v %v", result, err)
+	}
+}
+
+// 新しい版を残した install を同じタグで終える回は、old に残った前の版のタグを前のタグとしてフックに渡す。
+func TestFinishingInstallPassesThePreviousTag(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	signal := filepath.Join(h.tmp, "hook-started")
+	await := filepath.Join(h.tmp, "locked")
+	h.publish(release{name: "cli", tag: "c2", install: &hookPlan{Exit: 1, Signal: signal, Await: await}})
+	spoolDir := filepath.Join(h.plugins, "cli", spool.SpoolDirName)
+	var unlock func()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for deadline := time.Now().Add(10 * time.Second); !exist(signal) && time.Now().Before(deadline); {
+			time.Sleep(10 * time.Millisecond)
+		}
+		os.MkdirAll(spoolDir, 0o700)
+		unlock = fakeplugin.HoldLock(h.t, spoolDir)
+		os.WriteFile(await, nil, 0o600)
+	}()
+	_, err := h.install("cli", "c2")
+	<-done
+	if err == nil || !strings.Contains(err.Error(), "Vectorworks started") || h.installedVersion("cli") != "c2" {
+		t.Fatal(err)
+	}
+	// Vectorworks を終了し、残した版のフックを通るものにしてから、同じタグで走らせ直す。
+	unlock()
+	hook := filepath.Join(h.plugins, "cli", "hooks", "install.hook")
+	os.WriteFile(hook, []byte(planJSON(t, hookPlan{Stdout: "{}", Record: h.runs("cli")})), 0o644)
+	if result, err := h.install("cli", "c2"); err != nil || result.Outcome != OutcomeUpToDate {
+		t.Fatalf("%+v %v", result, err)
+	}
+	runs := h.hookRuns("cli")
+	last := runs[len(runs)-1]
+	if last.Env["VW2026_HOOK_PREVIOUS_TAG"] != "c1" || last.Env["VW2026_HOOK_TAG"] != "c2" {
+		t.Fatalf("%+v", last.Env)
+	}
+	if exist(filepath.Join(h.work, "old", "cli")) {
+		t.Fatal("left the previous version")
+	}
+}
+
 // 同じタグでフックだけを走らせた回も、前の install がよけた CLI を消してみる。
 func TestInstallSameTagCleansMovedCLIs(t *testing.T) {
 	h := newHarness(t)
