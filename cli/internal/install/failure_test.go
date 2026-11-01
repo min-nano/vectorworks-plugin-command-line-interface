@@ -1266,13 +1266,27 @@ func TestHookBreaksTheRecord(t *testing.T) {
 	}
 }
 
-// フックの通っていない版の module が欠けても（隔離された）、同じタグの install は断らずに入れ直す（install と
-// uninstall が互いを指して抜け出せなくならない）。前のタグは old の版。
+// フックの通っていない版の module が欠けると（隔離された）、同じタグでも入れ直しになる。付け替えの前の片付けが
+// old（フックの通った最後の版）を消さないよう、何も変えずに断り、前の版を戻すか消すかを示す（install と
+// uninstall が互いを指し合わない）。示したとおり前の版を戻せば、ふつうに入れ直せる。
 func TestReinstallingAKeptVersionWithoutItsModule(t *testing.T) {
 	h := newHarness(t)
 	keepNewVersion(t, h)
-	os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
+	dest := filepath.Join(h.plugins, "cli")
+	old := filepath.Join(h.work, "old", "cli")
+	os.RemoveAll(filepath.Join(dest, "cli.vwlibrary"))
 	h.publish(release{name: "cli", tag: "c2"})
+	before := snapshot(t, h.plugins)
+	if _, err := h.install("cli", "c2"); err == nil || !strings.Contains(err.Error(), "move it back there") ||
+		!strings.Contains(err.Error(), old) {
+		t.Fatal(err)
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
+	if !validRecord(old, "cli") {
+		t.Fatal("removed the previous version")
+	}
+	os.RemoveAll(dest)
+	os.Rename(old, dest)
 	if result, err := h.install("cli", "c2"); err != nil || result.Outcome != OutcomeInstalled {
 		t.Fatalf("%+v %v", result, err)
 	}
@@ -1280,8 +1294,56 @@ func TestReinstallingAKeptVersionWithoutItsModule(t *testing.T) {
 	if last := runs[len(runs)-1]; last.Env["VW2026_HOOK_PREVIOUS_TAG"] != "c1" || last.Env["VW2026_HOOK_TAG"] != "c2" {
 		t.Fatalf("%+v", last.Env)
 	}
-	if record, err := readRecord(filepath.Join(h.plugins, "cli")); err != nil || record.HookPending {
-		t.Fatal(record, err)
+}
+
+// 新しい版を残すとき、よけた CLI は前の版のフォルダ（old）の元の場所へ戻す（前の版を手で戻しても CLI が欠けず、
+// 後始末がよけた名前のまま消さない）。
+func TestKeepPutsTheMovedCLIIntoThePreviousVersion(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	signal := filepath.Join(h.tmp, "hook-started")
+	await := filepath.Join(h.tmp, "locked")
+	h.publish(release{name: "cli", tag: "c2", install: &hookPlan{Exit: 1, Signal: signal, Await: await}})
+	done := lockWhenSignaled(h, signal, await)
+	o := h.options()
+	o.Executable = h.fakeExecutable()
+	_, err := Install(o, "cli", "c2", false)
+	<-done
+	if err == nil || !strings.Contains(err.Error(), "Vectorworks started") {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(h.work, "old", "cli", "bin", "vw2026")); err != nil || string(data) != "cli c1" {
+		t.Fatal("the previous version should have its vw2026 back:", string(data), err)
+	}
+	if moved, _ := filepath.Glob(filepath.Join(h.work, "old", oldCLIName+"*")); len(moved) != 0 {
+		t.Fatal(moved)
+	}
+}
+
+// よけた CLI を前の版のフォルダへ戻せなければ、その場所を知らせる。
+func TestKeepCannotPutTheMovedCLIBack(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	signal := filepath.Join(h.tmp, "hook-started")
+	await := filepath.Join(h.tmp, "locked")
+	h.publish(release{name: "cli", tag: "c2", install: &hookPlan{Exit: 1, Signal: signal, Await: await}})
+	target := filepath.Join(h.work, "old", "cli", "bin", "vw2026")
+	original := rename
+	rename = func(from, to string) error {
+		if to == target {
+			return errInjected
+		}
+		return original(from, to)
+	}
+	t.Cleanup(func() { rename = original })
+	done := lockWhenSignaled(h, signal, await)
+	o := h.options()
+	o.Executable = h.fakeExecutable()
+	_, err := Install(o, "cli", "c2", false)
+	<-done
+	if err == nil || !strings.Contains(err.Error(), "the vw2026 of the previous version is in") ||
+		!strings.Contains(err.Error(), target) {
+		t.Fatal(err)
 	}
 }
 

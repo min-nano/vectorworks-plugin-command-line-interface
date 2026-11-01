@@ -36,10 +36,10 @@ func TestPluginsDirOf(t *testing.T) {
 	if _, ok := PluginsDirOf(executable); !ok {
 		t.Fatal("with a broken record")
 	}
-	// 記録が無ければ（手で置いたフォルダ）入った CLI とみなさない。
+	// 記録が消えても入った CLI とみなす（記録は見ない。自分のフォルダで install・uninstall が断る）。
 	os.Remove(filepath.Join(h.plugins, "cli", RecordFile))
-	if dir, ok := PluginsDirOf(executable); ok {
-		t.Error("without a record:", dir)
+	if _, ok := PluginsDirOf(executable); !ok {
+		t.Error("without a record")
 	}
 }
 

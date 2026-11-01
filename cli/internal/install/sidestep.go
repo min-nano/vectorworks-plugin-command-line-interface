@@ -43,6 +43,22 @@ func (m *movedCLI) restore() string {
 	return ""
 }
 
+// restoreInto は、よけた CLI を、dir の中の元の場所に当たる into の中の場所へ戻す（新しい版を残したときに、
+// 前の版のフォルダへ戻す）。戻せなければ、その場所を示す文言を返す（戻せたら空）。
+func (m *movedCLI) restoreInto(dir, into string) string {
+	if m == nil {
+		return ""
+	}
+	// from は dir の下（sidestep が dir と相対パスから作った）なので、Rel は失敗しない。
+	rel, _ := filepath.Rel(dir, m.from)
+	target := filepath.Join(into, rel)
+	if err := rename(m.to, target); err != nil {
+		return fmt.Sprintf("; the vw2026 of the previous version is in %s (%v): move it to %s if you put the previous "+
+			"version back, before the next install or uninstall (they delete it)", m.to, err, target)
+	}
+	return ""
+}
+
 // where は、フォルダを手で戻すよう示す文言に足す、よけた CLI の場所（よけていなければ空）。フォルダを戻すと
 // CLI の元の場所ができるので、続けて CLI を戻せる（よけた CLI は戻した版のフォルダには無い）。
 func (m *movedCLI) where() string {

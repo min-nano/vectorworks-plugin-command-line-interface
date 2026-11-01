@@ -252,13 +252,21 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		result.Tag = manifest.Tag
 		upToDate = same(manifest.Tag)
 	}
-	// 入っている版のフックがまだ通っておらず（hook_pending）、前の版が old に残っていれば、別のタグへは更新しない。
-	// 付け替えの前の片付けが old（フックの通った最後の版）を消し、新しい版のフックが失敗して戻すと、通っていない
-	// 版だけが残るため。同じタグ（module が欠けて入れ直すときも）なら通す。--check も同じ答えにする。
-	if installed != nil && installed.HookPending && result.Tag != installed.Tag && validRecord(p.oldDir, name) {
-		return nil, fmt.Errorf("%s@%s has not finished installing (its install hook has not succeeded), and the previous "+
-			"version is in %s; run install %s@%s first (with Vectorworks quit), then install the new tag",
-			name, installed.Tag, p.oldDir, name, installed.Tag)
+	// 入っている版のフックがまだ通っておらず（hook_pending）、前の版が old に残っていれば、付け替えない。付け替えの
+	// 前の片付けが old（フックの通った最後の版）を消し、新しい版のフックが失敗して戻すと、通っていない版だけが残る
+	// ため。同じタグでフックだけを走らせて入れ終える道（upToDate）は通す。--check も同じ答えにする。
+	if installed != nil && installed.HookPending && !upToDate && validRecord(p.oldDir, name) {
+		if result.Tag != installed.Tag {
+			return nil, fmt.Errorf("%s@%s has not finished installing (its install hook has not succeeded), and the "+
+				"previous version is in %s; run install %s@%s first (with Vectorworks quit), then install the new tag",
+				name, installed.Tag, p.oldDir, name, installed.Tag)
+		}
+		// 同じタグでも入れ直しになる（module が欠けた・ターゲットが違う）ときは、入れ終える道が無いので、利用者が
+		// 前の版を戻すか消すかを決める（どちらも済めば、ふつうに入れ直せる）。
+		return nil, fmt.Errorf("%s@%s has not finished installing and has to be installed again (its module is missing "+
+			"or it is for another target), but the previous version, the last that finished, is in %s; to keep it, "+
+			"delete %s and move it back there, otherwise delete it; then run install again",
+			name, installed.Tag, p.oldDir, p.dest)
 	}
 	if check {
 		result.Outcome = OutcomeAvailable
@@ -466,10 +474,16 @@ func (o *Options) undoHook(p places, hadOld bool, moved *movedCLI, cause error) 
 		previous = fmt.Sprintf(" (the previous one is in %s)", p.oldDir)
 	}
 	keep := func(reason string) error {
+		// よけた CLI は、前の版のフォルダ（old）の元の場所へ戻す（利用者が前の版を手で戻したときに CLI が欠けず、
+		// 後始末がよけた名前のまま消さないように）。戻せなければ、その場所を知らせる。
+		note := ""
+		if hadOld {
+			note = moved.restoreInto(p.dest, p.oldDir)
+		}
 		// 取った zip はもう要らない（同じタグで走らせ直す install は zip を取らない）。
 		_ = os.Remove(p.stageZip)
 		return fmt.Errorf("%w; %s, so the new version stays in %s%s: quit Vectorworks, "+
-			"then run install with the same tag again (it runs only the hook)", cause, reason, p.dest, previous)
+			"then run install with the same tag again (it runs only the hook)%s", cause, reason, p.dest, previous, note)
 	}
 	if running(p) {
 		return keep("Vectorworks started meanwhile")

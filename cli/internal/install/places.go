@@ -30,11 +30,10 @@ func Target() string {
 }
 
 // PluginsDirOf は、実行ファイル executable（リンクは解く。mac の ~/.local/bin/vw2026 はリンク）が
-// <X>/cli/bin/ にあり、<X>/cli/ に記録があれば、<X> を返す（入った CLI は、自分の入った <Plug-Ins> を使う。
-// 入れた場所を記録しなくても、場所を取り違えない）。記録の module が無くても（ウイルス対策が隔離した）・記録が
-// 読めなくても入った CLI とみなす（既定の場所に別の cli を入れない。module が無ければ同じタグの install が入れ
-// 直し、読めなければ install が断る）。
-// そうでなければ（初回のスクリプトの一時フォルダの CLI・手でビルドした CLI）ok は偽。
+// <X>/cli/bin/ にあれば、<X> を返す（入った CLI は、自分の入った <Plug-Ins> を使う。入れた場所を記録しなくても、
+// 場所を取り違えない）。記録は見ない（module が欠けた・記録が壊れた・記録が消えた cli でも、既定の場所に別の cli を
+// 入れず、自分の入ったフォルダで install・uninstall が記録を確かめて、入れ直すか断る）。初回のスクリプトの一時
+// フォルダの CLI（cli の下ではない）・手でビルドした CLI なら ok は偽。
 func PluginsDirOf(executable string) (dir string, ok bool) {
 	if executable == "" {
 		return "", false
@@ -46,11 +45,6 @@ func PluginsDirOf(executable string) (dir string, ok bool) {
 	bin := filepath.Dir(path)
 	cli := filepath.Dir(bin)
 	if !strings.EqualFold(filepath.Base(bin), "bin") || !strings.EqualFold(filepath.Base(cli), CLIName) {
-		return "", false
-	}
-	// 記録が在れば、読めなくても（壊れた・知らない版）入った CLI とみなす（既定の場所へ移らず、自分の入った
-	// フォルダで install・uninstall が記録を確かめて断る）。
-	if !exists(filepath.Join(cli, RecordFile)) {
 		return "", false
 	}
 	return filepath.Dir(cli), true
