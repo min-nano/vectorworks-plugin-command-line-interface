@@ -258,10 +258,12 @@ func TestUninstallFromInsideShowsTheScript(t *testing.T) {
 	if !exist(filepath.Join(plugins, "cli", install.RecordFile)) {
 		t.Fatal("removed cli")
 	}
-	// 入った <Plug-Ins> が既定の場所でなければ、初回のスクリプトに渡す --plugins-dir を示すコマンドに載せる。
+	// 入った <Plug-Ins> が既定の場所でなければ、初回のスクリプトに渡す --plugins-dir を示すコマンドに載せる
+	// （場所はリンクを解いたもの。mac の /private/var など、一時フォルダの書き方と違いうる）。
+	own, _ := install.PluginsDirOf(executable)
 	r = invoke(t, opts{executable: executable}, "uninstall", "cli")
 	if r.code != exitUsage || json.Unmarshal([]byte(r.stdout), &out) != nil ||
-		!strings.HasSuffix(out["command"], " uninstall --plugins-dir '"+plugins+"'") {
+		!strings.HasSuffix(out["command"], " uninstall --plugins-dir '"+own+"'") {
 		t.Fatalf("not the default folder: %+v", r)
 	}
 }

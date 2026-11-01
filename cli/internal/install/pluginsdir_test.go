@@ -11,7 +11,8 @@ func TestPluginsDirOf(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
 	executable := filepath.Join(h.plugins, "cli", "bin", "vw2026")
-	if dir, ok := PluginsDirOf(executable); !ok || dir != h.plugins {
+	// リンクを解いた場所を返すので、書き方（mac の /var と /private/var、Windows の短い名前）ではなく同一性で比べる。
+	if dir, ok := PluginsDirOf(executable); !ok || !sameDirectory(t, dir, h.plugins) {
 		t.Fatal(dir, ok)
 	}
 	link := filepath.Join(h.tmp, "vw2026-link")
