@@ -20,7 +20,8 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// CLIName は cli のプラグインの名前（フォルダ名）。ロックの場所を決めるためだけに使う。
+// CLIName は cli のプラグインの名前（フォルダ名）。ロックの場所・ほかのプラグインを cli のある <Plug-Ins> に
+// だけ入れる確かめ・入った CLI が自分の入った <Plug-Ins> を求める（PluginsDirOf）ためだけに使う。
 const CLIName = "cli"
 
 // 出力の outcome。
@@ -67,6 +68,12 @@ func (e *UsageError) Error() string {
 
 func usageErrorf(format string, args ...any) error {
 	return &UsageError{fmt.Sprintf(format, args...)}
+}
+
+// Usagef は使い方の誤り（IsUsage が真）を作る。コマンドの側で見つけた誤りも、install・uninstall の中で
+// 見つけたものと同じ出力（failed の JSON）と終了コードにするため。
+func Usagef(format string, args ...any) error {
+	return usageErrorf(format, args...)
 }
 
 // Options は配置に要る外の世界。

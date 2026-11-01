@@ -81,9 +81,9 @@ Exit status: 0 success (including not_installed), 1 failure, 2 wrong usage
 }
 
 func (c *uninstallCmd) run(e *env) int {
-	options, code := deployOptions(e, c.PluginsDir)
-	if code != exitOK {
-		return code
+	options, err := deployOptions(e, c.PluginsDir)
+	if err != nil {
+		return deployFailed(e, c.Name, err)
 	}
 	result, err := install.Uninstall(options, c.Name)
 	var inside *install.RunsInsideError

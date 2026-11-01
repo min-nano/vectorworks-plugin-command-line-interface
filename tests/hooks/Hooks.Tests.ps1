@@ -127,6 +127,7 @@ Describe 'Test-PathEntryTarget' {
 		Test-PathEntryAbsolute '\\srv\share\x' | Should -BeTrue
 		Test-PathEntryAbsolute 'C:' | Should -BeFalse
 		Test-PathEntryAbsolute 'C:x\bin' | Should -BeFalse
+		Test-PathEntryAbsolute '\Users\me\cli\bin' | Should -BeFalse
 		Get-PathEntryPlace 'C:' | Should -BeNullOrEmpty
 		Get-PathEntryRoot 'C:x' | Should -BeNullOrEmpty
 		Test-LocalFixedDrive '\\srv\share' | Should -BeFalse

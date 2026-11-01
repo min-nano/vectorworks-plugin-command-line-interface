@@ -22,15 +22,12 @@ function Get-PathEntryKey {
 	return $trimmed
 }
 
-# Test-PathEntryAbsolute は、項目の形 $Key が絶対パスか。C: のようなドライブだけのもの・C:x のような
-# ドライブの今のディレクトリからのものは、IsPathRooted が真でも絶対ではない（フックの今のディレクトリで
-# 解かれてしまう）。
+# Test-PathEntryAbsolute は、項目の形 $Key が絶対パスか。ドライブの根からのもの（C:\…）と共有（\\server\share\…）
+# だけを絶対とみなす。C: や C:x（ドライブの今のディレクトリから）・\x（今のドライブの根から）は、IsPathRooted が
+# 真でも絶対ではない（フックの今のディレクトリやドライブで解かれてしまう）。
 function Test-PathEntryAbsolute {
 	param([string] $Key)
-	if (-not [IO.Path]::IsPathRooted($Key)) {
-		return $false
-	}
-	return -not ($Key.Length -ge 2 -and $Key[1] -eq ':' -and ($Key.Length -eq 2 -or $Key[2] -ne '\'))
+	return ($Key -match '^[A-Za-z]:\\') -or $Key.StartsWith('\\')
 }
 
 # Get-FinalDirectory は、在るディレクトリ $Dir の実際のパス（GetFinalPathNameByHandle。ジャンクション・

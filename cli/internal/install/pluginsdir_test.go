@@ -26,6 +26,11 @@ func TestPluginsDirOf(t *testing.T) {
 			t.Error(path, dir)
 		}
 	}
+	// 記録の module が無くても（隔離された）入った CLI とみなす（既定の場所に別の cli を入れない）。
+	os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
+	if _, ok := PluginsDirOf(executable); !ok {
+		t.Fatal("without the module")
+	}
 	// 記録が無ければ（手で置いたフォルダ）入った CLI とみなさない。
 	os.Remove(filepath.Join(h.plugins, "cli", RecordFile))
 	if dir, ok := PluginsDirOf(executable); ok {

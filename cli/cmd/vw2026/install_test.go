@@ -83,6 +83,25 @@ func TestUninstallNotInstalled(t *testing.T) {
 	}
 }
 
+// コマンドの側で見つけた使い方の誤りも、install の中で見つけたものと同じく failed の JSON を 1 行出す。
+func TestUsageErrorsPrintJSON(t *testing.T) {
+	for _, c := range []struct {
+		o    opts
+		args []string
+	}{
+		{opts{}, []string{"install", "cli"}},
+		{opts{vars: map[string]string{"VW2026_REGISTRY": " "}}, []string{"install", "cli@latest"}},
+		{opts{}, []string{"install", "CLI@latest"}},
+	} {
+		r := invoke(t, c.o, c.args...)
+		var out map[string]string
+		if r.code != exitUsage || json.Unmarshal([]byte(r.stdout), &out) != nil || out["outcome"] != "failed" ||
+			out["message"] == "" || !strings.Contains(r.stderr, out["message"]) {
+			t.Errorf("%v: %+v", c.args, r)
+		}
+	}
+}
+
 // 空の --plugins-dir は使い方の誤り（既定の場所を使わない）。入った CLI は --plugins-dir を受け付けない
 // （初回のスクリプトだけが一時フォルダの CLI に渡す）。どちらも何も変えない。
 func TestPluginsDirFlag(t *testing.T) {
@@ -104,7 +123,7 @@ func TestPluginsDirFlag(t *testing.T) {
 			"only for the first-time script"},
 	} {
 		r := invoke(t, c.o, c.args...)
-		if r.code != exitUsage || !strings.Contains(r.stderr, c.want) || r.stdout != "" {
+		if r.code != exitUsage || !strings.Contains(r.stderr, c.want) || !strings.Contains(r.stdout, `"outcome":"failed"`) {
 			t.Errorf("%v: %+v", c.args, r)
 		}
 	}

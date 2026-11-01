@@ -110,12 +110,11 @@ failure, 2 wrong usage, 6 Vectorworks is running.
 func (c *installCmd) run(e *env) int {
 	name, tag, ok := strings.Cut(c.Plugin, "@")
 	if !ok {
-		fmt.Fprintf(e.stderr, "vw2026: %q has no tag: give NAME@TAG, such as cli@latest\n", c.Plugin)
-		return exitUsage
+		return deployFailed(e, c.Plugin, install.Usagef("%q has no tag: give NAME@TAG, such as cli@latest", c.Plugin))
 	}
-	options, code := deployOptions(e, c.PluginsDir)
-	if code != exitOK {
-		return code
+	options, err := deployOptions(e, c.PluginsDir)
+	if err != nil {
+		return deployFailed(e, name, err)
 	}
 	// URL は空白を含まないので、値の中の空白で分ける（VW2026_REGISTRY に複数を書ける）。空の値（空白だけを
 	// 含む）は使い方の誤りにする（--registry "$UNSET" のような取り違えを黙って通さない）。空の引数と空の
@@ -123,8 +122,7 @@ func (c *installCmd) run(e *env) int {
 	for _, value := range c.Registry {
 		urls := strings.Fields(value)
 		if len(urls) == 0 {
-			fmt.Fprintln(e.stderr, "vw2026: the registry is empty: give a URL to --registry, or unset VW2026_REGISTRY")
-			return exitUsage
+			return deployFailed(e, name, install.Usagef("the registry is empty: give a URL to --registry, or unset VW2026_REGISTRY"))
 		}
 		options.Registries = append(options.Registries, urls...)
 	}
@@ -145,7 +143,7 @@ func (c *installCmd) run(e *env) int {
 // フォルダ（install.PluginsDirOf）。フォルダの外の CLI（初回のスクリプトの一時フォルダのもの）なら、初回の
 // スクリプトが渡した --plugins-dir、無ければ既定の場所。入った CLI に --plugins-dir を渡すのと、空の値は使い方の
 // 誤り（入った CLI が別の <Plug-Ins> を扱うと、動いている cli と違う場所の Vectorworks のロックを見てしまう）。
-func deployOptions(e *env, given *string) (install.Options, int) {
+func deployOptions(e *env, given *string) (install.Options, error) {
 	// 走らせている CLI の場所が分からなければ、よけない（付け替えが失敗すれば何も変わらない）。
 	executable, _ := e.executable()
 	own, installed := install.PluginsDirOf(executable)
@@ -153,26 +151,22 @@ func deployOptions(e *env, given *string) (install.Options, int) {
 	var err error
 	switch {
 	case given != nil && installed:
-		fmt.Fprintf(e.stderr, "vw2026: --plugins-dir is only for the first-time script; this vw2026 is installed in %s "+
-			"and works on that folder\n", own)
-		return install.Options{}, exitUsage
+		return install.Options{}, install.Usagef("--plugins-dir is only for the first-time script; this vw2026 is "+
+			"installed in %s and works on that folder", own)
 	case given != nil && *given == "":
-		fmt.Fprintln(e.stderr, "vw2026: the folder of plug-ins is empty: give an absolute path to --plugins-dir")
-		return install.Options{}, exitUsage
+		return install.Options{}, install.Usagef("the folder of plug-ins is empty: give an absolute path to --plugins-dir")
 	case given != nil:
 		pluginsDir = *given
 	case installed:
 		pluginsDir = own
 	default:
 		if pluginsDir, err = e.pluginsDir(); err != nil {
-			fmt.Fprintf(e.stderr, "vw2026: cannot locate the folder of plug-ins: %v\n", err)
-			return install.Options{}, exitFailure
+			return install.Options{}, fmt.Errorf("cannot locate the folder of plug-ins: %w", err)
 		}
 	}
 	work, err := e.workDir()
 	if err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: cannot locate the work folder: %v\n", err)
-		return install.Options{}, exitFailure
+		return install.Options{}, fmt.Errorf("cannot locate the work folder: %w", err)
 	}
 	return install.Options{
 		PluginsDir: pluginsDir,
@@ -180,7 +174,7 @@ func deployOptions(e *env, given *string) (install.Options, int) {
 		Executable: executable,
 		Stderr:     e.stderr,
 		Terminal:   isTerminal(e.stderr),
-	}, exitOK
+	}, nil
 }
 
 // isTerminal は、w が端末か。取得の進み具合を同じ行に書き直すかを決める（ログ・パイプ・/dev/null や NUL の
