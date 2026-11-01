@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 
@@ -11,8 +12,10 @@ import (
 
 type uninstallCmd struct {
 	Name string `arg:"" help:"Plug-in to uninstall, such as cli."`
-	// 与えていない（nil）と空の値（使い方の誤り）を分けるため、ポインタで受ける。
-	PluginsDir *string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins, as an absolute path (default: the Plug-Ins folder of Vectorworks 2026 for this user; an empty value is wrong usage)."`
+	// 初回のスクリプトだけが一時フォルダの CLI に渡す隠した指定（help に出さず、環境変数も持たない。入った CLI は
+	// 自分の入った <Plug-Ins> を使い、これを断る）。与えていない（nil）と空の値（使い方の誤り）を分けるため、
+	// ポインタで受ける。
+	PluginsDir *string `name:"plugins-dir" hidden:"" placeholder:"DIR" help:"Folder of plug-ins, for the first-time script only."`
 }
 
 func (uninstallCmd) Help() string {
@@ -22,9 +25,10 @@ Uninstall removes a plug-in that vw2026 installed
 <Plug-Ins>/<NAME>/, not the registries, so it works offline and for a plug-in
 that left the registry. It removes a folder only when the record names the
 folder and the module of the record is there; otherwise it removes nothing.
+Like install, it works on the folder of plug-ins that this vw2026 is installed
+in (see "vw2026 help install").
 
 	vw2026 uninstall my-plugin
-	vw2026 uninstall my-plugin --plugins-dir <Plug-Ins>
 
 Uninstall does not remove the folder that this vw2026 runs from, such as cli
 for the vw2026 on the PATH (<Plug-Ins>/cli/bin/vw2026): once cli is
@@ -91,10 +95,11 @@ func (c *uninstallCmd) run(e *env) int {
 	case errors.As(err, &inside):
 		// 入れた cli の vw2026 では外さず、入っているタグの初回のスクリプトと CLI で外すよう案内する。
 		// PR のプレリリースは PR を閉じると消えるので、latest で外すコマンドも示す。
-		// 与えた --plugins-dir だけをコマンドに載せる（既定の場所なら書かない。空は deployOptions が断っている）。
+		// 外す CLI は入った cli なので、<Plug-Ins> は自分の入ったフォルダ。それが既定の場所でなければ、初回の
+		// スクリプトに渡すよう --plugins-dir をコマンドに載せる（既定の場所なら書かない）。
 		given := ""
-		if c.PluginsDir != nil {
-			given = *c.PluginsDir
+		if !isDefaultPlugins(e, options.PluginsDir) {
+			given = options.PluginsDir
 		}
 		command := uninstallScript(runtime.GOOS, inside.Tag, given)
 		fmt.Fprintf(e.stderr, "vw2026: %v. vw2026 is not used once %s is uninstalled; run the first-time script "+
@@ -137,4 +142,15 @@ func uninstallScript(goos, tag, pluginsDir string) string {
 		command += " --plugins-dir '" + strings.ReplaceAll(pluginsDir, "'", `'\''`) + "'"
 	}
 	return command
+}
+
+// isDefaultPlugins は、dir が既定の <Plug-Ins> と同じフォルダか（書き方ではなくフォルダの同一性で決める。分からなければ偽）。
+func isDefaultPlugins(e *env, dir string) bool {
+	def, err := e.pluginsDir()
+	if err != nil {
+		return false
+	}
+	a, errA := os.Stat(dir)
+	b, errB := os.Stat(def)
+	return errA == nil && errB == nil && os.SameFile(a, b)
 }

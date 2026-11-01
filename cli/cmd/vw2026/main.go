@@ -80,7 +80,8 @@ type env struct {
 	spool func() (string, error)
 	// install / uninstall の作業の場所（<Work>）。本番は install.WorkDir（利用者ごとの一時フォルダの下）。
 	workDir func() (string, error)
-	// 既定の <Plug-Ins>。本番は install.DefaultPluginsDir。--plugins-dir があれば使わない。
+	// 既定の <Plug-Ins>。本番は install.DefaultPluginsDir。入った CLI（自分の入った <Plug-Ins> を使う）と、
+	// 初回のスクリプトが --plugins-dir を渡したときは使わない。
 	pluginsDir func() (string, error)
 	// 走らせている CLI の実行ファイル。本番は os.Executable。install / uninstall が、付け替える
 	// フォルダの中にあればよける。

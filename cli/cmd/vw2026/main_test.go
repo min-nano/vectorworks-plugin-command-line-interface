@@ -29,7 +29,7 @@ type result struct {
 var envVars = []string{
 	"VW2026_APP", "VW2026_SESSION",
 	"VW2026_CALL_RAW", "VW2026_CALL_TIMEOUT", "VW2026_SESSION_TIMEOUT",
-	"VW2026_PLUGINS_DIR", "VW2026_REGISTRY", "VW2026_INSTALL_CHECK",
+	"VW2026_REGISTRY", "VW2026_INSTALL_CHECK",
 }
 
 // opts は、テストが run に与える外の世界。零値は、何も無いスプール・環境変数なし・空の標準入力・
@@ -580,6 +580,14 @@ func TestEveryFlagHasEnv(t *testing.T) {
 		for _, group := range node.AllFlags(false) {
 			for _, flag := range group {
 				if flag.Name == "help" {
+					continue
+				}
+				// 隠した指定（初回のスクリプトだけが一時フォルダの CLI に渡す --plugins-dir）は、環境変数を持たない
+				// （持つと、入った CLI にも効いてしまう）。
+				if flag.Hidden {
+					if len(flag.Envs) != 0 {
+						t.Errorf("%s --%s is hidden but has an environment variable", node.Path(), flag.Name)
+					}
 					continue
 				}
 				// オン・オフの指定は --no-<flag> で打ち消せるようにする（環境変数でオンにしたものを戻すため）。

@@ -92,7 +92,7 @@ func (o *Options) runsFrom(dir string) (executable, rel string, ok bool) {
 
 // within は、path が dir の中にあれば dir からの相対パスを返す。パスの文字列ではなく
 // ディレクトリの同一性で決める（path のあるディレクトリから親へ 1 つずつ上り、os.SameFile で比べる）。
-// dir は --plugins-dir・環境変数・既定の場所のどれからでも来て、実行ファイルのパスと書き方
+// dir は入った場所・初回のスクリプトの --plugins-dir・既定の場所のどれからでも来て、実行ファイルのパスと書き方
 // （大文字と小文字・8.3 形式・ジャンクション・末尾の区切り）が揃うとは限らないため。
 func within(path, dir string) (string, bool) {
 	target, err := os.Stat(dir)

@@ -13,8 +13,10 @@ import (
 type installCmd struct {
 	Plugin string `arg:"" placeholder:"NAME@TAG" help:"Plug-in to install and its tag, such as cli@latest."`
 	Check  bool   `env:"VW2026_INSTALL_CHECK" negatable:"" help:"Only tell whether a new build is available; change nothing."`
-	// 与えていない（nil）と空の値（使い方の誤り）を分けるため、ポインタで受ける。
-	PluginsDir *string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins, as an absolute path (default: the Plug-Ins folder of Vectorworks 2026 for this user; an empty value is wrong usage)."`
+	// 初回のスクリプトだけが一時フォルダの CLI に渡す隠した指定（help に出さず、環境変数も持たない。入った CLI は
+	// 自分の入った <Plug-Ins> を使い、これを断る）。与えていない（nil）と空の値（使い方の誤り）を分けるため、
+	// ポインタで受ける。
+	PluginsDir *string `name:"plugins-dir" hidden:"" placeholder:"DIR" help:"Folder of plug-ins, for the first-time script only."`
 	// sep:"none" で、URL のコンマで分けない（kong は既定で、引数と環境変数の値をコンマで分ける）。空白で
 	// 分けるのは run の中（URL は空白を含まない）。
 	Registry []string `env:"VW2026_REGISTRY" sep:"none" placeholder:"URL" help:"Registry (an https:// or a file:// URL) to look the name up in after the default one (repeatable; spaces separate several; an empty value is wrong usage)."`
@@ -82,11 +84,15 @@ quit Vectorworks, then run install with the same tag again (it runs only the
 hook). Replacing the folder fails on Windows while a program has a file in it
 open or has its current directory in it.
 
-The default <Plug-Ins> is
+<Plug-Ins> is the folder of plug-ins that this vw2026 is installed in
+(<Plug-Ins>/cli/bin/vw2026, with the record of cli), so install and uninstall
+always work on the folder that holds the running cli. A vw2026 outside such a
+folder (the first-time script's, or one built by hand) uses the Plug-Ins folder
+of Vectorworks 2026 for this user:
 ~/Library/Application Support/Vectorworks/2026/Plug-Ins on macOS and
-%APPDATA%\Nemetschek\Vectorworks\2026\Plug-Ins on Windows. vw2026
-does not remember another one: give --plugins-dir to every install and
-uninstall. Install works in vectorworks2026-cli in the temporary folder of the
+%APPDATA%\Nemetschek\Vectorworks\2026\Plug-Ins on Windows. To use another
+folder, give it to the first-time script (--plugins-dir <Plug-Ins>), which
+passes it to its vw2026; an installed vw2026 refuses it. Install works in vectorworks2026-cli in the temporary folder of the
 user, which must be on the same volume as <Plug-Ins>.
 
 Install has no time limit on the network or the hook: stop it (Ctrl-C) or limit
@@ -135,32 +141,39 @@ func (c *installCmd) run(e *env) int {
 	return emit(e, result)
 }
 
-// deployOptions は install / uninstall に渡す場所を env から求める。--plugins-dir が無ければ（nil）既定の
-// <Plug-Ins> を使う。空の値は使い方の誤り（--plugins-dir "$UNSET" のような取り違えで、既定の <Plug-Ins> を
-// 黙って変えない。空の引数と空の環境変数は見分けられないので、どちらも断る）。
+// deployOptions は install / uninstall に渡す場所を env から求める。<Plug-Ins> は、入った CLI なら自分の入った
+// フォルダ（install.PluginsDirOf）。フォルダの外の CLI（初回のスクリプトの一時フォルダのもの）なら、初回の
+// スクリプトが渡した --plugins-dir、無ければ既定の場所。入った CLI に --plugins-dir を渡すのと、空の値は使い方の
+// 誤り（入った CLI が別の <Plug-Ins> を扱うと、動いている cli と違う場所の Vectorworks のロックを見てしまう）。
 func deployOptions(e *env, given *string) (install.Options, int) {
+	// 走らせている CLI の場所が分からなければ、よけない（付け替えが失敗すれば何も変わらない）。
+	executable, _ := e.executable()
+	own, installed := install.PluginsDirOf(executable)
 	var pluginsDir string
 	var err error
 	switch {
-	case given == nil:
+	case given != nil && installed:
+		fmt.Fprintf(e.stderr, "vw2026: --plugins-dir is only for the first-time script; this vw2026 is installed in %s "+
+			"and works on that folder\n", own)
+		return install.Options{}, exitUsage
+	case given != nil && *given == "":
+		fmt.Fprintln(e.stderr, "vw2026: the folder of plug-ins is empty: give an absolute path to --plugins-dir")
+		return install.Options{}, exitUsage
+	case given != nil:
+		pluginsDir = *given
+	case installed:
+		pluginsDir = own
+	default:
 		if pluginsDir, err = e.pluginsDir(); err != nil {
-			fmt.Fprintf(e.stderr, "vw2026: cannot locate the folder of plug-ins (give --plugins-dir): %v\n", err)
+			fmt.Fprintf(e.stderr, "vw2026: cannot locate the folder of plug-ins: %v\n", err)
 			return install.Options{}, exitFailure
 		}
-	case *given == "":
-		fmt.Fprintln(e.stderr, "vw2026: the folder of plug-ins is empty: give an absolute path to --plugins-dir, "+
-			"or unset VW2026_PLUGINS_DIR")
-		return install.Options{}, exitUsage
-	default:
-		pluginsDir = *given
 	}
 	work, err := e.workDir()
 	if err != nil {
 		fmt.Fprintf(e.stderr, "vw2026: cannot locate the work folder: %v\n", err)
 		return install.Options{}, exitFailure
 	}
-	// 走らせている CLI の場所が分からなければ、よけない（付け替えが失敗すれば何も変わらない）。
-	executable, _ := e.executable()
 	return install.Options{
 		PluginsDir: pluginsDir,
 		WorkDir:    work,

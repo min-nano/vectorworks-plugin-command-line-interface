@@ -2,6 +2,7 @@ package install
 
 import (
 	"path/filepath"
+	"strings"
 )
 
 // WorkDirName は、利用者ごとの一時フォルダの下の <Work> の名前（docs/plugin/install-and-update.md
@@ -26,4 +27,25 @@ func DefaultPluginsDir() (string, error) {
 // Target は計算機からターゲットを 1 つに決める（docs/registry.md「名前・タグ・ターゲット」）。
 func Target() string {
 	return target()
+}
+
+// PluginsDirOf は、実行ファイル executable（リンクは解く。mac の ~/.local/bin/vw2026 はリンク）が
+// <X>/cli/bin/ にあり、<X>/cli/ に正しい cli の記録があれば、<X> を返す（入った CLI は、自分の入った
+// <Plug-Ins> を使う。入れた場所を記録しなくても、場所を取り違えない）。そうでなければ（初回のスクリプトの
+// 一時フォルダの CLI・手でビルドした CLI）ok は偽。
+func PluginsDirOf(executable string) (dir string, ok bool) {
+	if executable == "" {
+		return "", false
+	}
+	path := executable
+	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
+		path = resolved
+	}
+	bin := filepath.Dir(path)
+	cli := filepath.Dir(bin)
+	if !strings.EqualFold(filepath.Base(bin), "bin") || !strings.EqualFold(filepath.Base(cli), CLIName) ||
+		!validRecord(cli, CLIName) {
+		return "", false
+	}
+	return filepath.Dir(cli), true
 }

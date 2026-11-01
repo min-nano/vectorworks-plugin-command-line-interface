@@ -71,7 +71,7 @@ func usageErrorf(format string, args ...any) error {
 
 // Options は配置に要る外の世界。
 type Options struct {
-	// <Plug-Ins>（--plugins-dir か既定の場所）
+	// <Plug-Ins>（入った CLI の入った場所・初回のスクリプトの --plugins-dir・既定の場所のどれか）
 	PluginsDir string
 	// <Work>（利用者ごとの一時フォルダの下）
 	WorkDir string

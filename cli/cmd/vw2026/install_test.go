@@ -50,53 +50,66 @@ func TestInstallUsageErrors(t *testing.T) {
 }
 
 // 入っていなければ何もせずに成功する。remaining には、残った記録のあるフォルダの名前が載る。
-// 場所は --plugins-dir、無ければ VW2026_PLUGINS_DIR、無ければ既定の場所（env.pluginsDir）。
+// 場所は、入った CLI なら自分の入った <Plug-Ins>、フォルダの外の CLI なら --plugins-dir（初回のスクリプトが
+// 渡す）、無ければ既定の場所（env.pluginsDir）。
 func TestUninstallNotInstalled(t *testing.T) {
 	flag := t.TempDir()
-	variable := t.TempDir()
+	own := t.TempDir()
 	fallback := t.TempDir()
 	fakeInstalled(t, flag, "from-flag")
-	fakeInstalled(t, variable, "from-env")
+	fakeInstalled(t, own, "from-own")
 	fakeInstalled(t, fallback, "from-default")
-	vars := map[string]string{"VW2026_PLUGINS_DIR": variable}
+	// 入った CLI は、自分の入った <Plug-Ins>（<own>/cli/bin/vw2026 と cli の記録）を使う。
+	fakeInstalled(t, own, "cli")
+	installed := filepath.Join(own, "cli", "bin", "vw2026")
+	os.MkdirAll(filepath.Dir(installed), 0o755)
+	os.WriteFile(installed, nil, 0o700)
+	// cli でない名前は cli のある <Plug-Ins> でだけ扱うので、フォルダの外の CLI の場合は cli を外す（入っていない）。
+	for _, c := range []struct {
+		o    opts
+		name string
+		args []string
+		want string
+	}{
+		{opts{plugins: fallback}, "cli", nil, "from-default"},
+		{opts{plugins: fallback}, "cli", []string{"--plugins-dir", flag}, "from-flag"},
+		{opts{plugins: fallback, executable: installed}, "missing", nil, "cli\",\"from-own"},
+	} {
+		r := invoke(t, c.o, append([]string{"uninstall", c.name}, c.args...)...)
+		if r.code != exitOK || strings.TrimSpace(r.stdout) !=
+			`{"outcome":"not_installed","name":"`+c.name+`","remaining":["`+c.want+`"],"left":[]}` {
+			t.Errorf("%s %v: %+v", c.name, c.args, r)
+		}
+	}
+}
+
+// 空の --plugins-dir は使い方の誤り（既定の場所を使わない）。入った CLI は --plugins-dir を受け付けない
+// （初回のスクリプトだけが一時フォルダの CLI に渡す）。どちらも何も変えない。
+func TestPluginsDirFlag(t *testing.T) {
+	fallback := t.TempDir()
+	fakeInstalled(t, fallback, "cli")
+	installed := filepath.Join(fallback, "cli", "bin", "vw2026")
+	os.MkdirAll(filepath.Dir(installed), 0o755)
+	os.WriteFile(installed, nil, 0o700)
 	for _, c := range []struct {
 		o    opts
 		args []string
 		want string
 	}{
-		{opts{plugins: fallback}, []string{"uninstall", "cli"}, "from-default"},
-		{opts{plugins: fallback, vars: vars}, []string{"uninstall", "cli"}, "from-env"},
-		{opts{plugins: fallback, vars: vars}, []string{"uninstall", "cli", "--plugins-dir", flag}, "from-flag"},
+		{opts{plugins: fallback}, []string{"uninstall", "cli", "--plugins-dir", ""}, "the folder of plug-ins is empty"},
+		{opts{plugins: fallback}, []string{"install", "cli@latest", "--plugins-dir", ""}, "the folder of plug-ins is empty"},
+		{opts{plugins: fallback, executable: installed}, []string{"uninstall", "cli", "--plugins-dir", t.TempDir()},
+			"only for the first-time script"},
+		{opts{plugins: fallback, executable: installed}, []string{"install", "cli@latest", "--plugins-dir", t.TempDir()},
+			"only for the first-time script"},
 	} {
 		r := invoke(t, c.o, c.args...)
-		if r.code != exitOK || strings.TrimSpace(r.stdout) !=
-			`{"outcome":"not_installed","name":"cli","remaining":["`+c.want+`"],"left":[]}` {
+		if r.code != exitUsage || !strings.Contains(r.stderr, c.want) || r.stdout != "" {
 			t.Errorf("%v: %+v", c.args, r)
 		}
 	}
-}
-
-// 空の --plugins-dir・VW2026_PLUGINS_DIR は、install でも uninstall でも使い方の誤り（既定の場所を使わない）。
-func TestEmptyPluginsDir(t *testing.T) {
-	fallback := t.TempDir()
-	fakeInstalled(t, fallback, "cli")
-	empty := map[string]string{"VW2026_PLUGINS_DIR": ""}
-	for _, c := range []struct {
-		o    opts
-		args []string
-	}{
-		{opts{plugins: fallback}, []string{"uninstall", "cli", "--plugins-dir", ""}},
-		{opts{plugins: fallback, vars: empty}, []string{"uninstall", "cli"}},
-		{opts{plugins: fallback}, []string{"install", "cli@latest", "--plugins-dir", ""}},
-		{opts{plugins: fallback, vars: empty}, []string{"install", "cli@latest"}},
-	} {
-		r := invoke(t, c.o, c.args...)
-		if r.code != exitUsage || !strings.Contains(r.stderr, "the folder of plug-ins is empty") || r.stdout != "" {
-			t.Errorf("%v %v: %+v", c.o.vars, c.args, r)
-		}
-	}
-	if !exist(filepath.Join(fallback, "cli")) {
-		t.Fatal("touched the default folder")
+	if !exist(filepath.Join(fallback, "cli", install.RecordFile)) {
+		t.Fatal("touched the folder")
 	}
 }
 
@@ -126,16 +139,16 @@ func TestUninstallRefusal(t *testing.T) {
 	}
 }
 
-// 場所を求められなければ 1 で終わる（--plugins-dir があれば既定の場所は要らない）。
+// 場所を求められなければ 1 で終わる（初回のスクリプトの --plugins-dir があれば既定の場所は要らない）。
 func TestDeployPlacesNotLocated(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	failing := func() (string, error) { return "", os.ErrNotExist }
 	e := env{stdout: &stdout, stderr: &stderr, pluginsDir: failing, workDir: failing, executable: failing}
-	if code := run([]string{"uninstall", "cli"}, e); code != exitFailure || !strings.Contains(stderr.String(), "give --plugins-dir") {
+	if code := run([]string{"uninstall", "cli"}, e); code != exitFailure || !strings.Contains(stderr.String(), "folder of plug-ins") {
 		t.Fatalf("%d %s", code, stderr.String())
 	}
 	stderr.Reset()
-	if code := run([]string{"install", "cli@latest"}, e); code != exitFailure || !strings.Contains(stderr.String(), "give --plugins-dir") {
+	if code := run([]string{"install", "cli@latest"}, e); code != exitFailure || !strings.Contains(stderr.String(), "folder of plug-ins") {
 		t.Fatalf("%d %s", code, stderr.String())
 	}
 	stderr.Reset()
@@ -245,11 +258,11 @@ func TestUninstallFromInsideShowsTheScript(t *testing.T) {
 	if !exist(filepath.Join(plugins, "cli", install.RecordFile)) {
 		t.Fatal("removed cli")
 	}
-	// 与えた --plugins-dir は、示すコマンドにも載せる（既定の場所なら載せない）。
-	r = invoke(t, opts{executable: executable}, "uninstall", "cli", "--plugins-dir", plugins)
+	// 入った <Plug-Ins> が既定の場所でなければ、初回のスクリプトに渡す --plugins-dir を示すコマンドに載せる。
+	r = invoke(t, opts{executable: executable}, "uninstall", "cli")
 	if r.code != exitUsage || json.Unmarshal([]byte(r.stdout), &out) != nil ||
 		!strings.HasSuffix(out["command"], " uninstall --plugins-dir '"+plugins+"'") {
-		t.Fatalf("with --plugins-dir: %+v", r)
+		t.Fatalf("not the default folder: %+v", r)
 	}
 }
 

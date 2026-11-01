@@ -37,12 +37,15 @@ irm …/releases/download/<tag>/get-vw2026.ps1 | iex                            
   同じドライブ（ボリューム）にあるものとします。** 既定では同じボリュームにあります（下記「作業の場所」）。入れ替えは名前の変更だけで
   行い、ボリュームをまたぐ場合の扱い（コピーへの切り替え・その検出）は持ちません。名前の
   変更が失敗したら、何も変えずに失敗で終わります。
-- **入れた場所を記録しません。** 既定以外の `<Plug-Ins>` を使う利用者は、`install` と
-  `uninstall` に毎回 `--plugins-dir`（環境変数 `VW2026_PLUGINS_DIR`）を渡します（[設計「CLI はプリミティブに保つ」](../design.md#cli-はプリミティブに保つ)）。
+- **入れた場所を記録しません。** 入った `vw2026` は、自分の入った `<Plug-Ins>`（`<Plug-Ins>/cli/bin/vw2026` と、
+  `<Plug-Ins>/cli/` の正しい `cli` の記録）を使います（スプールと同じく、自分の実行ファイルの場所から求める）。
+  フォルダの外の `vw2026`（初回のスクリプトの一時フォルダのもの・手でビルドしたもの）は既定の場所を使います。
+  既定以外の `<Plug-Ins>` は、初回のスクリプトに `--plugins-dir` で渡します。スクリプトがその一時の `vw2026` に
+  渡す隠した指定で、help に出さず、環境変数も持たず、入った `vw2026` は使い方の誤りで断ります（入った `vw2026` が
+  別の `<Plug-Ins>` を扱うと、動いている `cli` と違う場所のロックを見てしまうため）。
   `--plugins-dir` は絶対パスだけを受け付けます（相対パスは使い方の誤り）。今の作業ディレクトリから絶対にする
   形は、それが分からないときに相対パスのまま名前の変更や削除へ進みうるため、持ちません。空の値も使い方の誤りです
-  （`--plugins-dir "$UNSET"` のような取り違えで、黙って既定の場所に入れない。空の引数と空の環境変数は見分けられない
-  ので、どちらも断る。環境変数で消すときは `unset` する）。与えなければ既定の場所です。
+  （`--plugins-dir "$UNSET"` のような取り違えで、黙って既定の場所に入れない）。
   入れたものの記録は、プラグインのフォルダの中にだけ置きます（[レジストリ「入れたときの記録」](../registry.md#入れたときの記録)）。
 - **安定版と開発版を区別しません。** PR のプレリリースを `cli@<そのタグ>` で入れると、プラグインも
   CLI もそのビルドのものに入れ替わります。
@@ -161,7 +164,6 @@ irm …/releases/download/<tag>/get-vw2026.ps1 | iex                            
 vw2026 install cli@latest                         # main の最新（同じタグなら zip を取らず、フックだけを走らせる）
 vw2026 install cli@dev-feature-x-61-a1b2c3d       # PR のプレリリース
 vw2026 install cli@latest --check                 # 入れずに、新しいビルドがあるかだけ返す（動いていてもよい）
-vw2026 install cli@latest --plugins-dir <Plug-Ins>
 vw2026 install import-ifc-homeskz@latest
 vw2026 install my-plugin@2026.3.1 --registry https://example.com/plugins.json
 vw2026 install my-plugin@2026.3.1 --registry file:///Users/me/plugins.json   # 手元のファイルも URL で書く
@@ -251,7 +253,7 @@ vw2026 install <name>@<tag>
 - 初回でも Vectorworks が動いていれば何もせずに終わり、CLI も置きません（何も変えない）。
 - **`cli` と同じ `<Plug-Ins>` に入れる**: Vectorworks が動いているかは、入れる先の `<Plug-Ins>/cli/spool/` の
   ロックで判定します。そのため、`cli` 以外のプラグインは、`cli` が入っている `<Plug-Ins>` にだけ入れます
-  （`--plugins-dir` で別の `<Plug-Ins>` を渡したときも同じ）。`<Plug-Ins>/cli/` に正しい記録（`name` が `cli` で、
+  `<Plug-Ins>/cli/` に正しい記録（`name` が `cli` で、
   `module` が実在する）が無ければ、何も変えずに失敗にします（`uninstall` も同じ）。`cli` の無い `<Plug-Ins>`
   では、Vectorworks が動いていても判定できず、付け替えとフックが走ってしまうためです。ワークグループの
   フォルダなど、`cli` の無い Plug-Ins へは入れられません（対応しない）。Go がここで `cli` の名前を使うのは、
@@ -461,7 +463,7 @@ vw2026 install <name>@<tag>
   （ほかの名前のフォルダに CLI が入ることはないので、実際に当たるのは `cli` だけ）。
 - **中にあるかは、パスの文字列ではなくディレクトリの同一性で決めます。** 実行ファイルのあるディレクトリから
   親へ 1 つずつ上り、どれかが `<Plug-Ins>/<name>/` と `os.SameFile` で同じなら中にあるとします（根に着いたら
-  外）。`<Plug-Ins>` は `--plugins-dir`・`VW2026_PLUGINS_DIR`・既定の場所のどれからでも来て、実行ファイルの
+  外）。`<Plug-Ins>` は入った場所・初回のスクリプトの `--plugins-dir`・既定の場所のどれからでも来て、実行ファイルの
   パス（Windows では `Path` の項目のまま）と書き方が揃うとは限らないためです。文字列で比べると、Windows の
   大文字と小文字の違い・8.3 形式の短い名前・ジャンクションや `subst` を通したパス・末尾の区切りの有無で
   外と判定し、よけずに付け替えの 1 つ目が失敗します（何も変わらないが、入っている CLI では `install cli` が
@@ -502,8 +504,8 @@ vw2026 install <name>@<tag>
   古い・写しだけが消えた）ことが起きません。
 - **スプールはどちらの側も自分のファイルの場所から求めます**（環境変数を読まず、探索しない）。
   プラグインは自分のモジュールの場所から、`vw2026` は自分の実行ファイルの場所から、同じ `<Plug-Ins>/cli/spool/`
-  にたどり着きます（[通信規則「スプールの場所」](../protocol.md#スプールの場所)）。`--plugins-dir` を
-  `call`・`session`・`status` に渡す必要はありません。`install` / `uninstall` は、入れる先の
+  にたどり着きます（[通信規則「スプールの場所」](../protocol.md#スプールの場所)）。`install` /
+  `uninstall` も、入った `vw2026` は自分の実行ファイルの場所から `<Plug-Ins>` を求めます（[前提](#前提)）。`install` / `uninstall` は、入れる先の
   `<Plug-Ins>/cli/spool/` のロックで Vectorworks が動いているかを判定します（[流れ](#流れ)の 4）。
 - **止まっていると答えるときは、求めたスプールの場所を示します。** フォルダの外で動かした `vw2026`
   （初回のスクリプトの一時フォルダのもの・zip を展開しただけのもの・手でビルドしたもの）は、Vectorworks が
@@ -517,7 +519,7 @@ vw2026 install <name>@<tag>
   フォルダ・アプリケーションのフォルダの `Plug-Ins`）に置くとスプールも共有され、別の利用者の要求を
   自分の Vectorworks が実行しうるためです（[通信規則「スプールの場所」](../protocol.md#スプールの場所)）。
   `install` はネットワーク共有へは入れられません（`<Work>` と別のボリューム）が、同じボリュームの共有の
-  フォルダへは `--plugins-dir` で入りうるので、渡さないのは利用者の責任です（[前提](#前提)の二重のインストールと
+  フォルダへは初回のスクリプトの `--plugins-dir` で入りうるので、渡さないのは利用者の責任です（[前提](#前提)の二重のインストールと
   同じく、確かめられない置き方を CLI が見分けない）。
 - **フォルダの中のスプールは、付け替えで消えてかまいません。** 付け替えは Vectorworks が止まっている
   間にしか行わず、そのときスプールに要るもの（ロックを掴む者・応答を待つ者）は居ません。占有も
@@ -689,13 +691,12 @@ vw2026 install <name>@<tag>
 
 ```sh
 vw2026 uninstall import-ifc-homeskz
-vw2026 uninstall import-ifc-homeskz --plugins-dir <Plug-Ins>   # 既定以外の <Plug-Ins> から
 curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI そのもの）は、入っているタグの初回のスクリプトで
 ```
 
 **走らせている CLI が外すフォルダの中にあれば、何も変えずに使い方の誤りで終わり、入っているタグ（記録の `tag`）の
 初回のスクリプトに `uninstall` を渡すコマンドを標準エラーと出力の `command` に示します**
-（`--plugins-dir` を渡していれば、それも渡す）。PR のプレリリースは PR を閉じると消えるので、標準エラーには
+（入った `<Plug-Ins>` が既定の場所でなければ、初回のスクリプトに渡す `--plugins-dir` も載せる）。PR のプレリリースは PR を閉じると消えるので、標準エラーには
 `latest` の初回のスクリプトに `uninstall` を渡すコマンドも添えます。
 実際に当たるのは、PATH から使う入った `cli` の `vw2026` で `uninstall cli` を走らせたときだけです（Go は名前で
 `cli` を見分けず、[動いている CLI のよけ方](#動いている-cli-のよけ方)と同じく実行ファイルの場所で決める）。
@@ -868,8 +869,9 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
       `os.Executable`。求め方は[名前と識別子「置き場所」](identifiers.md#置き場所)）を入れる。
     - テストの `invoke` は、どれも既定で一時ディレクトリ（`env.executable` はその中の偽のファイル）を返す
       関数を入れる（`env.spool` はすでにそうしている）。テストが場所を渡し忘れても、開発者のマシンの本物の
-      `<Plug-Ins>`・`<Work>`・スプールに触れないためです。`--plugins-dir` は、既定以外の場所を渡したときの
-      振る舞いを確かめるテストだけが付けます。
+      `<Plug-Ins>`・`<Work>`・スプールに触れないためです。入った CLI として振る舞わせる
+      テストは、`env.executable` を一時ディレクトリの `<Plug-Ins>/cli/bin/vw2026` にします。`--plugins-dir` は、
+      フォルダの外の CLI に初回のスクリプトが場所を渡す振る舞いを確かめるテストだけが付けます。
     - `install` / `uninstall` は、ロックを入れる先の `<Plug-Ins>/cli/spool` で見る（`env.spool` ではない。
       入れる先の Vectorworks が動いているかを見るため）。
 - **`cli` のフック**: CI の `hooks.yml`（[ビルド「CI」](build-and-release.md#ci)）で確かめます。どちらも
