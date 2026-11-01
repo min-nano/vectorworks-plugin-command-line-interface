@@ -245,6 +245,12 @@ func TestUninstallFromInsideShowsTheScript(t *testing.T) {
 	if !exist(filepath.Join(plugins, "cli", install.RecordFile)) {
 		t.Fatal("removed cli")
 	}
+	// 与えた --plugins-dir は、示すコマンドにも載せる（既定の場所なら載せない）。
+	r = invoke(t, opts{executable: executable}, "uninstall", "cli", "--plugins-dir", plugins)
+	if r.code != exitUsage || json.Unmarshal([]byte(r.stdout), &out) != nil ||
+		!strings.HasSuffix(out["command"], " uninstall --plugins-dir '"+plugins+"'") {
+		t.Fatalf("with --plugins-dir: %+v", r)
+	}
 }
 
 // fileURL は、絶対パス path を指す file:// の URL（Windows は file:///C:/…。空白などは %XX にする）。
