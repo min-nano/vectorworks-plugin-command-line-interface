@@ -273,7 +273,7 @@
 | --- | --- |
 | `VW2026_HOOK_NAME` | 名前 |
 | `VW2026_HOOK_TAG` | `install` は入れるタグ、`uninstall` は入っているタグ |
-| `VW2026_HOOK_PREVIOUS_TAG` | `install` のとき、前に入っていたタグ（最初に入れるときは空） |
+| `VW2026_HOOK_PREVIOUS_TAG` | `install` のとき、前に入っていたタグ（最初に入れるときは空。同じタグの `install` では入っているタグ）。ただし、入っている版のフックが通らずに残した版（フックの間に Vectorworks が起動した）のあとは、`<Work>/old/<name>/` に残った前の版のタグ（フックが前の版から移す処理を飛ばさないため。同じタグで終える回も、別のタグへ更新する回も同じ） |
 | `VW2026_HOOK_TARGET` | ターゲット |
 | `VW2026_HOOK_PLUGIN_DIR` | いまプラグインのファイルがあるフォルダ（作業ディレクトリと同じ）。`install` は `<Plug-Ins>/<name>/`、`uninstall` は移した先の `<Work>/old/<name>/` |
 | `VW2026_HOOK_INSTALL_DIR` | プラグインが入る・入っていたフォルダ（`<Plug-Ins>/<name>/`）。`install` では `VW2026_HOOK_PLUGIN_DIR` と同じ。`uninstall` で、フォルダの中を指すもの（PATH など）を片付けるために使う |

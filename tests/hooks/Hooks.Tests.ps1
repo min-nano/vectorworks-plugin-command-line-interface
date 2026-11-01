@@ -331,6 +331,14 @@ Describe 'uninstall.ps1' {
 		$left = ConvertTo-HookJson ('HKCU\Environment\Path: ' + $dir + '\bin')
 		Get-Ascii $r.Stdout | Should -BeExactly ("{`"path`":`"failed`",`"left`":[" + $left + "]}`n")
 	}
+	It 'fails without changing anything when VW2026_HOOK_INSTALL_DIR is not an absolute path' {
+		$dir = Initialize-PluginDir
+		$store = '-Value ' + (ConvertTo-Quoted ($dir + '\bin'))
+		$r = Invoke-Hook -Hook uninstall -InstallDir '\Plug-Ins\cli' -PluginDir $dir -StoreArguments $store
+		$r.Code | Should -Be 1
+		$r.Stdout.Length | Should -Be 0
+		$r.State.Writes | Should -Be 0
+	}
 	It 'fails without changing anything when VW2026_HOOK_INSTALL_DIR is missing' {
 		$dir = Initialize-PluginDir
 		$store = '-Value ' + (ConvertTo-Quoted ($dir + '\bin'))

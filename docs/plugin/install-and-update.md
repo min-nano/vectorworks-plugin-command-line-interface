@@ -201,13 +201,12 @@ vw2026 install <name>@<tag>
   3. 入れる先を確かめる               <Plug-Ins>/<name>/ と中の記録（下記「入れる先のフォルダ」）。
                                      <name> が cli でなければ、<Plug-Ins>/cli/ に正しい記録があること
                                      （無ければ何も変えずに失敗。下記「cli と同じ <Plug-Ins> に入れる」）
-                                     --check なら入れずに {"outcome":"up_to_date"} か {"outcome":"available"}
-  4. Vectorworks が動いていないか     <Plug-Ins>/cli/spool/ のロックが掴まれていれば終わり
-                                     {"outcome":"vectorworks_running"}（専用の終了コード）
+                                     --check なら入れずに、新しいビルドがあるかだけを返して終わる
+  4. Vectorworks が動いていないか     <Plug-Ins>/cli/spool/ か <Work>/old/cli/spool/ のロックが掴まれていれば
+                                     何もせずに終わる（専用の終了コード）
      （同じタグのとき）              記録の tag と target が同じで、記録の module がフォルダの中に実在するなら、
                                      入っているフォルダで記録の hooks.install だけを
-                                     走らせ、<Work>/old/<name>/ を片付けて終わり
-                                     {"outcome":"up_to_date",…,"hook":{…}}（zip を取らず、付け替えない）
+                                     走らせ、<Work>/old/<name>/ を片付けて終わる（zip を取らず、付け替えない）
   5. zip を取って照らす               asset を <Work>/staging/<name>.zip へ。sha256 が合わなければ失敗
   6. 組み立てる                       <Work>/staging/<name>/ へ展開し、モジュールを確かめ、記録を書く
   7. プラグインのフォルダを付け替える  下記「入れ替えの手順」（直前にロックをもう一度見る。動いている CLI が
@@ -215,9 +214,10 @@ vw2026 install <name>@<tag>
   8. install のフックを走らせる        失敗したら 7 を戻す（レジストリ「フック」）
   9. 後始末                           <Work>/staging/<name>/・<Work>/staging/<name>.zip を消し、<Work>/old/<name>/ を片付け、
                                      よけた CLI を消してみる
-                                     {"outcome":"installed","name":…,"requested":…,"tag":…,"target":…,
-                                      "registry":…,"plugins_dir":…,"hook":{…}}
 ```
+
+出力（どの段で終わったか・フックの出力）の形と終了コードは `vw2026 help install` が示します（CLI の使い方の真実は
+help。ここには写さない）。
 
 - **GitHub の API を使いません。** レジストリの規則とマニフェストの絶対の参照で、取るものの場所が
   決まります。API の回数制限・トークンの扱い・リリース本文の読み取りが要りません。
@@ -241,7 +241,8 @@ vw2026 install <name>@<tag>
   `install` で直してから `uninstall` します。
 - **同じタグのとき**は、**記録に写した `hooks.install`** を走らせます（マニフェストのものは使わない。
   提供側が同じ場所のマニフェストを差し替えても、入れていないフックが走らないため）。
-  `VW2026_HOOK_PREVIOUS_TAG` には同じタグを渡します。タグをそのまま指定し（`cli@<入っているタグ>`）、
+  `VW2026_HOOK_PREVIOUS_TAG` には同じタグを渡します（新しい版を残した `install` を終える回は、`<Work>/old/<name>/` に
+  残った前の版のタグ。[レジストリ「フックに渡す環境変数」](../registry.md#フックに渡す環境変数)）。タグをそのまま指定し（`cli@<入っているタグ>`）、
   合った規則の `path` に `{tag}` があり、記録の `target` が今のターゲットと同じなら、マニフェストも
   取りません（ターゲットが違えば、入れ直すのでマニフェストを取る）。ネットワークにつながっていなくても、
   消えた PATH を置き直せます（CLI はフォルダの中にあるので、同じタグでは戻らない。消えたときは

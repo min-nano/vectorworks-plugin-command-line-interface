@@ -232,8 +232,9 @@ func isLetter(c byte) bool {
 func CheckRef(ref string, remote bool) error {
 	switch {
 	case IsURL(ref):
-		if len(ref) == len("https://") {
-			return errors.New("empty URL")
+		// ホストの無いもの（https://・https:///x・https://?x）は断る（取りに行ってから失敗させない）。
+		if u, err := url.Parse(ref); err != nil || u.Host == "" {
+			return fmt.Errorf("%q has no host", ref)
 		}
 		return nil
 	case remote:

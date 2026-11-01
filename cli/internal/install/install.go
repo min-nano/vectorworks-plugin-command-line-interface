@@ -66,14 +66,10 @@ func (e *UsageError) Error() string {
 	return e.msg
 }
 
-func usageErrorf(format string, args ...any) error {
-	return &UsageError{fmt.Sprintf(format, args...)}
-}
-
 // Usagef は使い方の誤り（IsUsage が真）を作る。コマンドの側で見つけた誤りも、install・uninstall の中で
-// 見つけたものと同じ出力（failed の JSON）と終了コードにするため。
+// 見つけたものと同じ出力（failed の JSON）と終了コードにするため、パッケージの外にも出す。
 func Usagef(format string, args ...any) error {
-	return usageErrorf(format, args...)
+	return &UsageError{fmt.Sprintf(format, args...)}
 }
 
 // Options は配置に要る外の世界。
@@ -133,7 +129,7 @@ func (o *Options) places(name string) (places, error) {
 	case o.PluginsDir == "" || o.WorkDir == "":
 		return places{}, errors.New("the folder of plug-ins or the work folder is unknown")
 	case !filepath.IsAbs(o.PluginsDir):
-		return places{}, usageErrorf("the folder of plug-ins %q is not an absolute path", o.PluginsDir)
+		return places{}, Usagef("the folder of plug-ins %q is not an absolute path", o.PluginsDir)
 	case !filepath.IsAbs(o.WorkDir):
 		return places{}, fmt.Errorf("the work folder %q is not an absolute path", o.WorkDir)
 	}
@@ -195,10 +191,10 @@ func checkCLI(plugins, name string) error {
 // ErrRunning を返す（結果の outcome も vectorworks_running）。
 func Install(o Options, name, requested string, check bool) (*InstallResult, error) {
 	if !registry.ValidName(name) {
-		return nil, usageErrorf("invalid name %q (use a-z, 0-9 and -)", name)
+		return nil, Usagef("invalid name %q (use a-z, 0-9 and -)", name)
 	}
 	if !registry.ValidTag(requested) {
-		return nil, usageErrorf("invalid tag %q (use A-Z, a-z, 0-9, ., _ and -, starting with a letter or a digit)", requested)
+		return nil, Usagef("invalid tag %q (use A-Z, a-z, 0-9, ., _ and -, starting with a letter or a digit)", requested)
 	}
 	p, err := o.places(name)
 	if err != nil {
@@ -274,14 +270,8 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 	}
 	if upToDate {
 		// 同じタグなら、zip を取らず付け替えもせずに、記録に写したフックだけを走らせる。
-		// 新しい版を残した install（フックの間に Vectorworks が起動した）を終える回なら、前の版は old にある。その
-		// タグを前のタグとして渡す（フックが前の版から移す処理を飛ばさないように）。
-		previous := installed.Tag
-		if old, ok := checkedRecord(p.oldDir, name); ok {
-			previous = old.Tag
-		}
 		hook, err := o.runHook("install", installed.Hooks.Install, p.dest, hookEnv{
-			name: name, tag: installed.Tag, previous: previous, target: o.Target,
+			name: name, tag: installed.Tag, previous: previousTag(p, name, installed), target: o.Target,
 			pluginDir: p.dest, installDir: p.dest,
 		})
 		if err != nil {
@@ -300,11 +290,7 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		result.Hook = hook
 		return result, nil
 	}
-	previous := ""
-	if installed != nil {
-		previous = installed.Tag
-	}
-	hook, err := o.replace(p, name, source, result.Tag, previous, asset)
+	hook, err := o.replace(p, name, source, result.Tag, previousTag(p, name, installed), asset)
 	if err != nil {
 		if errors.Is(err, ErrRunning) {
 			result.Outcome = OutcomeRunning
@@ -339,6 +325,20 @@ func inspect(dest, name, source string) (*Record, error) {
 			dest, record.Registry, source)
 	}
 	return record, nil
+}
+
+// previousTag は、フックに渡す前のタグ（VW2026_HOOK_PREVIOUS_TAG）。入っていなければ空、入っていればそのタグ。
+// ただし新しい版を残した install（フックの間に Vectorworks が起動した）のあとなら、入っている版のフックは
+// まだ通っておらず、前の版は <Work>/old/<name>/ にあるので、そのタグにする（フックが前の版から移す処理を
+// 飛ばさないように。同じタグで終える回も、別のタグへ更新する回も同じ）。
+func previousTag(p places, name string, installed *Record) string {
+	if installed == nil {
+		return ""
+	}
+	if old, ok := checkedRecord(p.oldDir, name); ok {
+		return old.Tag
+	}
+	return installed.Tag
 }
 
 // pluginFolder は、<Plug-Ins>/<name> が在るか。在ってもシンボリックリンク（記録のあるフォルダを指すものでも）・

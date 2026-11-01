@@ -31,6 +31,11 @@ func TestPluginsDirOf(t *testing.T) {
 	if _, ok := PluginsDirOf(executable); !ok {
 		t.Fatal("without the module")
 	}
+	// 記録が読めなくても入った CLI とみなす（既定の場所へ移らず、install が自分のフォルダで断る）。
+	os.WriteFile(filepath.Join(h.plugins, "cli", RecordFile), []byte("broken"), 0o644)
+	if _, ok := PluginsDirOf(executable); !ok {
+		t.Fatal("with a broken record")
+	}
 	// 記録が無ければ（手で置いたフォルダ）入った CLI とみなさない。
 	os.Remove(filepath.Join(h.plugins, "cli", RecordFile))
 	if dir, ok := PluginsDirOf(executable); ok {

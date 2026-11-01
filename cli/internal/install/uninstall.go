@@ -27,7 +27,7 @@ type UninstallResult struct {
 // 戻す。Vectorworks が動いていれば何もせずに ErrRunning を返す。
 func Uninstall(o Options, name string) (*UninstallResult, error) {
 	if !registry.ValidName(name) {
-		return nil, usageErrorf("invalid name %q (use a-z, 0-9 and -)", name)
+		return nil, Usagef("invalid name %q (use a-z, 0-9 and -)", name)
 	}
 	p, err := o.places(name)
 	if err != nil {

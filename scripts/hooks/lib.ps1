@@ -272,7 +272,8 @@ function Get-HookInstallDir {
 		Write-HookError 'VW2026_HOOK_INSTALL_DIR is not set'
 		return $null
 	}
-	if (-not [IO.Path]::IsPathRooted($dir)) {
+	# IsPathRooted ではなく、Path の項目と同じ確かめで決める（\x や C:x は、今のドライブやディレクトリで解かれてしまう）。
+	if (-not (Test-PathEntryAbsolute $dir)) {
 		Write-HookError ('VW2026_HOOK_INSTALL_DIR is not an absolute path: ' + $dir)
 		return $null
 	}

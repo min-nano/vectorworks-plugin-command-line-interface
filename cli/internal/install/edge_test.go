@@ -99,7 +99,7 @@ func TestCheckRegistry(t *testing.T) {
 		}
 	}
 	for _, ref := range []string{"", "plugins.json", filepath.Join(t.TempDir(), "r.json"), "http://example.com/r.json",
-		"HTTPS://example.com/r.json", "https://", "file:///r.json?x", "ftp://x/r.json"} {
+		"HTTPS://example.com/r.json", "https://", "https:///r.json", "https://?x", "file:///r.json?x", "ftp://x/r.json"} {
 		if err := checkRegistry(ref); !IsUsage(err) {
 			t.Errorf("%q: %v", ref, err)
 		}

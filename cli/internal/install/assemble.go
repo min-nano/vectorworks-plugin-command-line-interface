@@ -70,7 +70,8 @@ func readRecord(dir string) (*Record, error) {
 
 // moduleExists は、記録の module がフォルダの直下に実在するか（uninstall の安全弁）。
 func (r *Record) moduleExists(dir string) bool {
-	if r.Module != filepath.Base(r.Module) || !filepath.IsLocal(r.Module) {
+	// フォルダの直下の 1 つの名前だけ。. と記録そのものは、いつも在るので歯止めにならない（守ること 9）。
+	if r.Module != filepath.Base(r.Module) || !filepath.IsLocal(r.Module) || r.Module == "." || r.Module == RecordFile {
 		return false
 	}
 	return exists(filepath.Join(dir, r.Module))

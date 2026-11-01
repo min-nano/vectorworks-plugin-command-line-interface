@@ -1145,9 +1145,11 @@ func TestRecordWithBOM(t *testing.T) {
 	}
 }
 
-// 新しい版を残した install を同じタグで終える回は、old に残った前の版のタグを前のタグとしてフックに渡す。
-func TestFinishingInstallPassesThePreviousTag(t *testing.T) {
-	h := newHarness(t)
+// keepNewVersion は、c1 を入れてから c2 の install のフックの間に Vectorworks を起動させ（ロックを掴み）、c2 を
+// 残した状態（c1 は old/cli）にする。終わったらロックを放す（Vectorworks を終了した）。c2 のフックは、記録を
+// 書き足す通るものにしておく。
+func keepNewVersion(t *testing.T, h *harness) {
+	t.Helper()
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	signal := filepath.Join(h.tmp, "hook-started")
 	await := filepath.Join(h.tmp, "locked")
@@ -1169,10 +1171,15 @@ func TestFinishingInstallPassesThePreviousTag(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "Vectorworks started") || h.installedVersion("cli") != "c2" {
 		t.Fatal(err)
 	}
-	// Vectorworks を終了し、残した版のフックを通るものにしてから、同じタグで走らせ直す。
 	unlock()
 	hook := filepath.Join(h.plugins, "cli", "hooks", "install.hook")
 	os.WriteFile(hook, []byte(planJSON(t, hookPlan{Stdout: "{}", Record: h.runs("cli")})), 0o644)
+}
+
+// 新しい版を残した install を同じタグで終える回は、old に残った前の版のタグを前のタグとしてフックに渡す。
+func TestFinishingInstallPassesThePreviousTag(t *testing.T) {
+	h := newHarness(t)
+	keepNewVersion(t, h)
 	if result, err := h.install("cli", "c2"); err != nil || result.Outcome != OutcomeUpToDate {
 		t.Fatalf("%+v %v", result, err)
 	}
@@ -1183,6 +1190,21 @@ func TestFinishingInstallPassesThePreviousTag(t *testing.T) {
 	}
 	if exist(filepath.Join(h.work, "old", "cli")) {
 		t.Fatal("left the previous version")
+	}
+}
+
+// 新しい版を残したまま別のタグへ更新する回も、残した版（フックが通っていない）ではなく old の版のタグを渡す。
+func TestUpdatingAKeptVersionPassesThePreviousTag(t *testing.T) {
+	h := newHarness(t)
+	keepNewVersion(t, h)
+	h.publish(release{name: "cli", tag: "c3"})
+	if result, err := h.install("cli", "c3"); err != nil || result.Outcome != OutcomeInstalled {
+		t.Fatalf("%+v %v", result, err)
+	}
+	runs := h.hookRuns("cli")
+	last := runs[len(runs)-1]
+	if last.Env["VW2026_HOOK_PREVIOUS_TAG"] != "c1" || last.Env["VW2026_HOOK_TAG"] != "c3" {
+		t.Fatalf("%+v", last.Env)
 	}
 }
 

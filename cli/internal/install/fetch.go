@@ -66,7 +66,7 @@ func (o *Options) lookup(name string) (registry.Entry, string, error) {
 // 文字列をそのまま残し、比べるのもその文字列どうしだけ。
 func checkRegistry(ref string) error {
 	if err := registry.CheckRef(ref, false); err != nil {
-		return usageErrorf("the registry: %v (write a path as file:///..., with %%20 for a space)", err)
+		return Usagef("the registry: %v (write a path as file:///..., with %%20 for a space)", err)
 	}
 	return nil
 }
