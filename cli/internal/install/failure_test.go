@@ -1193,6 +1193,19 @@ func TestUninstallCannotLookAtTheFolder(t *testing.T) {
 	}
 }
 
+// フォルダを調べられなければ（無い以外の誤り）、入っていないとみなさずに誤りを返す（ロックの確かめが先に断るので、
+// 直に確かめる）。
+func TestPluginFolderCannotTell(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports a path below a file as not found")
+	}
+	file := filepath.Join(t.TempDir(), "file")
+	os.WriteFile(file, nil, 0o600)
+	if found, err := pluginFolder(filepath.Join(file, "cli")); found || err == nil {
+		t.Fatal(found, err)
+	}
+}
+
 // 記録の先頭の BOM は許す（BOM を書くエディタで保存した記録も読む）。
 func TestRecordWithBOM(t *testing.T) {
 	h := newHarness(t)
@@ -1526,5 +1539,52 @@ func TestHookLeavesAProcess(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 30*time.Second || !strings.Contains(stderr.String(), "stopped waiting") {
 		t.Fatalf("%v %s", elapsed, stderr.String())
+	}
+}
+
+// Vectorworks が動いていれば、レジストリを取る前に vectorworks_running と答える（届かないレジストリの誤りより先）。
+func TestRunningBeforeTheRegistry(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.holdLock()
+	o := h.options()
+	o.Registries = []string{"https://127.0.0.1:1/unreachable.json"}
+	if result, err := Install(o, "elsewhere", "1", false); !errors.Is(err, ErrRunning) || result.Outcome != OutcomeRunning {
+		t.Fatalf("%+v %v", result, err)
+	}
+}
+
+// <Plug-Ins> と <Work> の片方がもう片方の中にあれば、何もせずに断る（片付けが入れたばかりのプラグインを消さない）。
+func TestOverlappingPlaces(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.publish(release{name: "cli", tag: "c2"})
+	for _, c := range []struct{ plugins, work string }{
+		{filepath.Join(h.work, "old"), h.work},
+		{h.plugins, h.plugins},
+		{h.plugins, filepath.Join(h.plugins, "work")},
+		{strings.ToUpper(filepath.Join(h.work, "old")), h.work},
+	} {
+		o := h.options()
+		o.PluginsDir, o.WorkDir = c.plugins, c.work
+		before := snapshot(t, h.plugins)
+		if _, err := Install(o, "cli", "c2", false); err == nil || !strings.Contains(err.Error(), "overlap") {
+			t.Errorf("install %+v: %v", c, err)
+		}
+		if _, err := Uninstall(o, "cli"); err == nil || !strings.Contains(err.Error(), "overlap") {
+			t.Errorf("uninstall %+v: %v", c, err)
+		}
+		sameSnapshot(t, before, snapshot(t, h.plugins))
+	}
+	// リンクで別の書き方をしても、同じディレクトリ・その中なら断る。
+	link := filepath.Join(h.tmp, "plugins-link")
+	if err := os.Symlink(h.plugins, link); err == nil {
+		for _, work := range []string{link, filepath.Join(link, "work")} {
+			o := h.options()
+			o.WorkDir = work
+			if _, err := Install(o, "cli", "c2", false); err == nil || !strings.Contains(err.Error(), "overlap") {
+				t.Errorf("link %s: %v", work, err)
+			}
+		}
 	}
 }

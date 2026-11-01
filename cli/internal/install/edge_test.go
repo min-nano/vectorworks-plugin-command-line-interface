@@ -120,10 +120,11 @@ func TestMissingPlaces(t *testing.T) {
 // 入れる先にフォルダでないもの（利用者のファイル）があれば触れない。
 func TestInstallRefusesAFile(t *testing.T) {
 	h := newHarness(t)
-	h.publish(release{name: "cli", tag: "c1"})
-	path := filepath.Join(h.plugins, "cli")
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.publish(release{name: "demo", tag: "d1"})
+	path := filepath.Join(h.plugins, "demo")
 	os.WriteFile(path, []byte("mine"), 0o644)
-	if _, err := h.install("cli", "c1"); err == nil || !strings.Contains(err.Error(), "not a folder") {
+	if _, err := h.install("demo", "d1"); err == nil || !strings.Contains(err.Error(), "not a folder") {
 		t.Fatal(err)
 	}
 	if data, _ := os.ReadFile(path); string(data) != "mine" {

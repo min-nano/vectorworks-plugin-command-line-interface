@@ -153,7 +153,8 @@ func Open(dir string) *Bridge {
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 		return &Bridge{Dir: dir, Reason: "not found"}
 	}
-	if !lockHeld(filepath.Join(dir, LockFile)) {
+	// 調べられないロックは「動いていない」とする（install・uninstall は LockHeld で誤りを見て、何も変えない）。
+	if held, _ := lockState(filepath.Join(dir, LockFile)); !held {
 		return &Bridge{Dir: dir, Reason: "not running"}
 	}
 	return &Bridge{Dir: dir, Running: true}

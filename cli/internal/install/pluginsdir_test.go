@@ -6,7 +6,8 @@ import (
 	"testing"
 )
 
-// 入った CLI（<X>/cli/bin/ にあり、<X>/cli/ に正しい記録がある）なら <X>。リンクは解く。それ以外は偽。
+// 入った CLI（<X>/cli/bin/ にあり、<X>/cli/ に記録のファイルがある。中身は読まない）なら <X>。リンクは解く。
+// それ以外は偽。
 func TestPluginsDirOf(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -36,9 +37,9 @@ func TestPluginsDirOf(t *testing.T) {
 	if _, ok := PluginsDirOf(executable); !ok {
 		t.Fatal("with a broken record")
 	}
-	// 記録が消えても入った CLI とみなす（記録は見ない。自分のフォルダで install・uninstall が断る）。
+	// 記録が無ければ入った CLI とみなさない（手でビルドした CLI・手で展開した zip。記録は install だけが書く）。
 	os.Remove(filepath.Join(h.plugins, "cli", RecordFile))
-	if _, ok := PluginsDirOf(executable); !ok {
+	if _, ok := PluginsDirOf(executable); ok {
 		t.Error("without a record")
 	}
 }

@@ -82,6 +82,10 @@ Exit status: 0 success (including not_installed), 1 failure, 2 wrong usage
 }
 
 func (c *uninstallCmd) run(e *env) int {
+	// 書き方の誤りは、場所を求める前に使い方の誤りにする（場所が分からないときも終了コード 2）。
+	if err := install.CheckName(c.Name); err != nil {
+		return deployFailed(e, c.Name, err)
+	}
 	options, err := deployOptions(e, c.PluginsDir)
 	if err != nil {
 		return deployFailed(e, c.Name, err)

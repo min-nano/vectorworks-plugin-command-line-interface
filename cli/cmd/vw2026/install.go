@@ -118,20 +118,29 @@ func (c *installCmd) run(e *env) int {
 	if !ok {
 		return deployFailed(e, c.Plugin, install.Usagef("%q has no tag: give NAME@TAG, such as cli@latest", c.Plugin))
 	}
-	options, err := deployOptions(e, c.PluginsDir)
-	if err != nil {
+	// 書き方の誤りは、場所を求める前に使い方の誤りにする（場所が分からないときも終了コード 2）。
+	if err := install.CheckRequest(name, tag); err != nil {
 		return deployFailed(e, name, err)
 	}
 	// URL は空白を含まないので、値の中の空白で分ける（VW2026_REGISTRY に複数を書ける）。空の値（空白だけを
 	// 含む）は使い方の誤りにする（--registry "$UNSET" のような取り違えを黙って通さない）。空の引数と空の
 	// 環境変数は見分けられないので、どちらも断る（環境変数で消すときは unset する）。
+	var registries []string
 	for _, value := range c.Registry {
 		urls := strings.Fields(value)
 		if len(urls) == 0 {
 			return deployFailed(e, name, install.Usagef("the registry is empty: give a URL to --registry, or unset VW2026_REGISTRY"))
 		}
-		options.Registries = append(options.Registries, urls...)
+		registries = append(registries, urls...)
 	}
+	if err := install.CheckRegistries(registries); err != nil {
+		return deployFailed(e, name, err)
+	}
+	options, err := deployOptions(e, c.PluginsDir)
+	if err != nil {
+		return deployFailed(e, name, err)
+	}
+	options.Registries = registries
 	options.Target = install.Target()
 	result, err := install.Install(options, name, tag, c.Check)
 	if err != nil {

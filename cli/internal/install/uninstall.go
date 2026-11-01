@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-
-	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
 
 // UninstallResult は uninstall の出力。
@@ -26,8 +24,8 @@ type UninstallResult struct {
 // 読まず、記録だけで決める。フックより先にフォルダを <Work>/old/<name>/ へ移し、フックが失敗したら
 // 戻す。Vectorworks が動いていれば何もせずに ErrRunning を返す。
 func Uninstall(o Options, name string) (*UninstallResult, error) {
-	if !registry.ValidName(name) {
-		return nil, Usagef("invalid name %q (use a-z, 0-9 and -)", name)
+	if err := CheckName(name); err != nil {
+		return nil, err
 	}
 	p, err := o.places(name)
 	if err != nil {

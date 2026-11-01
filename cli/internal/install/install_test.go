@@ -242,7 +242,7 @@ func TestInstallWhileRunning(t *testing.T) {
 	}
 }
 
-// 手順 4 で見たあと、zip を取る間に起動した Vectorworks も、付け替えの直前に見つけて何も変えない。
+// 手順 2 で見たあと、zip を取る間に起動した Vectorworks も、付け替えの直前に見つけて何も変えない。
 func TestInstallLockTakenWhileDownloading(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})

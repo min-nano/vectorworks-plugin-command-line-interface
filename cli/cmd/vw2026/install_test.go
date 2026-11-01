@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -359,5 +360,25 @@ func TestIsTerminal(t *testing.T) {
 	// 疑似端末は端末（mac・Linux。terminal_*_test.go）。
 	if !isTerminal(openTerminal(t)) {
 		t.Error("a pseudo terminal is a terminal")
+	}
+}
+
+// 書き方の誤り（名前・タグ・--registry）は、場所を求められなくても使い方の誤り（場所を求める前に確かめる）。
+func TestUsageBeforeLocating(t *testing.T) {
+	fail := func() (string, error) { return "", errors.New("unknown") }
+	for _, args := range [][]string{
+		{"install", "Bad_Name@1"},
+		{"install", "cli@-bad"},
+		{"install", "cli@latest", "--registry", "/plugins.json"},
+		{"uninstall", "Bad_Name"},
+	} {
+		var stdout, stderr bytes.Buffer
+		code := run(args, env{
+			stdin: strings.NewReader(""), stdout: &stdout, stderr: &stderr,
+			spool: fail, workDir: fail, pluginsDir: fail, executable: fail,
+		})
+		if code != exitUsage || !strings.Contains(stdout.String(), `"outcome":"failed"`) {
+			t.Errorf("%v: %d %s %s", args, code, stdout.String(), stderr.String())
+		}
 	}
 }

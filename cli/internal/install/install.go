@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
@@ -136,6 +137,12 @@ func (o *Options) places(name string) (places, error) {
 	}
 	plugins := filepath.Clean(o.PluginsDir)
 	work := filepath.Clean(o.WorkDir)
+	// 片方がもう片方の中にあれば（初回のスクリプトに <Work>/old を --plugins-dir として渡したなど）、片付けが
+	// 入れたばかりのプラグインを消し、付け替えが自分を動かすので断る（消すコードの歯止め。守ること 9）。
+	if nested(plugins, work) || nested(work, plugins) {
+		return places{}, fmt.Errorf("the folder of plug-ins %s and the work folder %s overlap (one is in the other); "+
+			"nothing is changed", plugins, work)
+	}
 	staging := filepath.Join(work, "staging")
 	old := filepath.Join(work, "old")
 	return places{
@@ -149,6 +156,22 @@ func (o *Options) places(name string) (places, error) {
 		oldDir:   filepath.Join(old, name),
 		marker:   filepath.Join(old, name+".uninstalling"),
 	}, nil
+}
+
+// nested は、path が dir と同じか、dir の中にあるか。パスの書き方（大文字と小文字の違いを除く）と、ディレクトリの
+// 同一性（within。リンク・8.3 形式・ジャンクション）の両方で決める（まだ無い場所も、書き方で見つける）。
+func nested(path, dir string) bool {
+	if rel, err := filepath.Rel(strings.ToLower(dir), strings.ToLower(path)); err == nil &&
+		rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return true
+	}
+	if a, err := os.Stat(path); err == nil {
+		if b, err := os.Stat(dir); err == nil && os.SameFile(a, b) {
+			return true
+		}
+	}
+	_, inside := within(path, dir)
+	return inside
 }
 
 // stderr は、知らせの行き先（無ければ捨てる）。
@@ -201,15 +224,32 @@ func checkCLI(plugins, name string) error {
 	return nil
 }
 
+// CheckName は名前の書き方を確かめる（誤りは使い方の誤り）。呼ぶ側（cmd）は、場所を求める前にこれで確かめる
+// （場所が分からないときも、書き方の誤りを使い方の誤りとして答える）。
+func CheckName(name string) error {
+	if !registry.ValidName(name) {
+		return Usagef("invalid name %q (use a-z, 0-9 and -)", name)
+	}
+	return nil
+}
+
+// CheckRequest は名前とタグの書き方を確かめる（CheckName と同じく、場所を求める前に呼ぶ）。
+func CheckRequest(name, tag string) error {
+	if err := CheckName(name); err != nil {
+		return err
+	}
+	if !registry.ValidTag(tag) {
+		return Usagef("invalid tag %q (use A-Z, a-z, 0-9, ., _ and -, starting with a letter or a digit)", tag)
+	}
+	return nil
+}
+
 // Install は <name>@<requested> を 1 回入れる（docs/plugin/install-and-update.md「流れ」）。
 // check なら入れずに、新しいビルドがあるかだけを返す。Vectorworks が動いていれば何もせずに
 // ErrRunning を返す（結果の outcome も vectorworks_running）。
 func Install(o Options, name, requested string, check bool) (*InstallResult, error) {
-	if !registry.ValidName(name) {
-		return nil, Usagef("invalid name %q (use a-z, 0-9 and -)", name)
-	}
-	if !registry.ValidTag(requested) {
-		return nil, Usagef("invalid tag %q (use A-Z, a-z, 0-9, ., _ and -, starting with a letter or a digit)", requested)
+	if err := CheckRequest(name, requested); err != nil {
+		return nil, err
 	}
 	p, err := o.places(name)
 	if err != nil {
@@ -222,6 +262,24 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 	}
 	if err := checkCLI(p.plugins, name); err != nil {
 		return nil, err
+	}
+	result := &InstallResult{
+		Name:       name,
+		Requested:  requested,
+		Tag:        requested,
+		Target:     o.Target,
+		PluginsDir: p.plugins,
+	}
+	// Vectorworks が動いていれば、レジストリ・マニフェストを取る前に答える（ネットワークの誤りや記録の誤りより先に、
+	// 終了コード 6。同じタグでも動いていればフックを走らせない）。--check は動いていてもよい。付け替えの直前にも
+	// もう一度見る（replace）。
+	if !check {
+		if held, err := lockState(p); held {
+			result.Outcome = OutcomeRunning
+			return result, ErrRunning
+		} else if err != nil {
+			return nil, err
+		}
 	}
 	entry, source, err := o.lookup(name)
 	if err != nil {
@@ -240,14 +298,7 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 			installed.moduleExists(p.dest)
 	}
 
-	result := &InstallResult{
-		Name:       name,
-		Requested:  requested,
-		Tag:        requested,
-		Target:     o.Target,
-		Registry:   source,
-		PluginsDir: p.plugins,
-	}
+	result.Registry = source
 	var asset registry.Asset
 	upToDate := rule.ByTag() && same(requested)
 	// タグで直接指す規則で、入っているものと同じタグとターゲットなら、マニフェストも取らない。
@@ -280,17 +331,11 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		}
 		return result, nil
 	}
-	if held, err := lockState(p); held {
-		result.Outcome = OutcomeRunning
-		return result, ErrRunning
-	} else if err != nil {
-		return nil, err
-	}
 	// 入っている版のフックがまだ通っておらず（hook_pending）、前の版が old に残っていれば、付け替えない。付け替えの
 	// 前の片付けが old（フックの通った最後の版）を消し、新しい版のフックが失敗して戻すと、通っていない版だけが残る
 	// ため。同じタグでフックだけを走らせて入れ終える道（upToDate）は通す。Vectorworks が動いていれば、先に
-	// vectorworks_running にする（どの道でも、動いているかを最初に答える）。--check は断らず available を返す（新しい
-	// ビルドがあるかだけを答える。help に、入れ終えるまで install が断ることを書く）。
+	// vectorworks_running と答えている。--check は断らず available を返す（新しいビルドがあるかだけを答える。help に、
+	// 入れ終えるまで install が断ることを書く）。
 	if installed != nil && installed.HookPending && !upToDate && validRecord(p.oldDir, name) {
 		if result.Tag != installed.Tag {
 			return nil, fmt.Errorf("%s@%s has not finished installing (its install hook has not succeeded), and the "+

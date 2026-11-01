@@ -54,9 +54,15 @@ func (o *Options) lookup(name string) (registry.Entry, string, error) {
 		strings.Join(append([]string{registry.DefaultName}, o.Registries...), " "))
 }
 
-// checkRegistries は、--registry に渡したものすべての書き方を確かめる（checkRegistry）。
+// checkRegistries は、--registry に渡したものすべての書き方を確かめる（CheckRegistries）。
 func (o *Options) checkRegistries() error {
-	for _, ref := range o.Registries {
+	return CheckRegistries(o.Registries)
+}
+
+// CheckRegistries は、--registry に渡したものすべての書き方を確かめる（checkRegistry。誤りは使い方の誤り）。呼ぶ側
+// （cmd）は、場所を求める前にこれで確かめる（CheckRequest と同じ）。
+func CheckRegistries(refs []string) error {
+	for _, ref := range refs {
 		if err := checkRegistry(ref); err != nil {
 			return err
 		}
