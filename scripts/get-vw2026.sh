@@ -96,6 +96,9 @@ main() {
 	# CLI だけを取り出す（実行ビットは zip のものを保つ）。
 	unzip -q "$tmp/cli.zip" bin/vw2026 -d "$tmp" || fail "no bin/vw2026 in $url"
 
+	# 利用者の環境の install の指定（VW2026_INSTALL_CHECK・VW2026_REGISTRY）は渡さない（このスクリプトは cli@<tag> を
+	# 既定のレジストリから入れるだけで、--check もレジストリも受け付けない）。
+	unset VW2026_INSTALL_CHECK VW2026_REGISTRY
 	# 標準入力は渡さない（curl | sh では標準入力がこのスクリプトそのもの）。
 	code=0
 	"$tmp/bin/vw2026" "$@" </dev/null || code=$?

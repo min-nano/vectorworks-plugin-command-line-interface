@@ -1744,3 +1744,29 @@ func TestCannotClearHookPendingKeepsTheMovedCLI(t *testing.T) {
 		t.Fatal("the moved vw2026 should stay where the message says:", moved)
 	}
 }
+
+// 記録を置き換えられなければ（書く途中で止まった・名前を変えられない）、隣に書いたファイルを残さず、元の記録も
+// そのまま。
+func TestReplaceFileLeavesNoTemporary(t *testing.T) {
+	path := filepath.Join(t.TempDir(), RecordFile)
+	os.WriteFile(path, []byte("old"), 0o644)
+	originalWrite, originalRename := writeFile, rename
+	t.Cleanup(func() { writeFile, rename = originalWrite, originalRename })
+	// 書きかけて止まる。
+	writeFile = func(name string, data []byte, perm fs.FileMode) error {
+		originalWrite(name, data[:1], perm)
+		return errInjected
+	}
+	if err := replaceFile(path, []byte("new")); !errors.Is(err, errInjected) || exist(path+".new") {
+		t.Fatal("write:", err)
+	}
+	// 書けたが、置き換えられない。
+	writeFile = originalWrite
+	rename = func(string, string) error { return errInjected }
+	if err := replaceFile(path, []byte("new")); !errors.Is(err, errInjected) || exist(path+".new") {
+		t.Fatal("rename:", err)
+	}
+	if data, _ := os.ReadFile(path); string(data) != "old" {
+		t.Fatal(string(data))
+	}
+}

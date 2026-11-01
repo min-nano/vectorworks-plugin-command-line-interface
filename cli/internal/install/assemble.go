@@ -75,10 +75,15 @@ func clearHookPending(dir string) error {
 // 落ちた）空や半分の記録を残さない（読めない記録では install も uninstall も通らなくなる）。
 func replaceFile(path string, data []byte) error {
 	temp := path + ".new"
-	if err := writeFile(temp, data, 0o644); err != nil {
-		return err
+	err := writeFile(temp, data, 0o644)
+	if err == nil {
+		err = rename(temp, path)
 	}
-	return rename(temp, path)
+	// 書けなかった・置き換えられなかった隣のファイル（このとき書いたもの）は、プラグインのフォルダに残さない。
+	if err != nil {
+		_ = removeFile(temp)
+	}
+	return err
 }
 
 // readRecord はフォルダの記録を読む。無ければ os.ErrNotExist を包んだ誤り。知らない項目は

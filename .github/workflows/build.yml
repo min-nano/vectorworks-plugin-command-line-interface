@@ -519,7 +519,11 @@ jobs:
         run: |
           @'
           $plugins = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'Nemetschek\Vectorworks\2026\Plug-Ins'
-          $work = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Temp\vectorworks2026-cli'
+          # <Work> は <Plug-Ins> ごと（install.WorkDirFor: 小文字にした <Plug-Ins> の sha256 の先頭 12 桁。ランナーの
+          # <Plug-Ins> の書き方にリンクは無い）。食い違えば、4 の「<Work> がある」の確かめで落ちる。
+          $sha = [Security.Cryptography.SHA256]::Create()
+          $key = -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($plugins.ToLowerInvariant()))[0..5] | ForEach-Object { $_.ToString('x2') })
+          $work = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) "Temp\vectorworks2026-cli-$key"
           $bin = Join-Path $plugins 'cli\bin'
           $exe = Join-Path $bin 'vw2026.exe'
 
@@ -638,6 +642,7 @@ jobs:
           # BOM を付けずに書く（Set-Content -Encoding UTF8 は BOM を付け、Go の JSON が読めない）。
           [IO.File]::WriteAllText($recordPath, ($record | ConvertTo-Json -Depth 5))
           $out = Invoke-Installed install "cli@$env:TAG"
+          if (-not (Test-Path -LiteralPath (Join-Path $work 'old'))) { throw "no work folder $work" }
           if ($out.outcome -ne 'installed') { throw 'not installed' }
           if ((Get-MovedCli).Count -ne 1) { throw "moved: $((Get-MovedCli).Name -join ', ')" }
           if (Test-Path -LiteralPath (Join-Path $work 'old\cli')) { throw 'old\cli is left' }

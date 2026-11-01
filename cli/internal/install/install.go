@@ -165,9 +165,14 @@ func (o *Options) places(name string) (places, error) {
 // 下を指す --plugins-dir も、解いた書き方で見つける）。同一性は、Windows で EvalSymlinks が解かないジャンクション・
 // subst のドライブ・割り当てたドライブ・短い名前も見つける。
 func nested(path, dir string) bool {
-	_, inside := within(path, dir)
 	return lexicallyIn(path, dir) || lexicallyIn(resolvedPath(path), resolvedPath(dir)) || SameDirectory(path, dir) ||
-		inside
+		isWithin(path, dir)
+}
+
+// isWithin は within の真偽だけ（nested の最後に、ほかで決まらないときだけ親を順に調べる）。
+func isWithin(path, dir string) bool {
+	_, inside := within(path, dir)
+	return inside
 }
 
 // SameDirectory は、a と b が同じディレクトリか（書き方ではなく同一性で決める。どちらかが無ければ偽）。

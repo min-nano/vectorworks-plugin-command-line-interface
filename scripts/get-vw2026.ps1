@@ -122,6 +122,11 @@
 		$info = [Diagnostics.ProcessStartInfo]::new($exe)
 		$info.Arguments = $quoted -join ' '
 		$info.UseShellExecute = $false
+		# The install flags of the user's environment are not passed on (this script installs
+		# cli@<tag> from the default registry only, and takes neither --check nor a registry). They
+		# are removed from the child's environment only, not from the session.
+		[void] $info.EnvironmentVariables.Remove('VW2026_INSTALL_CHECK')
+		[void] $info.EnvironmentVariables.Remove('VW2026_REGISTRY')
 		$info.RedirectStandardOutput = $true
 		$info.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
 		$process = [Diagnostics.Process]::Start($info)
