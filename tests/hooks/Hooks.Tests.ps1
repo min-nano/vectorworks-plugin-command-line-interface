@@ -83,6 +83,7 @@ Describe 'Test-PathEntryTarget' {
 	It 'ignores the case, the spaces around, one pair of quotes, and the trailing backslash' {
 		Test-PathEntryTarget ' "C:\Users\U\Plug-Ins\CLI\BIN\" ' (Get-PathEntryTarget 'c:\users\u\plug-ins\cli\bin') | Should -BeTrue
 		Test-PathEntryTarget 'C:\x\bin\\' (Get-PathEntryTarget 'C:\x\bin') | Should -BeTrue
+		Test-PathEntryTarget 'C:/x/bin/' (Get-PathEntryTarget 'C:\x\bin') | Should -BeTrue
 	}
 	It 'does not expand variables' {
 		Test-PathEntryTarget '%APPDATA%\cli\bin' (Get-PathEntryTarget 'C:\Users\U\AppData\Roaming\cli\bin') | Should -BeFalse

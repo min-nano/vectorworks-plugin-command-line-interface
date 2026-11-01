@@ -1,7 +1,8 @@
 // Package install はプラグインの配置（vw2026 install / uninstall）を行う
 // （docs/plugin/install-and-update.md・docs/registry.md）。どのプラグインにも同じ手順だけを持ち、
 // cli を特別に扱わない。cli の名前を使うのは、Vectorworks が動いているかを見るロックの場所
-// （<Plug-Ins>/cli/spool）と、ほかのプラグインを cli と同じ <Plug-Ins> にだけ入れるための確かめだけ。
+// （<Plug-Ins>/cli/spool）と、ほかのプラグインを cli と同じ <Plug-Ins> にだけ入れるための確かめと、入った CLI が
+// 自分の入った <Plug-Ins> を求めること（PluginsDirOf）だけ。
 //
 // 場所（<Plug-Ins>・<Work>）と既定のレジストリは Options で受け取る（テストが一時ディレクトリと
 // 偽の HTTP サーバーを渡す。環境変数は増やさない）。
@@ -201,6 +202,10 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		return nil, err
 	}
 	// ネットワークの要らない確かめを、レジストリを取る前にする（cli の無い <Plug-Ins> なら、取りに行かずに断る）。
+	// --registry の書き方の誤りは、それより先に使い方の誤りにする。
+	if err := o.checkRegistries(); err != nil {
+		return nil, err
+	}
 	if err := checkCLI(p.plugins, name); err != nil {
 		return nil, err
 	}
@@ -281,6 +286,9 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		result.Outcome = OutcomeRunning
 		return result, ErrRunning
 	}
+	if err := lockReadable(p); err != nil {
+		return nil, err
+	}
 	// <Plug-Ins>/<name>/ があるなら、中断した uninstall の印は前の回の残り（uninstall は移してから止まる
 	// ので、そのときは <Plug-Ins>/<name>/ が無い）。どの道でも先に消す（残すと、このあとの install が付け替えの
 	// 途中で止まったときに、次の uninstall がそれを中断した uninstall とみなし、唯一残った old/<name>/ を消す）。
@@ -354,6 +362,26 @@ func previousTag(p places, name string, installed *Record) string {
 		return old.Tag
 	}
 	return ""
+}
+
+// lockReadable は、running が見る 2 か所のスプールのロックを調べられるか。無い以外の理由でフォルダかロックの
+// ファイルを開けなければ（権限・壊れた場所）、動いているかが分からないので、何も変えずに失敗にする（「動いて
+// いない」とみなして、動いている Vectorworks の下でフォルダを付け替えない）。ロックの判定そのもの（通信規則
+// 「生存の判定」）は変えず、install・uninstall の始めにだけ確かめる。
+func lockReadable(p places) error {
+	for _, dir := range []string{filepath.Join(p.plugins, CLIName), filepath.Join(p.old, CLIName)} {
+		lock := filepath.Join(dir, spool.SpoolDirName, spool.LockFile)
+		file, err := os.Open(lock)
+		if err == nil {
+			file.Close()
+			continue
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("cannot tell whether Vectorworks is running, as %s cannot be read (%v); nothing is changed",
+				lock, err)
+		}
+	}
+	return nil
 }
 
 // pluginFolder は、<Plug-Ins>/<name> が在るか。在ってもシンボリックリンク（記録のあるフォルダを指すものでも）・

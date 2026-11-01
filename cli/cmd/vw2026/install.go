@@ -61,7 +61,9 @@ Install changes nothing while Vectorworks is running with the bridge (it holds
 the lock in <Plug-Ins>/cli/spool/): it prints {"outcome":"vectorworks_running"}
 and exits with 6, even for the same tag. It does not quit Vectorworks and does
 not wait; quit Vectorworks first (see "vw2026 --help" for the sequence). --check
-works while Vectorworks runs.
+works while Vectorworks runs. When it cannot read that lock (other than because
+it is not there), it cannot tell whether Vectorworks runs, so it changes
+nothing and exits with 1.
 
 It prints one line of JSON with one of these outcomes:
 
@@ -74,27 +76,29 @@ It prints one line of JSON with one of these outcomes:
 
 With --check, "available" means a new build is available, none is installed,
 or the installed one has not finished installing (its hook has not succeeded;
-run install with its tag). "hook" is the output of the hook (a JSON object), absent when the plug-in has
-none. On a failure (cannot download, the sha256 does not match, the zip is
-wrong, the folder cannot be replaced, the hook failed), install leaves
-<Plug-Ins> as it was, except for what the hook changed outside the folder,
-writes the reason to the standard error too, and exits with 1. The exception is
-a hook that fails while Vectorworks starts: Vectorworks may use the new version,
-so install leaves it in <Plug-Ins>, says so in the message, and exits with 1;
-quit Vectorworks, then run install with the same tag again (it runs only the
-hook). Replacing the folder fails on Windows while a program has a file in it
-open or has its current directory in it.
+run install with its tag). "hook" is the output of the hook (a JSON object),
+absent when the plug-in has none. On a failure (cannot download, the sha256
+does not match, the zip is wrong, the folder cannot be replaced, the hook
+failed), install leaves <Plug-Ins> as it was, except for what the hook changed
+outside the folder, writes the reason to the standard error too, and exits
+with 1. The exception is a hook that fails while Vectorworks starts:
+Vectorworks may use the new version, so install leaves it in <Plug-Ins>, says
+so in the message, and exits with 1; quit Vectorworks, then run install with
+the same tag again (it runs only the hook). Replacing the folder fails on
+Windows while a program has a file in it open or has its current directory in
+it.
 
-<Plug-Ins> is the folder of plug-ins that this vw2026 is installed in
-(<Plug-Ins>/cli/bin/vw2026, with the record of cli), so install and uninstall
-always work on the folder that holds the running cli. A vw2026 outside such a
-folder (the first-time script's, or one built by hand) uses the Plug-Ins folder
-of Vectorworks 2026 for this user:
+<Plug-Ins> is the folder of plug-ins that this vw2026 is installed in (it runs
+as <Plug-Ins>/cli/bin/vw2026), so install and uninstall always work on the
+folder that holds the running cli. A vw2026 outside such a folder (the
+first-time script's, or one built by hand) uses the Plug-Ins folder of
+Vectorworks 2026 for this user:
 ~/Library/Application Support/Vectorworks/2026/Plug-Ins on macOS and
 %APPDATA%\Nemetschek\Vectorworks\2026\Plug-Ins on Windows. To use another
 folder, give it to the first-time script (--plugins-dir <Plug-Ins>), which
-passes it to its vw2026; an installed vw2026 refuses it. Install works in vectorworks2026-cli in the temporary folder of the
-user, which must be on the same volume as <Plug-Ins>.
+passes it to its vw2026; an installed vw2026 refuses it. Install works in
+vectorworks2026-cli in the temporary folder of the user, which must be on the
+same volume as <Plug-Ins>.
 
 Install has no time limit on the network or the hook: stop it (Ctrl-C) or limit
 it from the caller. Stopped while it downloads, it has changed only the work

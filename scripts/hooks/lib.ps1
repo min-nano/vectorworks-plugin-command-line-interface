@@ -6,15 +6,17 @@
 # ハッシュテーブル）を通す。本番は Get-RegistryPathStore（HKCU\Environment）で、テストは偽の置き場所を
 # フックの -Store に渡して差し替える。Windows PowerShell 5.1 で動かす。
 
-# Get-PathEntryKey は、比べるための項目の形。前後の空白を除き、全体を囲む " を 1 組だけ除き、末尾の
-# \ を除く（ドライブの根の C:\ は \ を 1 つ残す。C: は「C ドライブの今のディレクトリ」になるため）。%…% は
-# 展開しない（大文字と小文字は Test-PathEntryTarget が区別せずに比べる）。
+# Get-PathEntryKey は、比べるための項目の形。前後の空白を除き、全体を囲む " を 1 組だけ除き、/ を \ に揃え
+# （Windows は Path の / も区切りとして扱う）、末尾の \ を除く（ドライブの根の C:\ は \ を 1 つ残す。C: は
+# 「C ドライブの今のディレクトリ」になるため）。%…% は展開しない（大文字と小文字は Test-PathEntryTarget が
+# 区別せずに比べる）。
 function Get-PathEntryKey {
 	param([string] $Entry)
 	$key = $Entry.Trim()
 	if ($key.Length -ge 2 -and $key.StartsWith('"') -and $key.EndsWith('"')) {
 		$key = $key.Substring(1, $key.Length - 2)
 	}
+	$key = $key.Replace('/', '\')
 	$trimmed = $key.TrimEnd('\')
 	if ($trimmed.Length -eq 2 -and $trimmed[1] -eq ':' -and $key.Length -gt 2) {
 		return $trimmed + '\'

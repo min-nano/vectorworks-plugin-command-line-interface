@@ -255,6 +255,38 @@ func TestUsageErrorMessage(t *testing.T) {
 	}
 }
 
+// スプールのロックを、無い以外の理由で調べられなければ（ここではスプールの場所がファイル）、動いているかが分からない
+// ので、install も uninstall も何も変えずに断る（「動いていない」とみなして付け替えない）。
+func TestLockCannotBeRead(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports a path below a file as not found")
+	}
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	spoolDir := filepath.Join(h.plugins, "cli", spool.SpoolDirName)
+	os.RemoveAll(spoolDir)
+	os.WriteFile(spoolDir, nil, 0o600)
+	h.publish(release{name: "cli", tag: "c2"})
+	before := snapshot(t, h.plugins)
+	if _, err := h.install("cli", "c2"); err == nil || !strings.Contains(err.Error(), "cannot tell whether Vectorworks is running") {
+		t.Fatal(err)
+	}
+	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "cannot tell whether Vectorworks is running") {
+		t.Fatal(err)
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
+}
+
+// --registry の書き方の誤りは、cli の無い <Plug-Ins> でも使い方の誤りにする（cli の確かめより先）。
+func TestRegistryUsageBeforeTheCLICheck(t *testing.T) {
+	h := newHarness(t)
+	o := h.options()
+	o.Registries = []string{"/plugins.json"}
+	if _, err := Install(o, "elsewhere", "1", false); !IsUsage(err) {
+		t.Fatal(err)
+	}
+}
+
 // cli の無い <Plug-Ins> では、レジストリを取りに行く前に断る（届かないレジストリで、本当の理由が隠れない）。
 func TestInstallChecksCLIBeforeTheRegistry(t *testing.T) {
 	h := newHarness(t)
@@ -320,6 +352,22 @@ func TestWorkDirIsAFile(t *testing.T) {
 	}
 	if _, err := Uninstall(h.options(), "cli"); err == nil {
 		t.Error("uninstall should fail")
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
+}
+
+// <Work>/old を作れなければ（OS の失敗）、install も uninstall も何も変えずに失敗にする。
+func TestCannotMakeTheOldFolder(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.publish(release{name: "cli", tag: "c2"})
+	failMkdirAll(t, filepath.Join(h.work, "old"))
+	before := snapshot(t, h.plugins)
+	if _, err := h.install("cli", "c2"); !errors.Is(err, errInjected) {
+		t.Error(err)
+	}
+	if _, err := Uninstall(h.options(), "cli"); !errors.Is(err, errInjected) {
+		t.Error(err)
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }

@@ -31,10 +31,8 @@ var maxExtracted int64 = 2 << 30
 func (o *Options) lookup(name string) (registry.Entry, string, error) {
 	// 書き方の誤りは、どのレジストリを引くかに依らず、先に使い方の誤りにする（既定のレジストリで見つかる
 	// 名前でも、正しくない --registry を黙って通さない）。
-	for _, ref := range o.Registries {
-		if err := checkRegistry(ref); err != nil {
-			return registry.Entry{}, "", err
-		}
+	if err := o.checkRegistries(); err != nil {
+		return registry.Entry{}, "", err
 	}
 	def := o.Default
 	if def == nil {
@@ -59,6 +57,16 @@ func (o *Options) lookup(name string) (registry.Entry, string, error) {
 	// 引いたレジストリを示す（名前の誤りか、--registry・VW2026_REGISTRY の足りなさかを見分けられるように）。
 	return registry.Entry{}, "", fmt.Errorf("%s is in no registry (looked in: %s)", name,
 		strings.Join(append([]string{registry.DefaultName}, o.Registries...), " "))
+}
+
+// checkRegistries は、--registry に渡したものすべての書き方を確かめる（checkRegistry）。
+func (o *Options) checkRegistries() error {
+	for _, ref := range o.Registries {
+		if err := checkRegistry(ref); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // checkRegistry は --registry に渡したものが https:// か file:// の URL かを確かめる（docs/registry.md
