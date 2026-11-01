@@ -114,7 +114,8 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		// 戻す前にロックを見る（install の undoHook と同じ）。フックの間に起動した Vectorworks の下へ
 		// フォルダを戻さず、印を残して、終了してからの uninstall が続きから走れるようにする。
 		if running(p) {
-			return nil, fmt.Errorf("%w; Vectorworks started meanwhile, so %s stays in %s: quit Vectorworks, then run "+
+			return nil, fmt.Errorf("%w; Vectorworks started meanwhile (or its lock cannot be read), so %s stays in %s: "+
+				"quit Vectorworks, then run "+
 				"uninstall again (it goes on from the hook)", err, name, p.oldDir)
 		}
 		if renameErr := rename(p.oldDir, p.dest); renameErr != nil {
@@ -127,7 +128,8 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	// Vectorworks が使っているかもしれない）。印を残すので、終了してからの uninstall が続きから走る。フォルダを
 	// 移してフックも走らせたので、「何もしなかった」の ErrRunning（終了コード 6）ではなく、失敗にする。
 	if running(p) {
-		return nil, fmt.Errorf("the uninstall hook ran, but Vectorworks started meanwhile, so %s stays in %s: quit "+
+		return nil, fmt.Errorf("the uninstall hook ran, but Vectorworks started meanwhile (or its lock cannot be read), "+
+			"so %s stays in %s: quit "+
 			"Vectorworks, then run uninstall again (it goes on from the hook)", name, p.oldDir)
 	}
 	// 組み立ての場所へ移してから消す（消すのが途中で止まっても、記録の消えた半分のフォルダを old に残さない）。

@@ -870,6 +870,24 @@ func TestExtractTooLarge(t *testing.T) {
 	}
 }
 
+// 項目の数が上限を超える zip は、何も展開せずに断る（空の項目の多い小さな zip が、ファイルを作り続けないように）。
+func TestExtractTooManyEntries(t *testing.T) {
+	original := maxEntries
+	maxEntries = 1
+	t.Cleanup(func() { maxEntries = original })
+	dir := t.TempDir()
+	path := filepath.Join(dir, "x.zip")
+	os.WriteFile(path, makeZip(t, []entry{{name: "a"}, {name: "b"}}), 0o644)
+	out := filepath.Join(dir, "out")
+	if _, err := extract(path, out); err == nil || !strings.Contains(err.Error(), "more than 1 entries") || exist(out) {
+		t.Fatal(err)
+	}
+	maxEntries = 2
+	if _, err := extract(path, out); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // フックのあとで組み立ての場所を空けられなければ（zip の場所が中身のあるフォルダ）、移したフォルダを
 // 消さずに印を残して失敗にする。
 func TestUninstallCannotEmptyTheStaging(t *testing.T) {
@@ -1563,7 +1581,6 @@ func TestOverlappingPlaces(t *testing.T) {
 		{filepath.Join(h.work, "old"), h.work},
 		{h.plugins, h.plugins},
 		{h.plugins, filepath.Join(h.plugins, "work")},
-		{strings.ToUpper(filepath.Join(h.work, "old")), h.work},
 	} {
 		o := h.options()
 		o.PluginsDir, o.WorkDir = c.plugins, c.work
@@ -1576,15 +1593,71 @@ func TestOverlappingPlaces(t *testing.T) {
 		}
 		sameSnapshot(t, before, snapshot(t, h.plugins))
 	}
-	// リンクで別の書き方をしても、同じディレクトリ・その中なら断る。
+	// 大文字と小文字を区別しない OS では、その違いだけの書き方も重なる。区別する OS では別のフォルダ（uninstall で
+	// 確かめる。入っていなければ何も作らない）。
+	o := h.options()
+	o.PluginsDir = strings.ToUpper(filepath.Join(h.work, "old"))
+	_, err := Uninstall(o, "cli")
+	if folds := runtime.GOOS == "darwin" || runtime.GOOS == "windows"; folds != (err != nil && strings.Contains(err.Error(), "overlap")) {
+		t.Errorf("case: %v", err)
+	}
+	// リンクで別の書き方をしても、同じディレクトリ・その中なら断る（<Work> の下を指すリンクを --plugins-dir に
+	// 渡したときも。まだ無い場所の下も、あるところまでのリンクを解いて見つける）。
 	link := filepath.Join(h.tmp, "plugins-link")
-	if err := os.Symlink(h.plugins, link); err == nil {
-		for _, work := range []string{link, filepath.Join(link, "work")} {
+	staging := filepath.Join(h.tmp, "staging-link")
+	os.MkdirAll(filepath.Join(h.work, "staging"), 0o700)
+	if os.Symlink(h.plugins, link) == nil && os.Symlink(filepath.Join(h.work, "staging"), staging) == nil {
+		for _, c := range []struct{ plugins, work string }{
+			{h.plugins, link},
+			{h.plugins, filepath.Join(link, "work")},
+			{h.plugins, filepath.Join(link, "missing", "work")},
+			{staging, h.work},
+			{filepath.Join(staging, "missing"), h.work},
+		} {
 			o := h.options()
-			o.WorkDir = work
+			o.PluginsDir, o.WorkDir = c.plugins, c.work
 			if _, err := Install(o, "cli", "c2", false); err == nil || !strings.Contains(err.Error(), "overlap") {
-				t.Errorf("link %s: %v", work, err)
+				t.Errorf("link %+v: %v", c, err)
 			}
 		}
+	}
+}
+
+// 同じタグでも、マニフェストを取る間に起動した Vectorworks の下ではフックを走らせない（始めの確かめのあとで、
+// もう一度見る）。
+func TestInstallSameTagLockTakenWhileFetching(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1", latest: true})
+	h.onGet("/cli/latest/vw2026.json", func() { h.holdLock() })
+	runs := len(h.hookRuns("cli"))
+	before := snapshot(t, h.plugins)
+	if result, err := h.install("cli", "latest"); !errors.Is(err, ErrRunning) || result.Outcome != OutcomeRunning {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if len(h.hookRuns("cli")) != runs {
+		t.Fatal("ran the hook while running")
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
+}
+
+// 同じタグで、マニフェストを取る間にロックを調べられなくなれば、フックを走らせずに失敗にする（終了コード 1）。
+func TestInstallSameTagLockUnreadableWhileFetching(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports a path below a file as not found")
+	}
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1", latest: true})
+	spoolDir := filepath.Join(h.plugins, "cli", spool.SpoolDirName)
+	h.onGet("/cli/latest/vw2026.json", func() {
+		os.RemoveAll(spoolDir)
+		os.WriteFile(spoolDir, nil, 0o600)
+	})
+	runs := len(h.hookRuns("cli"))
+	if _, err := h.install("cli", "latest"); err == nil || errors.Is(err, ErrRunning) ||
+		!strings.Contains(err.Error(), "cannot tell whether Vectorworks is running") {
+		t.Fatal(err)
+	}
+	if len(h.hookRuns("cli")) != runs {
+		t.Fatal("ran the hook")
 	}
 }

@@ -24,10 +24,14 @@ var maxAsset int64 = 512 << 20
 // 展開されて、<Work> のあるドライブを埋めないため。テストが縮める。
 var maxExtracted int64 = 2 << 30
 
+// maxEntries は zip の項目の数の上限（docs/registry.md「zip の形」）。空のファイル・フォルダの多い小さな zip が、
+// 大きさの上限に掛からずに、<Work> のあるドライブにファイルを作り続けないため。テストが縮める。
+var maxEntries = 100000
+
 // lookup はレジストリを順に引き、名前の項目と、そのレジストリの名前（記録の registry）を返す
 // （docs/registry.md「レジストリの順」）。既定のレジストリが先頭で、名前が見つかった時点で止める。
 // 見つかる前に取れない・読めないレジストリがあれば、そこで失敗にする（飛ばすと、どの項目が勝つかが
-// ネットワークの状態で変わる）。--registry の書き方は、呼ぶ側（Install）が先に checkRegistries で確かめている。
+// ネットワークの状態で変わる）。--registry の書き方は、呼ぶ側（Install）が先に CheckRegistries で確かめている。
 func (o *Options) lookup(name string) (registry.Entry, string, error) {
 	def := o.Default
 	if def == nil {
@@ -52,11 +56,6 @@ func (o *Options) lookup(name string) (registry.Entry, string, error) {
 	// 引いたレジストリを示す（名前の誤りか、--registry・VW2026_REGISTRY の足りなさかを見分けられるように）。
 	return registry.Entry{}, "", fmt.Errorf("%s is in no registry (looked in: %s)", name,
 		strings.Join(append([]string{registry.DefaultName}, o.Registries...), " "))
-}
-
-// checkRegistries は、--registry に渡したものすべての書き方を確かめる（CheckRegistries）。
-func (o *Options) checkRegistries() error {
-	return CheckRegistries(o.Registries)
 }
 
 // CheckRegistries は、--registry に渡したものすべての書き方を確かめる（checkRegistry。誤りは使い方の誤り）。呼ぶ側

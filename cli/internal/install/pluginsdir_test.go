@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// 入った CLI（<X>/cli/bin/ にあり、<X>/cli/ に記録のファイルがある。中身は読まない）なら <X>。リンクは解く。
-// それ以外は偽。
+// 入った CLI（<X>/cli/bin/ にあり、<X>/cli/ に記録・モジュール・スプールのどれかがある。中身は読まない）なら <X>。
+// リンクは解く。それ以外は偽。
 func TestPluginsDirOf(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -37,10 +37,16 @@ func TestPluginsDirOf(t *testing.T) {
 	if _, ok := PluginsDirOf(executable); !ok {
 		t.Fatal("with a broken record")
 	}
-	// 記録が無ければ入った CLI とみなさない（手でビルドした CLI・手で展開した zip。記録は install だけが書く）。
+	// 記録が消えても、スプールがあれば入った CLI とみなす（既定の場所に別の cli を入れない）。
 	os.Remove(filepath.Join(h.plugins, "cli", RecordFile))
+	os.MkdirAll(filepath.Join(h.plugins, "cli", "spool"), 0o700)
+	if _, ok := PluginsDirOf(executable); !ok {
+		t.Error("with the spool only")
+	}
+	// どの印も無ければ入った CLI とみなさない（リポジトリの cli/bin/ に手でビルドした CLI）。
+	os.RemoveAll(filepath.Join(h.plugins, "cli", "spool"))
 	if _, ok := PluginsDirOf(executable); ok {
-		t.Error("without a record")
+		t.Error("without any mark")
 	}
 }
 

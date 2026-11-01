@@ -9,6 +9,7 @@
 package install
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
@@ -158,20 +160,36 @@ func (o *Options) places(name string) (places, error) {
 	}, nil
 }
 
-// nested は、path が dir と同じか、dir の中にあるか。パスの書き方（大文字と小文字の違いを除く）と、ディレクトリの
-// 同一性（within。リンク・8.3 形式・ジャンクション）の両方で決める（まだ無い場所も、書き方で見つける）。
+// nested は、path が dir と同じか、dir の中にあるか。書いたままのパスと、リンクを解いたパス（resolvedPath。Windows
+// では短い名前・大文字と小文字も揃う）の書き方で決める（まだ無い場所も、書き方で見つける。リンクを通して <Work> の
+// 下を指す --plugins-dir も、解いた書き方で見つける）。
 func nested(path, dir string) bool {
-	if rel, err := filepath.Rel(strings.ToLower(dir), strings.ToLower(path)); err == nil &&
-		rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return true
+	return lexicallyIn(path, dir) || lexicallyIn(resolvedPath(path), resolvedPath(dir))
+}
+
+// lexicallyIn は、書き方で path が dir と同じか、その中か。大文字と小文字を区別しないのが既定の OS（mac・Windows）
+// だけ、その違いを除いて比べる（区別するボリュームの、大文字と小文字だけが違う別のフォルダを重ねない。区別しない
+// 名前の別の書き方は、同一性の確かめでも見つける）。
+func lexicallyIn(path, dir string) bool {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		path, dir = strings.ToLower(path), strings.ToLower(dir)
 	}
-	if a, err := os.Stat(path); err == nil {
-		if b, err := os.Stat(dir); err == nil && os.SameFile(a, b) {
-			return true
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// resolvedPath は、path のリンクを解いた書き方。まだ無ければ、あるところまでの親を解き、残りをそのまま足す（根まで
+// 解けなければ、書いたまま）。
+func resolvedPath(path string) string {
+	for current, rest := path, ""; ; {
+		real, err := filepath.EvalSymlinks(current)
+		parent := filepath.Dir(current)
+		if err == nil || parent == current {
+			return filepath.Join(cmp.Or(real, current), rest)
 		}
+		rest = filepath.Join(filepath.Base(current), rest)
+		current = parent
 	}
-	_, inside := within(path, dir)
-	return inside
 }
 
 // stderr は、知らせの行き先（無ければ捨てる）。
@@ -202,8 +220,18 @@ func lockState(p places) (bool, error) {
 	return false, unknown
 }
 
-// running は、Vectorworks が居るとみなすか。ロックを調べられないときも居るとみなす（付け替えの途中の確かめで、
-// 動いているかもしれない Vectorworks の下でフォルダを動かさない）。始めの確かめは lockState で誤りを分けて返す。
+// stopped は、何かを変える前の確かめ（始め・同じタグのフックの前・付け替えの前）。Vectorworks が居れば ErrRunning
+// （終了コード 6）、ロックを調べられなければその誤り（終了コード 1）を返す。どちらも何も変えていないときに使う。
+func stopped(p places) error {
+	held, err := lockState(p)
+	if held {
+		return ErrRunning
+	}
+	return err
+}
+
+// running は、Vectorworks が居るとみなすか。ロックを調べられないときも居るとみなす（付け替えやフックのあとの
+// 確かめで、動いているかもしれない Vectorworks の下でフォルダを動かさない）。何も変えていないときは stopped を使う。
 func running(p places) bool {
 	held, err := lockState(p)
 	return held || err != nil
@@ -257,7 +285,7 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 	}
 	// ネットワークの要らない確かめを、レジストリを取る前にする（cli の無い <Plug-Ins> なら、取りに行かずに断る）。
 	// --registry の書き方の誤りは、それより先に使い方の誤りにする。
-	if err := o.checkRegistries(); err != nil {
+	if err := CheckRegistries(o.Registries); err != nil {
 		return nil, err
 	}
 	if err := checkCLI(p.plugins, name); err != nil {
@@ -274,9 +302,9 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 	// 終了コード 6。同じタグでも動いていればフックを走らせない）。--check は動いていてもよい。付け替えの直前にも
 	// もう一度見る（replace）。
 	if !check {
-		if held, err := lockState(p); held {
+		if err := stopped(p); errors.Is(err, ErrRunning) {
 			result.Outcome = OutcomeRunning
-			return result, ErrRunning
+			return result, err
 		} else if err != nil {
 			return nil, err
 		}
@@ -357,7 +385,14 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		_ = os.Remove(p.marker)
 	}
 	if upToDate {
-		// 同じタグなら、zip を取らず付け替えもせずに、記録に写したフックだけを走らせる。
+		// 同じタグなら、zip を取らず付け替えもせずに、記録に写したフックだけを走らせる。始めの確かめのあと、レジストリと
+		// マニフェストを取る間（時間の上限が無い）に起動した Vectorworks の下でフックを走らせないよう、もう一度見る。
+		if err := stopped(p); errors.Is(err, ErrRunning) {
+			result.Outcome = OutcomeRunning
+			return result, err
+		} else if err != nil {
+			return nil, err
+		}
 		hook, err := o.runHook("install", installed.Hooks.Install, p.dest, hookEnv{
 			name: name, tag: installed.Tag, previous: previousTag(p, name, installed), target: o.Target,
 			pluginDir: p.dest, installDir: p.dest,
@@ -469,9 +504,9 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 
 	// 付け替えの直前にロックをもう一度見る（zip を取って組み立てる間に起動した Vectorworks を
 	// 見落とさないため）。
-	if running(p) {
+	if err := stopped(p); err != nil {
 		_ = removeStaging(p)
-		return nil, ErrRunning
+		return nil, err
 	}
 	moved, err := o.sidestep(p.dest, p.old)
 	if err != nil {
@@ -555,7 +590,7 @@ func (o *Options) undoHook(p places, hadOld bool, moved *movedCLI, cause error) 
 			"then run install with the same tag again (it runs only the hook)%s", cause, reason, p.dest, previous, note)
 	}
 	if running(p) {
-		return keep("Vectorworks started meanwhile")
+		return keep("Vectorworks started meanwhile (or its lock cannot be read)")
 	}
 	// 新しい版は名前の変更でよける（消すのはあと。削除が途中で止まると、半分消えたプラグインが
 	// Plug-Ins に残るため）。
@@ -607,12 +642,15 @@ func (o *Options) settleOld(p places, name string) error {
 	case !exists(p.dest):
 		return fmt.Errorf("%s was left by an install or uninstall that stopped halfway; it may be the only copy of %s. "+
 			"Move it back to %s or delete it, then run again", p.oldDir, name, p.dest)
+	}
 	// 動いている Vectorworks が使っているかもしれないものは、消しも移しもしない（フックの間に起動したとき。
-	// 始めの確かめでは居なかった）。付け替えの前なら、install は ErrRunning で何も変えずに終わる。
-	case running(p):
+	// 始めの確かめでは居なかった）。付け替えの前なら、install は ErrRunning（ロックを調べられなければその誤り）で
+	// 何も変えずに終わる。
+	if err := stopped(p); err != nil {
 		return fmt.Errorf("%w; %s is left because Vectorworks may use it (run install %s with the same tag again "+
-			"after quitting it to clean it up)", ErrRunning, p.oldDir, name)
-	case validRecord(p.oldDir, name):
+			"after quitting it to clean it up)", err, p.oldDir, name)
+	}
+	if validRecord(p.oldDir, name) {
 		return o.discard(p, name)
 	}
 	kept := filepath.Join(p.old, name+".kept-"+stamp())

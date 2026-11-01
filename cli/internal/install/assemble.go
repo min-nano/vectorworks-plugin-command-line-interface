@@ -188,7 +188,8 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 }
 
 // extract は zip を dir へ展開する（docs/registry.md「zip の形」）。展開先の外へ出る項目・
-// シンボリックリンク・\ を区切りに使った項目・展開すると maxExtracted を超える zip は断る。
+// シンボリックリンク・\ を区切りに使った項目・展開すると maxExtracted を超える zip・項目が maxEntries を超える zip
+// は断る。
 // 権限（実行ビット）は保ち、ファイルの時刻は展開した時刻のままにする（古い時刻を付けると、
 // 付け替えの前に OS の一時フォルダの片付けで消されうるため）。
 //
@@ -201,6 +202,9 @@ func extract(zipPath, dir string) ([]string, error) {
 	defer reader.Close()
 	// 展開した大きさの合計を、展開する前に項目の大きさで確かめる（archive/zip は、項目の大きさを超えて
 	// 読ませない）。
+	if len(reader.File) > maxEntries {
+		return nil, fmt.Errorf("the zip has more than %d entries", maxEntries)
+	}
 	var total uint64
 	for _, file := range reader.File {
 		if file.UncompressedSize64 > uint64(maxExtracted)-total {
