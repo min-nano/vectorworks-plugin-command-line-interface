@@ -205,7 +205,7 @@ func filePath(ref string, windows bool) (string, error) {
 	case u.RawQuery != "" || u.ForceQuery || u.Fragment != "":
 		return "", fmt.Errorf("%q has a query or a fragment", ref)
 	case !strings.HasPrefix(u.Path, "/"):
-		return "", fmt.Errorf("%q has no absolute path (write file:///…)", ref)
+		return "", fmt.Errorf("%q has no absolute path (write file:///...)", ref)
 	case host != "" && !windows:
 		return "", fmt.Errorf("%q names the host %s (only a shared folder on Windows has one)", ref, host)
 	}
@@ -218,7 +218,7 @@ func filePath(ref string, windows bool) (string, error) {
 	}
 	// file:///C:/… の C: の前の / を除く。ドライブの無いものは絶対ではない。
 	if len(path) < 4 || path[2] != ':' || path[3] != '\\' || !isLetter(path[1]) {
-		return "", fmt.Errorf("%q has no drive (write file:///C:/…)", ref)
+		return "", fmt.Errorf("%q has no drive (write file:///C:/...)", ref)
 	}
 	return path[1:], nil
 }

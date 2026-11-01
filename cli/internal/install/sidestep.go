@@ -29,11 +29,18 @@ type movedCLI struct {
 	to   string
 }
 
-// restore はよけた CLI を元の場所へ戻す（動いていても名前の変更はできる）。
-func (m *movedCLI) restore() {
-	if m != nil {
-		_ = rename(m.to, m.from)
+// restore はよけた CLI を元の場所へ戻す（動いていても名前の変更はできる）。戻せなければ（Windows でウイルス
+// 対策がよけた実行ファイルを開いているなど）、呼ぶ側の文言に足す、手で戻す手順を返す（戻せたら空）。黙って
+// 残すと、よけた CLI の名前のまま、次の install・uninstall の後始末が唯一の vw2026 を消すため。
+func (m *movedCLI) restore() string {
+	if m == nil {
+		return ""
 	}
+	if err := rename(m.to, m.from); err != nil {
+		return fmt.Sprintf("; the running vw2026 cannot be moved back (%v): move it back from %s to %s by hand "+
+			"before the next install or uninstall (they delete it)", err, m.to, m.from)
+	}
+	return ""
 }
 
 // where は、フォルダを手で戻すよう示す文言に足す、よけた CLI の場所（よけていなければ空）。フォルダを戻すと

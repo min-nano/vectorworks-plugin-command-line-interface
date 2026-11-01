@@ -39,13 +39,6 @@ function Get-FakePathStore {
 			$state.Value = $Value
 			$state.Writes += 1
 		}.GetNewClosure()
-		Delete = {
-			if ($state.FailWrite) { throw 'cannot write' }
-			$state.Exists = $false
-			$state.Kind = ''
-			$state.Value = ''
-			$state.Writes += 1
-		}.GetNewClosure()
 		Notify = {
 			if ($state.FailNotify) { throw 'cannot notify' }
 			$state.Notified += 1

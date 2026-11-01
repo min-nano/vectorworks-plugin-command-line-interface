@@ -374,9 +374,9 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 	hadOld := exists(p.dest)
 	if hadOld {
 		if err := rename(p.dest, p.oldDir); err != nil {
-			moved.restore()
+			note := moved.restore()
 			_ = removeStaging(p)
-			return nil, renameError(p.dest, err)
+			return nil, fmt.Errorf("%w%s", renameError(p.dest, err), note)
 		}
 	}
 	if err := mkdirAll(p.plugins, 0o755); err != nil {
@@ -414,9 +414,9 @@ func (o *Options) undoSwap(p places, hadOld bool, moved *movedCLI, cause error) 
 				"move %s back to %s by hand%s", p.stageDir, p.dest, cause, err, p.oldDir, p.dest, moved.where())
 		}
 	}
-	moved.restore()
+	note := moved.restore()
 	_ = removeStaging(p)
-	return fmt.Errorf("cannot put %s into %s: %w", p.stageDir, p.dest, cause)
+	return fmt.Errorf("cannot put %s into %s: %w%s", p.stageDir, p.dest, cause, note)
 }
 
 // undoHook はフックが失敗したときに前の版へ戻す。戻す前にロックを見て、Vectorworks が起動していれば
@@ -446,8 +446,11 @@ func (o *Options) undoHook(p places, name string, hadOld bool, moved *movedCLI, 
 				cause, err, p.oldDir, p.dest, moved.where())
 		}
 	}
-	moved.restore()
+	note := moved.restore()
 	_ = removeStaging(p)
+	if note != "" {
+		return fmt.Errorf("%w; the previous version is put back%s", cause, note)
+	}
 	return fmt.Errorf("%w; the previous state is restored", cause)
 }
 

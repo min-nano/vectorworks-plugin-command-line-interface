@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
@@ -55,7 +56,9 @@ func (o *Options) lookup(name string) (registry.Entry, string, error) {
 			return entry, source, nil
 		}
 	}
-	return registry.Entry{}, "", fmt.Errorf("%s is in no registry", name)
+	// 引いたレジストリを示す（--registry・VW2026_REGISTRY が空で何も足さなかったときも、そう分かるように）。
+	return registry.Entry{}, "", fmt.Errorf("%s is in no registry (looked in: %s)", name,
+		strings.Join(append([]string{registry.DefaultName}, o.Registries...), " "))
 }
 
 // checkRegistry は --registry に渡したものが https:// か file:// の URL かを確かめる（docs/registry.md
@@ -63,7 +66,7 @@ func (o *Options) lookup(name string) (registry.Entry, string, error) {
 // 文字列をそのまま残し、比べるのもその文字列どうしだけ。
 func checkRegistry(ref string) error {
 	if err := registry.CheckRef(ref, false); err != nil {
-		return usageErrorf("the registry: %v (write a path as file:///…, with %%20 for a space)", err)
+		return usageErrorf("the registry: %v (write a path as file:///..., with %%20 for a space)", err)
 	}
 	return nil
 }

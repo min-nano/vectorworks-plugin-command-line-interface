@@ -79,34 +79,34 @@ BeforeAll {
 	}
 }
 
-Describe 'Test-PathEntry' {
+Describe 'Test-PathEntryTarget' {
 	It 'ignores the case, the spaces around, one pair of quotes, and the trailing backslash' {
-		Test-PathEntry ' "C:\Users\U\Plug-Ins\CLI\BIN\" ' 'c:\users\u\plug-ins\cli\bin' | Should -BeTrue
-		Test-PathEntry 'C:\x\bin\\' 'C:\x\bin' | Should -BeTrue
+		Test-PathEntryTarget ' "C:\Users\U\Plug-Ins\CLI\BIN\" ' (Get-PathEntryTarget 'c:\users\u\plug-ins\cli\bin') | Should -BeTrue
+		Test-PathEntryTarget 'C:\x\bin\\' (Get-PathEntryTarget 'C:\x\bin') | Should -BeTrue
 	}
 	It 'does not expand variables' {
-		Test-PathEntry '%APPDATA%\cli\bin' 'C:\Users\U\AppData\Roaming\cli\bin' | Should -BeFalse
+		Test-PathEntryTarget '%APPDATA%\cli\bin' (Get-PathEntryTarget 'C:\Users\U\AppData\Roaming\cli\bin') | Should -BeFalse
 	}
 	It 'removes only one pair of quotes' {
-		Test-PathEntry '""C:\x""' 'C:\x' | Should -BeFalse
+		Test-PathEntryTarget '""C:\x""' (Get-PathEntryTarget 'C:\x') | Should -BeFalse
 	}
 	It 'does not match an empty entry or another directory' {
-		Test-PathEntry '' 'C:\x' | Should -BeFalse
-		Test-PathEntry 'C:\x\bin2' 'C:\x\bin' | Should -BeFalse
+		Test-PathEntryTarget '' (Get-PathEntryTarget 'C:\x') | Should -BeFalse
+		Test-PathEntryTarget 'C:\x\bin2' (Get-PathEntryTarget 'C:\x\bin') | Should -BeFalse
 	}
 	It 'matches the same directory written another way, also below a folder that is gone' {
 		$real = Join-Path $TestDrive 'real'
 		New-Item -ItemType Directory -Path (Join-Path $real 'cli\bin') -Force | Out-Null
 		$junction = Join-Path $TestDrive 'junction'
 		New-Item -ItemType Junction -Path $junction -Target $real | Out-Null
-		Test-PathEntry "$junction\cli\bin" "$real\cli\bin" | Should -BeTrue
-		Test-PathEntry "$junction\gone\bin" "$real\gone\bin" | Should -BeTrue
-		Test-PathEntry "$junction\gone\bin" "$real\gone\bin2" | Should -BeFalse
-		Test-PathEntry $junction "$real\cli" | Should -BeFalse
+		Test-PathEntryTarget "$junction\cli\bin" (Get-PathEntryTarget "$real\cli\bin") | Should -BeTrue
+		Test-PathEntryTarget "$junction\gone\bin" (Get-PathEntryTarget "$real\gone\bin") | Should -BeTrue
+		Test-PathEntryTarget "$junction\gone\bin" (Get-PathEntryTarget "$real\gone\bin2") | Should -BeFalse
+		Test-PathEntryTarget $junction (Get-PathEntryTarget "$real\cli") | Should -BeFalse
 	}
 	It 'does not match a relative entry or one that is not a path' {
-		Test-PathEntry 'cli\bin' (Join-Path $PWD 'cli\bin') | Should -BeFalse
-		Test-PathEntry 'C:\a|b' 'C:\a' | Should -BeFalse
+		Test-PathEntryTarget 'cli\bin' (Get-PathEntryTarget (Join-Path $PWD 'cli\bin')) | Should -BeFalse
+		Test-PathEntryTarget 'C:\a|b' (Get-PathEntryTarget 'C:\a') | Should -BeFalse
 	}
 }
 
@@ -218,10 +218,12 @@ Describe 'Uninstall-PathEntry' {
 		$store.State.Kind | Should -BeExactly 'ExpandString'
 		$store.State.Value | Should -BeExactly '%USERPROFILE%\vw2026-path-probe'
 	}
-	It 'deletes the value when nothing is left' {
+	It 'keeps the value and its type when nothing is left' {
 		$store = Get-FakePathStore -Value 'C:\p\cli\bin;'
 		Uninstall-PathEntry $store 'C:\p\cli\bin' | Should -BeExactly 'removed'
-		$store.State.Exists | Should -BeFalse
+		$store.State.Exists | Should -BeTrue
+		$store.State.Kind | Should -BeExactly 'ExpandString'
+		$store.State.Value | Should -BeExactly ''
 	}
 	It 'does nothing without the entry' {
 		$missing = Get-FakePathStore -Missing

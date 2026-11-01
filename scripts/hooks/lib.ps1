@@ -2,12 +2,12 @@
 # （docs/plugin/install-and-update.md「`cli` のフック」「Windows の `Path` の読み書き」）。
 # Path の項目の比べ方・足し方・除き方を 1 か所に置き、install と uninstall が同じ比べ方を使うようにする。
 #
-# 利用者の Path の読み書きは「置き場所」（Read・Write・Delete・Notify のスクリプトブロックを持つ
+# 利用者の Path の読み書きは「置き場所」（Read・Write・Notify のスクリプトブロックを持つ
 # ハッシュテーブル）を通す。本番は Get-RegistryPathStore（HKCU\Environment）で、テストは偽の置き場所を
 # フックの -Store に渡して差し替える。Windows PowerShell 5.1 で動かす。
 
 # Get-PathEntryKey は、比べるための項目の形。前後の空白を除き、全体を囲む " を 1 組だけ除き、末尾の
-# \ を除く。%…% は展開しない（大文字と小文字は Test-PathEntry が区別せずに比べる）。
+# \ を除く。%…% は展開しない（大文字と小文字は Test-PathEntryTarget が区別せずに比べる）。
 function Get-PathEntryKey {
 	param([string] $Entry)
 	$key = $Entry.Trim()
@@ -96,14 +96,6 @@ function Get-PathEntryPlace {
 	return $final.TrimEnd('\') + $rest
 }
 
-# Test-PathEntry は、Path の項目 $Entry が $Dir と同じ項目か。まず Get-PathEntryKey の形を大文字と小文字を
-# 区別せずに比べ、違えば実際の場所（Get-PathEntryPlace）で比べる（同じディレクトリを別の書き方、たとえば
-# ジャンクション・8.3 形式・--plugins-dir の書き方で指したものを同じとみなす。CLI の within と同じ考え方）。
-function Test-PathEntry {
-	param([string] $Entry, [string] $Dir)
-	return Test-PathEntryTarget $Entry (Get-PathEntryTarget $Dir)
-}
-
 # Get-PathEntryTarget は、比べる側の $Dir の形（Get-PathEntryKey）と実際の場所（Get-PathEntryPlace）。Path の
 # 項目ごとに $Dir のディレクトリを開き直さないよう、Path を 1 回たどるあいだ、これを 1 度だけ求めて使う。
 function Get-PathEntryTarget {
@@ -112,7 +104,10 @@ function Get-PathEntryTarget {
 	return [pscustomobject]@{ Key = $key; Place = (Get-PathEntryPlace $key) }
 }
 
-# Test-PathEntryTarget は、Path の項目 $Entry が $Target（Get-PathEntryTarget）と同じ項目か（Test-PathEntry）。
+# Test-PathEntryTarget は、Path の項目 $Entry が $Target（Get-PathEntryTarget）と同じ項目か。まず
+# Get-PathEntryKey の形を大文字と小文字を区別せずに比べ、違えば実際の場所（Get-PathEntryPlace）で比べる（同じ
+# ディレクトリを別の書き方、たとえばジャンクション・8.3 形式・--plugins-dir の書き方で指したものを同じとみなす。
+# CLI の within と同じ考え方）。
 function Test-PathEntryTarget {
 	param([string] $Entry, [object] $Target)
 	$key = Get-PathEntryKey $Entry
@@ -253,14 +248,6 @@ function Get-RegistryPathStore {
 			$key.SetValue('Path', $Value, [Microsoft.Win32.RegistryValueKind] $Kind)
 			$key.Close()
 		}
-		Delete = {
-			$key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
-			if ($null -eq $key) {
-				return
-			}
-			$key.DeleteValue('Path', $false)
-			$key.Close()
-		}
 		# 書いたことをトップレベルのウィンドウに知らせる（WM_SETTINGCHANGE。Explorer などがそこから
 		# 開く端末に新しい値を渡す）。上限はウィンドウ 1 つずつに順にかかり、全体の上限は持たない。
 		Notify = {
@@ -314,7 +301,8 @@ function Install-PathEntry {
 }
 
 # Uninstall-PathEntry は利用者の Path から $Dir と同じ項目をすべて除き、結果（removed・none・failed）を
-# 返す。除いて空になったら値ごと消す。失敗は例外にせず、結果で返す（uninstall のフックは失敗しない）。
+# 返す。除いて空になっても値は消さず、空の文字列を元の型で書く（消してよいのは一致する項目だけ。守ること 9）。
+# 失敗は例外にせず、結果で返す（uninstall のフックは失敗しない）。
 #
 #   removed  項目を除いた
 #   none     同じ項目が無かった（値が無い・型が文字列でないときも）
@@ -331,11 +319,7 @@ function Uninstall-PathEntry {
 		return 'none'
 	}
 	$rest = Get-PathWithoutEntry $value $Dir
-	$change = { & $Store.Write $rest $kind }
-	if ($rest.Length -eq 0) {
-		$change = $Store.Delete
-	}
-	try { & $change } catch { Write-HookException 'cannot write Path' $_; return 'failed' }
+	try { & $Store.Write $rest $kind } catch { Write-HookException 'cannot write Path' $_; return 'failed' }
 	Invoke-PathNotify $Store
 	return 'removed'
 }

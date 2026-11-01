@@ -58,13 +58,16 @@
     },
     "in-house-tool": {
       "manifests": [
-        { "match": "stable", "path": "\\\\fileserver\\vectorworks\\in-house-tool\\stable.json" },
-        { "match": "*", "path": "\\\\fileserver\\vectorworks\\in-house-tool\\{tag}\\vw2026.json" }
+        { "match": "stable", "path": "file://fileserver/vectorworks/in-house-tool/stable.json" },
+        { "match": "*", "path": "file://fileserver/vectorworks/in-house-tool/{tag}/vw2026.json" }
       ]
     }
   }
 }
 ```
+
+`in-house-tool` の例は Windows の共有フォルダ（`\\fileserver\vectorworks\…`）を指します。`file://` を指せるのは、
+手元のファイル（`file://`）のレジストリだけです（下記「[参照の書き方](#参照の書き方)」）。
 
 | 項目 | 意味 |
 | --- | --- |
@@ -113,7 +116,7 @@
 | 順 | レジストリ | 補足 |
 | --- | --- | --- |
 | 1 | **既定のレジストリ**（CLI に埋め込む。`cli/internal/registry/default.json`） | 必ず先頭にあり、外せない。このリポジトリの PR で直し、CLI のビルドに入る |
-| 2〜 | `--registry <url>`（何度でも書ける。1 つの値の中でも、空白で区切って複数を書ける。環境変数 `VW2026_REGISTRY` も同じで、空白で区切って複数を書ける） | 書いた順に引く。引数があれば環境変数は読まない（2 つの一覧をつながない）。`,` では区切らない（URL の `,` をそのまま使う）。`https://` か `file://` の URL でないもの（パス・`http://`・`HTTPS://` など）は使い方の誤りにする（名前が既定のレジストリにあって引かないときも） |
+| 2〜 | `--registry <url>`（何度でも書ける。1 つの値の中でも、空白で区切って複数を書ける。環境変数 `VW2026_REGISTRY` も同じで、空白で区切って複数を書ける） | 書いた順に引く。引数があれば環境変数は読まない（2 つの一覧をつながない）。`,` では区切らない（URL の `,` をそのまま使う）。`https://` か `file://` の URL でないもの（パス・`http://`・`HTTPS://` など）は使い方の誤りにする（名前が既定のレジストリにあって引かないときも）。空の値（空白だけを含む）は何も足さない（`--plugins-dir` の空と同じく、与えていないのと同じ。見つからなければ、引いたレジストリを `message` に示す） |
 
 - **先に見つかった名前を使います。** 名前が重なっても失敗にしません。どのレジストリの項目を
   使ったかは出力の `registry` に載せます。

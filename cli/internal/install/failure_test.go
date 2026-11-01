@@ -258,7 +258,8 @@ func TestUsageErrorMessage(t *testing.T) {
 // 名前がどのレジストリにも無い・規則が合わない・マニフェストが読めないときは、何も変えずに失敗にする。
 func TestInstallManifestErrors(t *testing.T) {
 	h := newHarness(t)
-	if _, err := h.install("nowhere", "1"); err == nil || !strings.Contains(err.Error(), "no registry") {
+	// 引いたレジストリを示す（空の --registry で何も足さなかったときも分かる）。
+	if _, err := h.install("nowhere", "1"); err == nil || !strings.Contains(err.Error(), "no registry (looked in: default") {
 		t.Error(err)
 	}
 	narrow := fileURL(filepath.Join(h.tmp, "narrow.json"))
@@ -410,6 +411,44 @@ func TestInstallHookFailureCannotUndo(t *testing.T) {
 			}
 			// 前の版を戻せないときは、よけた CLI の場所も示す。
 			if name == "old version" && !strings.Contains(err.Error(), "move the running vw2026 back") {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// よけた CLI を戻せなければ、どの戻しも、戻したとは言わずに、手で戻す場所を示す（黙って残すと、次の後始末が
+// よけた名前のまま唯一の vw2026 を消すため）。
+func TestCannotRestoreTheSidesteppedCLI(t *testing.T) {
+	for name, c := range map[string]struct {
+		fail func(h *harness)
+		plan *hookPlan
+	}{
+		"first rename": {fail: func(h *harness) {
+			failRenameTo(t, filepath.Join(h.plugins, "cli"), filepath.Join(h.work, "old", "cli"))
+		}},
+		"second rename": {fail: func(h *harness) { failRename(t, filepath.Join(h.work, "staging", "cli")) }},
+		"hook":          {fail: func(h *harness) {}, plan: &hookPlan{Exit: 1}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			h.mustInstall(release{name: "cli", tag: "c1"})
+			h.publish(release{name: "cli", tag: "c2", install: c.plan})
+			c.fail(h)
+			executable := filepath.Join(h.plugins, "cli", "bin", "vw2026")
+			original := rename
+			rename = func(from, to string) error {
+				if to == executable && strings.HasPrefix(filepath.Base(from), oldCLIName) {
+					return errInjected
+				}
+				return original(from, to)
+			}
+			t.Cleanup(func() { rename = original })
+			o := h.options()
+			o.Executable = executable
+			_, err := Install(o, "cli", "c2", false)
+			if err == nil || !strings.Contains(err.Error(), "cannot be moved back") ||
+				!strings.Contains(err.Error(), executable) || strings.Contains(err.Error(), "restored") {
 				t.Fatal(err)
 			}
 		})

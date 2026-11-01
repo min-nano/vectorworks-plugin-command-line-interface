@@ -16,7 +16,7 @@ type installCmd struct {
 	PluginsDir string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins, as an absolute path (default: the Plug-Ins folder of Vectorworks 2026 for this user)."`
 	// sep:"none" で、URL のコンマで分けない（kong は既定で、引数と環境変数の値をコンマで分ける）。空白で
 	// 分けるのは run の中（URL は空白を含まない）。
-	Registry []string `env:"VW2026_REGISTRY" sep:"none" placeholder:"URL" help:"Registry (an https:// or a file:// URL) to look the name up in after the default one (repeatable; spaces separate several)."`
+	Registry []string `env:"VW2026_REGISTRY" sep:"none" placeholder:"URL" help:"Registry (an https:// or a file:// URL) to look the name up in after the default one (repeatable; spaces separate several; an empty value adds none, like an empty --plugins-dir)."`
 }
 
 func (installCmd) Help() string {
@@ -110,7 +110,8 @@ func (c *installCmd) run(e *env) int {
 	if code != exitOK {
 		return code
 	}
-	// URL は空白を含まないので、値の中の空白で分ける（VW2026_REGISTRY に複数を書ける）。
+	// URL は空白を含まないので、値の中の空白で分ける（VW2026_REGISTRY に複数を書ける）。空の値は何も足さない
+	// （--plugins-dir と同じく、与えていないのと同じ。引数と環境変数のどちらの空かは見分けられない）。
 	for _, value := range c.Registry {
 		options.Registries = append(options.Registries, strings.Fields(value)...)
 	}

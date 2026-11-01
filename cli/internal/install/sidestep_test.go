@@ -134,8 +134,7 @@ func TestSidestepFollowsTheLink(t *testing.T) {
 	if err != nil || moved == nil || moved.from != h.fakeExecutable() || exist(h.fakeExecutable()) {
 		t.Fatalf("%+v %v", moved, err)
 	}
-	moved.restore()
-	if !exist(h.fakeExecutable()) {
+	if note := moved.restore(); note != "" || !exist(h.fakeExecutable()) {
 		t.Fatal("not restored")
 	}
 }

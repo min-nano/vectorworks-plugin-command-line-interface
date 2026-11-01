@@ -160,8 +160,13 @@ func TestInstallFromLocalRegistry(t *testing.T) {
 	if r := invoke(t, opts{plugins: plugins}, "install", "demo@d1", "--registry", filepath.Join(tmp, "plugins.json")); r.code != exitUsage {
 		t.Fatalf("a path: %+v", r)
 	}
+	// 空の値は何も足さない（--plugins-dir の空と同じ）。引いたのが既定のレジストリだけだと、文言で分かる。
+	r := invoke(t, opts{plugins: plugins, vars: map[string]string{"VW2026_REGISTRY": " "}}, "install", "demo@d1")
+	if r.code != exitFailure || !strings.Contains(r.stdout, "looked in: default)") {
+		t.Fatalf("an empty registry: %+v", r)
+	}
 	vars := map[string]string{"VW2026_REGISTRY": fileURL(other) + " " + registryPath}
-	r := invoke(t, opts{plugins: plugins, vars: vars}, "install", "demo@d1", "--check")
+	r = invoke(t, opts{plugins: plugins, vars: vars}, "install", "demo@d1", "--check")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"outcome":"available"`) || exist(filepath.Join(plugins, "demo")) {
 		t.Fatalf("--check: %+v", r)
 	}
