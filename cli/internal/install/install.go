@@ -160,16 +160,26 @@ func (o *Options) places(name string) (places, error) {
 	}, nil
 }
 
-// nested は、path が dir と同じか、dir の中にあるか。書いたままのパスと、リンクを解いたパス（resolvedPath。Windows
-// では短い名前・大文字と小文字も揃う）の書き方で決める（まだ無い場所も、書き方で見つける。リンクを通して <Work> の
-// 下を指す --plugins-dir も、解いた書き方で見つける）。
+// nested は、path が dir と同じか、dir の中にあるか。書いたままのパスと、リンクを解いたパス（resolvedPath）の書き方と、
+// ディレクトリの同一性（sameDirectory・within）で決める。書き方は、まだ無い場所も見つける（リンクを通して <Work> の
+// 下を指す --plugins-dir も、解いた書き方で見つける）。同一性は、Windows で EvalSymlinks が解かないジャンクション・
+// subst のドライブ・割り当てたドライブ・短い名前も見つける。
 func nested(path, dir string) bool {
-	return lexicallyIn(path, dir) || lexicallyIn(resolvedPath(path), resolvedPath(dir))
+	_, inside := within(path, dir)
+	return lexicallyIn(path, dir) || lexicallyIn(resolvedPath(path), resolvedPath(dir)) || sameDirectory(path, dir) ||
+		inside
+}
+
+// sameDirectory は、a と b が同じディレクトリか（どちらかが無ければ偽）。
+func sameDirectory(a, b string) bool {
+	x, errX := os.Stat(a)
+	y, errY := os.Stat(b)
+	return errX == nil && errY == nil && os.SameFile(x, y)
 }
 
 // lexicallyIn は、書き方で path が dir と同じか、その中か。大文字と小文字を区別しないのが既定の OS（mac・Windows）
 // だけ、その違いを除いて比べる（区別するボリュームの、大文字と小文字だけが違う別のフォルダを重ねない。区別しない
-// 名前の別の書き方は、同一性の確かめでも見つける）。
+// 名前の別の書き方は、あれば同一性の確かめでも見つける）。
 func lexicallyIn(path, dir string) bool {
 	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		path, dir = strings.ToLower(path), strings.ToLower(dir)
@@ -276,6 +286,22 @@ func CheckRequest(name, tag string) error {
 // check なら入れずに、新しいビルドがあるかだけを返す。Vectorworks が動いていれば何もせずに
 // ErrRunning を返す（結果の outcome も vectorworks_running）。
 func Install(o Options, name, requested string, check bool) (*InstallResult, error) {
+	result, err := install(o, name, requested, check)
+	// どこで分かっても、Vectorworks が動いていたら同じ形にする（outcome を道ごとに書かない）。ほかの誤りでは結果を
+	// 返さない（呼ぶ側は failed を出す）。
+	switch {
+	case errors.Is(err, ErrRunning) && result != nil:
+		result.Outcome = OutcomeRunning
+		return result, err
+	case err != nil:
+		return nil, err
+	}
+	return result, nil
+}
+
+// install は Install の本体。Vectorworks が動いていたら、作った結果と ErrRunning を返す（Install が outcome を
+// 決める）。
+func install(o Options, name, requested string, check bool) (*InstallResult, error) {
 	if err := CheckRequest(name, requested); err != nil {
 		return nil, err
 	}
@@ -302,11 +328,8 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 	// 終了コード 6。同じタグでも動いていればフックを走らせない）。--check は動いていてもよい。付け替えの直前にも
 	// もう一度見る（replace）。
 	if !check {
-		if err := stopped(p); errors.Is(err, ErrRunning) {
-			result.Outcome = OutcomeRunning
+		if err := stopped(p); err != nil {
 			return result, err
-		} else if err != nil {
-			return nil, err
 		}
 	}
 	entry, source, err := o.lookup(name)
@@ -387,11 +410,8 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 	if upToDate {
 		// 同じタグなら、zip を取らず付け替えもせずに、記録に写したフックだけを走らせる。始めの確かめのあと、レジストリと
 		// マニフェストを取る間（時間の上限が無い）に起動した Vectorworks の下でフックを走らせないよう、もう一度見る。
-		if err := stopped(p); errors.Is(err, ErrRunning) {
-			result.Outcome = OutcomeRunning
+		if err := stopped(p); err != nil {
 			return result, err
-		} else if err != nil {
-			return nil, err
 		}
 		hook, err := o.runHook("install", installed.Hooks.Install, p.dest, hookEnv{
 			name: name, tag: installed.Tag, previous: previousTag(p, name, installed), target: o.Target,
@@ -401,18 +421,14 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 			return nil, err
 		}
 		// 新しい版を残した install の続きなら、フックが通ったので、付け替えのあとと同じく印を外して片付ける。
-		o.finishInstall(p, name)
+		o.finishInstall(p, name, nil, false)
 		result.Outcome = OutcomeUpToDate
 		result.Hook = hook
 		return result, nil
 	}
 	hook, err := o.replace(p, name, source, result.Tag, previousTag(p, name, installed), asset)
 	if err != nil {
-		if errors.Is(err, ErrRunning) {
-			result.Outcome = OutcomeRunning
-			return result, err
-		}
-		return nil, err
+		return result, err
 	}
 	result.Outcome = OutcomeInstalled
 	result.Hook = hook
@@ -461,7 +477,7 @@ func previousTag(p places, name string, installed *Record) string {
 }
 
 // pluginFolder は、<Plug-Ins>/<name> が在るか。在ってもシンボリックリンク（記録のあるフォルダを指すものでも）・
-// ファイルなら、vw2026 が入れたフォルダとみなさずに誤りにする（リンクの先の作業用のコピーなどに触れない）。
+// ジャンクション（Windows。Go は ModeDir と ModeIrregular を返す）・ファイルなら、vw2026 が入れたフォルダとみなさずに誤りにする（リンクの先の作業用のコピーなどに触れない）。
 // 無い以外の理由で調べられなければ（権限・届かない共有）、その誤りを返す（無いとみなして進まない）。install と
 // uninstall はどちらもこれだけで決める（守ること 9 の歯止め）。
 func pluginFolder(dest string) (bool, error) {
@@ -471,7 +487,7 @@ func pluginFolder(dest string) (bool, error) {
 		return false, nil
 	case err != nil:
 		return false, err
-	case !info.IsDir():
+	case info.Mode().Type() != os.ModeDir:
 		return false, fmt.Errorf("%s is not a folder that vw2026 installed (not a plain folder); vw2026 does not touch it", dest)
 	}
 	return true, nil
@@ -534,7 +550,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 	if err != nil {
 		return nil, o.undoHook(p, hadOld, moved, err)
 	}
-	o.finishInstall(p, name)
+	o.finishInstall(p, name, moved, hadOld)
 	return hook, nil
 }
 
@@ -543,14 +559,23 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 // 変わらないので、知らせるだけにする。次の install が片付ける）、組み立ての場所の残りと中断した uninstall の印を
 // 消し（印を残すと、次の install が付け替えの途中で止まったときに、次の uninstall が唯一残った old/<name>/ を
 // 消してしまう）、よけた CLI を消してみる（動いていて消せなければ残す）。
-func (o *Options) finishInstall(p places, name string) {
+func (o *Options) finishInstall(p places, name string, moved *movedCLI, hadOld bool) {
 	// フックが通ったので、記録の hook_pending を外す。外せなければ知らせ、退避した版は片付けない（記録はまだ
 	// 通っていないと言うので、次の同じタグの install が前の版のタグでフックを走らせ直し、そこで外して片付ける）。
+	// 退避した版を残すときは、よけた CLI をその版のフォルダの元の場所へ戻す（undoHook の keep と同じ。利用者が前の版を
+	// 手で戻したときに CLI が欠けず、下の後始末がよけた名前のまま消さないように）。
+	var kept error
 	if err := clearHookPending(p.dest); err != nil {
-		fmt.Fprintf(o.stderr(), "vw2026: cannot record that the install hook succeeded (%v); run install with the same "+
-			"tag again\n", err)
-	} else if err := o.settleOld(p, name); err != nil {
-		fmt.Fprintf(o.stderr(), "vw2026: %v\n", err)
+		kept = fmt.Errorf("cannot record that the install hook succeeded (%v); run install with the same tag again", err)
+	} else {
+		kept = o.settleOld(p, name)
+	}
+	if kept != nil {
+		note := ""
+		if hadOld && exists(p.oldDir) {
+			note = moved.restoreInto(p.dest, p.oldDir)
+		}
+		fmt.Fprintf(o.stderr(), "vw2026: %v%s\n", kept, note)
 	}
 	_ = removeStaging(p)
 	_ = os.Remove(p.marker)

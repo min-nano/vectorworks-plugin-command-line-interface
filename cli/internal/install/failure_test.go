@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -1659,5 +1660,52 @@ func TestInstallSameTagLockUnreadableWhileFetching(t *testing.T) {
 	}
 	if len(h.hookRuns("cli")) != runs {
 		t.Fatal("ran the hook")
+	}
+}
+
+// フックが通ったのに hook_pending を外せず前の版を残すときは、よけた CLI を前の版のフォルダへ戻す（後始末が、
+// 前の版の vw2026 をよけた名前のまま消さない）。
+func TestCannotClearHookPendingPutsTheMovedCLIBack(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.publish(release{name: "cli", tag: "c2"})
+	record := filepath.Join(h.plugins, "cli", RecordFile) + ".new"
+	original := writeFile
+	writeFile = func(path string, data []byte, perm fs.FileMode) error {
+		if path == record {
+			return errInjected
+		}
+		return original(path, data, perm)
+	}
+	t.Cleanup(func() { writeFile = original })
+	var stderr bytes.Buffer
+	o := h.options()
+	o.Stderr = &stderr
+	o.Executable = h.fakeExecutable()
+	if result, err := Install(o, "cli", "c2", false); err != nil || result.Outcome != OutcomeInstalled ||
+		!strings.Contains(stderr.String(), "hook succeeded") {
+		t.Fatalf("%+v %v %s", result, err, stderr.String())
+	}
+	if data, err := os.ReadFile(filepath.Join(h.work, "old", "cli", "bin", "vw2026")); err != nil || string(data) != "cli c1" {
+		t.Fatal("the previous version should have its vw2026 back:", string(data), err)
+	}
+}
+
+// Windows のジャンクション（Go は ModeDir と ModeIrregular を返す）も、vw2026 が入れたフォルダとみなさない（リンクの
+// 先の作業用のコピーに触れない）。
+func TestPluginFolderRefusesAJunction(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("junctions are a Windows feature")
+	}
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	target := filepath.Join(h.tmp, "working-copy")
+	os.MkdirAll(target, 0o755)
+	link := filepath.Join(h.plugins, "demo")
+	if out, err := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput(); err != nil {
+		t.Skip("cannot make a junction:", string(out), err)
+	}
+	if found, err := pluginFolder(link); found || err == nil || !strings.Contains(err.Error(), "not a plain folder") {
+		t.Fatal(found, err)
 	}
 }

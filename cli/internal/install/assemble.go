@@ -200,11 +200,12 @@ func extract(zipPath, dir string) ([]string, error) {
 		return nil, fmt.Errorf("not a zip: %w", err)
 	}
 	defer reader.Close()
-	// 展開した大きさの合計を、展開する前に項目の大きさで確かめる（archive/zip は、項目の大きさを超えて
-	// 読ませない）。
+	// 項目の数を、展開する前に確かめる。
 	if len(reader.File) > maxEntries {
 		return nil, fmt.Errorf("the zip has more than %d entries", maxEntries)
 	}
+	// 展開した大きさの合計を、展開する前に項目の大きさで確かめる（archive/zip は、項目の大きさを超えて
+	// 読ませない）。
 	var total uint64
 	for _, file := range reader.File {
 		if file.UncompressedSize64 > uint64(maxExtracted)-total {

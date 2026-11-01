@@ -31,8 +31,8 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	if held, err := lockState(p); held {
-		return runningResult(name), ErrRunning
+	if err := stopped(p); errors.Is(err, ErrRunning) {
+		return runningResult(name), err
 	} else if err != nil {
 		return nil, err
 	}
