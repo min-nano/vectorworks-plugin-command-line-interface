@@ -31,6 +31,16 @@ type Record struct {
 	Target        string         `json:"target"`
 	Module        string         `json:"module"`
 	Hooks         registry.Hooks `json:"hooks"`
+	// 入れた版の install のフックがまだ通っていない（フックの間に Vectorworks が起動して新しい版を残した）。
+	// フックが通ったら外す。前のタグ（previousTag）をこれで決める（<Work>/old/<name>/ の残り方から推し量らない）。
+	HookPending bool `json:"hook_pending,omitempty"`
+}
+
+// writeRecord は記録を dir に書く。
+func writeRecord(dir string, record *Record) error {
+	// 文字列・文字列の配列・真偽値だけの構造体なので、失敗しない。
+	data, _ := json.MarshalIndent(record, "", "\t")
+	return writeFile(filepath.Join(dir, RecordFile), append(data, '\n'), 0o644)
 }
 
 // readRecord はフォルダの記録を読む。無ければ os.ErrNotExist を包んだ誤り。知らない項目は
@@ -131,9 +141,7 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 		Module:        module,
 		Hooks:         asset.Hooks,
 	}
-	// 文字列と文字列の配列だけの構造体なので、失敗しない。
-	data, _ := json.MarshalIndent(record, "", "\t")
-	if err := writeFile(filepath.Join(p.stageDir, RecordFile), append(data, '\n'), 0o644); err != nil {
+	if err := writeRecord(p.stageDir, record); err != nil {
 		return nil, err
 	}
 	return record, nil

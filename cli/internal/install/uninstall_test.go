@@ -216,6 +216,19 @@ func TestUninstallStaleMarker(t *testing.T) {
 	}
 }
 
+// 入っていなくても、前の回が残したよけた CLI・組み立ての場所・空の <Work> を、外したときと同じく片付ける。
+func TestUninstallNotInstalledCleansUp(t *testing.T) {
+	h := newHarness(t)
+	moved := filepath.Join(h.work, "old", oldCLIName+"20260101T000000.000000000")
+	os.MkdirAll(filepath.Dir(moved), 0o700)
+	os.WriteFile(moved, nil, 0o700)
+	os.MkdirAll(filepath.Join(h.work, "staging", "cli"), 0o700)
+	result, err := Uninstall(h.options(), "cli")
+	if err != nil || result.Outcome != OutcomeNotInstall || len(result.Left) != 0 || exist(moved) || exist(h.work) {
+		t.Fatalf("%+v %v", result, err)
+	}
+}
+
 // 走らせている CLI が外すフォルダの中にあれば（入れた cli の vw2026 で uninstall cli）、何も変えずに
 // ErrRunsInside で断る（フォルダの外の CLI、初回のスクリプトで外す）。リンクを通して走らせても同じ。
 func TestUninstallFromInsideTheFolder(t *testing.T) {

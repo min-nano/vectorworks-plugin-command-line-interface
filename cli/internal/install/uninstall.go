@@ -95,9 +95,12 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		resumed = true
 	default:
 		_ = os.Remove(p.marker)
-		// 前の回が消しきれなかった組み立ての場所（discard の残り）も消す。
+		// 前の回が消しきれなかった組み立ての場所（discard の残り）・よけた CLI・空の <Work> も、外したときと同じく
+		// 片付ける（初回のスクリプトの uninstall が、入っていなくても何も残さないように）。
 		_ = removeStaging(p)
-		return &UninstallResult{Outcome: OutcomeNotInstall, Name: name, Remaining: installedIn(p.plugins), Left: []string{}}, nil
+		left := cleanOldCLIs(p.old)
+		removeEmptyWork(p)
+		return &UninstallResult{Outcome: OutcomeNotInstall, Name: name, Remaining: installedIn(p.plugins), Left: left}, nil
 	}
 
 	hook, err := o.runHook("uninstall", record.Hooks.Uninstall, p.oldDir, hookEnv{

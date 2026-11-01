@@ -170,6 +170,14 @@ func TestDeployPlacesNotLocated(t *testing.T) {
 	if code := run([]string{"install", "cli@latest"}, e); code != exitFailure || !strings.Contains(stderr.String(), "folder of plug-ins") {
 		t.Fatalf("%d %s", code, stderr.String())
 	}
+	// 走らせている CLI の場所が分かっても（フォルダの外）、既定の場所を求められなければ 1。
+	stderr.Reset()
+	outside := e
+	outside.executable = func() (string, error) { return filepath.Join(t.TempDir(), "vw2026"), nil }
+	if code := run([]string{"uninstall", "cli"}, outside); code != exitFailure ||
+		!strings.Contains(stderr.String(), "cannot locate the folder of plug-ins") {
+		t.Fatalf("%d %s", code, stderr.String())
+	}
 	stderr.Reset()
 	if code := run([]string{"uninstall", "cli", "--plugins-dir", t.TempDir()}, e); code != exitFailure ||
 		!strings.Contains(stderr.String(), "work folder") {
@@ -276,6 +284,14 @@ func TestUninstallFromInsideShowsTheScript(t *testing.T) {
 	}
 	if !exist(filepath.Join(plugins, "cli", install.RecordFile)) {
 		t.Fatal("removed cli")
+	}
+	// 既定の場所を求められないときも、場所が分からないので --plugins-dir を載せる。
+	var stdout, stderr bytes.Buffer
+	failing := func() (string, error) { return "", os.ErrNotExist }
+	e := env{stdout: &stdout, stderr: &stderr, pluginsDir: failing, workDir: func() (string, error) { return t.TempDir(), nil },
+		executable: func() (string, error) { return executable, nil }}
+	if code := run([]string{"uninstall", "cli"}, e); code != exitUsage || !strings.Contains(stdout.String(), "--plugins-dir") {
+		t.Fatalf("%d %s %s", code, stdout.String(), stderr.String())
 	}
 	// 入った <Plug-Ins> が既定の場所でなければ、初回のスクリプトに渡す --plugins-dir を示すコマンドに載せる
 	// （場所はリンクを解いたもの。mac の /private/var など、一時フォルダの書き方と違いうる）。

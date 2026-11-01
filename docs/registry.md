@@ -273,7 +273,7 @@
 | --- | --- |
 | `VW2026_HOOK_NAME` | 名前 |
 | `VW2026_HOOK_TAG` | `install` は入れるタグ、`uninstall` は入っているタグ |
-| `VW2026_HOOK_PREVIOUS_TAG` | `install` のとき、前に入っていたタグ（最初に入れるときは空。同じタグの `install` では入っているタグ）。ただし、入っている版のフックが通らずに残した版（フックの間に Vectorworks が起動した）のあとは、`<Work>/old/<name>/` に残った前の版のタグ（フックが前の版から移す処理を飛ばさないため。同じタグで終える回も、別のタグへ更新する回も同じ） |
+| `VW2026_HOOK_PREVIOUS_TAG` | `install` のとき、前に入っていたタグ（最初に入れるときは空。同じタグの `install` では入っているタグ）。ただし、入っている版のフックが通らずに残した版（フックの間に Vectorworks が起動した。記録の `hook_pending`）のあとは、`<Work>/old/<name>/` に残った前の版のタグ、無ければ空（フックが前の版から移す処理を飛ばさないため。同じタグで終える回も、別のタグへ更新する回も同じ） |
 | `VW2026_HOOK_TARGET` | ターゲット |
 | `VW2026_HOOK_PLUGIN_DIR` | いまプラグインのファイルがあるフォルダ（作業ディレクトリと同じ）。`install` は `<Plug-Ins>/<name>/`、`uninstall` は移した先の `<Work>/old/<name>/` |
 | `VW2026_HOOK_INSTALL_DIR` | プラグインが入る・入っていたフォルダ（`<Plug-Ins>/<name>/`）。`install` では `VW2026_HOOK_PLUGIN_DIR` と同じ。`uninstall` で、フォルダの中を指すもの（PATH など）を片付けるために使う |
@@ -309,6 +309,7 @@
 | `module` | `uninstall` の安全弁（フォルダの中に実在すること） |
 | `hooks.install` | 同じタグの `install` で走らせるフック（入っている版のもの。マニフェストを取り直さない） |
 | `hooks.uninstall` | `uninstall` で走らせるフック（入っている版のもの） |
+| `hook_pending` | 入っている版の `install` のフックがまだ通っていない（フックの間に Vectorworks が起動して新しい版を残したとき `true` を書き、フックが通ったら外す。無ければ通っている）。前のタグ（`VW2026_HOOK_PREVIOUS_TAG`）をこれで決める（`<Work>/old/<name>/` の残り方から推し量らない） |
 
 - **記録はプラグインのフォルダの中にだけ置きます。** 別の場所に記録ファイルを持たず、入れた `<Plug-Ins>`
   の場所も記録しません（入った `vw2026` は自分の実行ファイルの場所から求める）（[設計「決めたこと」](design.md#決めたこと)）。

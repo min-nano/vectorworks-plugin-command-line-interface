@@ -144,8 +144,9 @@ func (c *installCmd) run(e *env) int {
 // スクリプトが渡した --plugins-dir、無ければ既定の場所。入った CLI に --plugins-dir を渡すのと、空の値は使い方の
 // 誤り（入った CLI が別の <Plug-Ins> を扱うと、動いている cli と違う場所の Vectorworks のロックを見てしまう）。
 func deployOptions(e *env, given *string) (install.Options, error) {
-	// 走らせている CLI の場所が分からなければ、よけない（付け替えが失敗すれば何も変わらない）。
-	executable, _ := e.executable()
+	// 走らせている CLI の場所が分からなければ、入った CLI かを決められないので、--plugins-dir が無ければ失敗に
+	// する（既定の場所へ移らない）。--plugins-dir があれば、よけないだけにする（付け替えが失敗すれば何も変わらない）。
+	executable, exeErr := e.executable()
 	own, installed := install.PluginsDirOf(executable)
 	var pluginsDir string
 	var err error
@@ -159,6 +160,9 @@ func deployOptions(e *env, given *string) (install.Options, error) {
 		pluginsDir = *given
 	case installed:
 		pluginsDir = own
+	case exeErr != nil:
+		return install.Options{}, fmt.Errorf("cannot locate this vw2026, so the folder of plug-ins it is installed in "+
+			"is unknown: %w", exeErr)
 	default:
 		if pluginsDir, err = e.pluginsDir(); err != nil {
 			return install.Options{}, fmt.Errorf("cannot locate the folder of plug-ins: %w", err)
