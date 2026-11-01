@@ -1465,10 +1465,17 @@ func TestUpdatingAKeptVersionNeedsFinishing(t *testing.T) {
 	if !validRecord(filepath.Join(h.work, "old", "cli"), "cli") {
 		t.Fatal("removed the previous version")
 	}
-	// --check も同じ答えにする（available と答えてから install が断らない）。
-	if _, err := Install(h.options(), "cli", "c3", true); err == nil || !strings.Contains(err.Error(), "has not finished installing") {
-		t.Fatal("--check:", err)
+	// --check は断らず、新しいビルドがあると答える（help に、入れ終えるまで install が断ると書く）。
+	if result, err := Install(h.options(), "cli", "c3", true); err != nil || result.Outcome != OutcomeAvailable {
+		t.Fatalf("--check: %+v %v", result, err)
 	}
+	// Vectorworks が動いていれば、断る理由より先に vectorworks_running と答える（終了コード 6）。
+	release := h.holdLock()
+	if result, err := h.install("cli", "c3"); !errors.Is(err, ErrRunning) || result.Outcome != OutcomeRunning {
+		t.Fatalf("running: %+v %v", result, err)
+	}
+	release()
+	sameSnapshot(t, before, snapshot(t, h.plugins))
 	if result, err := h.install("cli", "c2"); err != nil || result.Outcome != OutcomeUpToDate {
 		t.Fatalf("%+v %v", result, err)
 	}

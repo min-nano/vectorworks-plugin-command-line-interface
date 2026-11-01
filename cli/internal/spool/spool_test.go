@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -135,6 +136,41 @@ func TestLockFileWithoutHolderIsDown(t *testing.T) {
 func TestDirWithoutLockFileIsDown(t *testing.T) {
 	if bridge := Open(fakeplugin.NewDir(t)); bridge.Running || bridge.Reason != "not running" {
 		t.Fatalf("want down, got %+v", bridge)
+	}
+}
+
+// LockHeld は、掴まれたロックを真、無いロック・放されたロックを偽にし、どちらも誤りにしない。
+func TestLockHeld(t *testing.T) {
+	dir := fakeplugin.NewDir(t)
+	if held, err := LockHeld(dir); held || err != nil {
+		t.Fatal("no lock:", held, err)
+	}
+	if held, err := LockHeld(filepath.Join(dir, "missing")); held || err != nil {
+		t.Fatal("no folder:", held, err)
+	}
+	release := fakeplugin.HoldLock(t, dir)
+	if held, err := LockHeld(dir); !held || err != nil {
+		t.Fatal("held:", held, err)
+	}
+	release()
+	if held, err := LockHeld(dir); held || err != nil {
+		t.Fatal("released:", held, err)
+	}
+}
+
+// ロックを無い以外の理由で調べられなければ、動いているかが分からないという誤りを返す（mac・Linux では、
+// ファイルの下のパス。Windows はそれを無いと答えるので、名前に使えない文字で調べられなくする）。
+func TestLockHeldCannotTell(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dir := file
+	if runtime.GOOS == "windows" {
+		dir = filepath.Join(t.TempDir(), "bad<name>")
+	}
+	if held, err := LockHeld(dir); held || err == nil {
+		t.Fatal(held, err)
 	}
 }
 

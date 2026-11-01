@@ -74,19 +74,20 @@ It prints one line of JSON with one of these outcomes:
 	{"outcome":"vectorworks_running",...}
 	{"outcome":"failed","name":"...","message":"..."}
 
-With --check, "available" means a new build is available, none is installed,
-or the installed one has not finished installing (its hook has not succeeded;
-run install with its tag). "hook" is the output of the hook (a JSON object),
-absent when the plug-in has none. On a failure (cannot download, the sha256
-does not match, the zip is wrong, the folder cannot be replaced, the hook
-failed), install leaves <Plug-Ins> as it was, except for what the hook changed
-outside the folder, writes the reason to the standard error too, and exits
-with 1. The exception is a hook that fails while Vectorworks starts:
-Vectorworks may use the new version, so install leaves it in <Plug-Ins>, says
-so in the message, and exits with 1; quit Vectorworks, then run install with
-the same tag again (it runs only the hook). Replacing the folder fails on
-Windows while a program has a file in it open or has its current directory in
-it.
+With --check, "available" means a new build is available, none is installed, or
+the installed one has not finished installing (its hook has not succeeded). In
+the last case, run install with the installed tag first: while the previous
+version waits in the work folder, install refuses another tag (the message says
+how to give the pending version up by hand). "hook" is the output of the hook (a
+JSON object), absent when the plug-in has none. On a failure (cannot download,
+the sha256 does not match, the zip is wrong, the folder cannot be replaced, the
+hook failed), install leaves <Plug-Ins> as it was, except for what the hook
+changed outside the folder, writes the reason to the standard error too, and
+exits with 1. The exception is a hook that fails while Vectorworks starts:
+Vectorworks may use the new version, so install leaves it in <Plug-Ins>, says so
+in the message, and exits with 1; quit Vectorworks, then run install with the
+same tag again (it runs only the hook). Replacing the folder fails on Windows
+while a program has a file in it open or has its current directory in it.
 
 <Plug-Ins> is the folder of plug-ins that this vw2026 is installed in (it runs
 as <Plug-Ins>/cli/bin/vw2026), so install and uninstall always work on the

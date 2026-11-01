@@ -159,17 +159,31 @@ func (o *Options) stderr() io.Writer {
 	return o.Stderr
 }
 
-// running は、Vectorworks が居るか（docs/protocol.md「生存の判定」）。<Plug-Ins>/cli/spool/ と、
+// lockState は、Vectorworks が居るか（docs/protocol.md「生存の判定」）。<Plug-Ins>/cli/spool/ と、
 // <Work>/old/cli/spool/ の両方のロックを見る。cli の付け替え・uninstall の直前に前の版を読み込んだ
 // Vectorworks のロックは、フォルダと一緒に old/cli/spool/ へ移る（mac）ので、install・uninstall のどの確かめも
-// これだけを使い、道ごとに見る場所を変えない。
-func running(p places) bool {
+// これだけを使い、道ごとに見る場所を変えない。どちらかのロックを無い以外の理由で調べられなければ（権限・壊れた
+// 場所）、動いているかが分からないという誤りも返す（判定そのもの、spool.Open の意味は変えない）。
+func lockState(p places) (bool, error) {
+	var unknown error
 	for _, dir := range []string{filepath.Join(p.plugins, CLIName), filepath.Join(p.old, CLIName)} {
-		if spool.Open(filepath.Join(dir, spool.SpoolDirName)).Running {
-			return true
+		held, err := spool.LockHeld(filepath.Join(dir, spool.SpoolDirName))
+		if held {
+			return true, nil
+		}
+		if err != nil && unknown == nil {
+			unknown = fmt.Errorf("cannot tell whether Vectorworks is running, as the lock in %s cannot be read (%v); "+
+				"nothing is changed", dir, err)
 		}
 	}
-	return false
+	return false, unknown
+}
+
+// running は、Vectorworks が居るとみなすか。ロックを調べられないときも居るとみなす（付け替えの途中の確かめで、
+// 動いているかもしれない Vectorworks の下でフォルダを動かさない）。始めの確かめは lockState で誤りを分けて返す。
+func running(p places) bool {
+	held, err := lockState(p)
+	return held || err != nil
 }
 
 // checkCLI は、cli 以外を入れる・外すときに、<Plug-Ins>/cli/ に正しい記録があるかを確かめる。
@@ -257,22 +271,6 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		result.Tag = manifest.Tag
 		upToDate = same(manifest.Tag)
 	}
-	// 入っている版のフックがまだ通っておらず（hook_pending）、前の版が old に残っていれば、付け替えない。付け替えの
-	// 前の片付けが old（フックの通った最後の版）を消し、新しい版のフックが失敗して戻すと、通っていない版だけが残る
-	// ため。同じタグでフックだけを走らせて入れ終える道（upToDate）は通す。--check も同じ答えにする。
-	if installed != nil && installed.HookPending && !upToDate && validRecord(p.oldDir, name) {
-		if result.Tag != installed.Tag {
-			return nil, fmt.Errorf("%s@%s has not finished installing (its install hook has not succeeded), and the "+
-				"previous version is in %s; run install %s@%s first (with Vectorworks quit), then install the new tag",
-				name, installed.Tag, p.oldDir, name, installed.Tag)
-		}
-		// 同じタグでも入れ直しになる（module が欠けた・ターゲットが違う）ときは、入れ終える道が無いので、利用者が
-		// 前の版を戻すか消すかを決める（どちらも済めば、ふつうに入れ直せる）。
-		return nil, fmt.Errorf("%s@%s has not finished installing and has to be installed again (its module is missing "+
-			"or it is for another target), but the previous version, the last that finished, is in %s; to keep it, "+
-			"delete %s and move it back there, otherwise delete it; then run install again",
-			name, installed.Tag, p.oldDir, p.dest)
-	}
 	if check {
 		result.Outcome = OutcomeAvailable
 		// 入っている版のフックがまだ通っていなければ（hook_pending）、同じタグでも入れ終えていないので available
@@ -282,12 +280,30 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		}
 		return result, nil
 	}
-	if running(p) {
+	if held, err := lockState(p); held {
 		result.Outcome = OutcomeRunning
 		return result, ErrRunning
-	}
-	if err := lockReadable(p); err != nil {
+	} else if err != nil {
 		return nil, err
+	}
+	// 入っている版のフックがまだ通っておらず（hook_pending）、前の版が old に残っていれば、付け替えない。付け替えの
+	// 前の片付けが old（フックの通った最後の版）を消し、新しい版のフックが失敗して戻すと、通っていない版だけが残る
+	// ため。同じタグでフックだけを走らせて入れ終える道（upToDate）は通す。Vectorworks が動いていれば、先に
+	// vectorworks_running にする（どの道でも、動いているかを最初に答える）。--check は断らず available を返す（新しい
+	// ビルドがあるかだけを答える。help に、入れ終えるまで install が断ることを書く）。
+	if installed != nil && installed.HookPending && !upToDate && validRecord(p.oldDir, name) {
+		if result.Tag != installed.Tag {
+			return nil, fmt.Errorf("%s@%s has not finished installing (its install hook has not succeeded), and the "+
+				"previous version, the last that finished, is in %s; run install %s@%s first to finish it, then install the "+
+				"new tag (or, to give it up, delete %s and move the previous version back there, then install the new tag)",
+				name, installed.Tag, p.oldDir, name, installed.Tag, p.dest)
+		}
+		// 同じタグでも入れ直しになる（module が欠けた・ターゲットが違う）ときは、入れ終える道が無いので、利用者が
+		// 前の版を戻すか消すかを決める（どちらも済めば、ふつうに入れ直せる）。
+		return nil, fmt.Errorf("%s@%s has not finished installing and has to be installed again (its module is missing "+
+			"or it is for another target), but the previous version, the last that finished, is in %s; to keep it, "+
+			"delete %s and move it back there, otherwise delete it; then run install again",
+			name, installed.Tag, p.oldDir, p.dest)
 	}
 	// <Plug-Ins>/<name>/ があるなら、中断した uninstall の印は前の回の残り（uninstall は移してから止まる
 	// ので、そのときは <Plug-Ins>/<name>/ が無い）。どの道でも先に消す（残すと、このあとの install が付け替えの
@@ -362,26 +378,6 @@ func previousTag(p places, name string, installed *Record) string {
 		return old.Tag
 	}
 	return ""
-}
-
-// lockReadable は、running が見る 2 か所のスプールのロックを調べられるか。無い以外の理由でフォルダかロックの
-// ファイルを開けなければ（権限・壊れた場所）、動いているかが分からないので、何も変えずに失敗にする（「動いて
-// いない」とみなして、動いている Vectorworks の下でフォルダを付け替えない）。ロックの判定そのもの（通信規則
-// 「生存の判定」）は変えず、install・uninstall の始めにだけ確かめる。
-func lockReadable(p places) error {
-	for _, dir := range []string{filepath.Join(p.plugins, CLIName), filepath.Join(p.old, CLIName)} {
-		lock := filepath.Join(dir, spool.SpoolDirName, spool.LockFile)
-		file, err := os.Open(lock)
-		if err == nil {
-			file.Close()
-			continue
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("cannot tell whether Vectorworks is running, as %s cannot be read (%v); nothing is changed",
-				lock, err)
-		}
-	}
-	return nil
 }
 
 // pluginFolder は、<Plug-Ins>/<name> が在るか。在ってもシンボリックリンク（記録のあるフォルダを指すものでも）・

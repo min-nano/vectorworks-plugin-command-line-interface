@@ -33,10 +33,9 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	if running(p) {
+	if held, err := lockState(p); held {
 		return runningResult(name), ErrRunning
-	}
-	if err := lockReadable(p); err != nil {
+	} else if err != nil {
 		return nil, err
 	}
 	if err := checkCLI(p.plugins, name); err != nil {

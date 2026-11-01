@@ -273,7 +273,7 @@ func TestLookupBrokenRegistry(t *testing.T) {
 	}
 	// 正しくない --registry は、既定のレジストリにある名前でも使い方の誤り。
 	o.Registries = []string{""}
-	if _, _, err := o.lookup("cli"); !IsUsage(err) {
+	if _, err := Install(o, "cli", "c1", false); !IsUsage(err) {
 		t.Fatal(err)
 	}
 }
