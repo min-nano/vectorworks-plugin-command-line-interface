@@ -13,7 +13,8 @@ import (
 type installCmd struct {
 	Plugin     string `arg:"" placeholder:"NAME@TAG" help:"Plug-in to install and its tag, such as cli@latest."`
 	Check      bool   `env:"VW2026_INSTALL_CHECK" negatable:"" help:"Only tell whether a new build is available; change nothing."`
-	PluginsDir string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins, as an absolute path (default: the Plug-Ins folder of Vectorworks 2026 for this user)."`
+	// 与えていない（nil）と空の値（使い方の誤り）を分けるため、ポインタで受ける。
+	PluginsDir *string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins, as an absolute path (default: the Plug-Ins folder of Vectorworks 2026 for this user; an empty value is wrong usage)."`
 	// sep:"none" で、URL のコンマで分けない（kong は既定で、引数と環境変数の値をコンマで分ける）。空白で
 	// 分けるのは run の中（URL は空白を含まない）。
 	Registry []string `env:"VW2026_REGISTRY" sep:"none" placeholder:"URL" help:"Registry (an https:// or a file:// URL) to look the name up in after the default one (repeatable; spaces separate several; an empty value is wrong usage)."`
@@ -134,14 +135,24 @@ func (c *installCmd) run(e *env) int {
 	return emit(e, result)
 }
 
-// deployOptions は install / uninstall に渡す場所を env から求める。
-func deployOptions(e *env, pluginsDir string) (install.Options, int) {
+// deployOptions は install / uninstall に渡す場所を env から求める。--plugins-dir が無ければ（nil）既定の
+// <Plug-Ins> を使う。空の値は使い方の誤り（--plugins-dir "$UNSET" のような取り違えで、既定の <Plug-Ins> を
+// 黙って変えない。空の引数と空の環境変数は見分けられないので、どちらも断る）。
+func deployOptions(e *env, given *string) (install.Options, int) {
+	var pluginsDir string
 	var err error
-	if pluginsDir == "" {
+	switch {
+	case given == nil:
 		if pluginsDir, err = e.pluginsDir(); err != nil {
 			fmt.Fprintf(e.stderr, "vw2026: cannot locate the folder of plug-ins (give --plugins-dir): %v\n", err)
 			return install.Options{}, exitFailure
 		}
+	case *given == "":
+		fmt.Fprintln(e.stderr, "vw2026: the folder of plug-ins is empty: give an absolute path to --plugins-dir, "+
+			"or unset VW2026_PLUGINS_DIR")
+		return install.Options{}, exitUsage
+	default:
+		pluginsDir = *given
 	}
 	work, err := e.workDir()
 	if err != nil {

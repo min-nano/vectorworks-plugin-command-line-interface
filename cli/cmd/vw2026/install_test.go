@@ -76,6 +76,30 @@ func TestUninstallNotInstalled(t *testing.T) {
 	}
 }
 
+// 空の --plugins-dir・VW2026_PLUGINS_DIR は、install でも uninstall でも使い方の誤り（既定の場所を使わない）。
+func TestEmptyPluginsDir(t *testing.T) {
+	fallback := t.TempDir()
+	fakeInstalled(t, fallback, "cli")
+	empty := map[string]string{"VW2026_PLUGINS_DIR": ""}
+	for _, c := range []struct {
+		o    opts
+		args []string
+	}{
+		{opts{plugins: fallback}, []string{"uninstall", "cli", "--plugins-dir", ""}},
+		{opts{plugins: fallback, vars: empty}, []string{"uninstall", "cli"}},
+		{opts{plugins: fallback}, []string{"install", "cli@latest", "--plugins-dir", ""}},
+		{opts{plugins: fallback, vars: empty}, []string{"install", "cli@latest"}},
+	} {
+		r := invoke(t, c.o, c.args...)
+		if r.code != exitUsage || !strings.Contains(r.stderr, "the folder of plug-ins is empty") || r.stdout != "" {
+			t.Errorf("%v %v: %+v", c.o.vars, c.args, r)
+		}
+	}
+	if !exist(filepath.Join(fallback, "cli")) {
+		t.Fatal("touched the default folder")
+	}
+}
+
 // Vectorworks が動いている（<Plug-Ins>/cli/spool のロックが掴まれている）と、何もせずに 6 で終わる。
 func TestUninstallWhileRunning(t *testing.T) {
 	plugins := t.TempDir()

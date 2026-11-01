@@ -11,7 +11,8 @@ import (
 
 type uninstallCmd struct {
 	Name       string `arg:"" help:"Plug-in to uninstall, such as cli."`
-	PluginsDir string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins, as an absolute path (default: the Plug-Ins folder of Vectorworks 2026 for this user)."`
+	// 与えていない（nil）と空の値（使い方の誤り）を分けるため、ポインタで受ける。
+	PluginsDir *string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins, as an absolute path (default: the Plug-Ins folder of Vectorworks 2026 for this user; an empty value is wrong usage)."`
 }
 
 func (uninstallCmd) Help() string {
@@ -89,11 +90,16 @@ func (c *uninstallCmd) run(e *env) int {
 	case errors.As(err, &inside):
 		// 入れた cli の vw2026 では外さず、入っているタグの初回のスクリプトと CLI で外すよう案内する。
 		// PR のプレリリースは PR を閉じると消えるので、latest で外すコマンドも示す。
-		command := uninstallScript(runtime.GOOS, inside.Tag, c.PluginsDir)
+		// 与えた --plugins-dir だけをコマンドに載せる（既定の場所なら書かない。空は deployOptions が断っている）。
+		given := ""
+		if c.PluginsDir != nil {
+			given = *c.PluginsDir
+		}
+		command := uninstallScript(runtime.GOOS, inside.Tag, given)
 		fmt.Fprintf(e.stderr, "vw2026: %v. vw2026 is not used once %s is uninstalled; run the first-time script "+
 			"of the installed tag instead:\n\t%s\nIf that release no longer exists (a prerelease is deleted when "+
 			"its pull request closes), use latest:\n\t%s\n",
-			err, c.Name, command, uninstallScript(runtime.GOOS, "latest", c.PluginsDir))
+			err, c.Name, command, uninstallScript(runtime.GOOS, "latest", given))
 		emit(e, map[string]any{"outcome": "failed", "name": c.Name, "message": err.Error(), "command": command})
 		return exitUsage
 	case err != nil:
