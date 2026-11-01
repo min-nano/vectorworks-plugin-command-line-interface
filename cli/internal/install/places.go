@@ -28,11 +28,13 @@ func WorkDir() (string, error) {
 
 // WorkDirFor は、<Plug-Ins> plugins の <Work>（頭 base に - と鍵を足した名前）を返す。<Work>/old/<name>/ を
 // <Plug-Ins> ごとに分ける（同じ利用者が別の <Plug-Ins> にも入れているとき、片方の install が、もう片方の付け替えの
-// 途中で退避した唯一の版を前の版と取り違えて消さないため）。鍵は、リンクを解いたパス（resolvedPath。mac と Windows
-// では小文字にする）の sha256 の先頭 12 桁（入った CLI が求める場所と、初回のスクリプトに渡した書き方が揃う）。
+// 途中で退避した唯一の版を前の版と取り違えて消さないため）。鍵は、リンクを解いたパス（resolvedPath。Windows では
+// 小文字にする）の sha256 の先頭 12 桁（入った CLI が求める場所と、初回のスクリプトに渡した書き方が揃う）。mac では
+// 小文字にしない（大文字と小文字を区別するボリュームの、それだけが違う 2 つのフォルダに 1 つの <Work> を使わせない。
+// 同じフォルダを違う書き方で渡せば <Work> が分かれるが、残るだけで、ほかの <Plug-Ins> の版を消すことはない）。
 func WorkDirFor(base, plugins string) string {
 	key := resolvedPath(filepath.Clean(plugins))
-	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+	if runtime.GOOS == "windows" {
 		key = strings.ToLower(key)
 	}
 	sum := sha256.Sum256([]byte(key))

@@ -1301,10 +1301,10 @@ func TestCannotClearHookPending(t *testing.T) {
 	h := newHarness(t)
 	keepNewVersion(t, h)
 	// 記録は隣に書いてから置き換えるので、隣のファイルを書けなくする。
-	record := filepath.Join(h.plugins, "cli", RecordFile) + ".new"
+	record := filepath.Join(h.plugins, "cli", RecordFile) + ".new-"
 	original := writeFile
 	writeFile = func(path string, data []byte, perm fs.FileMode) error {
-		if path == record {
+		if strings.HasPrefix(path, record) {
 			return errInjected
 		}
 		return original(path, data, perm)
@@ -1669,10 +1669,10 @@ func TestCannotClearHookPendingPutsTheMovedCLIBack(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	h.publish(release{name: "cli", tag: "c2"})
-	record := filepath.Join(h.plugins, "cli", RecordFile) + ".new"
+	record := filepath.Join(h.plugins, "cli", RecordFile) + ".new-"
 	original := writeFile
 	writeFile = func(path string, data []byte, perm fs.FileMode) error {
-		if path == record {
+		if strings.HasPrefix(path, record) {
 			return errInjected
 		}
 		return original(path, data, perm)
@@ -1715,10 +1715,10 @@ func TestCannotClearHookPendingKeepsTheMovedCLI(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	h.publish(release{name: "cli", tag: "c2"})
-	record := filepath.Join(h.plugins, "cli", RecordFile) + ".new"
+	record := filepath.Join(h.plugins, "cli", RecordFile) + ".new-"
 	originalWrite := writeFile
 	writeFile = func(path string, data []byte, perm fs.FileMode) error {
-		if path == record {
+		if strings.HasPrefix(path, record) {
 			return errInjected
 		}
 		return originalWrite(path, data, perm)
@@ -1745,28 +1745,89 @@ func TestCannotClearHookPendingKeepsTheMovedCLI(t *testing.T) {
 	}
 }
 
-// 記録を置き換えられなければ（書く途中で止まった・名前を変えられない）、隣に書いたファイルを残さず、元の記録も
-// そのまま。
+// 記録を置き換えられなければ（書く途中で止まった・名前を変えられない）、この回が隣に書いたファイルを残さず、元の
+// 記録も、前からある隣の名前のファイル（この回が書いたものではない）もそのまま。
 func TestReplaceFileLeavesNoTemporary(t *testing.T) {
-	path := filepath.Join(t.TempDir(), RecordFile)
+	dir := t.TempDir()
+	path := filepath.Join(dir, RecordFile)
 	os.WriteFile(path, []byte("old"), 0o644)
+	theirs := path + ".new"
+	os.WriteFile(theirs, []byte("theirs"), 0o644)
 	originalWrite, originalRename := writeFile, rename
 	t.Cleanup(func() { writeFile, rename = originalWrite, originalRename })
+	written := func() []string {
+		matches, _ := filepath.Glob(path + ".new-*")
+		return matches
+	}
 	// 書きかけて止まる。
 	writeFile = func(name string, data []byte, perm fs.FileMode) error {
 		originalWrite(name, data[:1], perm)
 		return errInjected
 	}
-	if err := replaceFile(path, []byte("new")); !errors.Is(err, errInjected) || exist(path+".new") {
-		t.Fatal("write:", err)
+	if err := replaceFile(path, []byte("new")); !errors.Is(err, errInjected) || len(written()) != 0 {
+		t.Fatal("write:", err, written())
 	}
 	// 書けたが、置き換えられない。
 	writeFile = originalWrite
 	rename = func(string, string) error { return errInjected }
-	if err := replaceFile(path, []byte("new")); !errors.Is(err, errInjected) || exist(path+".new") {
-		t.Fatal("rename:", err)
+	if err := replaceFile(path, []byte("new")); !errors.Is(err, errInjected) || len(written()) != 0 {
+		t.Fatal("rename:", err, written())
 	}
 	if data, _ := os.ReadFile(path); string(data) != "old" {
 		t.Fatal(string(data))
+	}
+	if data, _ := os.ReadFile(theirs); string(data) != "theirs" {
+		t.Fatal("touched a file it did not write:", string(data))
+	}
+}
+
+// 記録の無い前の版を .kept-<時刻> へ脇へ移したときは、よけた CLI をそこへ戻す（利用者が戻すかもしれない版から、
+// vw2026 を消さない）。
+func TestKeptPreviousVersionGetsTheMovedCLI(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.publish(release{name: "cli", tag: "c2"})
+	// module が欠けた（隔離された）入った cli から更新する。前の版は記録が正しくないので、消さずに脇へ移す。
+	os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
+	var stderr bytes.Buffer
+	o := h.options()
+	o.Stderr = &stderr
+	o.Executable = h.fakeExecutable()
+	if result, err := Install(o, "cli", "c2", false); err != nil || result.Outcome != OutcomeInstalled {
+		t.Fatalf("%+v %v %s", result, err, stderr.String())
+	}
+	kept, _ := filepath.Glob(filepath.Join(h.work, "old", "cli.kept-*"))
+	if len(kept) != 1 {
+		t.Fatal("kept:", kept, stderr.String())
+	}
+	if data, err := os.ReadFile(filepath.Join(kept[0], "bin", "vw2026")); err != nil || string(data) != "cli c1" {
+		t.Fatal("the kept version should have its vw2026 back:", string(data), err)
+	}
+}
+
+// 脇へ移した前の版へよけた CLI を戻せなければ、その場所を知らせ、よけた CLI を消さない。
+func TestKeptPreviousVersionCannotGetTheMovedCLI(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.publish(release{name: "cli", tag: "c2"})
+	os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
+	original := rename
+	rename = func(oldpath, newpath string) error {
+		if strings.Contains(newpath, ".kept-") && strings.HasSuffix(newpath, filepath.Join("bin", "vw2026")) {
+			return errInjected
+		}
+		return original(oldpath, newpath)
+	}
+	t.Cleanup(func() { rename = original })
+	var stderr bytes.Buffer
+	o := h.options()
+	o.Stderr = &stderr
+	o.Executable = h.fakeExecutable()
+	if result, err := Install(o, "cli", "c2", false); err != nil || result.Outcome != OutcomeInstalled ||
+		!strings.Contains(stderr.String(), "the vw2026 of the previous version is in") {
+		t.Fatalf("%+v %v %s", result, err, stderr.String())
+	}
+	if moved, _ := filepath.Glob(filepath.Join(h.work, "old", oldCLIName+"*")); len(moved) != 1 {
+		t.Fatal("the moved vw2026 should stay where the message says:", moved)
 	}
 }

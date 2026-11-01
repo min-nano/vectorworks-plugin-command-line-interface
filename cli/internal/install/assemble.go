@@ -74,7 +74,8 @@ func clearHookPending(dir string) error {
 // replaceFile は path を data で置き換える。隣に書いてから名前の変更で置き換え、書く途中で止まっても（電源が
 // 落ちた）空や半分の記録を残さない（読めない記録では install も uninstall も通らなくなる）。
 func replaceFile(path string, data []byte) error {
-	temp := path + ".new"
+	// 隣の名前は回ごとに違う名前にする（前からあるファイルを上書きしたり、失敗したときに消したりしない）。
+	temp := path + ".new-" + stamp()
 	err := writeFile(temp, data, 0o644)
 	if err == nil {
 		err = rename(temp, path)

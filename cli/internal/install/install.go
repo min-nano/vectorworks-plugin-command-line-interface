@@ -509,7 +509,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 	// 前回の残りの old を片付けてから、組み立ての場所（名前をそのまま組み立てたパスだけ）を消す。
 	// settleOld が消すものは組み立ての場所を通るので、この順にすると、消しきれなかったものがあれば
 	// removeStaging が失敗し、前の版のファイルを新しい版に混ぜて組み立てない。
-	if err := o.settleOld(p, name); err != nil {
+	if _, err := o.settleOld(p, name); err != nil {
 		return nil, err
 	}
 	if err := removeStaging(p); err != nil {
@@ -569,24 +569,32 @@ func (o *Options) finishInstall(p places, name string, moved *movedCLI, hadOld b
 	// 通っていないと言うので、次の同じタグの install が前の版のタグでフックを走らせ直し、そこで外して片付ける）。
 	// 退避した版を残すときは、よけた CLI をその版のフォルダの元の場所へ戻す（undoHook の keep と同じ。利用者が前の版を
 	// 手で戻したときに CLI が欠けず、下の後始末がよけた名前のまま消さないように）。
+	// 記録の無い前の版を <Work>/old/<name>.kept-<時刻>/ へ脇へ移したときも、よけた CLI をそこへ戻す（利用者が戻す
+	// かもしれない）。
 	var kept error
+	keptDir := ""
 	if err := clearHookPending(p.dest); err != nil {
 		kept = fmt.Errorf("cannot record that the install hook succeeded (%v); run install with the same tag again", err)
 	} else {
-		kept = o.settleOld(p, name)
+		keptDir, kept = o.settleOld(p, name)
+	}
+	if kept != nil && hadOld && exists(p.oldDir) {
+		keptDir = p.oldDir
+	}
+	note := ""
+	if hadOld && keptDir != "" {
+		note = moved.restoreInto(p.dest, keptDir)
 	}
 	if kept != nil {
-		note := ""
-		if hadOld && exists(p.oldDir) {
-			note = moved.restoreInto(p.dest, p.oldDir)
-		}
 		fmt.Fprintf(o.stderr(), "vw2026: %v%s\n", kept, note)
+	} else if note != "" {
+		fmt.Fprintf(o.stderr(), "vw2026: the previous version is kept in %s%s\n", keptDir, note)
 	}
 	_ = removeStaging(p)
 	_ = os.Remove(p.marker)
 	// 前の版を残したときは、よけた CLI を消さない（戻せなかったときは、手で戻す場所として知らせている。undoHook の keep
 	// と同じ）。次の install・uninstall が消す。
-	if kept == nil {
+	if keptDir == "" {
 		cleanOldCLIs(p.old)
 	}
 }
@@ -666,34 +674,36 @@ func removeStaging(p places) error {
 //   - そうでなければ（module の無いフォルダを入れ直した前の版など。利用者のファイルが入っているかも
 //     しれない）、消さずに <Work>/old/<name>.kept-<時刻>/ へ移して知らせる。old/<name>/ に置いたままに
 //     すると、次の install・uninstall が通らないため。
-func (o *Options) settleOld(p places, name string) error {
+//
+// 脇へ移したときは、その場所を返す。
+func (o *Options) settleOld(p places, name string) (string, error) {
 	switch {
 	case !exists(p.oldDir):
-		return nil
+		return "", nil
 	case !exists(p.dest) && exists(p.marker):
-		return fmt.Errorf("%s was left by an uninstall that stopped halfway; run uninstall %s again to finish it",
+		return "", fmt.Errorf("%s was left by an uninstall that stopped halfway; run uninstall %s again to finish it",
 			p.oldDir, name)
 	case !exists(p.dest):
-		return fmt.Errorf("%s was left by an install or uninstall that stopped halfway; it may be the only copy of %s. "+
+		return "", fmt.Errorf("%s was left by an install or uninstall that stopped halfway; it may be the only copy of %s. "+
 			"Move it back to %s or delete it, then run again", p.oldDir, name, p.dest)
 	}
 	// 動いている Vectorworks が使っているかもしれないものは、消しも移しもしない（フックの間に起動したとき。
 	// 始めの確かめでは居なかった）。付け替えの前なら、install は ErrRunning（ロックを調べられなければその誤り）で
 	// 何も変えずに終わる。
 	if err := stopped(p); err != nil {
-		return fmt.Errorf("%w; %s is left because Vectorworks may use it (quit Vectorworks, then run install %s "+
+		return "", fmt.Errorf("%w; %s is left because Vectorworks may use it (quit Vectorworks, then run install %s "+
 			"again to clean it up)", err, p.oldDir, name)
 	}
 	if validRecord(p.oldDir, name) {
-		return o.discard(p, name)
+		return "", o.discard(p, name)
 	}
 	kept := filepath.Join(p.old, name+".kept-"+stamp())
 	if err := rename(p.oldDir, kept); err != nil {
-		return renameError(p.oldDir, err)
+		return "", renameError(p.oldDir, err)
 	}
 	fmt.Fprintf(o.stderr(), "vw2026: the previous folder of %s has no valid record or module, so it is kept in %s "+
 		"(it may hold your files); delete it when it is no longer needed\n", name, kept)
-	return nil
+	return kept, nil
 }
 
 // discard は、確かめた <Work>/old/<name>/ を組み立ての場所（<Work>/staging/<name>/）へ名前の変更で
