@@ -11,8 +11,8 @@ import (
 )
 
 type installCmd struct {
-	Plugin     string `arg:"" placeholder:"NAME@TAG" help:"Plug-in to install and its tag, such as cli@latest."`
-	Check      bool   `env:"VW2026_INSTALL_CHECK" negatable:"" help:"Only tell whether a new build is available; change nothing."`
+	Plugin string `arg:"" placeholder:"NAME@TAG" help:"Plug-in to install and its tag, such as cli@latest."`
+	Check  bool   `env:"VW2026_INSTALL_CHECK" negatable:"" help:"Only tell whether a new build is available; change nothing."`
 	// 与えていない（nil）と空の値（使い方の誤り）を分けるため、ポインタで受ける。
 	PluginsDir *string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins, as an absolute path (default: the Plug-Ins folder of Vectorworks 2026 for this user; an empty value is wrong usage)."`
 	// sep:"none" で、URL のコンマで分けない（kong は既定で、引数と環境変数の値をコンマで分ける）。空白で

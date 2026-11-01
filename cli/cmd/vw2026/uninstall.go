@@ -10,7 +10,7 @@ import (
 )
 
 type uninstallCmd struct {
-	Name       string `arg:"" help:"Plug-in to uninstall, such as cli."`
+	Name string `arg:"" help:"Plug-in to uninstall, such as cli."`
 	// 与えていない（nil）と空の値（使い方の誤り）を分けるため、ポインタで受ける。
 	PluginsDir *string `env:"VW2026_PLUGINS_DIR" placeholder:"DIR" help:"Folder of plug-ins, as an absolute path (default: the Plug-Ins folder of Vectorworks 2026 for this user; an empty value is wrong usage)."`
 }
