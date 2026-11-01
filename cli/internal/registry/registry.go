@@ -333,7 +333,8 @@ func (h Hooks) Check() error {
 var Interpreters = []string{"sh", "powershell"}
 
 // Script はフックの argv から、zip の中のファイルの相対パス（/ 区切り）を返す。1 つ目が sh・powershell
-// なら 2 つ目、それ以外なら 1 つ目。絶対パス・..・- で始まるもの（sh -c のような指定）・\ は断る。
+// なら 2 つ目、それ以外なら 1 つ目。絶対パス・..・- で始まるもの（sh -c のような指定）・\ は断る。powershell の
+// スクリプトは .ps1 に限る（Windows PowerShell 5.1 の -File はほかの拡張子を断るので、付け替えの前に断る）。
 func Script(argv []string) (string, error) {
 	if len(argv) == 0 {
 		return "", errors.New("empty")
@@ -346,6 +347,9 @@ func Script(argv []string) (string, error) {
 			}
 			script = argv[1]
 		}
+	}
+	if argv[0] == "powershell" && !strings.EqualFold(filepath.Ext(script), ".ps1") {
+		return "", fmt.Errorf("powershell runs only a .ps1 script, not %q", script)
 	}
 	if err := CheckRelative(script); err != nil {
 		return "", err

@@ -219,7 +219,10 @@ func TestHookOfAnotherOS(t *testing.T) {
 	h.mustInstall(release{name: "cli", tag: "c2"})
 	dest := filepath.Join(h.plugins, "cli")
 	record, _ := readRecord(dest)
-	record.Hooks.Uninstall = []string{interpreter, "hooks/uninstall.hook"}
+	// powershell のスクリプトは .ps1 に限る（registry.Script）。
+	uninstallScript := strings.Replace(script, "install", "uninstall", 1)
+	os.WriteFile(filepath.Join(dest, filepath.FromSlash(uninstallScript)), nil, 0o644)
+	record.Hooks.Uninstall = []string{interpreter, uninstallScript}
 	data, _ := json.Marshal(record)
 	os.WriteFile(filepath.Join(dest, RecordFile), data, 0o644)
 	if _, err := Uninstall(o, "cli"); err == nil || !strings.Contains(err.Error(), "do not run") || !validRecord(dest, "cli") {
@@ -1829,5 +1832,23 @@ func TestKeptPreviousVersionCannotGetTheMovedCLI(t *testing.T) {
 	}
 	if moved, _ := filepath.Glob(filepath.Join(h.work, "old", oldCLIName+"*")); len(moved) != 1 {
 		t.Fatal("the moved vw2026 should stay where the message says:", moved)
+	}
+}
+
+// この回が CLI をよけていなければ、前の版を脇へ移しても、前の回までのよけた CLI は消してみる。
+func TestKeptPreviousVersionWithoutAMovedCLICleansUp(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.publish(release{name: "cli", tag: "c2"})
+	// 記録の無い前回の残り（同じタグの install が脇へ移す）と、前の回までのよけた CLI。
+	old := filepath.Join(h.work, "old")
+	os.MkdirAll(filepath.Join(old, "cli"), 0o700)
+	leftover := filepath.Join(old, oldCLIName+"20260101T000000.000000000")
+	os.WriteFile(leftover, nil, 0o700)
+	if result, err := h.install("cli", "c1"); err != nil || result.Outcome != OutcomeUpToDate {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if kept, _ := filepath.Glob(filepath.Join(old, "cli.kept-*")); len(kept) != 1 || exist(leftover) {
+		t.Fatal(kept, exist(leftover))
 	}
 }

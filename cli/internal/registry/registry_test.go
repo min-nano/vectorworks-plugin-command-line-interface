@@ -187,7 +187,12 @@ func TestScript(t *testing.T) {
 			t.Errorf("%s: %q %v", argv, got, err)
 		}
 	}
-	for _, argv := range []string{"sh", "-x", "sh -c", "sh ../x", "./../x", "/x", "sh /x"} {
+	// powershell の .ps1 は大文字でもよい。
+	if got, err := Script([]string{"powershell", "hooks/install.PS1"}); err != nil || got != "hooks/install.PS1" {
+		t.Errorf("upper case .PS1: %q %v", got, err)
+	}
+	for _, argv := range []string{"sh", "-x", "sh -c", "sh ../x", "./../x", "/x", "sh /x", "powershell hooks/install.txt",
+		"powershell hooks/install"} {
 		if _, err := Script(strings.Fields(argv)); err == nil {
 			t.Errorf("%s: should fail", argv)
 		}

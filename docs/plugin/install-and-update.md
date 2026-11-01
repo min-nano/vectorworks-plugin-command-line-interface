@@ -805,8 +805,8 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
   フォルダの名前を載せます**（Go は `cli` を特別に扱わない）。`uninstall cli` はほかのプラグインが
   残っていても断りません。残ったプラグインは Vectorworks の中で動き続けますが、`vw2026` が無くなる
   ので外せなくなります（先に外したい呼ぶ側はこの一覧を見る）。
-- 出力: `{"outcome":"uninstalled","name":…,"hook":{…},"remaining":[…],"left":[…]}`（`left` は手順 6 で
-  消せなかったもの。無ければ空の配列）。
+- 出力の `left` には、手順 6 で消せなかったものを載せます。出力の形と終了コードは `vw2026 help uninstall` が
+  示します（CLI の使い方の真実は help。ここには写さない）。
 
 ### `uninstall cli` のあとに残るもの
 

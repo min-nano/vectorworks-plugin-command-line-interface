@@ -592,9 +592,9 @@ func (o *Options) finishInstall(p places, name string, moved *movedCLI, hadOld b
 	}
 	_ = removeStaging(p)
 	_ = os.Remove(p.marker)
-	// 前の版を残したときは、よけた CLI を消さない（戻せなかったときは、手で戻す場所として知らせている。undoHook の keep
-	// と同じ）。次の install・uninstall が消す。
-	if keptDir == "" {
+	// この回がよけた CLI を前の版へ戻したとき（戻せなかったときは、手で戻す場所として知らせている。undoHook の keep
+	// と同じ）は、よけた CLI を消さない。次の install・uninstall が消す。よけていなければ、前の回までの残りを消してみる。
+	if moved == nil || keptDir == "" {
 		cleanOldCLIs(p.old)
 	}
 }
@@ -691,8 +691,8 @@ func (o *Options) settleOld(p places, name string) (string, error) {
 	// 始めの確かめでは居なかった）。付け替えの前なら、install は ErrRunning（ロックを調べられなければその誤り）で
 	// 何も変えずに終わる。
 	if err := stopped(p); err != nil {
-		return "", fmt.Errorf("%w; %s is left because Vectorworks may use it (quit Vectorworks, then run install %s "+
-			"again to clean it up)", err, p.oldDir, name)
+		return "", fmt.Errorf("%w; %s is left because Vectorworks may use it (quit Vectorworks, then run install "+
+			"%s@<the installed tag> again to clean it up)", err, p.oldDir, name)
 	}
 	if validRecord(p.oldDir, name) {
 		return "", o.discard(p, name)

@@ -219,7 +219,7 @@
   | 1 つ目 | 走るもの | 2 つ目 |
   | --- | --- | --- |
   | `sh` | `/bin/sh`（mac） | **zip の中のスクリプトの相対パス**（必須） |
-  | `powershell` | System32（`FOLDERID_System`。環境変数 `SystemRoot` は読まない）の `WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File`（Windows。Windows PowerShell 5.1） | **zip の中のスクリプトの相対パス**（必須） |
+  | `powershell` | System32（`FOLDERID_System`。環境変数 `SystemRoot` は読まない）の `WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File`（Windows。Windows PowerShell 5.1） | **zip の中の `.ps1` のスクリプトの相対パス**（必須。`-File` はほかの拡張子を断るので、ほかは読むときに断る） |
   | zip の中の相対パス | その実行ファイル | — |
 
 - zip の中の相対パスは、展開したフォルダの中に実在するファイルでなければ失敗にします（絶対パス・
