@@ -67,7 +67,13 @@ func PluginsDirOf(executable string) (dir string, ok bool) {
 	}
 	bin := filepath.Dir(path)
 	cli := filepath.Dir(bin)
-	if !strings.EqualFold(filepath.Base(bin), "bin") || !strings.EqualFold(filepath.Base(cli), CLIName) {
+	// 名前は、Windows では大文字と小文字を区別せず、ほかでは区別して比べる（install が作る名前は bin と cli。区別する
+	// ボリュームの CLI/bin を cli/bin と取り違えて、別のフォルダのロックと記録を見ない）。
+	same := func(a, b string) bool { return a == b }
+	if runtime.GOOS == "windows" {
+		same = strings.EqualFold
+	}
+	if !same(filepath.Base(bin), "bin") || !same(filepath.Base(cli), CLIName) {
 		return "", false
 	}
 	for _, mark := range []string{RecordFile, CLIName + ".vwlibrary", CLIName + ".vlb", spool.SpoolDirName} {

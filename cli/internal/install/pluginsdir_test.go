@@ -3,6 +3,7 @@ package install
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -71,5 +72,18 @@ func TestWorkDirFor(t *testing.T) {
 	link := filepath.Join(tmp, "link")
 	if os.Symlink(a, link) == nil && WorkDirFor(base, link) != work {
 		t.Fatal("a link to the same folder should give the same work folder")
+	}
+}
+
+// cli と bin の名前は、Windows でだけ大文字と小文字を区別しない（区別するボリュームの CLI/bin は別のフォルダ）。
+func TestPluginsDirOfCase(t *testing.T) {
+	tmp := t.TempDir()
+	dir := filepath.Join(tmp, "CLI")
+	os.MkdirAll(filepath.Join(dir, "BIN"), 0o755)
+	os.WriteFile(filepath.Join(dir, RecordFile), nil, 0o644)
+	executable := filepath.Join(dir, "BIN", "vw2026")
+	os.WriteFile(executable, nil, 0o700)
+	if _, ok := PluginsDirOf(executable); ok != (runtime.GOOS == "windows") {
+		t.Fatal(ok)
 	}
 }
