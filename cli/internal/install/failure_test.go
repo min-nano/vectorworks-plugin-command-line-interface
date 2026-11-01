@@ -255,9 +255,23 @@ func TestUsageErrorMessage(t *testing.T) {
 	}
 }
 
+// cli の無い <Plug-Ins> では、レジストリを取りに行く前に断る（届かないレジストリで、本当の理由が隠れない）。
+func TestInstallChecksCLIBeforeTheRegistry(t *testing.T) {
+	h := newHarness(t)
+	o := h.options()
+	o.Registries = []string{"https://127.0.0.1:1/unreachable.json"}
+	// 既定のレジストリに無い名前なので、確かめが後なら届かないレジストリを取りに行く。
+	if _, err := Install(o, "elsewhere", "1", false); err == nil || !strings.Contains(err.Error(), "has no cli") {
+		t.Fatal(err)
+	}
+}
+
 // 名前がどのレジストリにも無い・規則が合わない・マニフェストが読めないときは、何も変えずに失敗にする。
 func TestInstallManifestErrors(t *testing.T) {
 	h := newHarness(t)
+	// cli でない名前は cli のある <Plug-Ins> でだけ引く（無ければ、レジストリを取る前に断る）。
+	h.installCLI()
+	before := snapshot(t, h.plugins)
 	// 引いたレジストリを示す。
 	if _, err := h.install("nowhere", "1"); err == nil || !strings.Contains(err.Error(), "no registry (looked in: default") {
 		t.Error(err)
@@ -274,9 +288,7 @@ func TestInstallManifestErrors(t *testing.T) {
 	if _, err := h.install("cli", "broken"); err == nil || !strings.Contains(err.Error(), "manifest") {
 		t.Error(err)
 	}
-	if exist(filepath.Join(h.plugins, "cli")) || exist(h.work) {
-		t.Error("changed something")
-	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
 // <Plug-Ins> がファイルなら、何も変えずに失敗にする。
@@ -1225,9 +1237,18 @@ func TestCannotClearHookPending(t *testing.T) {
 		!strings.Contains(stderr.String(), "hook succeeded") {
 		t.Fatalf("%+v %v %s", result, err, stderr.String())
 	}
-	// 記録は壊さない（書き換えが途中で止まっても、元の記録が残る）。
+	// 記録は壊さない（書き換えが途中で止まっても、元の記録が残る）。記録はまだ通っていないと言うので、退避した
+	// 版も片付けない（前のタグを失わない）。次の同じタグの install が外して片付ける。
 	if got, err := readRecord(filepath.Join(h.plugins, "cli")); err != nil || !got.HookPending {
 		t.Fatal("the record should stay as it was:", got, err)
+	}
+	old := filepath.Join(h.work, "old", "cli")
+	if !validRecord(old, "cli") {
+		t.Fatal("removed the previous version while the record still says hook_pending")
+	}
+	writeFile = original
+	if result, err := Install(o, "cli", "c2", false); err != nil || result.Outcome != OutcomeUpToDate || exist(old) {
+		t.Fatalf("%+v %v", result, err)
 	}
 }
 
@@ -1242,6 +1263,25 @@ func TestHookBreaksTheRecord(t *testing.T) {
 	if result, err := Install(o, "cli", "c1", false); err != nil || result.Outcome != OutcomeInstalled ||
 		!strings.Contains(stderr.String(), "hook succeeded") {
 		t.Fatalf("%+v %v %s", result, err, stderr.String())
+	}
+}
+
+// フックの通っていない版の module が欠けても（隔離された）、同じタグの install は断らずに入れ直す（install と
+// uninstall が互いを指して抜け出せなくならない）。前のタグは old の版。
+func TestReinstallingAKeptVersionWithoutItsModule(t *testing.T) {
+	h := newHarness(t)
+	keepNewVersion(t, h)
+	os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
+	h.publish(release{name: "cli", tag: "c2"})
+	if result, err := h.install("cli", "c2"); err != nil || result.Outcome != OutcomeInstalled {
+		t.Fatalf("%+v %v", result, err)
+	}
+	runs := h.hookRuns("cli")
+	if last := runs[len(runs)-1]; last.Env["VW2026_HOOK_PREVIOUS_TAG"] != "c1" || last.Env["VW2026_HOOK_TAG"] != "c2" {
+		t.Fatalf("%+v", last.Env)
+	}
+	if record, err := readRecord(filepath.Join(h.plugins, "cli")); err != nil || record.HookPending {
+		t.Fatal(record, err)
 	}
 }
 
@@ -1314,6 +1354,10 @@ func TestUpdatingAKeptVersionNeedsFinishing(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 	if !validRecord(filepath.Join(h.work, "old", "cli"), "cli") {
 		t.Fatal("removed the previous version")
+	}
+	// --check も同じ答えにする（available と答えてから install が断らない）。
+	if _, err := Install(h.options(), "cli", "c3", true); err == nil || !strings.Contains(err.Error(), "has not finished installing") {
+		t.Fatal("--check:", err)
 	}
 	if result, err := h.install("cli", "c2"); err != nil || result.Outcome != OutcomeUpToDate {
 		t.Fatalf("%+v %v", result, err)

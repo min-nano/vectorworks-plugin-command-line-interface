@@ -158,7 +158,7 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 // hookOutput はフックの標準出力を、1 行の JSON のオブジェクトにする。空なら {}。先頭の BOM と
 // 前後の空白は許す。
 func hookOutput(data []byte) (json.RawMessage, error) {
-	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
+	data = trimBOM(data)
 	if !utf8.Valid(data) {
 		return nil, errors.New("invalid UTF-8")
 	}

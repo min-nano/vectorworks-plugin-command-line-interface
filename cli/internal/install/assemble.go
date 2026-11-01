@@ -37,6 +37,11 @@ type Record struct {
 	HookPending bool `json:"hook_pending,omitempty"`
 }
 
+// trimBOM は先頭の UTF-8 の BOM を除く（記録とフックの出力で許す。同じ決まりを 1 か所に置く）。
+func trimBOM(data []byte) []byte {
+	return bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
+}
+
 // writeRecord は記録を dir に書く。
 func writeRecord(dir string, record *Record) error {
 	// 文字列・文字列の配列・真偽値だけの構造体なので、失敗しない。
@@ -52,7 +57,7 @@ func clearHookPending(dir string) error {
 	var fields map[string]json.RawMessage
 	data, err := os.ReadFile(path)
 	if err == nil {
-		err = json.Unmarshal(bytes.TrimPrefix(data, []byte("\xef\xbb\xbf")), &fields)
+		err = json.Unmarshal(trimBOM(data), &fields)
 	}
 	if err != nil {
 		return err
@@ -84,7 +89,7 @@ func readRecord(dir string) (*Record, error) {
 		return nil, err
 	}
 	// 先頭の BOM は許す（利用者が BOM を書くエディタで保存した記録も読む。フックの出力と同じ）。
-	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
+	data = trimBOM(data)
 	var raw struct {
 		RecordVersion *int `json:"record_version"`
 		Record

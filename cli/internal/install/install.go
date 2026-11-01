@@ -200,6 +200,10 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 	if err != nil {
 		return nil, err
 	}
+	// ネットワークの要らない確かめを、レジストリを取る前にする（cli の無い <Plug-Ins> なら、取りに行かずに断る）。
+	if err := checkCLI(p.plugins, name); err != nil {
+		return nil, err
+	}
 	entry, source, err := o.lookup(name)
 	if err != nil {
 		return nil, err
@@ -210,9 +214,6 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 	}
 	installed, err := inspect(p.dest, name, source)
 	if err != nil {
-		return nil, err
-	}
-	if err := checkCLI(p.plugins, name); err != nil {
 		return nil, err
 	}
 	same := func(tag string) bool {
@@ -251,6 +252,14 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		result.Tag = manifest.Tag
 		upToDate = same(manifest.Tag)
 	}
+	// 入っている版のフックがまだ通っておらず（hook_pending）、前の版が old に残っていれば、別のタグへは更新しない。
+	// 付け替えの前の片付けが old（フックの通った最後の版）を消し、新しい版のフックが失敗して戻すと、通っていない
+	// 版だけが残るため。同じタグ（module が欠けて入れ直すときも）なら通す。--check も同じ答えにする。
+	if installed != nil && installed.HookPending && result.Tag != installed.Tag && validRecord(p.oldDir, name) {
+		return nil, fmt.Errorf("%s@%s has not finished installing (its install hook has not succeeded), and the previous "+
+			"version is in %s; run install %s@%s first (with Vectorworks quit), then install the new tag",
+			name, installed.Tag, p.oldDir, name, installed.Tag)
+	}
 	if check {
 		result.Outcome = OutcomeAvailable
 		// 入っている版のフックがまだ通っていなければ（hook_pending）、同じタグでも入れ終えていないので available
@@ -284,14 +293,6 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		result.Outcome = OutcomeUpToDate
 		result.Hook = hook
 		return result, nil
-	}
-	// 入っている版のフックがまだ通っておらず（hook_pending）、前の版が old に残っていれば、別のタグへは更新しない。
-	// 付け替えの前の片付けが old（フックの通った最後の版）を消し、新しい版のフックが失敗して戻すと、通っていない
-	// 版だけが残るため。同じタグで入れ終えてから更新する。
-	if installed != nil && installed.HookPending && validRecord(p.oldDir, name) {
-		return nil, fmt.Errorf("%s@%s has not finished installing (its install hook has not succeeded), and the previous "+
-			"version is in %s; run install %s@%s first (with Vectorworks quit), then install the new tag",
-			name, installed.Tag, p.oldDir, name, installed.Tag)
 	}
 	hook, err := o.replace(p, name, source, result.Tag, previousTag(p, name, installed), asset)
 	if err != nil {
@@ -431,11 +432,12 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 // 消し（印を残すと、次の install が付け替えの途中で止まったときに、次の uninstall が唯一残った old/<name>/ を
 // 消してしまう）、よけた CLI を消してみる（動いていて消せなければ残す）。
 func (o *Options) finishInstall(p places, name string) {
-	// フックが通ったので、記録の hook_pending を外す（外せなくても入れたことは変わらないので、知らせるだけにする）。
+	// フックが通ったので、記録の hook_pending を外す。外せなければ知らせ、退避した版は片付けない（記録はまだ
+	// 通っていないと言うので、次の同じタグの install が前の版のタグでフックを走らせ直し、そこで外して片付ける）。
 	if err := clearHookPending(p.dest); err != nil {
-		fmt.Fprintf(o.stderr(), "vw2026: cannot record that the install hook succeeded (%v)\n", err)
-	}
-	if err := o.settleOld(p, name); err != nil {
+		fmt.Fprintf(o.stderr(), "vw2026: cannot record that the install hook succeeded (%v); run install with the same "+
+			"tag again\n", err)
+	} else if err := o.settleOld(p, name); err != nil {
 		fmt.Fprintf(o.stderr(), "vw2026: %v\n", err)
 	}
 	_ = removeStaging(p)
