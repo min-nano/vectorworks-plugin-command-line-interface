@@ -161,17 +161,17 @@ func (o *Options) places(name string) (places, error) {
 }
 
 // nested は、path が dir と同じか、dir の中にあるか。書いたままのパスと、リンクを解いたパス（resolvedPath）の書き方と、
-// ディレクトリの同一性（sameDirectory・within）で決める。書き方は、まだ無い場所も見つける（リンクを通して <Work> の
+// ディレクトリの同一性（SameDirectory・within）で決める。書き方は、まだ無い場所も見つける（リンクを通して <Work> の
 // 下を指す --plugins-dir も、解いた書き方で見つける）。同一性は、Windows で EvalSymlinks が解かないジャンクション・
 // subst のドライブ・割り当てたドライブ・短い名前も見つける。
 func nested(path, dir string) bool {
 	_, inside := within(path, dir)
-	return lexicallyIn(path, dir) || lexicallyIn(resolvedPath(path), resolvedPath(dir)) || sameDirectory(path, dir) ||
+	return lexicallyIn(path, dir) || lexicallyIn(resolvedPath(path), resolvedPath(dir)) || SameDirectory(path, dir) ||
 		inside
 }
 
-// sameDirectory は、a と b が同じディレクトリか（どちらかが無ければ偽）。
-func sameDirectory(a, b string) bool {
+// SameDirectory は、a と b が同じディレクトリか（書き方ではなく同一性で決める。どちらかが無ければ偽）。
+func SameDirectory(a, b string) bool {
 	x, errX := os.Stat(a)
 	y, errY := os.Stat(b)
 	return errX == nil && errY == nil && os.SameFile(x, y)
@@ -579,7 +579,11 @@ func (o *Options) finishInstall(p places, name string, moved *movedCLI, hadOld b
 	}
 	_ = removeStaging(p)
 	_ = os.Remove(p.marker)
-	cleanOldCLIs(p.old)
+	// 前の版を残したときは、よけた CLI を消さない（戻せなかったときは、手で戻す場所として知らせている。undoHook の keep
+	// と同じ）。次の install・uninstall が消す。
+	if kept == nil {
+		cleanOldCLIs(p.old)
+	}
 }
 
 // undoSwap は付け替えの 2 つ目が失敗したときに、1 つ目とよけた CLI を戻す。
@@ -672,8 +676,8 @@ func (o *Options) settleOld(p places, name string) error {
 	// 始めの確かめでは居なかった）。付け替えの前なら、install は ErrRunning（ロックを調べられなければその誤り）で
 	// 何も変えずに終わる。
 	if err := stopped(p); err != nil {
-		return fmt.Errorf("%w; %s is left because Vectorworks may use it (run install %s with the same tag again "+
-			"after quitting it to clean it up)", err, p.oldDir, name)
+		return fmt.Errorf("%w; %s is left because Vectorworks may use it (quit Vectorworks, then run install %s "+
+			"again to clean it up)", err, p.oldDir, name)
 	}
 	if validRecord(p.oldDir, name) {
 		return o.discard(p, name)

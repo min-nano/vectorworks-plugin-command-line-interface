@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
 	"runtime"
 	"strings"
 
@@ -155,7 +154,5 @@ func isDefaultPlugins(e *env, dir string) bool {
 	if err != nil {
 		return false
 	}
-	a, errA := os.Stat(dir)
-	b, errB := os.Stat(def)
-	return errA == nil && errB == nil && os.SameFile(a, b)
+	return install.SameDirectory(dir, def)
 }

@@ -98,8 +98,8 @@ Vectorworks 2026 for this user:
 %APPDATA%\Nemetschek\Vectorworks\2026\Plug-Ins on Windows. To use another
 folder, give it to the first-time script (--plugins-dir <Plug-Ins>), which
 passes it to its vw2026; an installed vw2026 refuses it. Install works in
-vectorworks2026-cli in the temporary folder of the user, which must be on the
-same volume as <Plug-Ins>.
+vectorworks2026-cli-<key> in the temporary folder of the user (one for each
+folder of plug-ins), which must be on the same volume as <Plug-Ins>.
 
 Install has no time limit on the network or the hook: stop it (Ctrl-C) or limit
 it from the caller. Stopped while it downloads, it has changed only the work
@@ -189,7 +189,8 @@ func deployOptions(e *env, given *string) (install.Options, error) {
 	}
 	return install.Options{
 		PluginsDir: pluginsDir,
-		WorkDir:    work,
+		// <Work> は <Plug-Ins> ごとに分ける（install.WorkDirFor）。
+		WorkDir:    install.WorkDirFor(work, pluginsDir),
 		Executable: executable,
 		Stderr:     e.stderr,
 		Terminal:   isTerminal(e.stderr),

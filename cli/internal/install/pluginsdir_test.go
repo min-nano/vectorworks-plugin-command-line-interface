@@ -3,6 +3,7 @@ package install
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -13,12 +14,12 @@ func TestPluginsDirOf(t *testing.T) {
 	h.installCLI()
 	executable := filepath.Join(h.plugins, "cli", "bin", "vw2026")
 	// リンクを解いた場所を返すので、書き方（mac の /var と /private/var、Windows の短い名前）ではなく同一性で比べる。
-	if dir, ok := PluginsDirOf(executable); !ok || !sameDirectory(dir, h.plugins) {
+	if dir, ok := PluginsDirOf(executable); !ok || !SameDirectory(dir, h.plugins) {
 		t.Fatal(dir, ok)
 	}
 	link := filepath.Join(h.tmp, "vw2026-link")
 	if err := os.Symlink(executable, link); err == nil {
-		if dir, ok := PluginsDirOf(link); !ok || !sameDirectory(dir, h.plugins) {
+		if dir, ok := PluginsDirOf(link); !ok || !SameDirectory(dir, h.plugins) {
 			t.Fatal("link:", dir, ok)
 		}
 	}
@@ -47,5 +48,28 @@ func TestPluginsDirOf(t *testing.T) {
 	os.RemoveAll(filepath.Join(h.plugins, "cli", "spool"))
 	if _, ok := PluginsDirOf(executable); ok {
 		t.Error("without any mark")
+	}
+}
+
+// <Work> は <Plug-Ins> ごとに分ける。同じフォルダは書き方（リンク・末尾の区切り）に依らず同じ <Work>、別のフォルダは
+// 別の <Work>。
+func TestWorkDirFor(t *testing.T) {
+	tmp := t.TempDir()
+	a := filepath.Join(tmp, "a", "Plug-Ins")
+	b := filepath.Join(tmp, "b", "Plug-Ins")
+	os.MkdirAll(a, 0o755)
+	os.MkdirAll(b, 0o755)
+	base := filepath.Join(tmp, WorkDirName)
+	work := WorkDirFor(base, a)
+	if filepath.Dir(work) != tmp || !strings.HasPrefix(filepath.Base(work), WorkDirName+"-") ||
+		len(filepath.Base(work)) != len(WorkDirName)+1+12 {
+		t.Fatal(work)
+	}
+	if WorkDirFor(base, b) == work || WorkDirFor(base, a+string(filepath.Separator)) != work {
+		t.Fatal("different folders should differ, and the same folder should not")
+	}
+	link := filepath.Join(tmp, "link")
+	if os.Symlink(a, link) == nil && WorkDirFor(base, link) != work {
+		t.Fatal("a link to the same folder should give the same work folder")
 	}
 }

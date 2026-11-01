@@ -61,7 +61,8 @@ irm …/releases/download/<tag>/get-vw2026.ps1 | iex                            
 
 ### 作業の場所
 
-**`install` / `uninstall` の作業の場所（`<Work>`）は、利用者ごとの一時フォルダの下の `vectorworks2026-cli/` です。**
+**`install` / `uninstall` の作業の場所（`<Work>`）は、利用者ごとの一時フォルダの下の `vectorworks2026-cli-<鍵>/` です
+（`<Plug-Ins>` ごとに 1 つ）。**
 置くのは、組み立て（`staging/`）・退避（`old/<name>/` と `uninstall` の途中の印）・よけた CLI（`old/` の直下の
 `vw2026.old-*` / `vw2026.exe.old-*`）・消さずに脇へ移した前の版（`old/<name>.kept-<時刻>/`。[`<Work>/old/<name>/` の片付け](#workoldname-の片付け)）だけで、
 脇へ移した前の版のほかは、どれも `install` / `uninstall` の中でしか要らないものです。
@@ -74,9 +75,14 @@ irm …/releases/download/<tag>/get-vw2026.ps1 | iex                            
 
 | OS | `<Work>` | 求め方 |
 | --- | --- | --- |
-| Windows | `%LOCALAPPDATA%\Temp\vectorworks2026-cli\` | `SHGetKnownFolderPath(FOLDERID_LocalAppData)` の下の `Temp`（`%TEMP%` の既定の場所）。環境変数 `TMP` / `TEMP` は読まない |
-| mac | `/var/folders/…/T/vectorworks2026-cli/` | `/usr/bin/getconf DARWIN_USER_TEMP_DIR` の出力（`confstr(_CS_DARWIN_USER_TEMP_DIR)`。利用者ごとの一時フォルダ）。環境変数 `TMPDIR` は読まない（cgo を使わないので `getconf` を走らせる） |
+| Windows | `%LOCALAPPDATA%\Temp\vectorworks2026-cli-<鍵>\` | `SHGetKnownFolderPath(FOLDERID_LocalAppData)` の下の `Temp`（`%TEMP%` の既定の場所）。環境変数 `TMP` / `TEMP` は読まない |
+| mac | `/var/folders/…/T/vectorworks2026-cli-<鍵>/` | `/usr/bin/getconf DARWIN_USER_TEMP_DIR` の出力（`confstr(_CS_DARWIN_USER_TEMP_DIR)`。利用者ごとの一時フォルダ）。環境変数 `TMPDIR` は読まない（cgo を使わないので `getconf` を走らせる） |
 
+- **`<鍵>` は `<Plug-Ins>` から決めます**（リンクを解いたパス。mac と Windows では小文字にする。その sha256 の
+  先頭 12 桁）。`<Work>/old/<name>/` は、どの `<Plug-Ins>` から退避したものかを持たないので、同じ利用者が別の
+  `<Plug-Ins>` にも入れているとき、`<Work>` を分けなければ、片方の `install` が、もう片方の付け替えの途中で退避した
+  唯一の版を前の版と取り違えて消してしまうためです。入った `vw2026` が求める自分の `<Plug-Ins>`（リンクを解いた
+  場所）と、初回のスクリプトに `--plugins-dir` で渡した書き方とで、同じフォルダなら同じ `<鍵>` になります。
 - **環境変数を読まないのは、**走らせ方（端末・ssh・ほかのアプリ）で場所が変わると、前の `install` /
   `uninstall` が途中で止まって残した `old/` を、次の回が見つけられなくなるためです。mac で `TMPDIR` が
   無いときに Go の `os.TempDir()` が返す `/tmp` は利用者の間で共有され、ほかの利用者がシンボリックリンクを

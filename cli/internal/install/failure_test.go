@@ -1709,3 +1709,38 @@ func TestPluginFolderRefusesAJunction(t *testing.T) {
 		t.Fatal(found, err)
 	}
 }
+
+// 前の版を残し、よけた CLI をその版へ戻せなければ、知らせた場所のまま消さない（後始末が消すと、知らせた場所に無い）。
+func TestCannotClearHookPendingKeepsTheMovedCLI(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.publish(release{name: "cli", tag: "c2"})
+	record := filepath.Join(h.plugins, "cli", RecordFile) + ".new"
+	originalWrite := writeFile
+	writeFile = func(path string, data []byte, perm fs.FileMode) error {
+		if path == record {
+			return errInjected
+		}
+		return originalWrite(path, data, perm)
+	}
+	target := filepath.Join(h.work, "old", "cli", "bin", "vw2026")
+	originalRename := rename
+	rename = func(oldpath, newpath string) error {
+		if newpath == target {
+			return errInjected
+		}
+		return originalRename(oldpath, newpath)
+	}
+	t.Cleanup(func() { writeFile, rename = originalWrite, originalRename })
+	var stderr bytes.Buffer
+	o := h.options()
+	o.Stderr = &stderr
+	o.Executable = h.fakeExecutable()
+	if result, err := Install(o, "cli", "c2", false); err != nil || result.Outcome != OutcomeInstalled ||
+		!strings.Contains(stderr.String(), "the vw2026 of the previous version is in") {
+		t.Fatalf("%+v %v %s", result, err, stderr.String())
+	}
+	if moved, _ := filepath.Glob(filepath.Join(h.work, "old", oldCLIName+"*")); len(moved) != 1 {
+		t.Fatal("the moved vw2026 should stay where the message says:", moved)
+	}
+}

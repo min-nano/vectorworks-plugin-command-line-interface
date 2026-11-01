@@ -30,7 +30,7 @@
 | 入れたときの記録 | `<Plug-Ins>/<name>/vw2026-install.json` | `<Plug-Ins>\<name>\vw2026-install.json` |
 | CLI（PATH に載せる） | `<Plug-Ins>/cli/bin/vw2026` | `<Plug-Ins>\cli\bin\vw2026.exe` |
 | スプール（プラグインが作る） | `<Plug-Ins>/cli/spool/` | `<Plug-Ins>\cli\spool\` |
-| `vw2026` の作業の場所（`<Work>`。[インストール「作業の場所」](install-and-update.md#作業の場所)） | `/var/folders/…/T/vectorworks2026-cli/` | `%LOCALAPPDATA%\Temp\vectorworks2026-cli\` |
+| `vw2026` の作業の場所（`<Work>`。[インストール「作業の場所」](install-and-update.md#作業の場所)） | `/var/folders/…/T/vectorworks2026-cli-<鍵>/` | `%LOCALAPPDATA%\Temp\vectorworks2026-cli-<鍵>\` |
 | 組み立ての場所 | `<Work>/staging/<name>/`（zip は `<Work>/staging/<name>.zip`） | `<Work>\staging\<name>\` |
 | 退避の場所 | `<Work>/old/<name>/` | `<Work>\old\<name>\` |
 | `uninstall` の途中の印 | `<Work>/old/<name>.uninstalling` | `<Work>\old\<name>.uninstalling` |
@@ -48,7 +48,7 @@
   から起動した `vw2026` とで食い違わないようにします。
   - `<Work>`: Windows は `SHGetKnownFolderPath(FOLDERID_LocalAppData)` の下の `Temp`（環境変数 `TMP` /
     `TEMP` は読まない。`vw2026` は `syscall` 経由）。mac は `/usr/bin/getconf DARWIN_USER_TEMP_DIR` の出力
-    （環境変数 `TMPDIR` は読まない）。その下の `vectorworks2026-cli`（[インストール「作業の場所」](install-and-update.md#作業の場所)）。
+    （環境変数 `TMPDIR` は読まない）。その下の `vectorworks2026-cli-<鍵>`（`<Plug-Ins>` ごと。[インストール「作業の場所」](install-and-update.md#作業の場所)）。
   - 既定の `<Plug-Ins>`: Windows は `%APPDATA%` の指す場所を `SHGetKnownFolderPath(FOLDERID_RoamingAppData)` で求める
     （環境変数 `APPDATA` は読まない。`syscall` 経由）。mac はホームディレクトリの `Library/Application Support` の下で、
     ホームは利用者の passwd の項目（`getpwuid_r(getuid())` の `pw_dir`）から求める（環境変数 `HOME` は読まない。
@@ -81,7 +81,7 @@
 スプールの名前（`spool`）は、スプールの場所を求める共通部（SDK に依らない）が使うので、
 `src/core/Protocol.h` の `kSpoolDirName` に置きます。CLI 側の `cli/internal/spool` の `SpoolDirName` と
 対で、両側のテストが[通信規則の見本](../fixtures.md)の `constants.json` に照らします
-（[通信規則](../protocol.md#スプールの場所)）。`<Work>` のディレクトリ名（`vectorworks2026-cli`）は
+（[通信規則](../protocol.md#スプールの場所)）。`<Work>` のディレクトリ名の頭（`vectorworks2026-cli`）は
 `vw2026` だけが使うので、`cli/internal/install` の `WorkDirName` に置きます（見本には載せない）。
 CLI の実行ファイルを置く `bin` は、`vw2026` が実行ファイルのあるフォルダの親をスプールの親とするだけで、
 名前としては使いません。
