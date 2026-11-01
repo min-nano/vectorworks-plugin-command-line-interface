@@ -101,24 +101,40 @@ function Get-PathEntryPlace {
 # ジャンクション・8.3 形式・--plugins-dir の書き方で指したものを同じとみなす。CLI の within と同じ考え方）。
 function Test-PathEntry {
 	param([string] $Entry, [string] $Dir)
-	$a = Get-PathEntryKey $Entry
-	$b = Get-PathEntryKey $Dir
-	if ($a.Length -eq 0) {
+	return Test-PathEntryTarget $Entry (Get-PathEntryTarget $Dir)
+}
+
+# Get-PathEntryTarget は、比べる側の $Dir の形（Get-PathEntryKey）と実際の場所（Get-PathEntryPlace）。Path の
+# 項目ごとに $Dir のディレクトリを開き直さないよう、Path を 1 回たどるあいだ、これを 1 度だけ求めて使う。
+function Get-PathEntryTarget {
+	param([string] $Dir)
+	$key = Get-PathEntryKey $Dir
+	return [pscustomobject]@{ Key = $key; Place = (Get-PathEntryPlace $key) }
+}
+
+# Test-PathEntryTarget は、Path の項目 $Entry が $Target（Get-PathEntryTarget）と同じ項目か（Test-PathEntry）。
+function Test-PathEntryTarget {
+	param([string] $Entry, [object] $Target)
+	$key = Get-PathEntryKey $Entry
+	if ($key.Length -eq 0) {
 		return $false
 	}
-	if ([string]::Equals($a, $b, [StringComparison]::OrdinalIgnoreCase)) {
+	if ([string]::Equals($key, $Target.Key, [StringComparison]::OrdinalIgnoreCase)) {
 		return $true
 	}
-	$placeA = Get-PathEntryPlace $a
-	$placeB = Get-PathEntryPlace $b
-	return $null -ne $placeA -and $null -ne $placeB -and [string]::Equals($placeA, $placeB, [StringComparison]::OrdinalIgnoreCase)
+	if ($null -eq $Target.Place) {
+		return $false
+	}
+	$place = Get-PathEntryPlace $key
+	return $null -ne $place -and [string]::Equals($place, $Target.Place, [StringComparison]::OrdinalIgnoreCase)
 }
 
 # Test-PathValue は、Path の値 $Value に $Dir と同じ項目があるか。
 function Test-PathValue {
 	param([string] $Value, [string] $Dir)
+	$target = Get-PathEntryTarget $Dir
 	foreach ($entry in $Value.Split(';')) {
-		if (Test-PathEntry $entry $Dir) {
+		if (Test-PathEntryTarget $entry $target) {
 			return $true
 		}
 	}
@@ -139,7 +155,8 @@ function Get-PathWithEntry {
 # 除く（先頭の項目なら後ろの ;）。; で分けて除き、残りを ; でつなぐと、この除き方と同じになる。
 function Get-PathWithoutEntry {
 	param([string] $Value, [string] $Dir)
-	$kept = @($Value.Split(';') | Where-Object { -not (Test-PathEntry $_ $Dir) })
+	$target = Get-PathEntryTarget $Dir
+	$kept = @($Value.Split(';') | Where-Object { -not (Test-PathEntryTarget $_ $target) })
 	return $kept -join ';'
 }
 

@@ -155,10 +155,17 @@ func (o *Options) stderr() io.Writer {
 	return o.Stderr
 }
 
-// running は、入れる先の <Plug-Ins>/cli/spool/ のロックを掴む Vectorworks が居るか
-// （docs/protocol.md「生存の判定」）。
-func running(plugins string) bool {
-	return spool.Open(filepath.Join(plugins, CLIName, spool.SpoolDirName)).Running
+// running は、Vectorworks が居るか（docs/protocol.md「生存の判定」）。<Plug-Ins>/cli/spool/ と、
+// <Work>/old/cli/spool/ の両方のロックを見る。cli の付け替え・uninstall の直前に前の版を読み込んだ
+// Vectorworks のロックは、フォルダと一緒に old/cli/spool/ へ移る（mac）ので、install・uninstall のどの確かめも
+// これだけを使い、道ごとに見る場所を変えない。
+func running(p places) bool {
+	for _, dir := range []string{filepath.Join(p.plugins, CLIName), filepath.Join(p.old, CLIName)} {
+		if spool.Open(filepath.Join(dir, spool.SpoolDirName)).Running {
+			return true
+		}
+	}
+	return false
 }
 
 // checkCLI は、cli 以外を入れる・外すときに、<Plug-Ins>/cli/ に正しい記録があるかを確かめる。
@@ -248,7 +255,7 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		}
 		return result, nil
 	}
-	if running(p.plugins) {
+	if running(p) {
 		result.Outcome = OutcomeRunning
 		return result, ErrRunning
 	}
@@ -355,7 +362,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 
 	// 付け替えの直前にロックをもう一度見る（zip を取って組み立てる間に起動した Vectorworks を
 	// 見落とさないため）。
-	if running(p.plugins) {
+	if running(p) {
 		_ = removeStaging(p)
 		return nil, ErrRunning
 	}
@@ -425,8 +432,7 @@ func (o *Options) undoHook(p places, name string, hadOld bool, moved *movedCLI, 
 		return fmt.Errorf("%w; %s, so the new version stays in %s%s: quit Vectorworks, "+
 			"then run install with the same tag again (it runs only the hook)", cause, reason, p.dest, previous)
 	}
-	// cli は、付け替えの直前に前の版を読み込んだ Vectorworks のロックが old/cli/spool/ へ移っているので、そこも見る。
-	if running(p.plugins) || runningAfterMove(p, name) {
+	if running(p) {
 		return keep("Vectorworks started meanwhile")
 	}
 	// 新しい版は名前の変更でよける（消すのはあと。削除が途中で止まると、半分消えたプラグインが
@@ -476,11 +482,11 @@ func (o *Options) settleOld(p places, name string) error {
 	case !exists(p.dest):
 		return fmt.Errorf("%s was left by an install or uninstall that stopped halfway; it may be the only copy of %s. "+
 			"Move it back to %s or delete it, then run again", p.oldDir, name, p.dest)
-	// 動いている Vectorworks が使っているかもしれないものは、消しも移しもしない。cli は、付け替えの直前に前の版を
-	// 読み込んだ Vectorworks のロックが、フォルダと一緒に old/cli/spool/ へ移っている（runningAfterMove）。
-	case runningAfterMove(p, name):
-		return fmt.Errorf("%s is left because Vectorworks is running and may use it; quit Vectorworks, then run "+
-			"install %s with the same tag again to clean it up", p.oldDir, name)
+	// 動いている Vectorworks が使っているかもしれないものは、消しも移しもしない（フックの間に起動したとき。
+	// 始めの確かめでは居なかった）。付け替えの前なら、install は ErrRunning で何も変えずに終わる。
+	case running(p):
+		return fmt.Errorf("%w; %s is left because Vectorworks may use it (run install %s with the same tag again "+
+			"after quitting it to clean it up)", ErrRunning, p.oldDir, name)
 	case validRecord(p.oldDir, name):
 		return o.discard(p, name)
 	}

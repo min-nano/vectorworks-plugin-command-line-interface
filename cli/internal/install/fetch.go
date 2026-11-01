@@ -147,15 +147,16 @@ func (o *Options) download(ref, path, want string) error {
 	if closeErr := file.Close(); err == nil {
 		err = closeErr
 	}
-	// 終わりの行は、大きさの上限と書き込みも確かめてから書く（失敗したのに取り終えたとは書かない）。
+	if err != nil {
+		err = fmt.Errorf("%s: %w", ref, err)
+	} else if got := hex.EncodeToString(hash.Sum(nil)); got != want {
+		err = fmt.Errorf("the sha256 of %s is %s, not %s as the manifest says", ref, got, want)
+	}
+	// 終わりの行は、大きさの上限・書き込み・sha256 を確かめてから書く（失敗したのに取り終えたとは書かない）。
 	progress.finish(err)
 	if err != nil {
 		_ = removeFile(path)
-		return fmt.Errorf("%s: %w", ref, err)
-	}
-	if got := hex.EncodeToString(hash.Sum(nil)); got != want {
-		_ = removeFile(path)
-		return fmt.Errorf("the sha256 of %s is %s, not %s as the manifest says", ref, got, want)
+		return err
 	}
 	return nil
 }

@@ -217,6 +217,25 @@ uninstall_hook "$moved"
 expect "uninstall with the real path: output" "$out" '{"path":"removed","left":[]}'
 [ -L "$link" ] && fail "uninstall with the real path: the link is left"
 
+# 同じ CLI を指す相対のリンクも、install は exists とみなし、uninstall は消す。
+setup relative-link
+mkdir -p "$home/.local/bin"
+ln -s ../../../Plug-Ins/cli/bin/vw2026 "$link"
+install_hook
+expect "install with a relative link: output" "$out" '{"path":"exists"}'
+uninstall_hook
+expect "uninstall with a relative link: output" "$out" '{"path":"removed","left":[]}'
+[ -L "$link" ] && fail "uninstall with a relative link: the link is left"
+
+# PATH の項目が ~/.local/bin を別の書き方（シンボリックリンクのホーム）で指していても、PATH にあるとみなす。
+setup path-other-spelling
+ln -s "$home" "$case_dir/home-link"
+hook_home="$home"
+hook_path="$case_dir/home-link/.local/bin:/usr/bin:/bin"
+hook_install_dir="$plugin"
+run_hook install "$plugin"
+expect "install with PATH through a link: output" "$out" '{"path":"linked"}'
+
 setup uninstall-other-link
 mkdir -p "$home/.local/bin"
 ln -s "$case_dir/elsewhere/bin/vw2026" "$link"

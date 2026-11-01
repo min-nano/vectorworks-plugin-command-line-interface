@@ -63,14 +63,14 @@ json_string() {
 		}'
 }
 
-# dir_in_path は、ディレクトリ $1 が PATH の項目にあるか（末尾の / の違いは同じとみなす）。
+# dir_in_path は、ディレクトリ $1 が PATH の項目にあるか。同じ場所かは same_place で決める（リンクの確かめと
+# 揃える。同じディレクトリを別の書き方で指す項目も、あるとみなす）。相対の項目（空を含む）はあるとみなさない。
 dir_in_path() {
-	dir_in_path_want="$(strip_slashes "$1")"
 	dir_in_path_rest="${PATH-}:"
 	while [ -n "$dir_in_path_rest" ]; do
 		dir_in_path_entry="${dir_in_path_rest%%:*}"
 		dir_in_path_rest="${dir_in_path_rest#*:}"
-		if [ "$(strip_slashes "$dir_in_path_entry")" = "$dir_in_path_want" ]; then
+		if same_place "$dir_in_path_entry" "$1"; then
 			return 0
 		fi
 	done
@@ -105,8 +105,15 @@ same_place() {
 }
 
 # link_points_to は、$1 がシンボリックリンクで、その中身（解かない）が $2 と同じ場所を指すか（same_place）。
+# 相対の中身は、リンクのあるディレクトリから見た場所にする（OS がリンクを解くときと同じ）。
 # install の「同じリンクが既にある」と uninstall の「このプラグインの CLI を指すリンク」は、同じこの関数で
 # 決める（片方だけが一致とみなすと、install が exists と答えたリンクを uninstall が残すため）。
 link_points_to() {
-	[ -L "$1" ] && same_place "$(readlink "$1")" "$2"
+	[ -L "$1" ] || return 1
+	link_points_to_target="$(readlink "$1")"
+	case $link_points_to_target in
+	/*) ;;
+	*) link_points_to_target="$(dirname "$1")/$link_points_to_target" ;;
+	esac
+	same_place "$link_points_to_target" "$2"
 }

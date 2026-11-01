@@ -9,7 +9,6 @@ import (
 	"sort"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
-	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
 // UninstallResult は uninstall の出力。
@@ -34,7 +33,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	if running(p.plugins) {
+	if running(p) {
 		return runningResult(name), ErrRunning
 	}
 	if err := checkCLI(p.plugins, name); err != nil {
@@ -88,10 +87,6 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 			return nil, fmt.Errorf("%s was left by an install or uninstall that stopped halfway, and %s is not there; "+
 				"it may be the only copy of %s. Move it back to %s or delete it", p.oldDir, p.dest, name, p.dest)
 		}
-		// cli は、ロックのある spool ごと移しているので、始めの running では見えない（移した先を見る）。
-		if runningAfterMove(p, name) {
-			return runningResult(name), ErrRunning
-		}
 		resumed = true
 	default:
 		_ = os.Remove(p.marker)
@@ -110,7 +105,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		}
 		// 戻す前にロックを見る（install の undoHook と同じ）。フックの間に起動した Vectorworks の下へ
 		// フォルダを戻さず、印を残して、終了してからの uninstall が続きから走れるようにする。
-		if runningAfterMove(p, name) {
+		if running(p) {
 			return nil, fmt.Errorf("%w; Vectorworks started meanwhile, so %s stays in %s: quit Vectorworks, then run "+
 				"uninstall again (it goes on from the hook)", err, name, p.oldDir)
 		}
@@ -123,7 +118,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	// フックの間に Vectorworks が起動していれば消さない（cli は、移したフォルダのスプールとロックを、動いている
 	// Vectorworks が使っているかもしれない）。印を残すので、終了してからの uninstall が続きから走る。フォルダを
 	// 移してフックも走らせたので、「何もしなかった」の ErrRunning（終了コード 6）ではなく、失敗にする。
-	if runningAfterMove(p, name) {
+	if running(p) {
 		return nil, fmt.Errorf("the uninstall hook ran, but Vectorworks started meanwhile, so %s stays in %s: quit "+
 			"Vectorworks, then run uninstall again (it goes on from the hook)", name, p.oldDir)
 	}
@@ -150,16 +145,6 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 // runningResult は、Vectorworks が動いていて止めたときの出力（どこで分かっても同じ形にする）。
 func runningResult(name string) *UninstallResult {
 	return &UninstallResult{Outcome: OutcomeRunning, Name: name, Remaining: []string{}, Left: []string{}}
-}
-
-// runningAfterMove は、フォルダを old へ移したあとで、Vectorworks がロックを掴んでいるか。cli は、ロックの
-// ある <Plug-Ins>/cli/spool/ ごと移しているので、移した先のスプールを見る（mac では、移す直前に読み込んだ
-// プラグインが掴んだロックが、フォルダと一緒に移る）。ほかの名前は <Plug-Ins>/cli/spool/ を見る。
-func runningAfterMove(p places, name string) bool {
-	if name == CLIName {
-		return spool.Open(filepath.Join(p.oldDir, spool.SpoolDirName)).Running
-	}
-	return running(p.plugins)
 }
 
 // removeEmptyWork は、<Work> に staging / old の空のディレクトリしか無ければ、<Work> ごと消す。

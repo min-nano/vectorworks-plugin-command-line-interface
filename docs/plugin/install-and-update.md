@@ -255,6 +255,8 @@ vw2026 install <name>@<tag>
   フォルダなど、`cli` の無い Plug-Ins へは入れられません（対応しない）。Go がここで `cli` の名前を使うのは、
   ロックの場所を決めるためだけです。
 - **Vectorworks が動いているかはロックで判定します**（[通信規則「生存の判定」](../protocol.md#生存の判定)）。
+  見るのは `<Plug-Ins>/cli/spool/` と `<Work>/old/cli/spool/`（下記。付け替えで移ったロック）の 2 か所で、`install` /
+  `uninstall` のどの確かめも、この同じ 2 か所を見ます（道ごとに見る場所を変えると、見落とす道が残るため）。
   プロセス名は見ません。ロックを掴んでいない Vectorworks（`cli` が入っていない・起動の途中で
   最初の刻みの前・2 つ目の起動）が居るときは、Windows では読み込み中のフォルダの名前を変えられないので
   （[SDK の調査 6](../sdk-research.md#6-プラグインのフォルダの中のモジュール以外のものとモジュールの読み込み元分かった)）
@@ -271,8 +273,10 @@ vw2026 install <name>@<tag>
     `<Plug-Ins>/cli/spool/` で探します。
   - 新しい CLI は `<Plug-Ins>/cli/spool/` でロックを掴む者を見つけられず、Vectorworks が動いていても
     止まっていると判定し、`call` も断ります。
-  - 手順 9 の後始末が、掴まれたままのロックごと `<Work>/old/cli/` を消します。それ以降の `install` /
-    `uninstall` は、Vectorworks が動いているのに通ります。
+  - そのため `install` / `uninstall` は `<Work>/old/cli/spool/` のロックも見ます。この Vectorworks を動いていると
+    みなし（`vectorworks_running`。付け替えのあとの後始末なら知らせるだけ）、`<Work>/old/cli/` を消しも移しもしません
+    （[`<Work>/old/<name>/` の片付け](#workoldname-の片付け)）。見ないと、後始末が掴まれたままのロックごと
+    `<Work>/old/cli/` を消し、それ以降の `install` / `uninstall` が、Vectorworks が動いているのに通ります。
 - **フックが失敗して戻す前にも、ロックを見ます**（[入れ替えの手順](#入れ替えの手順)の 4）。フックの時間には
   上限が無く、その間に起動した Vectorworks が新しい版を読み込み、ロックを掴むことがあります。そのまま戻すと、
   mac では動いているプラグインのロックごと新しい版が消え、`Plug-Ins` には古い版が戻り、上と同じく止まって
@@ -367,8 +371,8 @@ vw2026 install <name>@<tag>
    ともに、これらを閉じる・カレントディレクトリをフォルダの外へ移すことを示します。2 つ目が
    失敗したら 1 つ目を戻し、よけた CLI を戻す。まだ入っていなければ 1 つ目は飛ばす。
 4. **フック**: `install` のフックを走らせる。失敗したら、まず `<Plug-Ins>/cli/spool/` のロックを見る
-   （[流れ](#流れ)の「フックが失敗して戻す前にも、ロックを見ます」。`cli` は、付け替えの直前に前の版を読み込んだ
-   Vectorworks のロックがフォルダと一緒に移るので、`<Work>/old/cli/spool/` のロックも見る）。掴まれていれば戻さない。戻しの
+   （[流れ](#流れ)の「フックが失敗して戻す前にも、ロックを見ます」。ほかの確かめと同じく `<Work>/old/cli/spool/` も
+   見る）。掴まれていれば戻さない。戻しの
    1 の名前の変更が失敗したとき（Windows で、ロックを掴む前の Vectorworks が新しい版を読み込んでいる）も、
    その先へ進まない。どちらも新しい版を `<Plug-Ins>/<name>` に残し、`<Work>/old/<name>` とよけた CLI も
    残して（同じタグで走らせ直した `install` が、フックが通ったあとで片付ける。[流れ](#流れ)の「同じタグのとき」）、取った
@@ -405,10 +409,10 @@ vw2026 install <name>@<tag>
 - **`<Plug-Ins>/<name>/` が無ければ**、`old` が入っていた唯一の版かもしれないので、何も変えずに `old` の場所を
   `message` に載せて失敗にする（戻すか消すかは利用者が決める）。印 `<Work>/old/<name>.uninstalling` も
   あれば、止まった `uninstall` なので、`uninstall <name>` を走らせ直して終わらせることを示す。
-- **Vectorworks が動いていれば**（`<Plug-Ins>/cli/spool/` のロック。`cli` は `<Work>/old/cli/spool/` のロックも見る）、
-  動いている Vectorworks が使っているかもしれないので、消しも移しもせずに知らせる（終了してから同じタグの `install` を
-  走らせ直すと片付ける）。`cli` は、付け替えの直前に前の版を読み込んだ Vectorworks のロックが、フォルダと一緒に
-  `old/cli/spool/` へ移っているためです（`uninstall` の手順 4 と同じ）。
+- **Vectorworks が動いていれば**（`<Plug-Ins>/cli/spool/` と `<Work>/old/cli/spool/` のロック。[流れ](#流れ)）、
+  動いている Vectorworks が使っているかもしれないので、消しも移しもしない。付け替えの前なら `vectorworks_running` で
+  何も変えずに終わり、付け替えやフックのあと（フックの間に起動した）なら知らせるだけにする（終了してから同じタグの
+  `install` を走らせ直すと片付ける）。
 - `<Plug-Ins>/<name>/` があり、`old` の記録の `name` が一致し記録の `module` があれば、退避した版・退避の残りと
   して消す（[消すコードの歯止め](#消すコードの歯止め)）。
 - `<Plug-Ins>/<name>/` があり、`old` の記録が無い・読めない・`module` が無いとき（`module` の無いフォルダを
@@ -689,7 +693,8 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
   一時フォルダの CLI で外せば、動いている自分を消せずに残すこと（Windows）も、自分をよけることも要りません。
 - 出力は `{"outcome":"failed","name":…,"message":…,"command":…}` です。
 
-1. **Vectorworks が動いていれば何もせずに終わる**（`<Plug-Ins>/cli/spool/` のロックで判定。install と同じ終了コード）。
+1. **Vectorworks が動いていれば何もせずに終わる**（`<Plug-Ins>/cli/spool/` と `<Work>/old/cli/spool/` のロックで判定。
+   install と同じ 2 か所・同じ終了コード）。
    `<name>` が `cli` でなければ、`<Plug-Ins>/cli/` に正しい記録が無いときも何も変えずに失敗にする
    （[`cli` と同じ `<Plug-Ins>` に入れる](#流れ)）。
 2. **安全弁**: `<Plug-Ins>/<name>/` に記録があり、記録の `name` がフォルダ名と一致し、記録の
@@ -697,8 +702,7 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
    何も消さずに失敗にする（`vw2026` が入れたものではない）。
    - `<Plug-Ins>/<name>/` が無く、`<Work>/old/<name>/` に正しい記録（`name` が一致し `module` がある）が
      あり、**`<Work>/old/<name>.uninstalling`（手順 3 の印）もあれば**、前の `uninstall` が手順 3 のあとで
-     止まったとみなし、手順 4 から続ける。続ける前に、移した先のロックも見る（`cli` は `<Plug-Ins>/cli/spool/` ごと
-     移しているので、手順 1 では見えない。掴まれていれば何もせずに `vectorworks_running` で終わる）。
+     止まったとみなし、手順 4 から続ける（`cli` の移した先のロックは、手順 1 が `<Work>/old/cli/spool/` で見ている）。
    - 印が無ければ、`install` が付け替えの途中で止まった（`old` が入っていた唯一の版かもしれない）のと
      見分けられないので、何も変えずに `old` の場所を `message` に載せて失敗にする（[入れ替えの手順](#入れ替えの手順)の
      1 と同じ。戻すか消すかは利用者が決める）。
@@ -716,9 +720,9 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
    フォルダを開いているとき・カレントディレクトリがフォルダの中にあるプロセスが居るとき。
    [入れ替えの手順](#入れ替えの手順)の 3 と同じ）よけた CLI を戻し、印を消して、何も変えずに失敗にする。
 4. 記録の `hooks.uninstall` を、移した先（`<Work>/old/<name>/`）で走らせる（`VW2026_HOOK_PLUGIN_DIR` は
-   移した先、`VW2026_HOOK_INSTALL_DIR` は `<Plug-Ins>/<name>/`）。失敗したら、まず `<Plug-Ins>/cli/spool/` の
-   ロックを見る（`install` のフックの失敗と同じ。[入れ替えの手順](#入れ替えの手順)の 4）。`cli` は、ロックのある
-   `<Plug-Ins>/cli/spool/` ごと移しているので、移した先（`<Work>/old/cli/spool/`）のロックを見る（mac では、移す直前に
+   移した先、`VW2026_HOOK_INSTALL_DIR` は `<Plug-Ins>/<name>/`）。失敗したら、まずロックを見る（手順 1 と同じ 2 か所。
+   `install` のフックの失敗と同じ。[入れ替えの手順](#入れ替えの手順)の 4）。`cli` は、ロックのある
+   `<Plug-Ins>/cli/spool/` ごと移しているので、移した先の `<Work>/old/cli/spool/` で見つかる（mac では、移す直前に
    読み込んだプラグインが掴んだロックが、フォルダと一緒に移る）。掴まれていれば戻さず、
    `old/<name>/` と印を残して失敗にする（Vectorworks を終了してから走らせ直すと、手順 4 から続く）。掴まれて
    いなければ `<Work>/old/<name>` を `<Plug-Ins>/<name>` へ戻し、よけた CLI を戻し、印を消して失敗にする。
@@ -726,7 +730,7 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
    残し、場所を `message` に載せて失敗にする）。OS の一時フォルダの片付けはファイルを 1 つずつ消すので、
    続きの `old/<name>/` は記録とモジュールだけが残った壊れたフォルダかもしれず、それを `Plug-Ins` に
    戻さないためです。
-5. フックが通ったあとにもロックを見る（`cli` は移した先のスプール。手順 4 と同じ）。掴まれていれば消さずに、印を
+5. フックが通ったあとにもロックを見る（手順 1 と同じ 2 か所）。掴まれていれば消さずに、印を
    残して失敗にする（フォルダを移してフックも走らせたので、「何もしなかった」の `vectorworks_running` にはしない。
    終了してから走らせ直すと手順 4 から続く）。`<Work>/old/<name>` を
    `<Work>/staging/<name>/` へ名前の変更で移してから消し（[`<Work>/old/<name>/` の片付け](#workoldname-の片付け)と

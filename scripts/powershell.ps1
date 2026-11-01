@@ -53,7 +53,8 @@ if ($Mode -eq 'Lint') {
 		for ($attempt = 1; ; $attempt++) {
 			& $pwsh -NoProfile -File $PSCommandPath -Mode LintFile $file
 			$code = $LASTEXITCODE
-			if ($code -le 1 -or $attempt -ge 3) {
+			# 0 と 1 のほかは落ちたとみなす（Windows で .NET の例外のまま終わった pwsh は負の終了コードを返す）。
+			if ($code -eq 0 -or $code -eq 1 -or $attempt -ge 3) {
 				break
 			}
 			[Console]::Error.WriteLine(('{0}: PSScriptAnalyzer crashed (exit code {1}); running it again' -f $file, $code))

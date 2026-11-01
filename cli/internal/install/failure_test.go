@@ -1002,8 +1002,13 @@ func TestDownloadMismatchCannotRemove(t *testing.T) {
 		return original(path)
 	}
 	t.Cleanup(func() { removeFile = original })
-	if _, err := h.install("cli", "c1"); err == nil || !strings.Contains(err.Error(), "sha256") || !exist(zip) {
-		t.Fatal(err)
+	var stderr bytes.Buffer
+	o := h.options()
+	o.Stderr = &stderr
+	// 取り終えた行は、sha256 を照らしてから書く（合わなければ取り終えたとは書かない）。
+	if _, err := Install(o, "cli", "c1", false); err == nil || !strings.Contains(err.Error(), "sha256") || !exist(zip) ||
+		strings.Contains(stderr.String(), "downloaded") || !strings.Contains(stderr.String(), "stopped after") {
+		t.Fatal(err, stderr.String())
 	}
 	removeFile = original
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -1032,8 +1037,9 @@ func TestInstallCLIHookFailureWhileLockedInOld(t *testing.T) {
 	}
 }
 
-// フックが通っても、old/cli/spool/ のロックが掴まれていれば、退避した版を消さずに知らせる。同じタグの install も
-// 同じ（終了してから走らせ直すと片付ける）。
+// フックが通っても、old/cli/spool/ のロックが掴まれていれば、退避した版を消さずに知らせる。そのあとは、同じタグの
+// install も、ほかのプラグインの install・uninstall も、Vectorworks が動いているとみなして何もしない（終了してから
+// 走らせ直すと片付ける）。
 func TestInstallCLIKeepsOldWhileLockedInOld(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -1051,11 +1057,21 @@ func TestInstallCLIKeepsOldWhileLockedInOld(t *testing.T) {
 		!strings.Contains(stderr.String(), "Vectorworks is running") {
 		t.Fatalf("%+v %v %s", result, err, stderr.String())
 	}
-	stderr.Reset()
+	before := snapshot(t, h.plugins)
 	h.publish(release{name: "cli", tag: "c2"})
-	if result, err := Install(o, "cli", "c2", false); err != nil || result.Outcome != OutcomeUpToDate ||
-		!validRecord(old, "cli") || !strings.Contains(stderr.String(), "Vectorworks is running") {
-		t.Fatalf("%+v %v %s", result, err, stderr.String())
+	if result, err := Install(o, "cli", "c2", false); !errors.Is(err, ErrRunning) || result.Outcome != OutcomeRunning {
+		t.Fatalf("%+v %v", result, err)
+	}
+	h.publish(release{name: "demo", tag: "d1"})
+	if result, err := Install(o, "demo", "d1", false); !errors.Is(err, ErrRunning) || result.Outcome != OutcomeRunning {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if result, err := Uninstall(o, "cli"); !errors.Is(err, ErrRunning) || result.Outcome != OutcomeRunning {
+		t.Fatalf("%+v %v", result, err)
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
+	if !validRecord(old, "cli") {
+		t.Fatal("should keep old")
 	}
 }
 
