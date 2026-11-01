@@ -258,7 +258,7 @@ func TestUsageErrorMessage(t *testing.T) {
 // 名前がどのレジストリにも無い・規則が合わない・マニフェストが読めないときは、何も変えずに失敗にする。
 func TestInstallManifestErrors(t *testing.T) {
 	h := newHarness(t)
-	// 引いたレジストリを示す（空の --registry で何も足さなかったときも分かる）。
+	// 引いたレジストリを示す。
 	if _, err := h.install("nowhere", "1"); err == nil || !strings.Contains(err.Error(), "no registry (looked in: default") {
 		t.Error(err)
 	}

@@ -160,10 +160,18 @@ func TestInstallFromLocalRegistry(t *testing.T) {
 	if r := invoke(t, opts{plugins: plugins}, "install", "demo@d1", "--registry", filepath.Join(tmp, "plugins.json")); r.code != exitUsage {
 		t.Fatalf("a path: %+v", r)
 	}
-	// 空の値は何も足さない（--plugins-dir の空と同じ）。引いたのが既定のレジストリだけだと、文言で分かる。
+	// 空の値（空白だけを含む）は、引数でも環境変数でも使い方の誤り。
 	r := invoke(t, opts{plugins: plugins, vars: map[string]string{"VW2026_REGISTRY": " "}}, "install", "demo@d1")
-	if r.code != exitFailure || !strings.Contains(r.stdout, "looked in: default)") {
-		t.Fatalf("an empty registry: %+v", r)
+	if r.code != exitUsage || !strings.Contains(r.stderr, "the registry is empty") {
+		t.Fatalf("an empty VW2026_REGISTRY: %+v", r)
+	}
+	if r := invoke(t, opts{plugins: plugins}, "install", "demo@d1", "--registry", ""); r.code != exitUsage {
+		t.Fatalf("an empty --registry: %+v", r)
+	}
+	// どのレジストリにも無ければ、引いたレジストリを示す。
+	r = invoke(t, opts{plugins: plugins}, "install", "demo@d1", "--registry", fileURL(other))
+	if r.code != exitFailure || !strings.Contains(r.stdout, "looked in: default "+fileURL(other)+")") {
+		t.Fatalf("in no registry: %+v", r)
 	}
 	vars := map[string]string{"VW2026_REGISTRY": fileURL(other) + " " + registryPath}
 	r = invoke(t, opts{plugins: plugins, vars: vars}, "install", "demo@d1", "--check")

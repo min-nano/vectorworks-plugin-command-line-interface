@@ -56,7 +56,7 @@ func (o *Options) lookup(name string) (registry.Entry, string, error) {
 			return entry, source, nil
 		}
 	}
-	// 引いたレジストリを示す（--registry・VW2026_REGISTRY が空で何も足さなかったときも、そう分かるように）。
+	// 引いたレジストリを示す（名前の誤りか、--registry・VW2026_REGISTRY の足りなさかを見分けられるように）。
 	return registry.Entry{}, "", fmt.Errorf("%s is in no registry (looked in: %s)", name,
 		strings.Join(append([]string{registry.DefaultName}, o.Registries...), " "))
 }
