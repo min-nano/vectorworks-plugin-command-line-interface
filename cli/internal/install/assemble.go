@@ -31,8 +31,9 @@ type Record struct {
 	Target        string         `json:"target"`
 	Module        string         `json:"module"`
 	Hooks         registry.Hooks `json:"hooks"`
-	// 入れた版の install のフックがまだ通っていない（フックの間に Vectorworks が起動して新しい版を残した）。
-	// フックが通ったら外す。前のタグ（previousTag）をこれで決める（<Work>/old/<name>/ の残り方から推し量らない）。
+	// 入れた版の install のフックがまだ通っていない。組み立てるときに書き、フックが通ったら外す（フックが失敗して
+	// 新しい版を残したときも、フックの途中で止まったときも残る）。前のタグ（previousTag）をこれで決める
+	// （<Work>/old/<name>/ の残り方から推し量らない）。
 	HookPending bool `json:"hook_pending,omitempty"`
 }
 
@@ -40,7 +41,39 @@ type Record struct {
 func writeRecord(dir string, record *Record) error {
 	// 文字列・文字列の配列・真偽値だけの構造体なので、失敗しない。
 	data, _ := json.MarshalIndent(record, "", "\t")
-	return writeFile(filepath.Join(dir, RecordFile), append(data, '\n'), 0o644)
+	return replaceFile(filepath.Join(dir, RecordFile), append(data, '\n'))
+}
+
+// clearHookPending は、dir の記録から hook_pending を外す（無ければ何もしない）。読んだ JSON の項目をそのまま
+// 書き戻し、この CLI の知らない項目（新しい CLI が書いたもの）も落とさない。
+func clearHookPending(dir string) error {
+	path := filepath.Join(dir, RecordFile)
+	// フックが記録を消した・壊したときも、読めないという 1 つの誤りにする（知らせるだけで、入れたことは変わらない）。
+	var fields map[string]json.RawMessage
+	data, err := os.ReadFile(path)
+	if err == nil {
+		err = json.Unmarshal(bytes.TrimPrefix(data, []byte("\xef\xbb\xbf")), &fields)
+	}
+	if err != nil {
+		return err
+	}
+	if _, ok := fields["hook_pending"]; !ok {
+		return nil
+	}
+	delete(fields, "hook_pending")
+	// 読めた JSON の値だけなので、失敗しない。
+	out, _ := json.MarshalIndent(fields, "", "\t")
+	return replaceFile(path, append(out, '\n'))
+}
+
+// replaceFile は path を data で置き換える。隣に書いてから名前の変更で置き換え、書く途中で止まっても（電源が
+// 落ちた）空や半分の記録を残さない（読めない記録では install も uninstall も通らなくなる）。
+func replaceFile(path string, data []byte) error {
+	temp := path + ".new"
+	if err := writeFile(temp, data, 0o644); err != nil {
+		return err
+	}
+	return rename(temp, path)
 }
 
 // readRecord はフォルダの記録を読む。無ければ os.ErrNotExist を包んだ誤り。知らない項目は
@@ -132,6 +165,7 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 			}
 		}
 	}
+	// フックが通るまでは hook_pending（付け替えのあとフックが失敗して残した・フックの途中で止まった版を見分ける）。
 	record := &Record{
 		RecordVersion: RecordVersion,
 		Name:          name,
@@ -140,6 +174,7 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 		Target:        o.Target,
 		Module:        module,
 		Hooks:         asset.Hooks,
+		HookPending:   true,
 	}
 	if err := writeRecord(p.stageDir, record); err != nil {
 		return nil, err

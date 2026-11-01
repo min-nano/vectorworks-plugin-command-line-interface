@@ -72,8 +72,9 @@ It prints one line of JSON with one of these outcomes:
 	{"outcome":"vectorworks_running",...}
 	{"outcome":"failed","name":"...","message":"..."}
 
-With --check, "available" means a new build is available, or none is
-installed. "hook" is the output of the hook (a JSON object), absent when the plug-in has
+With --check, "available" means a new build is available, none is installed,
+or the installed one has not finished installing (its hook has not succeeded;
+run install with its tag). "hook" is the output of the hook (a JSON object), absent when the plug-in has
 none. On a failure (cannot download, the sha256 does not match, the zip is
 wrong, the folder cannot be replaced, the hook failed), install leaves
 <Plug-Ins> as it was, except for what the hook changed outside the folder,

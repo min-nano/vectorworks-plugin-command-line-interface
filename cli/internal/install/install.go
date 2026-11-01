@@ -253,7 +253,9 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 	}
 	if check {
 		result.Outcome = OutcomeAvailable
-		if upToDate {
+		// 入っている版のフックがまだ通っていなければ（hook_pending）、同じタグでも入れ終えていないので available
+		// （同じタグの install でフックを走らせる）。
+		if upToDate && !installed.HookPending {
 			result.Outcome = OutcomeUpToDate
 		}
 		return result, nil
@@ -277,18 +279,19 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 		if err != nil {
 			return nil, err
 		}
-		// 新しい版を残した install（フックの間に Vectorworks が起動した）の続きなら、フックが通ったので印を外し、
-		// 退避した前の版などを付け替えのあとと同じく片付ける。
-		if installed.HookPending {
-			installed.HookPending = false
-			if err := writeRecord(p.dest, installed); err != nil {
-				fmt.Fprintf(o.stderr(), "vw2026: cannot record that the install hook succeeded (%v)\n", err)
-			}
-		}
+		// 新しい版を残した install の続きなら、フックが通ったので、付け替えのあとと同じく印を外して片付ける。
 		o.finishInstall(p, name)
 		result.Outcome = OutcomeUpToDate
 		result.Hook = hook
 		return result, nil
+	}
+	// 入っている版のフックがまだ通っておらず（hook_pending）、前の版が old に残っていれば、別のタグへは更新しない。
+	// 付け替えの前の片付けが old（フックの通った最後の版）を消し、新しい版のフックが失敗して戻すと、通っていない
+	// 版だけが残るため。同じタグで入れ終えてから更新する。
+	if installed != nil && installed.HookPending && validRecord(p.oldDir, name) {
+		return nil, fmt.Errorf("%s@%s has not finished installing (its install hook has not succeeded), and the previous "+
+			"version is in %s; run install %s@%s first (with Vectorworks quit), then install the new tag",
+			name, installed.Tag, p.oldDir, name, installed.Tag)
 	}
 	hook, err := o.replace(p, name, source, result.Tag, previousTag(p, name, installed), asset)
 	if err != nil {
@@ -416,7 +419,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 		name: name, tag: tag, previous: previous, target: o.Target, pluginDir: p.dest, installDir: p.dest,
 	})
 	if err != nil {
-		return nil, o.undoHook(p, record, hadOld, moved, err)
+		return nil, o.undoHook(p, hadOld, moved, err)
 	}
 	o.finishInstall(p, name)
 	return hook, nil
@@ -428,6 +431,10 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 // 消し（印を残すと、次の install が付け替えの途中で止まったときに、次の uninstall が唯一残った old/<name>/ を
 // 消してしまう）、よけた CLI を消してみる（動いていて消せなければ残す）。
 func (o *Options) finishInstall(p places, name string) {
+	// フックが通ったので、記録の hook_pending を外す（外せなくても入れたことは変わらないので、知らせるだけにする）。
+	if err := clearHookPending(p.dest); err != nil {
+		fmt.Fprintf(o.stderr(), "vw2026: cannot record that the install hook succeeded (%v)\n", err)
+	}
 	if err := o.settleOld(p, name); err != nil {
 		fmt.Fprintf(o.stderr(), "vw2026: %v\n", err)
 	}
@@ -451,18 +458,12 @@ func (o *Options) undoSwap(p places, hadOld bool, moved *movedCLI, cause error) 
 
 // undoHook はフックが失敗したときに前の版へ戻す。戻す前にロックを見て、Vectorworks が起動していれば
 // 新しい版を残す（動いているプラグインのロックごと消さない）。
-func (o *Options) undoHook(p places, record *Record, hadOld bool, moved *movedCLI, cause error) error {
+func (o *Options) undoHook(p places, hadOld bool, moved *movedCLI, cause error) error {
 	previous := ""
 	if hadOld {
 		previous = fmt.Sprintf(" (the previous one is in %s)", p.oldDir)
 	}
 	keep := func(reason string) error {
-		// 残した版のフックはまだ通っていないと記録に書く（同じタグで終える回・別のタグへ更新する回が、前のタグを
-		// old の版のものにする）。書けなければ知らせるだけにする（前のタグが残した版のタグになる）。
-		record.HookPending = true
-		if err := writeRecord(p.dest, record); err != nil {
-			fmt.Fprintf(o.stderr(), "vw2026: cannot record that the install hook has not succeeded (%v)\n", err)
-		}
 		// 取った zip はもう要らない（同じタグで走らせ直す install は zip を取らない）。
 		_ = os.Remove(p.stageZip)
 		return fmt.Errorf("%w; %s, so the new version stays in %s%s: quit Vectorworks, "+
