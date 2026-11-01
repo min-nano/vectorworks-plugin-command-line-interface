@@ -71,9 +71,11 @@ It prints one line of JSON with one of these outcomes:
 
 "remaining" lists the plug-ins that vw2026 installed and that remain in
 <Plug-Ins>. "left" lists the moved-away copies of vw2026 (left by an update on
-Windows) that could not be deleted; the temporary folder of the user holds
-them, and Windows cleans it up. "command" is the first-time script (of the
-installed tag) to run when this vw2026 runs from the folder.
+Windows) that could not be deleted. They are in the temporary folder of the
+user; the next install or uninstall deletes them, and so does the cleanup of
+temporary files of Windows if it is turned on (Storage Sense, Disk Cleanup).
+"command" is the first-time script (of the installed tag) to run when this
+vw2026 runs from the folder.
 
 Exit status: 0 success (including not_installed), 1 failure, 2 wrong usage
 (including a vw2026 that runs from the folder), 6 Vectorworks is running.

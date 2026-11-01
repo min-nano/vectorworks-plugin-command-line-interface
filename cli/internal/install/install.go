@@ -141,7 +141,7 @@ func (o *Options) places(name string) (places, error) {
 	work := filepath.Clean(o.WorkDir)
 	// 片方がもう片方の中にあれば（初回のスクリプトに <Work>/old を --plugins-dir として渡したなど）、片付けが
 	// 入れたばかりのプラグインを消し、付け替えが自分を動かすので断る（消すコードの歯止め。守ること 9）。
-	if nested(plugins, work) || nested(work, plugins) {
+	if overlap(plugins, work) {
 		return places{}, fmt.Errorf("the folder of plug-ins %s and the work folder %s overlap (one is in the other); "+
 			"nothing is changed", plugins, work)
 	}
@@ -160,16 +160,18 @@ func (o *Options) places(name string) (places, error) {
 	}, nil
 }
 
-// nested は、path が dir と同じか、dir の中にあるか。書いたままのパスと、リンクを解いたパス（resolvedPath）の書き方と、
-// ディレクトリの同一性（SameDirectory・within）で決める。書き方は、まだ無い場所も見つける（リンクを通して <Work> の
-// 下を指す --plugins-dir も、解いた書き方で見つける）。同一性は、Windows で EvalSymlinks が解かないジャンクション・
-// subst のドライブ・割り当てたドライブ・短い名前も見つける。
-func nested(path, dir string) bool {
-	return lexicallyIn(path, dir) || lexicallyIn(resolvedPath(path), resolvedPath(dir)) || SameDirectory(path, dir) ||
-		isWithin(path, dir)
+// overlap は、a と b の片方がもう片方と同じか、その中か。書いたままのパスと、リンクを解いたパス（resolvedPath。それぞれ
+// 1 回だけ解く）の書き方と、ディレクトリの同一性（SameDirectory・within）で決める。書き方は、まだ無い場所も見つける
+// （リンクを通して <Work> の下を指す --plugins-dir も、解いた書き方で見つける）。同一性は、Windows で EvalSymlinks が
+// 解かないジャンクション・subst のドライブ・割り当てたドライブ・短い名前も見つける。親を順に調べる within は、ほかで
+// 決まらないときだけ走らせる。
+func overlap(a, b string) bool {
+	ra, rb := resolvedPath(a), resolvedPath(b)
+	return lexicallyIn(a, b) || lexicallyIn(b, a) || lexicallyIn(ra, rb) || lexicallyIn(rb, ra) ||
+		SameDirectory(a, b) || isWithin(a, b) || isWithin(b, a)
 }
 
-// isWithin は within の真偽だけ（nested の最後に、ほかで決まらないときだけ親を順に調べる）。
+// isWithin は within の真偽だけ。
 func isWithin(path, dir string) bool {
 	_, inside := within(path, dir)
 	return inside
@@ -307,6 +309,8 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 // install は Install の本体。Vectorworks が動いていたら、作った結果と ErrRunning を返す（Install が outcome を
 // 決める）。
 func install(o Options, name, requested string, check bool) (*InstallResult, error) {
+	// cmd も場所を求める前に同じ関数（CheckRequest・CheckRegistries）で確かめるが、ここでも確かめる。名前からは消す
+	// パスを組み立てるので（守ること 9）、パッケージの入り口が自分で歯止めを持つ。同じ関数なので、文言と規則はずれない。
 	if err := CheckRequest(name, requested); err != nil {
 		return nil, err
 	}
@@ -426,7 +430,7 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 			return nil, err
 		}
 		// 新しい版を残した install の続きなら、フックが通ったので、付け替えのあとと同じく印を外して片付ける。
-		o.finishInstall(p, name, nil, false)
+		o.finishInstall(p, name, installed.Tag, nil, false)
 		result.Outcome = OutcomeUpToDate
 		result.Hook = hook
 		return result, nil
@@ -509,7 +513,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 	// 前回の残りの old を片付けてから、組み立ての場所（名前をそのまま組み立てたパスだけ）を消す。
 	// settleOld が消すものは組み立ての場所を通るので、この順にすると、消しきれなかったものがあれば
 	// removeStaging が失敗し、前の版のファイルを新しい版に混ぜて組み立てない。
-	if _, err := o.settleOld(p, name); err != nil {
+	if _, err := o.settleOld(p, name, "nothing is changed; quit Vectorworks, then run install again"); err != nil {
 		return nil, err
 	}
 	if err := removeStaging(p); err != nil {
@@ -555,7 +559,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 	if err != nil {
 		return nil, o.undoHook(p, hadOld, moved, err)
 	}
-	o.finishInstall(p, name, moved, hadOld)
+	o.finishInstall(p, name, tag, moved, hadOld)
 	return hook, nil
 }
 
@@ -564,7 +568,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 // 変わらないので、知らせるだけにする。次の install が片付ける）、組み立ての場所の残りと中断した uninstall の印を
 // 消し（印を残すと、次の install が付け替えの途中で止まったときに、次の uninstall が唯一残った old/<name>/ を
 // 消してしまう）、よけた CLI を消してみる（動いていて消せなければ残す）。
-func (o *Options) finishInstall(p places, name string, moved *movedCLI, hadOld bool) {
+func (o *Options) finishInstall(p places, name, tag string, moved *movedCLI, hadOld bool) {
 	// フックが通ったので、記録の hook_pending を外す。外せなければ知らせ、退避した版は片付けない（記録はまだ
 	// 通っていないと言うので、次の同じタグの install が前の版のタグでフックを走らせ直し、そこで外して片付ける）。
 	// 退避した版を残すときは、よけた CLI をその版のフォルダの元の場所へ戻す（undoHook の keep と同じ。利用者が前の版を
@@ -576,7 +580,8 @@ func (o *Options) finishInstall(p places, name string, moved *movedCLI, hadOld b
 	if err := clearHookPending(p.dest); err != nil {
 		kept = fmt.Errorf("cannot record that the install hook succeeded (%v); run install with the same tag again", err)
 	} else {
-		keptDir, kept = o.settleOld(p, name)
+		keptDir, kept = o.settleOld(p, name, fmt.Sprintf("the new version is installed; quit Vectorworks, then run "+
+			"install %s@%s again to clean it up", name, tag))
 	}
 	if kept != nil && hadOld && exists(p.oldDir) {
 		keptDir = p.oldDir
@@ -676,7 +681,10 @@ func removeStaging(p places) error {
 //     すると、次の install・uninstall が通らないため。
 //
 // 脇へ移したときは、その場所を返す。
-func (o *Options) settleOld(p places, name string) (string, error) {
+//
+// advice は、Vectorworks が使っているかもしれないので残すときに添える、次にすること（呼ぶ側が決める。付け替えの前は
+// 何も変えていない、付け替えのあとは新しい版が入っている）。
+func (o *Options) settleOld(p places, name, advice string) (string, error) {
 	switch {
 	case !exists(p.oldDir):
 		return "", nil
@@ -691,8 +699,7 @@ func (o *Options) settleOld(p places, name string) (string, error) {
 	// 始めの確かめでは居なかった）。付け替えの前なら、install は ErrRunning（ロックを調べられなければその誤り）で
 	// 何も変えずに終わる。
 	if err := stopped(p); err != nil {
-		return "", fmt.Errorf("%w; %s is left because Vectorworks may use it (quit Vectorworks, then run install "+
-			"%s@<the installed tag> again to clean it up)", err, p.oldDir, name)
+		return "", fmt.Errorf("%w; %s is left because Vectorworks may use it (%s)", err, p.oldDir, advice)
 	}
 	if validRecord(p.oldDir, name) {
 		return "", o.discard(p, name)

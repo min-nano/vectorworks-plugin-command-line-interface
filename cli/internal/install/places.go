@@ -28,17 +28,61 @@ func WorkDir() (string, error) {
 
 // WorkDirFor は、<Plug-Ins> plugins の <Work>（頭 base に - と鍵を足した名前）を返す。<Work>/old/<name>/ を
 // <Plug-Ins> ごとに分ける（同じ利用者が別の <Plug-Ins> にも入れているとき、片方の install が、もう片方の付け替えの
-// 途中で退避した唯一の版を前の版と取り違えて消さないため）。鍵は、リンクを解いたパス（resolvedPath。Windows では
-// 小文字にする）の sha256 の先頭 12 桁（入った CLI が求める場所と、初回のスクリプトに渡した書き方が揃う）。mac では
-// 小文字にしない（大文字と小文字を区別するボリュームの、それだけが違う 2 つのフォルダに 1 つの <Work> を使わせない。
-// 同じフォルダを違う書き方で渡せば <Work> が分かれるが、残るだけで、ほかの <Plug-Ins> の版を消すことはない）。
+// 途中で退避した唯一の版を前の版と取り違えて消さないため）。鍵は、リンクを解いたパス（resolvedPath）の sha256 の
+// 先頭 12 桁（入った CLI が求める場所と、初回のスクリプトに渡した書き方が揃う）。同じフォルダの綴りの違いは揃える。
+// Windows は小文字にし、mac はディスクにある綴りにする（onDiskCase）。mac で小文字にしないのは、大文字と小文字を区別する
+// ボリュームの、それだけが違う 2 つのフォルダに 1 つの <Work> を使わせないため。揃えないと、区別しない既定のボリュームで
+// 綴りを変えて渡したときに <Work> が分かれ、付け替えで old/cli/spool へ移ったロックを次の回が見落とす。
 func WorkDirFor(base, plugins string) string {
 	key := resolvedPath(filepath.Clean(plugins))
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		key = strings.ToLower(key)
+	case "darwin":
+		key = onDiskCase(key)
 	}
 	sum := sha256.Sum256([]byte(key))
 	return base + "-" + hex.EncodeToString(sum[:6])
+}
+
+// onDiskCase は、絶対パス path の各要素を、親のディレクトリに実際にある名前の綴りにする（大文字と小文字を区別しない
+// ボリュームで、綴りの違う同じフォルダを揃える）。そのままの名前があればそれを、無ければ大文字と小文字だけが違う名前が
+// 1 つだけあるときにそれを使う（区別するボリュームでも、そのままの名前のフォルダを別のものと取り違えない）。読めない
+// ディレクトリ（まだ無い）から先は、書いたまま。
+func onDiskCase(path string) string {
+	if !filepath.IsAbs(path) {
+		return path
+	}
+	volume := filepath.VolumeName(path)
+	separator := string(filepath.Separator)
+	parts := strings.Split(strings.Trim(path[len(volume):], separator), separator)
+	current := volume + separator
+	for i, part := range parts {
+		entries, err := os.ReadDir(current)
+		if err != nil {
+			return filepath.Join(append([]string{current}, parts[i:]...)...)
+		}
+		current = filepath.Join(current, nameOnDisk(entries, part))
+	}
+	return current
+}
+
+// nameOnDisk は、entries の中の name の綴り（onDiskCase）。
+func nameOnDisk(entries []os.DirEntry, name string) string {
+	match, count := name, 0
+	for _, entry := range entries {
+		if entry.Name() == name {
+			return name
+		}
+		if strings.EqualFold(entry.Name(), name) {
+			match = entry.Name()
+			count++
+		}
+	}
+	if count != 1 {
+		return name
+	}
+	return match
 }
 
 // DefaultPluginsDir は既定の <Plug-Ins> を返す（docs/plugin/identifiers.md「置き場所」）。

@@ -91,7 +91,26 @@
 	try {
 		$zip = Join-Path $temp 'cli.zip'
 		[Console]::Error.WriteLine("get-vw2026: downloading $url")
-		Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip
+		# Retry a failure that may pass on its own, as curl --retry 3 does in get-vw2026.sh: no response,
+		# 408, 429 or 5xx, up to 3 more times, 1, 2 and 4 seconds apart. Other failures stop at once.
+		for ($attempt = 0; ; $attempt++) {
+			try {
+				Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip
+				break
+			}
+			catch {
+				$status = $null
+				if ($_.Exception.Response) {
+					$status = [int] $_.Exception.Response.StatusCode
+				}
+				$transient = ($null -eq $status) -or $status -eq 408 -or $status -eq 429 -or $status -ge 500
+				if ($attempt -ge 3 -or -not $transient) {
+					throw
+				}
+				[Console]::Error.WriteLine("get-vw2026: retrying $url ($($_.Exception.Message))")
+				Start-Sleep -Seconds ([int] [math]::Pow(2, $attempt))
+			}
+		}
 		# Take out the CLI only.
 		Add-Type -AssemblyName System.IO.Compression.FileSystem
 		$exe = Join-Path $temp 'vw2026.exe'

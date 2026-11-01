@@ -69,6 +69,12 @@ func TestWorkDirFor(t *testing.T) {
 	if WorkDirFor(base, b) == work || WorkDirFor(base, a+string(filepath.Separator)) != work {
 		t.Fatal("different folders should differ, and the same folder should not")
 	}
+	// mac と Windows（大文字と小文字を区別しない既定のボリューム）では、綴りの違う同じフォルダも同じ <Work>。
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		if WorkDirFor(base, strings.ToUpper(a)) != work {
+			t.Fatal("the same folder written in another case should give the same work folder")
+		}
+	}
 	link := filepath.Join(tmp, "link")
 	if os.Symlink(a, link) == nil && WorkDirFor(base, link) != work {
 		t.Fatal("a link to the same folder should give the same work folder")
@@ -85,5 +91,39 @@ func TestPluginsDirOfCase(t *testing.T) {
 	os.WriteFile(executable, nil, 0o700)
 	if _, ok := PluginsDirOf(executable); ok != (runtime.GOOS == "windows") {
 		t.Fatal(ok)
+	}
+}
+
+// onDiskCase は、ディスクにある綴りにする。そのままの名前があればそれを使い、まだ無い場所から先は書いたまま。
+func TestOnDiskCase(t *testing.T) {
+	tmp, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.MkdirAll(filepath.Join(tmp, "Vectorworks", "Plug-Ins"), 0o755)
+	if got, want := onDiskCase(filepath.Join(tmp, "VECTORWORKS", "plug-ins")), filepath.Join(tmp, "Vectorworks", "Plug-Ins"); got != want {
+		t.Errorf("%s, want %s", got, want)
+	}
+	if got, want := onDiskCase(filepath.Join(tmp, "vectorworks", "Missing", "X")), filepath.Join(tmp, "Vectorworks", "Missing", "X"); got != want {
+		t.Errorf("missing: %s, want %s", got, want)
+	}
+	// 大文字と小文字だけが違う 2 つのフォルダ（区別するボリューム）は、そのままの名前を使い、どちらでもなければ書いたまま。
+	other := filepath.Join(tmp, "vectorworks")
+	if os.Mkdir(other, 0o755) == nil && !SameDirectory(other, filepath.Join(tmp, "Vectorworks")) {
+		if got := onDiskCase(other); got != other {
+			t.Errorf("exact: %s", got)
+		}
+		if got, want := onDiskCase(filepath.Join(tmp, "VectorWorks")), filepath.Join(tmp, "VectorWorks"); got != want {
+			t.Errorf("ambiguous: %s, want %s", got, want)
+		}
+	}
+	// 根・相対パス・ファイルの下は、そのまま。
+	root := filepath.VolumeName(tmp) + string(filepath.Separator)
+	file := filepath.Join(tmp, "file")
+	os.WriteFile(file, nil, 0o644)
+	for _, path := range []string{root, "relative/path", filepath.Join(file, "x")} {
+		if got := onDiskCase(path); got != filepath.Clean(path) && got != path {
+			t.Errorf("%s: %s", path, got)
+		}
 	}
 }

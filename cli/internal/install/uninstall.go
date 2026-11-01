@@ -24,6 +24,7 @@ type UninstallResult struct {
 // 読まず、記録だけで決める。フックより先にフォルダを <Work>/old/<name>/ へ移し、フックが失敗したら
 // 戻す。Vectorworks が動いていれば何もせずに ErrRunning を返す。
 func Uninstall(o Options, name string) (*UninstallResult, error) {
+	// cmd も同じ CheckName で先に確かめるが、名前から消すパスを組み立てるので、ここでも確かめる（install と同じ）。
 	if err := CheckName(name); err != nil {
 		return nil, err
 	}

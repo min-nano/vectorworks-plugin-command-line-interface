@@ -1852,3 +1852,39 @@ func TestKeptPreviousVersionWithoutAMovedCLICleansUp(t *testing.T) {
 		t.Fatal(kept, exist(leftover))
 	}
 }
+
+// 前の版を Vectorworks が使っているかもしれないので残すときの案内は、呼ぶ場面で変わる。付け替えの前なら何も変えて
+// いないので走らせ直すだけ、フックのあとなら新しい版が入っているので、入ったタグで走らせ直して片付ける。
+func TestSettleOldAdviceDependsOnTheStage(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	// 付け替えの前: 前回の残りの old/cli があり、マニフェストを取る間に Vectorworks が起動する（片付けの確かめで見つける）。
+	old := filepath.Join(h.work, "old", "cli")
+	if err := os.CopyFS(old, os.DirFS(filepath.Join(h.plugins, "cli"))); err != nil {
+		t.Fatal(err)
+	}
+	h.publish(release{name: "cli", tag: "c2"})
+	unlock := func() {}
+	h.onGet("/cli/c2/vw2026.json", func() { unlock = h.holdLock() })
+	if result, err := h.install("cli", "c2"); !errors.Is(err, ErrRunning) || result.Outcome != OutcomeRunning ||
+		!strings.Contains(err.Error(), "nothing is changed") || strings.Contains(err.Error(), "clean it up") {
+		t.Fatalf("%+v %v", result, err)
+	}
+	unlock()
+	os.RemoveAll(old)
+
+	// フックのあと: フックの間に Vectorworks が起動し、フックは通る。
+	signal := filepath.Join(h.tmp, "hook-started")
+	await := filepath.Join(h.tmp, "locked")
+	h.publish(release{name: "cli", tag: "c3", install: &hookPlan{Signal: signal, Await: await}})
+	done := lockWhenSignaled(h, signal, await)
+	var stderr bytes.Buffer
+	o := h.options()
+	o.Stderr = &stderr
+	result, err := Install(o, "cli", "c3", false)
+	<-done
+	if err != nil || result.Outcome != OutcomeInstalled ||
+		!strings.Contains(stderr.String(), "the new version is installed; quit Vectorworks, then run install cli@c3 again") {
+		t.Fatalf("%+v %v %s", result, err, stderr.String())
+	}
+}

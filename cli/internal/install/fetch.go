@@ -31,7 +31,7 @@ var maxEntries = 100000
 // lookup はレジストリを順に引き、名前の項目と、そのレジストリの名前（記録の registry）を返す
 // （docs/registry.md「レジストリの順」）。既定のレジストリが先頭で、名前が見つかった時点で止める。
 // 見つかる前に取れない・読めないレジストリがあれば、そこで失敗にする（飛ばすと、どの項目が勝つかが
-// ネットワークの状態で変わる）。--registry の書き方は、呼ぶ側（Install）が先に CheckRegistries で確かめている。
+// ネットワークの状態で変わる）。--registry の書き方は、呼ぶ側（install）が先に CheckRegistries で確かめている。
 func (o *Options) lookup(name string) (registry.Entry, string, error) {
 	def := o.Default
 	if def == nil {
