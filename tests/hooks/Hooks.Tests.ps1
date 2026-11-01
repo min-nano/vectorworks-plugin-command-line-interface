@@ -104,6 +104,15 @@ Describe 'Test-PathEntryTarget' {
 		Test-PathEntryTarget "$junction\gone\bin" (Get-PathEntryTarget "$real\gone\bin2") | Should -BeFalse
 		Test-PathEntryTarget $junction (Get-PathEntryTarget "$real\cli") | Should -BeFalse
 	}
+	It 'does not open an entry on another root, such as a share that may not answer' {
+		Mock Get-PathEntryPlace { 'C:\x\bin' }
+		$target = Get-PathEntryTarget 'C:\x\bin'
+		Test-PathEntryTarget '\\fileserver\tools\bin' $target | Should -BeFalse
+		Test-PathEntryTarget 'D:\x\bin' $target | Should -BeFalse
+		Should -Invoke Get-PathEntryPlace -Times 1 -Exactly
+		Test-PathEntryTarget 'c:\X\y\..\BIN' $target | Should -BeTrue
+		Should -Invoke Get-PathEntryPlace -Times 2 -Exactly
+	}
 	It 'does not match a relative entry or one that is not a path' {
 		Test-PathEntryTarget 'cli\bin' (Get-PathEntryTarget (Join-Path $PWD 'cli\bin')) | Should -BeFalse
 		Test-PathEntryTarget 'C:\a|b' (Get-PathEntryTarget 'C:\a') | Should -BeFalse

@@ -76,6 +76,17 @@ func TestUninstallRefusesForeignFolders(t *testing.T) {
 		"module path": func(t *testing.T, dir string) {
 			rewriteRecord(t, filepath.Join(dir, RecordFile), func(r *Record) { r.Module = "../cli/cli.vwlibrary" })
 		},
+		// 記録のあるフォルダ（作業用のコピーなど）を指すシンボリックリンクも、install と同じく断る。
+		"symbolic link": func(t *testing.T, dir string) {
+			real := filepath.Join(t.TempDir(), "demo")
+			if err := os.CopyFS(real, os.DirFS(dir)); err != nil {
+				t.Fatal(err)
+			}
+			os.RemoveAll(dir)
+			if err := os.Symlink(real, dir); err != nil {
+				t.Skip("cannot make a symbolic link here:", err)
+			}
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

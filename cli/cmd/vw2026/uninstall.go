@@ -46,7 +46,8 @@ Uninstall first moves the folder out of <Plug-Ins>, then runs the uninstall
 hook of the installed version (for cli, it takes vw2026 off the PATH), then
 deletes the folder. If the hook fails, the folder goes back. If uninstall
 stops after moving the folder (Ctrl-C, power loss), run it again: it goes on
-from the hook. If Vectorworks starts while the hook runs, the folder stays
+from the hook, and if the hook fails then, the folder stays moved out (it may
+be partly deleted), and the message says where it is. If Vectorworks starts while the hook runs, the folder stays
 moved out and uninstall fails (exit status 1); quit Vectorworks, then run
 uninstall again: it goes on from the hook.
 
@@ -62,7 +63,7 @@ It prints one line of JSON with one of these outcomes:
 	 "remaining":[...],"left":[...]}
 	{"outcome":"not_installed","name":"...","remaining":[...],"left":[]}
 	{"outcome":"vectorworks_running",...}
-	{"outcome":"failed","message":"...","command":"..."}
+	{"outcome":"failed","name":"...","message":"...","command":"..."}
 
 "remaining" lists the plug-ins that vw2026 installed and that remain in
 <Plug-Ins>. "left" lists the moved-away copies of vw2026 (left by an update on
@@ -111,6 +112,11 @@ func (c *uninstallCmd) run(e *env) int {
 // releases は、初回のスクリプトを置くリリースの場所。
 const releases = "https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/"
 
+// powershellQuote は、PowerShell の単一引用符の文字列の中身にする。PowerShell は ' のほかに活字の引用符
+// （U+2018・U+2019・U+201A・U+201B）も単一引用符の区切りとして扱うので、どれも同じ文字を 2 つ重ねて逃がす。
+var powershellQuote = strings.NewReplacer("'", "''", "\u2018", "\u2018\u2018", "\u2019", "\u2019\u2019",
+	"\u201a", "\u201a\u201a", "\u201b", "\u201b\u201b")
+
 // uninstallScript は、goos で tag のリリースの初回のスクリプトに uninstall を渡すコマンド（どのリリースの
 // スクリプトも、そのリリースの CLI で cli を外す）。tag が latest なら latest のリリースのもの。
 // --plugins-dir を渡されていれば、そのまま渡す（シェルの引用符で囲む）。
@@ -122,7 +128,7 @@ func uninstallScript(goos, tag, pluginsDir string) string {
 	if goos == "windows" {
 		command := "& ([scriptblock]::Create((irm " + base + "get-vw2026.ps1))) uninstall"
 		if pluginsDir != "" {
-			command += " --plugins-dir '" + strings.ReplaceAll(pluginsDir, "'", "''") + "'"
+			command += " --plugins-dir '" + powershellQuote.Replace(pluginsDir) + "'"
 		}
 		return command
 	}

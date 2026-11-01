@@ -271,6 +271,9 @@ func TestUninstallScript(t *testing.T) {
 		{"darwin", "t1", "/a b/it's", "curl -fsSL " + tagged + `get-vw2026.sh | sh -s -- uninstall --plugins-dir '/a b/it'\''s'`},
 		{"windows", "t1", "", "& ([scriptblock]::Create((irm " + tagged + "get-vw2026.ps1))) uninstall"},
 		{"windows", "latest", `C:\a b\it's`, "& ([scriptblock]::Create((irm " + latest + `get-vw2026.ps1))) uninstall --plugins-dir 'C:\a b\it''s'`},
+		// PowerShell は活字の引用符も単一引用符の区切りにするので、それも重ねる。
+		{"windows", "t1", "C:\\O\u2019B\u2018r\u201ai\u201bn", "& ([scriptblock]::Create((irm " + tagged +
+			"get-vw2026.ps1))) uninstall --plugins-dir 'C:\\O\u2019\u2019B\u2018\u2018r\u201a\u201ai\u201b\u201bn'"},
 	} {
 		if got := uninstallScript(c.goos, c.tag, c.dir); got != c.want {
 			t.Errorf("%s %s %q:\n got %s\nwant %s", c.goos, c.tag, c.dir, got, c.want)

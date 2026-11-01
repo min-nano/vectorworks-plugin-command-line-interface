@@ -72,9 +72,9 @@
 - **初回のスクリプトは、取ってきたリリースのタグの `cli` を入れる・外す。** リリースがスクリプトにタグを埋め込み、
   引数でタグを渡す形は持たない。どのタグを入れるかは取る URL（`releases/download/<tag>/` か `releases/latest/download/`）
   だけで決まり、取ったスクリプトと入る CLI の版がいつも揃う。
-- **`install` / `uninstall` の失敗は、標準出力の `{"outcome":"failed","name":…,"message":…}` と標準エラーに書く。**
-  `message` に場所を載せる決めごと（[インストール](install-and-update.md#流れ)）を、ほかの結果と同じく
-  標準出力の JSON で読めるようにするため。指定の形の誤りも同じ出力で、終了コードだけを 2 にする。
+- **`install` / `uninstall` の失敗は、標準出力の JSON（outcome が `failed`。形は `vw2026 help install` /
+  `help uninstall`）と標準エラーに書く。** `message` に場所を載せる決めごと（[インストール](install-and-update.md#流れ)）を、
+  ほかの結果と同じく標準出力の JSON で読めるようにするため。指定の形の誤りも同じ出力で、終了コードだけを 2 にする。
 - **`cli` のフックの `path` に `failed` を足す**（作れなかった・読み書きできなかった。フックは失敗にしない）。
   mac の `not_in_path` は `linked` / `exists` より先に伝える（利用者が直すのは PATH のほう）。`powershell` の
   フックの標準出力は ASCII だけにする（[インストール「PATH」](install-and-update.md#path)）。

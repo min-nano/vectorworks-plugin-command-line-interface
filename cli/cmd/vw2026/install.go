@@ -68,7 +68,7 @@ It prints one line of JSON with one of these outcomes:
 	{"outcome":"up_to_date",...}
 	{"outcome":"available",...}
 	{"outcome":"vectorworks_running",...}
-	{"outcome":"failed","message":"..."}
+	{"outcome":"failed","name":"...","message":"..."}
 
 With --check, "available" means a new build is available, or none is
 installed. "hook" is the output of the hook (a JSON object), absent when the plug-in has

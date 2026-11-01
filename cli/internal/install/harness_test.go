@@ -430,6 +430,12 @@ func snapshot(t *testing.T, dir string) map[string]string {
 			files[rel] = "/"
 			return nil
 		}
+		// シンボリックリンクは、たどらずに行き先を残す（リンクを消した・付け替えたことも比べられる）。
+		if d.Type()&fs.ModeSymlink != 0 {
+			target, err := os.Readlink(path)
+			files[rel] = "-> " + target
+			return err
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err

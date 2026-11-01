@@ -96,12 +96,28 @@ function Get-PathEntryPlace {
 	return $final.TrimEnd('\') + $rest
 }
 
-# Get-PathEntryTarget は、比べる側の $Dir の形（Get-PathEntryKey）と実際の場所（Get-PathEntryPlace）。Path の
+# Get-PathEntryTarget は、比べる側の $Dir の形（Get-PathEntryKey）・根（Get-PathEntryRoot）・実際の場所（Get-PathEntryPlace）。Path の
 # 項目ごとに $Dir のディレクトリを開き直さないよう、Path を 1 回たどるあいだ、これを 1 度だけ求めて使う。
 function Get-PathEntryTarget {
 	param([string] $Dir)
 	$key = Get-PathEntryKey $Dir
-	return [pscustomobject]@{ Key = $key; Place = (Get-PathEntryPlace $key) }
+	return [pscustomobject]@{ Key = $key; Root = (Get-PathEntryRoot $key); Place = (Get-PathEntryPlace $key) }
+}
+
+# Get-PathEntryRoot は、比べるための項目 $Key の根（C: や \\server\share。文字列だけで求め、ディスクに触れない）。
+# 根の違う項目は開かずに違うとみなす（届かない共有の項目ごとに SMB の待ちで止まらないため。根の違う書き方、
+# たとえば subst のドライブで同じディレクトリを指すものは同じとみなさない）。分からなければ $null。
+function Get-PathEntryRoot {
+	param([string] $Key)
+	try {
+		if ($Key.Contains('%') -or -not [IO.Path]::IsPathRooted($Key)) {
+			return $null
+		}
+		return [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($Key)).TrimEnd('\')
+	}
+	catch {
+		return $null
+	}
 }
 
 # Test-PathEntryTarget は、Path の項目 $Entry が $Target（Get-PathEntryTarget）と同じ項目か。まず
@@ -118,6 +134,10 @@ function Test-PathEntryTarget {
 		return $true
 	}
 	if ($null -eq $Target.Place) {
+		return $false
+	}
+	$root = Get-PathEntryRoot $key
+	if ($null -eq $root -or -not [string]::Equals($root, $Target.Root, [StringComparison]::OrdinalIgnoreCase)) {
 		return $false
 	}
 	$place = Get-PathEntryPlace $key

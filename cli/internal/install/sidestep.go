@@ -117,7 +117,8 @@ func within(path, dir string) (string, bool) {
 func cleanOldCLIs(old string) []string {
 	// 読めなければ（無ければ）消すものも無い。
 	entries, _ := os.ReadDir(old)
-	var left []string
+	// 出力の left は、無くても null ではなく [] にする。
+	left := []string{}
 	for _, entry := range entries {
 		if !entry.Type().IsRegular() || !hasOldCLIPrefix(entry.Name()) {
 			continue
