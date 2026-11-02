@@ -69,7 +69,7 @@ func writeFileWhen(t *testing.T, when func(path string) error) (restore func()) 
 	})
 }
 
-// failMkdirAll・failRemoveAll は、その場所への操作を失敗させる（OS の失敗を真似る）。
+// failMkdirAll は、その場所のディレクトリの作成を失敗させる（OS の失敗を真似る）。
 func failMkdirAll(t *testing.T, at string) {
 	t.Helper()
 	original := mkdirAll
@@ -81,6 +81,7 @@ func failMkdirAll(t *testing.T, at string) {
 	})
 }
 
+// failRemoveAll は、その場所の削除を失敗させる（OS の失敗を真似る）。
 func failRemoveAll(t *testing.T, at string) {
 	t.Helper()
 	pathOpWhen(t, &removeAll, func(path string) error {
