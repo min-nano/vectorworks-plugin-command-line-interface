@@ -536,35 +536,43 @@ func TestCheckResponse(t *testing.T) {
 		text string
 		// want は返る応答の result（成功）か detail（失敗）。malformed なら壊れた応答。
 		want string
+		// err は「実行しなかった」種別のときの誤り（want は見ない）。
+		err error
 	}{
+		// 「実行しなかった」種別は、道具の失敗ではなく、それぞれの誤りにする。
+		{text: `{"ok":false,"code":"no_wait","error":"x"}`, err: ErrNoWait},
+		{text: `{"ok":false,"code":"busy","error":"x"}`, err: ErrBusy},
+		{text: `{"ok":false,"code":"occupied","error":"x"}`, err: ErrOccupied},
+		{text: `{"ok":false,"code":"no_session","error":"x"}`, err: ErrNoSession},
 		// JSON として壊れている・オブジェクトでない応答。
-		{`{"ok":tr`, malformed},
-		{`null`, malformed},
+		{`{"ok":tr`, malformed, nil},
+		{`null`, malformed, nil},
 		// 知らないフィールドは無視する（「互換性」）。
-		{`{"ok":true,"result":{},"future":[1]}`, `{}`},
+		{`{"ok":true,"result":{},"future":[1]}`, `{}`, nil},
 		// 成功の result は必ずオブジェクト。
-		{`{"ok":true}`, malformed},
-		{`{"ok":true,"result":null}`, malformed},
-		{`{"ok":true,"result":[1]}`, malformed},
-		{`{"ok":true,"result":"done"}`, malformed},
+		{`{"ok":true}`, malformed, nil},
+		{`{"ok":true,"result":null}`, malformed, nil},
+		{`{"ok":true,"result":[1]}`, malformed, nil},
+		{`{"ok":true,"result":"done"}`, malformed, nil},
 		// 失敗の code が無い・知らない値なら、道具の失敗ではなく壊れた応答（知っているフィールドの未知の値）。
-		{`{"ok":false,"error":"x"}`, malformed},
-		{`{"ok":false,"code":"later","error":"x"}`, malformed},
+		{`{"ok":false,"error":"x"}`, malformed, nil},
+		{`{"ok":false,"code":"later","error":"x"}`, malformed, nil},
 		// 失敗の detail はそのまま渡す。持てるのは invalid_args・internal だけで、オブジェクトに限る。
 		{
 			`{"ok":false,"code":"internal","error":"x","detail":{"reason":"documents_open"}}`,
 			`{"reason":"documents_open"}`,
+			nil,
 		},
-		{`{"ok":false,"code":"invalid_args","error":"x","detail":{}}`, `{}`},
-		{`{"ok":false,"code":"internal","error":"x"}`, ``},
-		{`{"ok":false,"code":"internal","error":"x","detail":null}`, malformed},
-		{`{"ok":false,"code":"internal","error":"x","detail":[1]}`, malformed},
-		{`{"ok":false,"code":"internal","error":"x","detail":"x"}`, malformed},
-		{`{"ok":true,"result":{},"detail":{}}`, malformed},
-		{`{"ok":false,"code":"unknown_tool","error":"x","detail":{}}`, malformed},
-		{`{"ok":false,"code":"invalid_request","error":"x","detail":{}}`, malformed},
-		{`{"ok":false,"code":"busy","error":"x","detail":null}`, malformed},
-		{`{"ok":false,"code":"no_session","error":"x","detail":{}}`, malformed},
+		{`{"ok":false,"code":"invalid_args","error":"x","detail":{}}`, `{}`, nil},
+		{`{"ok":false,"code":"internal","error":"x"}`, ``, nil},
+		{`{"ok":false,"code":"internal","error":"x","detail":null}`, malformed, nil},
+		{`{"ok":false,"code":"internal","error":"x","detail":[1]}`, malformed, nil},
+		{`{"ok":false,"code":"internal","error":"x","detail":"x"}`, malformed, nil},
+		{`{"ok":true,"result":{},"detail":{}}`, malformed, nil},
+		{`{"ok":false,"code":"unknown_tool","error":"x","detail":{}}`, malformed, nil},
+		{`{"ok":false,"code":"invalid_request","error":"x","detail":{}}`, malformed, nil},
+		{`{"ok":false,"code":"busy","error":"x","detail":null}`, malformed, nil},
+		{`{"ok":false,"code":"no_session","error":"x","detail":{}}`, malformed, nil},
 	} {
 		t.Run(c.text, func(t *testing.T) {
 			response, unreadable := DecodeResponse([]byte(c.text))
@@ -575,6 +583,12 @@ func TestCheckResponse(t *testing.T) {
 				return
 			}
 			got, err := CheckResponse("ping", response)
+			if c.err != nil {
+				if !errors.Is(err, c.err) || got != nil {
+					t.Fatalf("want %v, got %+v %v", c.err, got, err)
+				}
+				return
+			}
 			if c.want == malformed {
 				if !errors.Is(err, ErrMalformedResponse) {
 					t.Fatalf("want ErrMalformedResponse, got %+v %v", got, err)
@@ -594,6 +608,17 @@ func TestCheckResponse(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Call は、締切の前に届いた応答も確かめる。読めても規則に合わない応答は壊れた応答にし、応答のファイルを残さない。
+func TestCallRejectsInvalidResponse(t *testing.T) {
+	dir, _ := fakeplugin.NewHeldDir(t)
+	answer(t, dir, `{"ok":true}`)
+	if _, err := Open(dir).Call("ping", nil, "", 5*time.Second); !errors.Is(err, ErrMalformedResponse) {
+		t.Fatalf("want ErrMalformedResponse, got %v", err)
+	}
+	assertNoFiles(t, dir, ResponseSuffix)
+	assertNoFiles(t, dir, WaitSuffix)
 }
 
 // Call は届いた応答を確かめて返す（失敗の detail もそのまま渡す）。

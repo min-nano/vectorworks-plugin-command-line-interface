@@ -151,10 +151,10 @@ func TestInstallSameTagWithoutTheHookFile(t *testing.T) {
 func TestExtractRefuses(t *testing.T) {
 	for name, c := range map[string]struct {
 		zip func(t *testing.T) []byte
-		// want は誤りの文言に含まれるもの（空なら失敗するだけを見る）。
+		// want は誤りの文言に含まれるもの（どの理由で断ったか）。
 		want string
 	}{
-		"not a zip": {func(*testing.T) []byte { return []byte("not a zip") }, ""},
+		"not a zip": {func(*testing.T) []byte { return []byte("not a zip") }, "not a zip"},
 		"device": {func(t *testing.T) []byte {
 			return makeZip(t, []entry{{name: "dev", mode: os.ModeDevice | 0o644}})
 		}, "not a file"},
@@ -163,7 +163,7 @@ func TestExtractRefuses(t *testing.T) {
 		}, "contains .."},
 		"file under a file": {func(t *testing.T) []byte {
 			return makeZip(t, []entry{{name: "a", body: "file"}, {name: "a/b", body: "x"}})
-		}, ""},
+		}, "mkdir"},
 		"unknown compression": {func(t *testing.T) []byte {
 			var buf bytes.Buffer
 			w := zip.NewWriter(&buf)
@@ -171,10 +171,14 @@ func TestExtractRefuses(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			f.Write([]byte("x"))
-			w.Close()
+			if _, err := f.Write([]byte("x")); err != nil {
+				t.Fatal(err)
+			}
+			if err := w.Close(); err != nil {
+				t.Fatal(err)
+			}
 			return buf.Bytes()
-		}, ""},
+		}, "unsupported compression algorithm"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()

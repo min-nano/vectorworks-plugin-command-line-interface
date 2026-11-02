@@ -111,6 +111,16 @@ func invoke(t *testing.T, o opts, args ...string) result {
 			t.Fatal(err)
 		}
 	}
+	// 渡した名前がコマンドの読まない環境変数なら（指定の名前を変えたのにテストを直し忘れた）、黙って捨てずに落とす。
+	known := map[string]bool{}
+	for _, name := range envVars() {
+		known[name] = true
+	}
+	for name := range o.vars {
+		if !known[name] {
+			t.Fatalf("no command reads %s", name)
+		}
+	}
 	// kong は環境変数を os から直接読むので、テストごとに置き直す（並行には走らせない）。
 	for _, name := range envVars() {
 		value, ok := o.vars[name]
