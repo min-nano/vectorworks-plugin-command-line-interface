@@ -45,9 +45,10 @@ and 23 for occupied, no_session, and busy, as described below, and prints nothin
 standard output even with --raw. A failure with a missing or unknown code is
 a malformed response, so call exits with 1 for it. So does a response file
 that is not a valid response object (not JSON, or JSON of the wrong shape);
-call removes it without waiting for --timeout. If call cannot write its
-output (a full disk, for example), it exits with 1 even though the tool ran
-(and writes the tool's code and reason to the standard error if it failed).
+call removes it without waiting for --timeout. If call cannot write the
+result of a tool that succeeded (a full disk, for example), it exits with 1
+even though the tool ran. When the tool failed, call keeps its exit code even
+if it cannot write the detail.
 
 When the bridge is not running, call exits with 5 and writes the spool it
 looked at to the standard error, so that a vw2026 run from outside the folder
@@ -118,17 +119,14 @@ func (c *callCmd) run(e *env) int {
 		// 呼ぶ側が失敗の原因を機械的に読めるように（docs/protocol.md「応答」の detail）。
 		code = emitRaw(e, response.Detail)
 	}
+	// 道具が失敗したときは、出力（detail）を書けなくても道具の終了コードを残す（呼ぶ側がやり直すかを決める
+	// 手がかりなので。書けなかったことは標準エラーに書いてある）。
 	if !response.OK {
 		fmt.Fprintf(e.stderr, "vw2026: %s: %s: %s\n", c.Tool, response.Code, response.Error)
-	}
-	// 出力を書けなければ、道具の結果より先にその失敗で終わる（空や途中までの出力を正しいものとして扱わせない）。
-	if code != exitOK {
-		return code
-	}
-	if !response.OK {
 		return toolCodeFor(response.Code)
 	}
-	return exitOK
+	// 成功したのに結果を書けなければ、その失敗で終わる（空や途中までの出力を正しいものとして扱わせない）。
+	return code
 }
 
 // failed は err を標準エラーに書き、終了コードを返す。止まっていると答えるとき（5）は、求めた
