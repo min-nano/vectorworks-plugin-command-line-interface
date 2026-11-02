@@ -23,7 +23,7 @@ import (
 // errInjected は、テストが差し替えたファイルの操作が返す失敗。
 var errInjected = errors.New("injected failure")
 
-// failMkdirAll・failRemoveAll・failWriteFile は、その場所への操作を失敗させる（OS の失敗を真似る）。
+// failMkdirAll・failRemoveAll は、その場所への操作を失敗させる（OS の失敗を真似る）。
 func failMkdirAll(t *testing.T, at string) {
 	t.Helper()
 	original := mkdirAll
@@ -1090,7 +1090,8 @@ func TestUninstallCLIResumeWhileLockedInOld(t *testing.T) {
 	}
 }
 
-// フックが通っても、その間に移した先のスプールのロックが掴まれたら（cli）、消さずに印を残して ErrRunning で終わる。
+// フックが通っても、その間に移した先のスプールのロックが掴まれたら（cli）、消さずに印を残して失敗する（フォルダを移して
+// フックも走らせたので、「何もしなかった」の ErrRunning にはしない）。
 func TestUninstallCLIHookSuccessWhileLockedInOld(t *testing.T) {
 	h := newHarness(t)
 	signal := filepath.Join(h.tmp, "hook-started")
@@ -1100,7 +1101,6 @@ func TestUninstallCLIHookSuccessWhileLockedInOld(t *testing.T) {
 	done := lockAtWhenSignaled(h, filepath.Join(old, spool.SpoolDirName), signal, await)
 	result, err := Uninstall(h.options(), "cli")
 	<-done
-	// フォルダを移してフックも走らせたので、「何もしなかった」の ErrRunning にはしない。
 	if err == nil || errors.Is(err, ErrRunning) || result != nil || !strings.Contains(err.Error(), old) {
 		t.Fatalf("%+v %v", result, err)
 	}

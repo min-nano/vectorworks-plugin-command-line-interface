@@ -43,6 +43,8 @@ type opts struct {
 	vars map[string]string
 	// 標準入力。nil なら空。
 	stdin io.Reader
+	// 標準出力。nil なら書いたものを result.stdout に集める（書けないときを確かめるため）。
+	stdout io.Writer
 	// 起動（env.start）。nil なら成功し、渡された引数を started に書く。
 	start   func(argv []string) error
 	started *[]string
@@ -97,9 +99,12 @@ func invoke(t *testing.T, o opts, args ...string) result {
 		}
 	}
 	var stdout, stderr bytes.Buffer
+	if o.stdout == nil {
+		o.stdout = &stdout
+	}
 	code := run(args, env{
 		stdin:      o.stdin,
-		stdout:     &stdout,
+		stdout:     o.stdout,
 		stderr:     &stderr,
 		start:      o.start,
 		spool:      o.locate,
@@ -212,6 +217,34 @@ func TestCallToolUsageError(t *testing.T) {
 	}
 }
 
+// failingWriter は書けない標準出力（ディスクが一杯・読む側がパイプを閉じた）を真似る。
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("no space left on device") }
+
+// 成功した道具の結果を書けなければ、0 ではなく失敗で終わる。道具が失敗したときは、detail を書けなくても
+// 道具の終了コードを残す（書けなかったことと、道具の失敗の理由は標準エラーに書く）。
+func TestCallCannotWriteOutput(t *testing.T) {
+	dir := echoBridge(t)
+	for _, c := range []struct {
+		args []string
+		code int
+		// stderr は、書けなかったことのほかに標準エラーに含まれるもの。
+		stderr string
+	}{
+		{[]string{"call", "ping"}, exitFailure, ""},
+		{[]string{"call", "--raw", "ping"}, exitFailure, ""},
+		{[]string{"call", "explain"}, exitToolFailure, "internal: open"},
+		{[]string{"call", "--raw", "explain"}, exitToolFailure, "internal: open"},
+	} {
+		r := invoke(t, opts{dir: dir, stdout: failingWriter{}}, c.args...)
+		if r.code != c.code || !strings.Contains(r.stderr, "write output: no space left on device") ||
+			!strings.Contains(r.stderr, c.stderr) {
+			t.Errorf("%v: %+v", c.args, r)
+		}
+	}
+}
+
 func TestCallUsageErrors(t *testing.T) {
 	for _, args := range [][]string{{"call"}, {"call", "x", "[1]"}, {"call", "x", "not json"}, {"tools"}, {"nope"}, {}} {
 		r := invoke(t, opts{}, args...)
@@ -261,7 +294,8 @@ func TestLaunchAppNotFound(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing")
 	vars := map[string]string{"VW2026_APP": missing}
 	r := invoke(t, opts{vars: vars, started: &started}, "launch")
-	if r.code != exitFailure || started != nil || !strings.Contains(r.stderr, missing) {
+	if r.code != exitFailure || started != nil || !strings.Contains(r.stderr, missing) ||
+		!strings.Contains(r.stderr, "point --app (VW2026_APP) to") {
 		t.Fatalf("%+v %v", r, started)
 	}
 }
