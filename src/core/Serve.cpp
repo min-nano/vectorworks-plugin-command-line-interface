@@ -111,10 +111,10 @@ std::optional<Json> toolsList(std::span<const Tool> tools, std::string &reason) 
 	for (const Tool &tool : tools) {
 		std::optional<Json> schema = Json::parse(tool.inputSchema, protocol::kMaxNestingDepth);
 		if (!schema) {
-			reason = std::string("道具 ") + tool.name + " の inputSchema が JSON として読めません";
+			reason = "道具 " + std::string(tool.name) + " の inputSchema が JSON として読めません";
 			return std::nullopt;
 		}
-		list.push(Json::object({{"name", Json::string(tool.name)},
+		list.push(Json::object({{"name", Json::string(std::string(tool.name))},
 		                        {"description", Json::string(tool.description)},
 		                        {"inputSchema", std::move(*schema)},
 		                        {"kind", Json::string(std::string(kindName(tool.kind)))}}));
