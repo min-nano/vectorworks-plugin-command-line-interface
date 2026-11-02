@@ -356,16 +356,21 @@ func TestOtherPluginNeedsCLI(t *testing.T) {
 			if running {
 				defer h.holdLock()()
 			}
-			plugins, work := snapshot(t, h.plugins), snapshot(t, h.work)
-			install := func() error { _, err := h.install("demo", "d1"); return err }
-			uninstall := func() error { _, err := Uninstall(h.options(), "demo"); return err }
-			for name, run := range map[string]func() error{"install": install, "uninstall": uninstall} {
-				if err := run(); err == nil || !strings.Contains(err.Error(), "has no cli") {
-					t.Errorf("%s: %v", name, err)
+			// 1 回ごとに、何も変えていないことを確かめる（片方が残したものを、もう片方が片付けて隠さないように）。
+			for _, c := range []struct {
+				name string
+				run  func() error
+			}{
+				{"install", func() error { _, err := h.install("demo", "d1"); return err }},
+				{"uninstall", func() error { _, err := Uninstall(h.options(), "demo"); return err }},
+			} {
+				plugins, work := snapshot(t, h.plugins), snapshot(t, h.work)
+				if err := c.run(); err == nil || !strings.Contains(err.Error(), "has no cli") {
+					t.Errorf("%s: %v", c.name, err)
 				}
+				sameSnapshot(t, plugins, snapshot(t, h.plugins))
+				sameSnapshot(t, work, snapshot(t, h.work))
 			}
-			sameSnapshot(t, plugins, snapshot(t, h.plugins))
-			sameSnapshot(t, work, snapshot(t, h.work))
 		})
 	}
 }
