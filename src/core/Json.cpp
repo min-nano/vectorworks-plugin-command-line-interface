@@ -153,9 +153,12 @@ private:
 		}
 		switch (text_[at_]) {
 		case '{':
-			return parseObject(depth + 1);
 		case '[':
-			return parseArray(depth + 1);
+			// 入れ子に入る前に深さを数え、上限を超えたら降りない（オブジェクトと配列で同じ）。
+			if (depth + 1 > maxDepth_) {
+				return fail("入れ子が深すぎます（上限 " + std::to_string(maxDepth_) + "）");
+			}
+			return text_[at_] == '{' ? parseObject(depth + 1) : parseArray(depth + 1);
 		case '"': {
 			std::string text;
 			if (!parseString(text)) {
@@ -175,9 +178,6 @@ private:
 	}
 
 	std::optional<Json> parseObject(int depth) {
-		if (depth > maxDepth_) {
-			return fail("入れ子が深すぎます（上限 " + std::to_string(maxDepth_) + "）");
-		}
 		++at_;
 		Json::Object members;
 		// 同じキーを探す索引（キー → members の位置）。キーが少ないうちは並びを順に見るだけにし、
@@ -239,9 +239,6 @@ private:
 	}
 
 	std::optional<Json> parseArray(int depth) {
-		if (depth > maxDepth_) {
-			return fail("入れ子が深すぎます（上限 " + std::to_string(maxDepth_) + "）");
-		}
 		++at_;
 		Json::Array items;
 		skipSpace();

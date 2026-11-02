@@ -34,6 +34,15 @@ Json staleSession() {
 	               "Vectorworks を起動し直しました）");
 }
 
+// occupied は、ほかの呼ぶ側が占有しているときの応答。
+Json occupied() { return failure(protocol::kCodeOccupied, "ほかの呼ぶ側が占有しています"); }
+
+// toolDefect は、道具の定義か返した値が通信規則に合わないときの文言
+// （道具の不具合。internal で応える）。
+std::string toolDefect(std::string_view name, std::string_view what) {
+	return "道具 " + std::string(name) + " の " + std::string(what);
+}
+
 struct Request {
 	std::string tool;
 	Json args;
@@ -111,7 +120,7 @@ std::optional<Json> toolsList(std::span<const Tool> tools, std::string &reason) 
 	for (const Tool &tool : tools) {
 		std::optional<Json> schema = Json::parse(tool.inputSchema, protocol::kMaxNestingDepth);
 		if (!schema) {
-			reason = std::string("道具 ") + tool.name + " の inputSchema が JSON として読めません";
+			reason = toolDefect(tool.name, "inputSchema が JSON として読めません");
 			return std::nullopt;
 		}
 		list.push(Json::object({{"name", Json::string(tool.name)},
@@ -271,7 +280,7 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 			return failure(protocol::kCodeNoSession, request->tool + " は占有の中でだけ呼べます");
 		}
 		if (request->session != session_) {
-			return failure(protocol::kCodeOccupied, "ほかの呼ぶ側が占有しています");
+			return occupied();
 		}
 		return std::nullopt;
 	};
@@ -286,7 +295,7 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 	}
 	if (name == protocol::kToolSessionStart) {
 		if (!session_.empty()) {
-			return respond(failure(protocol::kCodeOccupied, "ほかの呼ぶ側が占有しています"));
+			return respond(occupied());
 		}
 		if (!request->session.empty()) {
 			return respond(staleSession());
@@ -338,9 +347,8 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		// detail は JSON のオブジェクト（通信規則「応答」）。オブジェクトでない値は
 		// 道具の不具合として internal で応え、detail を付けない。
 		if (!status.detail.isNull() && !status.detail.isObject()) {
-			return respond(
-			    failure(protocol::kCodeInternal,
-				        std::string("道具 ") + name + " の detail がオブジェクトではありません"));
+			return respond(failure(protocol::kCodeInternal,
+			                       toolDefect(name, "detail がオブジェクトではありません")));
 		}
 		std::string_view code = status.code == ErrorCode::InvalidArgs ? protocol::kCodeInvalidArgs
 		                                                              : protocol::kCodeInternal;
@@ -352,8 +360,8 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 	if (result.isNull()) {
 		result = Json::object();
 	} else if (!result.isObject()) {
-		return respond(failure(protocol::kCodeInternal, std::string("道具 ") + name +
-		                                                    " の結果がオブジェクトではありません"));
+		return respond(
+		    failure(protocol::kCodeInternal, toolDefect(name, "結果がオブジェクトではありません")));
 	}
 	// 道具はもう実行したので、ここで投げると、実行した要求に internal で応えることになる（避け
 	// られない。応答を書き出すための確保だけが残る）。
