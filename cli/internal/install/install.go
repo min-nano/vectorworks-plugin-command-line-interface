@@ -255,18 +255,30 @@ func running(p places) bool {
 }
 
 // checkCLI は、cli 以外を入れる・外すときに、<Plug-Ins>/cli/ に正しい記録があるかを確かめる。
-// cli の無い <Plug-Ins> では Vectorworks が動いているかを判定できないため。
-func checkCLI(plugins, name string) error {
+// cli の無い <Plug-Ins> では Vectorworks が動いているかを判定できないため。<Plug-Ins>/cli/ が無く
+// <Work>/old/cli/ があれば、cli の install・uninstall が途中で止まっている。<Plug-Ins> を間違えたと読ませないよう、
+// その続け方を答える（settleOld が cli のときに答えるのと同じ続け方）。
+func checkCLI(p places, name string) error {
 	if name == CLIName {
 		return nil
 	}
-	dir := filepath.Join(plugins, CLIName)
-	if !validRecord(dir, CLIName) {
-		return fmt.Errorf("%s has no cli that vw2026 installed; vw2026 installs and uninstalls a plug-in only in the "+
-			"folder of plug-ins that has cli (it tells whether Vectorworks is running from the lock in %s)",
-			plugins, filepath.Join(dir, spool.SpoolDirName))
+	dir := filepath.Join(p.plugins, CLIName)
+	if validRecord(dir, CLIName) {
+		return nil
 	}
-	return nil
+	oldDir := filepath.Join(p.old, CLIName)
+	switch {
+	case exists(dir) || !exists(oldDir):
+	case exists(filepath.Join(p.old, CLIName+".uninstalling")):
+		return fmt.Errorf("%s has no cli, as an uninstall of cli stopped halfway and left %s; "+
+			"run uninstall cli again to finish it", p.plugins, oldDir)
+	default:
+		return fmt.Errorf("%s has no cli, as an install or uninstall of cli stopped halfway and left %s "+
+			"(it may be the only copy of cli); move it back to %s, then run again", p.plugins, oldDir, dir)
+	}
+	return fmt.Errorf("%s has no cli that vw2026 installed; vw2026 installs and uninstalls a plug-in only in the "+
+		"folder of plug-ins that has cli (it tells whether Vectorworks is running from the lock in %s)",
+		p.plugins, filepath.Join(dir, spool.SpoolDirName))
 }
 
 // CheckName は名前の書き方を確かめる（誤りは使い方の誤り）。呼ぶ側（cmd）は、場所を求める前にこれで確かめる
@@ -323,7 +335,7 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 	if err := CheckRegistries(o.Registries); err != nil {
 		return nil, err
 	}
-	if err := checkCLI(p.plugins, name); err != nil {
+	if err := checkCLI(p, name); err != nil {
 		return nil, err
 	}
 	result := &InstallResult{

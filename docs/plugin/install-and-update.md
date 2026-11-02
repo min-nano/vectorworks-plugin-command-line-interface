@@ -278,7 +278,11 @@ help。ここには写さない）。
   `<Plug-Ins>/cli/` に正しい記録（`name` が `cli` で、
   `module` が実在する）が無ければ、何も変えずに失敗にします（`uninstall` も同じ）。`cli` の無い `<Plug-Ins>`
   では、Vectorworks が動いていても判定できず、付け替えとフックが走ってしまうためです。ワークグループの
-  フォルダなど、`cli` の無い Plug-Ins へは入れられません（対応しない）。Go が `cli` の名前を使うのは、
+  フォルダなど、`cli` の無い Plug-Ins へは入れられません（対応しない）。
+  `<Plug-Ins>/cli/` が無く `<Work>/old/cli/` があるときは、`cli` の `install` / `uninstall` が途中で
+  止まっています。このときは `<Plug-Ins>` を間違えたとは答えず、その続け方を答えます（印
+  `<Work>/old/cli.uninstalling` があれば `uninstall cli` を走らせ直す。無ければ `<Work>/old/cli/` を
+  `<Plug-Ins>/cli/` へ戻す。[片付け](#workoldname-の片付け)が `cli` に答えるのと同じ続け方）。Go が `cli` の名前を使うのは、
   ロックの場所を決めることと、入った `vw2026` が自分の入った `<Plug-Ins>` を求めること（[前提](#前提)）だけです。
 - **Vectorworks が動いているかはロックで判定します**（[通信規則「生存の判定」](../protocol.md#生存の判定)）。
   ロックを無い以外の理由で調べられなければ（権限・壊れた場所）、動いているかが分からないので、`install` /
@@ -875,7 +879,8 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
     手順 3 のあとで止まったときに、印があれば手順 4 から続け、印が無ければ断る・続きから走った回で
     フックが失敗したら `<Plug-Ins>` へ戻さない）
   - `cli` 以外を入れる・外すとき、`<Plug-Ins>/cli/` に正しい記録が無ければ何も変えない（Vectorworks が
-    動いていても、`vectorworks_running` ではなく `cli` の記録の誤りを答える）
+    動いていても、`vectorworks_running` ではなく `cli` の記録の誤りを答える。`cli` の付け替えや `uninstall cli` が
+    途中で止まって `<Work>/old/cli/` があれば、その続け方を答える）
   - 付け替えに成功した `install` が、残っていた印 `<Work>/old/<name>.uninstalling` を消す
   - 同じタグでも記録の `module` が無ければ入れ直す・記録の `name` が違う・記録が読めないときに断る
   - 同じタグのとき（記録の `hooks.install` を走らせる・`{tag}` のある規則でターゲットも同じならマニフェストを

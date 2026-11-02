@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
 func TestInstallFirstTime(t *testing.T) {
@@ -374,6 +376,49 @@ func TestNoCLIIsAnsweredBeforeRunning(t *testing.T) {
 	}
 	if !exist(filepath.Join(h.plugins, "demo")) {
 		t.Fatal("uninstalled without cli")
+	}
+}
+
+// cli の install・uninstall が途中で止まって <Plug-Ins>/cli/ が無く <Work>/old/cli/ があるとき、cli 以外の
+// install・uninstall は、<Plug-Ins> の誤りではなく cli の続け方を答え、何も変えない。前の版を読み込んだ
+// Vectorworks が old/cli/spool のロックを持っていても同じ（checkCLI が先に答える）。
+func TestNoCLIAfterStoppedCLISwap(t *testing.T) {
+	for name, c := range map[string]struct {
+		marker bool
+		want   string
+	}{
+		"install":   {want: "move it back to "},
+		"uninstall": {marker: true, want: "run uninstall cli again"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			h.installCLI()
+			h.mustInstall(release{name: "demo", tag: "d1"})
+			old := filepath.Join(h.work, "old")
+			os.MkdirAll(old, 0o700)
+			if err := os.Rename(filepath.Join(h.plugins, "cli"), filepath.Join(old, "cli")); err != nil {
+				t.Fatal(err)
+			}
+			if c.marker {
+				os.WriteFile(filepath.Join(old, "cli.uninstalling"), nil, 0o600)
+			}
+			lock := filepath.Join(old, "cli", spool.SpoolDirName)
+			os.MkdirAll(lock, 0o700)
+			defer fakeplugin.HoldLock(t, lock)()
+			plugins, work := snapshot(t, h.plugins), snapshot(t, h.work)
+			stopped := func(err error) bool {
+				return err != nil && strings.Contains(err.Error(), "cli stopped halfway") &&
+					strings.Contains(err.Error(), c.want)
+			}
+			if _, err := h.install("demo", "d1"); !stopped(err) {
+				t.Fatalf("install: %v", err)
+			}
+			if _, err := Uninstall(h.options(), "demo"); !stopped(err) {
+				t.Fatalf("uninstall: %v", err)
+			}
+			sameSnapshot(t, plugins, snapshot(t, h.plugins))
+			sameSnapshot(t, work, snapshot(t, h.work))
+		})
 	}
 }
 
