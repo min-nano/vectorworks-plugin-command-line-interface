@@ -200,7 +200,7 @@ The commands exit with
 
 	0  success
 	1  any other failure (cannot write, cannot start, cannot locate the spool,
-	   cannot write the output: a tool or install may have run then)
+	   cannot write the output of a success: a tool or install has run then)
 	2  wrong usage
 	3  timed out, or refused for a missing wait file (the tool did not run and will not run;
 	   Vectorworks is running)

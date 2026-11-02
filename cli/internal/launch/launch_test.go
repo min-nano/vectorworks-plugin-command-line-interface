@@ -76,7 +76,8 @@ func TestCommandMac(t *testing.T) {
 func TestCommandDefault(t *testing.T) {
 	switch runtime.GOOS {
 	case "darwin":
-		if argv, err := Command(""); err != nil || len(argv) == 0 || argv[0] != "/usr/bin/open" {
+		argv, err := Command("")
+		if err != nil || !reflect.DeepEqual(argv, []string{"/usr/bin/open", "-a", DefaultMacApp}) {
 			t.Fatalf("got %v, %v", argv, err)
 		}
 	case "windows":
