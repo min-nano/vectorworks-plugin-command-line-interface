@@ -58,7 +58,7 @@ func TestCleanOldCLIs(t *testing.T) {
 	}
 	os.Mkdir(filepath.Join(old, "vw2026.old-dir"), 0o700)
 	busy := filepath.Join(old, "vw2026.old-busy")
-	removeFileWhen(t, func(path string) error {
+	pathOpWhen(t, &removeFile, func(path string) error {
 		if path == busy {
 			return os.ErrPermission
 		}

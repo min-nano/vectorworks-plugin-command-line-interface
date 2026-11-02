@@ -33,9 +33,9 @@ func swap[T any](t *testing.T, at *T, value T) (restore func()) {
 	return restore
 }
 
-// renameWhen・removeAllWhen・removeFileWhen・writeFileWhen は、テストの間だけその操作の前に when を呼び、
-// when が誤りを返せばそれで失敗させる（nil なら元の操作をする。見るだけのときも nil を返す）。返す関数で途中でも
-// 元に戻せる。
+// renameWhen・pathOpWhen・writeFileWhen は、テストの間だけその操作の前に when を呼び、when が誤りを返せば
+// それで失敗させる（nil なら元の操作をする。見るだけのときも nil を返す）。返す関数で途中でも元に戻せる。
+// pathOpWhen は、パス 1 つを受ける操作（removeAll・removeFile）の差し替え口 at に使う。
 func renameWhen(t *testing.T, when func(from, to string) error) (restore func()) {
 	t.Helper()
 	original := rename
@@ -47,21 +47,10 @@ func renameWhen(t *testing.T, when func(from, to string) error) (restore func())
 	})
 }
 
-func removeAllWhen(t *testing.T, when func(path string) error) (restore func()) {
+func pathOpWhen(t *testing.T, at *func(string) error, when func(path string) error) (restore func()) {
 	t.Helper()
-	original := removeAll
-	return swap(t, &removeAll, func(path string) error {
-		if err := when(path); err != nil {
-			return err
-		}
-		return original(path)
-	})
-}
-
-func removeFileWhen(t *testing.T, when func(path string) error) (restore func()) {
-	t.Helper()
-	original := removeFile
-	return swap(t, &removeFile, func(path string) error {
+	original := *at
+	return swap(t, at, func(path string) error {
 		if err := when(path); err != nil {
 			return err
 		}
@@ -94,7 +83,7 @@ func failMkdirAll(t *testing.T, at string) {
 
 func failRemoveAll(t *testing.T, at string) {
 	t.Helper()
-	removeAllWhen(t, func(path string) error {
+	pathOpWhen(t, &removeAll, func(path string) error {
 		if path == at {
 			return errInjected
 		}
@@ -582,7 +571,7 @@ func TestUninstallLeavesWhatCannotBeDeletedInStaging(t *testing.T) {
 	h.installCLI()
 	stage := filepath.Join(h.work, "staging", "cli")
 	// 移したあと（中身があるとき）だけ失敗させる（移す前の、前回の残りを消す呼び出しは通す）。
-	restore := removeAllWhen(t, func(path string) error {
+	restore := pathOpWhen(t, &removeAll, func(path string) error {
 		if path == stage && exist(stage) {
 			return errInjected
 		}
@@ -921,18 +910,17 @@ func TestInstallDoesNotMixTheLeftoverIntoTheNewVersion(t *testing.T) {
 	os.WriteFile(filepath.Join(old, "stale.txt"), []byte("old"), 0o644)
 	stage := filepath.Join(h.work, "staging", "cli")
 	// stale.txt だけが消せない（ほかは消える）。
-	original := removeAll
-	restore := swap(t, &removeAll, func(path string) error {
+	restore := pathOpWhen(t, &removeAll, func(path string) error {
 		if path == stage && exist(filepath.Join(stage, "stale.txt")) {
 			entries, _ := os.ReadDir(stage)
 			for _, entry := range entries {
 				if entry.Name() != "stale.txt" {
-					original(filepath.Join(stage, entry.Name()))
+					os.RemoveAll(filepath.Join(stage, entry.Name()))
 				}
 			}
 			return errInjected
 		}
-		return original(path)
+		return nil
 	})
 	before := snapshot(t, h.plugins)
 	if _, err := h.install("cli", "c2"); !errors.Is(err, errInjected) {
@@ -1112,7 +1100,7 @@ func TestDownloadMismatchCannotRemove(t *testing.T) {
 	h.publish(release{name: "cli", tag: "c1", sha: strings.Repeat("0", 64)})
 	zip := filepath.Join(h.work, "staging", "cli.zip")
 	// 組み立ての前の片付け（まだ無い zip を消す）は通し、取ったあとの zip だけを消せなくする。
-	restore := removeFileWhen(t, func(path string) error {
+	restore := pathOpWhen(t, &removeFile, func(path string) error {
 		if path == zip && exist(path) {
 			return errInjected
 		}
@@ -1705,22 +1693,19 @@ func TestCannotClearHookPendingKeepsTheMovedCLI(t *testing.T) {
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	h.publish(release{name: "cli", tag: "c2"})
 	record := filepath.Join(h.plugins, "cli", RecordFile) + ".new-"
-	originalWrite := writeFile
-	writeFile = func(path string, data []byte, perm fs.FileMode) error {
+	writeFileWhen(t, func(path string) error {
 		if strings.HasPrefix(path, record) {
 			return errInjected
 		}
-		return originalWrite(path, data, perm)
-	}
+		return nil
+	})
 	target := filepath.Join(h.work, "old", "cli", "bin", "vw2026")
-	originalRename := rename
-	rename = func(oldpath, newpath string) error {
+	renameWhen(t, func(oldpath, newpath string) error {
 		if newpath == target {
 			return errInjected
 		}
-		return originalRename(oldpath, newpath)
-	}
-	t.Cleanup(func() { writeFile, rename = originalWrite, originalRename })
+		return nil
+	})
 	var stderr bytes.Buffer
 	o := h.options()
 	o.Stderr = &stderr
@@ -1742,23 +1727,22 @@ func TestReplaceFileLeavesNoTemporary(t *testing.T) {
 	os.WriteFile(path, []byte("old"), 0o644)
 	theirs := path + ".new"
 	os.WriteFile(theirs, []byte("theirs"), 0o644)
-	originalWrite, originalRename := writeFile, rename
-	t.Cleanup(func() { writeFile, rename = originalWrite, originalRename })
 	written := func() []string {
 		matches, _ := filepath.Glob(path + ".new-*")
 		return matches
 	}
 	// 書きかけて止まる。
-	writeFile = func(name string, data []byte, perm fs.FileMode) error {
-		originalWrite(name, data[:1], perm)
+	original := writeFile
+	restore := swap(t, &writeFile, func(name string, data []byte, perm fs.FileMode) error {
+		original(name, data[:1], perm)
 		return errInjected
-	}
+	})
 	if err := replaceFile(path, []byte("new")); !errors.Is(err, errInjected) || len(written()) != 0 {
 		t.Fatal("write:", err, written())
 	}
 	// 書けたが、置き換えられない。
-	writeFile = originalWrite
-	rename = func(string, string) error { return errInjected }
+	restore()
+	swap(t, &rename, func(string, string) error { return errInjected })
 	if err := replaceFile(path, []byte("new")); !errors.Is(err, errInjected) || len(written()) != 0 {
 		t.Fatal("rename:", err, written())
 	}

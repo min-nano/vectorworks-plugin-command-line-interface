@@ -30,20 +30,27 @@ type result struct {
 var envVars = func() []string {
 	seen := map[string]bool{}
 	var names []string
+	eachFlag(func(_ *kong.Node, flag *kong.Flag) {
+		for _, name := range flag.Envs {
+			if !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+	})
+	return names
+}()
+
+// eachFlag は、コマンド（kong の葉）ごとに、その指定（親の指定を含む）を順に fn へ渡す。
+func eachFlag(fn func(command *kong.Node, flag *kong.Flag)) {
 	for _, node := range kong.Must(&cli{}).Model.Leaves(true) {
 		for _, group := range node.AllFlags(false) {
 			for _, flag := range group {
-				for _, name := range flag.Envs {
-					if !seen[name] {
-						seen[name] = true
-						names = append(names, name)
-					}
-				}
+				fn(node, flag)
 			}
 		}
 	}
-	return names
-}()
+}
 
 // opts は、テストが run に与える外の世界。零値は、何も無いスプール・環境変数なし・空の標準入力・
 // 成功する起動。
@@ -204,7 +211,10 @@ func TestCallToolError(t *testing.T) {
 		raw string
 	}{
 		{"fail", exitToolFailure, "internal: boom", "", `"code":"internal"`},
-		{"explain", exitToolFailure, "internal: open", "{\"reason\":\"documents_open\"}\n", `"detail":{"reason":"documents_open"}`},
+		{
+			"explain", exitToolFailure, "internal: open",
+			"{\"reason\":\"documents_open\"}\n", `"detail":{"reason":"documents_open"}`,
+		},
 		{"picky", exitToolUsage, "invalid_args: no such argument", "", `"code":"invalid_args"`},
 	} {
 		t.Run(c.tool, func(t *testing.T) {
@@ -571,33 +581,30 @@ func TestSpoolNotLocated(t *testing.T) {
 	}
 }
 
-// TestEveryFlagHasEnv は、ヘルプを除くすべての指定に環境変数があり、invoke がそれを
-// 置き直すこと、オン・オフの指定が --no-<flag> を持つことを確かめる（指定を足して環境変数を付け忘れないように）。
+// TestEveryFlagHasEnv は、ヘルプと隠した指定を除くすべての指定に環境変数があり、オン・オフの指定が
+// --no-<flag> を持つことを確かめる（指定を足して環境変数を付け忘れないように。invoke が置き直す環境変数は、
+// envVars がコマンドの定義から集める）。
 func TestEveryFlagHasEnv(t *testing.T) {
-	for _, node := range kong.Must(&cli{}).Model.Leaves(true) {
-		for _, group := range node.AllFlags(false) {
-			for _, flag := range group {
-				if flag.Name == "help" {
-					continue
-				}
-				// 隠した指定（初回のスクリプトだけが一時フォルダの CLI に渡す --plugins-dir）は、環境変数を持たない
-				// （持つと、入った CLI にも効いてしまう）。
-				if flag.Hidden {
-					if len(flag.Envs) != 0 {
-						t.Errorf("%s --%s is hidden but has an environment variable", node.Path(), flag.Name)
-					}
-					continue
-				}
-				// オン・オフの指定は --no-<flag> で打ち消せるようにする（環境変数でオンにしたものを戻すため）。
-				if flag.IsBool() && flag.Tag.Negatable == "" {
-					t.Errorf("%s --%s is not negatable (add negatable:\"\")", node.Path(), flag.Name)
-				}
-				if len(flag.Envs) == 0 {
-					t.Errorf("%s --%s has no environment variable", node.Path(), flag.Name)
-				}
-			}
+	eachFlag(func(node *kong.Node, flag *kong.Flag) {
+		if flag.Name == "help" {
+			return
 		}
-	}
+		// 隠した指定（初回のスクリプトだけが一時フォルダの CLI に渡す --plugins-dir）は、環境変数を持たない
+		// （持つと、入った CLI にも効いてしまう）。
+		if flag.Hidden {
+			if len(flag.Envs) != 0 {
+				t.Errorf("%s --%s is hidden but has an environment variable", node.Path(), flag.Name)
+			}
+			return
+		}
+		// オン・オフの指定は --no-<flag> で打ち消せるようにする（環境変数でオンにしたものを戻すため）。
+		if flag.IsBool() && flag.Tag.Negatable == "" {
+			t.Errorf("%s --%s is not negatable (add negatable:\"\")", node.Path(), flag.Name)
+		}
+		if len(flag.Envs) == 0 {
+			t.Errorf("%s --%s has no environment variable", node.Path(), flag.Name)
+		}
+	})
 }
 
 // TestEnvNamesDoNotCollide は、VW2026_<コマンド>_ で始まる環境変数を、そのコマンド（とその下の
@@ -617,20 +624,16 @@ func TestEnvNamesDoNotCollide(t *testing.T) {
 		}
 	}
 	walk(app.Model.Children)
-	for _, leaf := range app.Model.Leaves(true) {
-		for _, group := range leaf.AllFlags(false) {
-			for _, flag := range group {
-				for _, name := range flag.Envs {
-					for path, prefix := range prefixes {
-						within := leaf.Path() == path || strings.HasPrefix(leaf.Path(), path+" ")
-						if strings.HasPrefix(name, prefix) && !within {
-							t.Errorf("%s --%s uses %s, which belongs to %s", leaf.Path(), flag.Name, name, path)
-						}
-					}
+	eachFlag(func(leaf *kong.Node, flag *kong.Flag) {
+		for _, name := range flag.Envs {
+			for path, prefix := range prefixes {
+				within := leaf.Path() == path || strings.HasPrefix(leaf.Path(), path+" ")
+				if strings.HasPrefix(name, prefix) && !within {
+					t.Errorf("%s --%s uses %s, which belongs to %s", leaf.Path(), flag.Name, name, path)
 				}
 			}
 		}
-	}
+	})
 }
 
 // 本番の外の世界は、どの接点も埋まっている（main は run に渡すだけ）。場所を求める関数は呼ばない

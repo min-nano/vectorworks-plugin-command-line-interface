@@ -527,8 +527,9 @@ func TestIsObject(t *testing.T) {
 	}
 }
 
-// 届いた応答の確かめ（docs/protocol.md「応答」「互換性」）。ファイルを使わずに checkResponse（CheckResponse）を直接呼ぶ
-// （Call が受け取った応答をこれに渡すことは TestCallPassesDetail が確かめる）。
+// 届いた応答の読み方と確かめ（docs/protocol.md「応答」「互換性」）。ファイルを使わずに、pollResponse と同じ
+// decodeResponse で読み、checkResponse で確かめる（Call がこの 2 つを通すことは TestCallPassesDetail・
+// TestCallStopsOnMalformedResponse・TestCallTakenThenAnsweredInGrace が確かめる）。
 func TestCheckResponse(t *testing.T) {
 	const malformed = "malformed"
 	for _, c := range []struct {
@@ -536,6 +537,9 @@ func TestCheckResponse(t *testing.T) {
 		// want は返る応答の result（成功）か detail（失敗）。malformed なら壊れた応答。
 		want string
 	}{
+		// JSON として壊れている・オブジェクトでない応答。
+		{`{"ok":tr`, malformed},
+		{`null`, malformed},
 		// 知らないフィールドは無視する（「互換性」）。
 		{`{"ok":true,"result":{},"future":[1]}`, `{}`},
 		// 成功の result は必ずオブジェクト。
@@ -547,7 +551,10 @@ func TestCheckResponse(t *testing.T) {
 		{`{"ok":false,"error":"x"}`, malformed},
 		{`{"ok":false,"code":"later","error":"x"}`, malformed},
 		// 失敗の detail はそのまま渡す。持てるのは invalid_args・internal だけで、オブジェクトに限る。
-		{`{"ok":false,"code":"internal","error":"x","detail":{"reason":"documents_open"}}`, `{"reason":"documents_open"}`},
+		{
+			`{"ok":false,"code":"internal","error":"x","detail":{"reason":"documents_open"}}`,
+			`{"reason":"documents_open"}`,
+		},
 		{`{"ok":false,"code":"invalid_args","error":"x","detail":{}}`, `{}`},
 		{`{"ok":false,"code":"internal","error":"x"}`, ``},
 		{`{"ok":false,"code":"internal","error":"x","detail":null}`, malformed},
@@ -560,19 +567,23 @@ func TestCheckResponse(t *testing.T) {
 		{`{"ok":false,"code":"no_session","error":"x","detail":{}}`, malformed},
 	} {
 		t.Run(c.text, func(t *testing.T) {
-			var response Response
-			if err := json.Unmarshal([]byte(c.text), &response); err != nil {
-				t.Fatal(err)
+			response, unreadable := DecodeResponse([]byte(c.text))
+			if unreadable {
+				if c.want != malformed {
+					t.Fatal("cannot decode")
+				}
+				return
 			}
-			got, err := CheckResponse("ping", &response)
+			got, err := CheckResponse("ping", response)
 			if c.want == malformed {
 				if !errors.Is(err, ErrMalformedResponse) {
 					t.Fatalf("want ErrMalformedResponse, got %+v %v", got, err)
 				}
 				return
 			}
-			if err != nil {
-				t.Fatal(err)
+			// 確かめた応答は、そのまま返す（ok・code を変えない）。
+			if err != nil || got != response {
+				t.Fatalf("got %+v %v, want the response as it is", got, err)
 			}
 			field := got.Detail
 			if got.OK {

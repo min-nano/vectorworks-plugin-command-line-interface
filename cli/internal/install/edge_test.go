@@ -158,7 +158,9 @@ func TestExtractRefuses(t *testing.T) {
 		"device": {func(t *testing.T) []byte {
 			return makeZip(t, []entry{{name: "dev", mode: os.ModeDevice | 0o644}})
 		}, "not a file"},
-		"dot dot inside": {func(t *testing.T) []byte { return makeZip(t, []entry{{name: "a/../b", body: "x"}}) }, "contains .."},
+		"dot dot inside": {func(t *testing.T) []byte {
+			return makeZip(t, []entry{{name: "a/../b", body: "x"}})
+		}, "contains .."},
 		"file under a file": {func(t *testing.T) []byte {
 			return makeZip(t, []entry{{name: "a", body: "file"}, {name: "a/b", body: "x"}})
 		}, ""},
@@ -179,7 +181,7 @@ func TestExtractRefuses(t *testing.T) {
 			path := filepath.Join(dir, "x.zip")
 			os.WriteFile(path, c.zip(t), 0o644)
 			if _, err := extract(path, filepath.Join(dir, "out")); err == nil || !strings.Contains(err.Error(), c.want) {
-				t.Fatal(err)
+				t.Fatalf("want an error containing %q, got %v", c.want, err)
 			}
 		})
 	}
@@ -190,7 +192,8 @@ func TestExtractMakesFolders(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "folders.zip")
 	os.WriteFile(path, makeZip(t, []entry{{name: "a/", mode: os.ModeDir | 0o755}, {name: "a/b/c", body: "c"}}), 0o644)
-	if _, err := extract(path, filepath.Join(dir, "out")); err != nil || !exist(filepath.Join(dir, "out", "a", "b", "c")) {
+	out := filepath.Join(dir, "out")
+	if _, err := extract(path, out); err != nil || !exist(filepath.Join(out, "a", "b", "c")) {
 		t.Fatal(err)
 	}
 }

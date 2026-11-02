@@ -325,18 +325,24 @@ func pollResponse(path string, until time.Time) (response *Response, malformed b
 		if text, err := os.ReadFile(path); err == nil {
 			// 消せなくても応答は取得できている。残骸はプラグイン側が開始時に掃除する。
 			_ = os.Remove(path)
-			// 値で受ける（null も届いた応答として返し、checkResponse が壊れた応答にする）。
-			var received Response
-			if json.Unmarshal(text, &received) != nil {
-				return nil, true
-			}
-			return &received, false
+			return decodeResponse(text)
 		}
 		if time.Now().After(until) {
 			return nil, false
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+}
+
+// decodeResponse は応答のファイルの中身を読む。応答として読めなければ（JSON として壊れている・形が合わない）
+// malformed を真にする。知らないフィールドは無視する（docs/protocol.md「互換性」）。値で受け、null も届いた応答として
+// 返す（checkResponse が壊れた応答にする）。
+func decodeResponse(text []byte) (response *Response, malformed bool) {
+	var received Response
+	if json.Unmarshal(text, &received) != nil {
+		return nil, true
+	}
+	return &received, false
 }
 
 // NestingDepth は JSON の入れ子（オブジェクトと配列）の深さ。外側のオブジェクトを 1 と数える。
