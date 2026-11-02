@@ -377,49 +377,39 @@ func TestOtherPluginNeedsCLI(t *testing.T) {
 	}
 }
 
-// cli の install・uninstall が途中で止まって <Plug-Ins>/cli/ が無く <Work>/old/cli/ が
-// あるとき、cli 以外の install・uninstall は、<Plug-Ins> の誤りではなく cli の続け方を答え、
-// 何も変えない。前の版を読み込んだ Vectorworks が old/cli/spool のロックを持っていても
-// 同じ（checkCLI が先に答える）。
+// cli の install・uninstall が途中で止まって <Plug-Ins>/cli/ が無いとき、cli 以外の
+// install・uninstall は、Vectorworks を終えて cli の操作を終えるよう添えて断り、何も
+// 変えない。前の版を読み込んだ Vectorworks が <Work>/old/cli/spool のロックを持って
+// いても同じ（checkCLI が先に答える）。
 func TestNoCLIAfterStoppedCLISwap(t *testing.T) {
-	for name, c := range map[string]struct {
-		marker bool
-		want   string
-	}{
-		"install":   {want: "move it back to "},
-		"uninstall": {marker: true, want: "run uninstall cli again"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			h := newHarness(t)
-			h.installCLI()
-			h.mustInstall(release{name: "demo", tag: "d1"})
-			old := filepath.Join(h.work, "old")
-			os.MkdirAll(old, 0o700)
-			cli := filepath.Join(h.plugins, "cli")
-			if err := os.Rename(cli, filepath.Join(old, "cli")); err != nil {
-				t.Fatal(err)
-			}
-			if c.marker {
-				os.WriteFile(filepath.Join(old, "cli.uninstalling"), nil, 0o600)
-			}
-			lock := filepath.Join(old, "cli", spool.SpoolDirName)
-			os.MkdirAll(lock, 0o700)
-			defer fakeplugin.HoldLock(t, lock)()
-			plugins, work := snapshot(t, h.plugins), snapshot(t, h.work)
-			stopped := func(err error) bool {
-				return err != nil && strings.Contains(err.Error(), "cli stopped halfway") &&
-					strings.Contains(err.Error(), c.want)
-			}
-			if _, err := h.install("demo", "d1"); !stopped(err) {
-				t.Fatalf("install: %v", err)
-			}
-			if _, err := Uninstall(h.options(), "demo"); !stopped(err) {
-				t.Fatalf("uninstall: %v", err)
-			}
-			sameSnapshot(t, plugins, snapshot(t, h.plugins))
-			sameSnapshot(t, work, snapshot(t, h.work))
-		})
+	h := newHarness(t)
+	h.installCLI()
+	h.mustInstall(release{name: "demo", tag: "d1"})
+	old := filepath.Join(h.work, "old")
+	if err := os.MkdirAll(old, 0o700); err != nil {
+		t.Fatal(err)
 	}
+	if err := os.Rename(filepath.Join(h.plugins, "cli"), filepath.Join(old, "cli")); err != nil {
+		t.Fatal(err)
+	}
+	lock := filepath.Join(old, "cli", spool.SpoolDirName)
+	if err := os.MkdirAll(lock, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	defer fakeplugin.HoldLock(t, lock)()
+	plugins, work := snapshot(t, h.plugins), snapshot(t, h.work)
+	noCLI := func(err error) bool {
+		return err != nil && strings.Contains(err.Error(), "has no cli") &&
+			strings.Contains(err.Error(), "quit Vectorworks")
+	}
+	if _, err := h.install("demo", "d1"); !noCLI(err) {
+		t.Fatalf("install: %v", err)
+	}
+	if _, err := Uninstall(h.options(), "demo"); !noCLI(err) {
+		t.Fatalf("uninstall: %v", err)
+	}
+	sameSnapshot(t, plugins, snapshot(t, h.plugins))
+	sameSnapshot(t, work, snapshot(t, h.work))
 }
 
 // 付け替えの 1 つ目（<Plug-Ins>/<name> を移す）と 2 つ目（組み立てたものを置く）の失敗で元に戻る。

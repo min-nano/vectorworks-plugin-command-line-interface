@@ -58,7 +58,9 @@ Like install, uninstall changes nothing while Vectorworks is running with the
 bridge (exit status 6), and a plug-in other than cli is uninstalled only from a
 folder of plug-ins that has cli. Like install, it checks the cli first: when
 that folder has no cli that vw2026 installed, it fails with 1 even while
-Vectorworks is running (quitting Vectorworks would not help). Uninstalling cli
+Vectorworks is running. If cli is missing because an install or uninstall of
+cli stopped halfway, quit Vectorworks and finish that first with the
+first-time script. Uninstalling cli
 does not refuse while other plug-ins remain, but without vw2026 they can no
 longer be uninstalled; see "remaining".
 

@@ -50,38 +50,30 @@ const startedMeanwhile = "Vectorworks started meanwhile (or its lock cannot be r
 
 // checkCLI は、cli 以外を入れる・外すときに、<Plug-Ins>/cli/ に正しい記録があるかを確かめる。
 // cli の無い <Plug-Ins> では Vectorworks が動いているかを判定できないため。
-// <Plug-Ins>/cli/ が無く <Work>/old/cli/ があれば、cli の install・uninstall が途中で
-// 止まっている。<Plug-Ins> を間違えたと読ませないよう、その続け方を答える
-// （settleOld が cli のときに答えるのと同じ続け方）。
-func checkCLI(p places, name string) error {
+// cli の install・uninstall が途中で止まって cli が無いこともあるので、Vectorworks を
+// 終えてそれを終えるよう添える（止まった状態は読まない。続け方は install cli /
+// uninstall cli が答える。CLAUDE.md の守ること 3）。
+func checkCLI(plugins, name string) error {
 	if name == CLIName {
 		return nil
 	}
-	dir := filepath.Join(p.plugins, CLIName)
-	if validRecord(dir, CLIName) {
-		return nil
+	dir := filepath.Join(plugins, CLIName)
+	if !validRecord(dir, CLIName) {
+		return fmt.Errorf("%s has no cli that vw2026 installed; vw2026 installs and "+
+			"uninstalls a plug-in only in the folder of plug-ins that has cli (it tells "+
+			"whether Vectorworks is running from the lock of cli). If an install or "+
+			"uninstall of cli stopped halfway, quit Vectorworks, run that install or "+
+			"uninstall of cli again with the first-time script (get-vw2026), then run "+
+			"this again", plugins)
 	}
-	oldDir := filepath.Join(p.old, CLIName)
-	switch {
-	case exists(dir) || !exists(oldDir):
-	case exists(filepath.Join(p.old, CLIName+".uninstalling")):
-		return fmt.Errorf("%s has no cli, as an uninstall of cli stopped halfway and left %s; "+
-			"run uninstall cli again to finish it", p.plugins, oldDir)
-	default:
-		return fmt.Errorf("%s has no cli, as an install or uninstall of cli stopped halfway "+
-			"and left %s (it may be the only copy of cli); move it back to %s, then run again",
-			p.plugins, oldDir, dir)
-	}
-	return fmt.Errorf("%s has no cli that vw2026 installed; vw2026 installs and uninstalls a plug-in only in the "+
-		"folder of plug-ins that has cli (it tells whether Vectorworks is running from the lock in %s)",
-		p.plugins, filepath.Join(dir, spool.SpoolDirName))
+	return nil
 }
 
 // precheck は、install・uninstall が何かを変える前の確かめを、両方で同じ順にする。cli の記録（checkCLI）を、
 // Vectorworks が動いているか（stopped）より先に確かめる（cli の記録の誤りは、Vectorworks を終えて走らせ直しても
 // 通らないので、先に答える）。running が偽なら（install --check）動いているかは見ない。
 func precheck(p places, name string, running bool) error {
-	if err := checkCLI(p, name); err != nil {
+	if err := checkCLI(p.plugins, name); err != nil {
 		return err
 	}
 	if running {
