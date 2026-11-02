@@ -63,6 +63,8 @@ type opts struct {
 	vars map[string]string
 	// 標準入力。nil なら空。
 	stdin io.Reader
+	// 標準出力。nil なら書いたものを result.stdout に集める（書けないときを確かめるため）。
+	stdout io.Writer
 	// 起動（env.start）。nil なら成功し、渡された引数を started に書く。
 	start   func(argv []string) error
 	started *[]string
@@ -117,9 +119,12 @@ func invoke(t *testing.T, o opts, args ...string) result {
 		}
 	}
 	var stdout, stderr bytes.Buffer
+	if o.stdout == nil {
+		o.stdout = &stdout
+	}
 	code := run(args, env{
 		stdin:      o.stdin,
-		stdout:     &stdout,
+		stdout:     o.stdout,
 		stderr:     &stderr,
 		start:      o.start,
 		spool:      o.locate,
@@ -230,6 +235,27 @@ func TestCallToolError(t *testing.T) {
 	}
 }
 
+// failingWriter は書けない標準出力（ディスクが一杯・読む側がパイプを閉じた）を真似る。
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("no space left on device") }
+
+// 出力を書けなければ、道具の結果（成功の 0 や道具の失敗の終了コード）ではなく失敗で終わる。
+func TestCallCannotWriteOutput(t *testing.T) {
+	dir := echoBridge(t)
+	for _, args := range [][]string{{"call", "ping"}, {"call", "--raw", "ping"}, {"call", "explain"}} {
+		r := invoke(t, opts{dir: dir, stdout: failingWriter{}}, args...)
+		if r.code != exitFailure || !strings.Contains(r.stderr, "write output: no space left on device") {
+			t.Errorf("%v: %+v", args, r)
+		}
+	}
+	// 道具の失敗の理由は、出力を書けなくても標準エラーに残す。
+	r := invoke(t, opts{dir: dir, stdout: failingWriter{}}, "call", "explain")
+	if !strings.Contains(r.stderr, "internal: open") {
+		t.Errorf("%+v", r)
+	}
+}
+
 func TestCallUsageErrors(t *testing.T) {
 	for _, args := range [][]string{{"call"}, {"call", "x", "[1]"}, {"call", "x", "not json"}, {"tools"}, {"nope"}, {}} {
 		r := invoke(t, opts{}, args...)
@@ -279,7 +305,8 @@ func TestLaunchAppNotFound(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing")
 	vars := map[string]string{"VW2026_APP": missing}
 	r := invoke(t, opts{vars: vars, started: &started}, "launch")
-	if r.code != exitFailure || started != nil || !strings.Contains(r.stderr, missing) {
+	if r.code != exitFailure || started != nil || !strings.Contains(r.stderr, missing) ||
+		!strings.Contains(r.stderr, "--app (VW2026_APP)") {
 		t.Fatalf("%+v %v", r, started)
 	}
 }

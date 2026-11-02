@@ -123,7 +123,7 @@ std::optional<Json> toolsList(std::span<const Tool> tools, std::string &reason) 
 			reason = toolDefect(tool.name, "inputSchema が JSON として読めません");
 			return std::nullopt;
 		}
-		list.push(Json::object({{"name", Json::string(tool.name)},
+		list.push(Json::object({{"name", Json::string(std::string(tool.name))},
 		                        {"description", Json::string(tool.description)},
 		                        {"inputSchema", std::move(*schema)},
 		                        {"kind", Json::string(std::string(kindName(tool.kind)))}}));

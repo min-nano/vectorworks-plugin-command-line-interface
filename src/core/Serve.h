@@ -10,6 +10,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 
 namespace VwCli::core {
 
@@ -55,8 +56,9 @@ struct ToolContext {
 using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolStatus &status);
 
 struct Tool {
-	// [a-z0-9_]+(\.[a-z0-9_]+)*
-	const char *name;
+	// [a-z0-9_]+(\.[a-z0-9_]+)*。通信規則の綴り（core/Protocol.h の
+	// std::string_view）をそのまま使えるように、string_view で持つ。
+	std::string_view name;
 	// 日本語。呼ぶ側がそのまま読む。
 	const char *description;
 	// JSON Schema（文字列）。tools の結果にそのまま載る。
