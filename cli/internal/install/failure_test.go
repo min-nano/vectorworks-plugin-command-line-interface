@@ -23,7 +23,8 @@ import (
 var errInjected = errors.New("injected failure")
 
 // swap は、テストの間だけ差し替え口 *at（ファイルの操作・上限）を value に替える。返す関数で途中でも元に戻せる
-// （テストの終わりにも戻す）。
+// （テストの終わりにも戻す）。戻すのは、この swap の前の値なので、途中で戻してよいのは、その差し替え口を最後に
+// 差し替えたものだけ（あとから同じ差し替え口を差し替えていると、それも外れる）。
 func swap[T any](t *testing.T, at *T, value T) (restore func()) {
 	t.Helper()
 	original := *at
@@ -33,7 +34,7 @@ func swap[T any](t *testing.T, at *T, value T) (restore func()) {
 	return restore
 }
 
-// renameWhen・pathOpWhen・writeFileWhen は、テストの間だけその操作の前に when を呼び、when が誤りを返せば
+// renameWhen・pathOpWhen・writeFileWhen・mkdirAllWhen は、テストの間だけその操作の前に when を呼び、when が誤りを返せば
 // それで失敗させる（nil なら元の操作をする。見るだけのときも nil を返す）。返す関数で途中でも元に戻せる。
 // pathOpWhen は、パス 1 つを受ける操作（removeAll・removeFile）の差し替え口 at に使う。
 func renameWhen(t *testing.T, when func(from, to string) error) (restore func()) {
@@ -69,15 +70,25 @@ func writeFileWhen(t *testing.T, when func(path string) error) (restore func()) 
 	})
 }
 
+func mkdirAllWhen(t *testing.T, when func(path string) error) (restore func()) {
+	t.Helper()
+	original := mkdirAll
+	return swap(t, &mkdirAll, func(path string, perm fs.FileMode) error {
+		if err := when(path); err != nil {
+			return err
+		}
+		return original(path, perm)
+	})
+}
+
 // failMkdirAll は、その場所のディレクトリの作成を失敗させる（OS の失敗を真似る）。
 func failMkdirAll(t *testing.T, at string) {
 	t.Helper()
-	original := mkdirAll
-	swap(t, &mkdirAll, func(path string, perm fs.FileMode) error {
+	mkdirAllWhen(t, func(path string) error {
 		if path == at {
 			return errInjected
 		}
-		return original(path, perm)
+		return nil
 	})
 }
 
@@ -92,12 +103,12 @@ func failRemoveAll(t *testing.T, at string) {
 	})
 }
 
-// failRenameTo は、from から to への名前の変更だけを失敗させる（同じ from からほかへの変更は通す）。返す関数で
-// 途中でも元に戻せる。
-func failRenameTo(t *testing.T, from, to string) (restore func()) {
+// failRename は、from から to への名前の変更を失敗させる（to が空なら行き先を問わない。同じ from からほかへの
+// 変更は通す）。返す関数で途中でも元に戻せる。
+func failRename(t *testing.T, from, to string) (restore func()) {
 	t.Helper()
 	return renameWhen(t, func(oldpath, newpath string) error {
-		if oldpath == from && newpath == to {
+		if oldpath == from && (to == "" || newpath == to) {
 			return errInjected
 		}
 		return nil
@@ -410,7 +421,7 @@ func TestCannotSidestepTheCLI(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	h.publish(release{name: "cli", tag: "c2"})
-	failRename(t, resolved(t, h.fakeExecutable()))
+	failRename(t, resolved(t, h.fakeExecutable()), "")
 	before := snapshot(t, h.plugins)
 	o := h.options()
 	o.Executable = h.fakeExecutable()
@@ -442,8 +453,8 @@ func TestInstallCannotPutTheOldVersionBack(t *testing.T) {
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	h.publish(release{name: "cli", tag: "c2"})
 	old := filepath.Join(h.work, "old", "cli")
-	failRename(t, filepath.Join(h.work, "staging", "cli"))
-	failRename(t, old)
+	failRename(t, filepath.Join(h.work, "staging", "cli"), "")
+	failRename(t, old, "")
 	// 走らせている CLI をよけていれば、その場所も示す（戻した版のフォルダには CLI が無いため）。
 	o := h.options()
 	o.Executable = h.fakeExecutable()
@@ -471,7 +482,7 @@ func TestInstallHookFailureCannotUndo(t *testing.T) {
 			h.mustInstall(release{name: "cli", tag: "c1"})
 			h.publish(release{name: "cli", tag: "c2", install: &hookPlan{Exit: 1}})
 			move := c.move(h)
-			failRenameTo(t, move[0], move[1])
+			failRename(t, move[0], move[1])
 			o := h.options()
 			o.Executable = h.fakeExecutable()
 			_, err := Install(o, "cli", "c2", false)
@@ -494,9 +505,9 @@ func TestCannotRestoreTheSidesteppedCLI(t *testing.T) {
 		plan *hookPlan
 	}{
 		"first rename": {fail: func(h *harness) {
-			failRenameTo(t, filepath.Join(h.plugins, "cli"), filepath.Join(h.work, "old", "cli"))
+			failRename(t, filepath.Join(h.plugins, "cli"), filepath.Join(h.work, "old", "cli"))
 		}},
-		"second rename": {fail: func(h *harness) { failRename(t, filepath.Join(h.work, "staging", "cli")) }},
+		"second rename": {fail: func(h *harness) { failRename(t, filepath.Join(h.work, "staging", "cli"), "") }},
 		"hook":          {fail: func(h *harness) {}, plan: &hookPlan{Exit: 1}},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -539,7 +550,7 @@ func TestUninstallCannotPutTheFolderBack(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1", uninstall: &hookPlan{Exit: 1}})
 	old := filepath.Join(h.work, "old", "cli")
-	failRename(t, old)
+	failRename(t, old, "")
 	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "by hand") {
 		t.Fatal(err)
 	}
@@ -552,7 +563,7 @@ func TestUninstallCannotDeleteTheFolder(t *testing.T) {
 	h.installCLI()
 	old := filepath.Join(h.work, "old", "cli")
 	marker := filepath.Join(h.work, "old", "cli.uninstalling")
-	restore := failRenameTo(t, old, filepath.Join(h.work, "staging", "cli"))
+	restore := failRename(t, old, filepath.Join(h.work, "staging", "cli"))
 	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "run uninstall again") {
 		t.Fatal(err)
 	}
@@ -631,7 +642,7 @@ func TestInstallCannotMoveAsideAFolderWithoutModule(t *testing.T) {
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
 	old := filepath.Join(h.work, "old", "cli")
-	failRename(t, old)
+	failRename(t, old, "")
 	var stderr bytes.Buffer
 	o := h.options()
 	o.Stderr = &stderr

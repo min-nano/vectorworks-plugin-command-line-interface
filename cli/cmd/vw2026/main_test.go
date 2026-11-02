@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"testing/iotest"
 	"time"
@@ -27,7 +28,9 @@ type result struct {
 
 // envVars は、コマンドが読む環境変数のすべて。コマンドの定義（kong のタグ）から集める（手で並べると、
 // 指定を足したときに書き足し忘れる）。
-var envVars = func() []string {
+// テストを走らせる前のパッケージの初期化では作らない（kong のタグを壊したとき、初期化の panic ですべての
+// テストが走らなくなる代わりに、使うテストが名前付きで落ちるように）。
+var envVars = sync.OnceValue(func() []string {
 	seen := map[string]bool{}
 	var names []string
 	eachFlag(func(_ *kong.Node, flag *kong.Flag) {
@@ -39,7 +42,7 @@ var envVars = func() []string {
 		}
 	})
 	return names
-}()
+})
 
 // eachFlag は、コマンド（kong の葉）ごとに、その指定（親の指定を含む）を順に fn へ渡す。
 func eachFlag(fn func(command *kong.Node, flag *kong.Flag)) {
@@ -109,7 +112,7 @@ func invoke(t *testing.T, o opts, args ...string) result {
 		}
 	}
 	// kong は環境変数を os から直接読むので、テストごとに置き直す（並行には走らせない）。
-	for _, name := range envVars {
+	for _, name := range envVars() {
 		value, ok := o.vars[name]
 		// 終わったら元に戻させる
 		t.Setenv(name, value)
@@ -335,15 +338,8 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-// busySpool は、Vectorworks は動いている（ロックが掴まれている）が応えないスプールを作る
-// （保存の確認のダイアログを開いている間など）。返す関数で終了を真似る。
-func busySpool(t *testing.T) (string, func()) {
-	t.Helper()
-	return fakeplugin.NewHeldDir(t)
-}
-
 func TestCallWhileBusyTimesOut(t *testing.T) {
-	dir, _ := busySpool(t)
+	dir, _ := fakeplugin.NewHeldDir(t)
 	r := invoke(t, opts{dir: dir}, "call", "ping", "--timeout", "0.3")
 	if r.code != exitTimeout {
 		t.Fatalf("%+v", r)
@@ -353,7 +349,7 @@ func TestCallWhileBusyTimesOut(t *testing.T) {
 // 終了を待つ呼ぶ側は status を繰り返すので、応えなくてもロックが掴まれている間は
 // 動いていると答え、放されたら止まったと答える（保存の確認のダイアログを止まったと誤らない）。
 func TestStatusWhileBusyUntilTheProcessEnds(t *testing.T) {
-	dir, quit := busySpool(t)
+	dir, quit := fakeplugin.NewHeldDir(t)
 	r := invoke(t, opts{dir: dir}, "status")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"running":true`) {
 		t.Fatalf("a held lock must count as running: %+v", r)
@@ -517,7 +513,7 @@ func TestFlagsFromEnv(t *testing.T) {
 		t.Fatalf("--no-raw over VW2026_CALL_RAW: %+v", r)
 	}
 
-	busy, _ := busySpool(t)
+	busy, _ := fakeplugin.NewHeldDir(t)
 	short := map[string]string{"VW2026_CALL_TIMEOUT": "0.3"}
 	if r := invoke(t, opts{dir: busy, vars: short}, "call", "ping"); r.code != exitTimeout {
 		t.Fatalf("VW2026_CALL_TIMEOUT: %+v", r)
@@ -570,7 +566,7 @@ func TestNotRunningShowsTheSpool(t *testing.T) {
 
 // 待つ間にブリッジが止まった（ロックが放された）ときも、求めたスプールの場所を示して 5 で終わる。
 func TestCallStoppedWhileWaitingShowsTheSpool(t *testing.T) {
-	dir, quit := busySpool(t)
+	dir, quit := fakeplugin.NewHeldDir(t)
 	stopped := make(chan struct{})
 	// 要求が置かれてから（call が待ち始めてから）ロックを放す。call はロックを締切のときに
 	// 見るので、締切より前に放せばよく、締切には余裕を持たせる。

@@ -381,7 +381,7 @@ func TestInstallRenameFailureRestores(t *testing.T) {
 			h.mustInstall(release{name: "cli", tag: "c1"})
 			h.publish(release{name: "cli", tag: "c2"})
 			executable := filepath.Join(h.plugins, "cli", "bin", "vw2026")
-			failRename(t, from(h))
+			failRename(t, from(h), "")
 			before := snapshot(t, h.plugins)
 			o := h.options()
 			o.Executable = executable
@@ -516,7 +516,7 @@ func TestInstallSameTagCannotSettleOld(t *testing.T) {
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	old := filepath.Join(h.work, "old", "cli")
 	copyDir(t, filepath.Join(h.plugins, "cli"), old)
-	failRename(t, old)
+	failRename(t, old, "")
 	var stderr bytes.Buffer
 	o := h.options()
 	o.Stderr = &stderr
