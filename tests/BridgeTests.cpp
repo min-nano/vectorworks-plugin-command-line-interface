@@ -391,6 +391,31 @@ TEST(BridgeRejectsReparsePointsThatAreNotLinks) {
 	cleanUp();
 }
 
+// UNC のパス（\\server\share\…）は \\?\UNC\ を付けて開き、
+// share の後ろから区切りごとに作る。管理用の共有 \\localhost\C$ など
+// （一時ディレクトリのドライブ）を通して、一時ディレクトリの下に作る。
+// 共有を使えなければ飛ばしたことを出力に残し、CI（runner は使える）では
+// 失敗にする。
+TEST(FilesMakeDirectoriesOnUncPathOnWindows) {
+	TempDir dir;
+	std::wstring local = dir.path().wstring();
+	REQUIRE(local.size() > 3 && local[1] == L':' && local[2] == L'\\');
+	std::filesystem::path unc =
+	    L"\\\\localhost\\" + std::wstring(1, local[0]) + L"$" + local.substr(2);
+	std::error_code ec;
+	if (!std::filesystem::is_directory(unc, ec)) {
+		REQUIRE(!inCi());
+		std::fprintf(stderr, "skip FilesMakeDirectoriesOnUncPathOnWindows: %s\n",
+		             VwCli::test::utf8(unc).c_str());
+		return;
+	}
+	std::string error;
+	CHECK(files::makeDirectories(VwCli::test::utf8(unc / "a" / "b"), error));
+	CHECK(std::filesystem::is_directory(dir.path() / "a" / "b"));
+	// 既にあれば何もしない。
+	CHECK(files::makeDirectories(VwCli::test::utf8(unc / "a" / "b"), error));
+}
+
 // 絶対パスでないパスは開かない（\\?\ を付けられず、予約された名前がデバイスを指すため）。
 TEST(FilesRejectRelativePathsOnWindows) {
 	CHECK(!files::read("NUL", 1024));
