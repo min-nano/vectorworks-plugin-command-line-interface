@@ -31,7 +31,8 @@ func Command(app string) ([]string, error) {
 	return command(runtime.GOOS, app)
 }
 
-// command は goos での Command（テストが、走っている OS のほかの道も確かめる）。
+// command は goos での Command（テストが、走っている OS に依らない道 ― macOS・未対応の OS ― をどの OS でも
+// 確かめる。Windows の道は %ProgramFiles% と区切りに依るので、Windows でだけ確かめる）。
 func command(goos, app string) ([]string, error) {
 	if app != "" && !(goos == "darwin" && strings.HasSuffix(strings.TrimRight(app, "/"), ".app")) {
 		if info, err := os.Stat(app); err != nil || info.IsDir() {

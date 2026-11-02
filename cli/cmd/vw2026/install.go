@@ -47,7 +47,9 @@ sha256. The plug-in goes into <Plug-Ins>/<NAME>/ with a record of the install
 hook runs: for cli, the hook puts vw2026 on the PATH. Install does not touch a
 folder of that name that vw2026 did not install, or that came from another
 registry. A plug-in other than cli goes only into a folder of plug-ins that
-has cli.
+has cli; install checks this before whether Vectorworks is running, so it fails
+with 1 for a folder without cli even while Vectorworks is running (quitting
+Vectorworks would not help).
 
 When the installed plug-in already has the tag (and the target), install
 neither downloads the zip nor replaces the folder: it runs the install hook of

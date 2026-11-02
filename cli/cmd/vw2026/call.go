@@ -45,7 +45,9 @@ and 23 for occupied, no_session, and busy, as described below, and prints nothin
 standard output even with --raw. A failure with a missing or unknown code is
 a malformed response, so call exits with 1 for it. So does a response file
 that is not a valid response object (not JSON, or JSON of the wrong shape);
-call removes it without waiting for --timeout.
+call removes it without waiting for --timeout. If call cannot write its
+output (a full disk, for example), it exits with 1 even though the tool ran
+(and writes the tool's code and reason to the standard error if it failed).
 
 When the bridge is not running, call exits with 5 and writes the spool it
 looked at to the standard error, so that a vw2026 run from outside the folder
