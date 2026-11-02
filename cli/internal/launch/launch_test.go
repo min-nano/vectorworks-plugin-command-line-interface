@@ -71,9 +71,14 @@ func TestCommandMac(t *testing.T) {
 	}
 }
 
-// Windows の道は %ProgramFiles% と区切りに依るので、Windows でだけ確かめる。
+// Windows の道は %ProgramFiles% と区切りに依るので、Windows でだけ確かめる。走っている OS の
+// 既定の道を Command で確かめる（macOS は TestCommandMac が command で確かめる）。
 func TestCommandDefault(t *testing.T) {
 	switch runtime.GOOS {
+	case "darwin":
+		if argv, err := Command(""); err != nil || len(argv) == 0 || argv[0] != "/usr/bin/open" {
+			t.Fatalf("got %v, %v", argv, err)
+		}
 	case "windows":
 		root := t.TempDir()
 		t.Setenv("ProgramFiles", root)
