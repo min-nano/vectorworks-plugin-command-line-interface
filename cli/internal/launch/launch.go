@@ -47,7 +47,7 @@ func Command(app string) ([]string, error) {
 		}
 		return nil, fmt.Errorf("Vectorworks 2026 was not found at %s; name Vectorworks2026.exe with --app (VW2026_APP)", exe)
 	default:
-		return nil, errors.New("launching is not supported on this OS; name the executable with --app (VW2026_APP)")
+		return nil, errors.New("launching is not supported on this OS; set VW2026_APP")
 	}
 }
 
