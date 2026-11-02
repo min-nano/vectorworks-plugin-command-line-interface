@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"testing/iotest"
 	"time"
@@ -25,11 +26,33 @@ type result struct {
 	stderr string
 }
 
-// envVars は、コマンドが読む環境変数のすべて。
-var envVars = []string{
-	"VW2026_APP", "VW2026_SESSION",
-	"VW2026_CALL_RAW", "VW2026_CALL_TIMEOUT", "VW2026_SESSION_TIMEOUT",
-	"VW2026_REGISTRY", "VW2026_INSTALL_CHECK",
+// envVars は、コマンドが読む環境変数のすべて。コマンドの定義（kong のタグ）から集める（手で並べると、
+// 指定を足したときに書き足し忘れる）。
+// テストを走らせる前のパッケージの初期化では作らない（kong のタグを壊したとき、初期化の panic ですべての
+// テストが走らなくなる代わりに、使うテストが名前付きで落ちるように）。
+var envVars = sync.OnceValue(func() []string {
+	seen := map[string]bool{}
+	var names []string
+	eachFlag(func(_ *kong.Node, flag *kong.Flag) {
+		for _, name := range flag.Envs {
+			if !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+	})
+	return names
+})
+
+// eachFlag は、コマンド（kong の葉）ごとに、その指定（親の指定を含む）を順に fn へ渡す。
+func eachFlag(fn func(command *kong.Node, flag *kong.Flag)) {
+	for _, node := range kong.Must(&cli{}).Model.Leaves(true) {
+		for _, group := range node.AllFlags(false) {
+			for _, flag := range group {
+				fn(node, flag)
+			}
+		}
+	}
 }
 
 // opts は、テストが run に与える外の世界。零値は、何も無いスプール・環境変数なし・空の標準入力・
@@ -88,8 +111,18 @@ func invoke(t *testing.T, o opts, args ...string) result {
 			t.Fatal(err)
 		}
 	}
+	// 渡した名前がコマンドの読まない環境変数なら（指定の名前を変えたのにテストを直し忘れた）、黙って捨てずに落とす。
+	known := map[string]bool{}
+	for _, name := range envVars() {
+		known[name] = true
+	}
+	for name := range o.vars {
+		if !known[name] {
+			t.Fatalf("no command reads %s", name)
+		}
+	}
 	// kong は環境変数を os から直接読むので、テストごとに置き直す（並行には走らせない）。
-	for _, name := range envVars {
+	for _, name := range envVars() {
 		value, ok := o.vars[name]
 		// 終わったら元に戻させる
 		t.Setenv(name, value)
@@ -166,8 +199,7 @@ func TestCallArgsFromStdin(t *testing.T) {
 // 標準入力を読めなければ、要求を置かずに 1 で終わる。応える偽のプラグインは使わず、ロックだけを
 // 掴んでおき、終わったあとに要求も待つ印も残っていないことを見る。
 func TestCallArgsFromUnreadableStdin(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
+	dir, _ := fakeplugin.NewHeldDir(t)
 	broken := iotest.ErrReader(errors.New("broken pipe"))
 	r := invoke(t, opts{dir: dir, stdin: broken}, "call", "x", "-")
 	if r.code != exitFailure || r.stdout != "" || !strings.Contains(r.stderr, "read stdin: broken pipe") {
@@ -184,36 +216,35 @@ func TestCallArgsFromUnreadableStdin(t *testing.T) {
 	}
 }
 
+// 道具の失敗は、種別ごとの終了コードで終わり、理由を標準エラーに書く。標準出力には detail があれば
+// それだけを出し（無ければ何も出さない）、--raw なら応答ごと出す。
 func TestCallToolError(t *testing.T) {
 	dir := echoBridge(t)
-	r := invoke(t, opts{dir: dir}, "call", "fail")
-	if r.code != exitToolFailure || r.stdout != "" || !strings.Contains(r.stderr, "internal: boom") {
-		t.Fatalf("%+v", r)
-	}
-	raw := invoke(t, opts{dir: dir}, "call", "--raw", "fail")
-	if raw.code != exitToolFailure || !strings.Contains(raw.stdout, `"ok":false`) || !strings.Contains(raw.stdout, `"code":"internal"`) {
-		t.Fatalf("%+v", raw)
-	}
-}
-
-// 道具が失敗の detail を返せば、標準出力に出す（--raw なら応答ごと）。
-func TestCallToolErrorDetail(t *testing.T) {
-	dir := echoBridge(t)
-	r := invoke(t, opts{dir: dir}, "call", "explain")
-	if r.code != exitToolFailure || r.stdout != "{\"reason\":\"documents_open\"}\n" || !strings.Contains(r.stderr, "internal: open") {
-		t.Fatalf("%+v", r)
-	}
-	raw := invoke(t, opts{dir: dir}, "call", "--raw", "explain")
-	if raw.code != exitToolFailure || !strings.Contains(raw.stdout, `"detail":{"reason":"documents_open"}`) {
-		t.Fatalf("%+v", raw)
-	}
-}
-
-func TestCallToolUsageError(t *testing.T) {
-	dir := echoBridge(t)
-	r := invoke(t, opts{dir: dir}, "call", "picky")
-	if r.code != exitToolUsage || r.stdout != "" || !strings.Contains(r.stderr, "invalid_args: no such argument") {
-		t.Fatalf("%+v", r)
+	for _, c := range []struct {
+		tool   string
+		code   int
+		stderr string
+		stdout string
+		// raw は --raw の出力に含まれるもの。
+		raw string
+	}{
+		{"fail", exitToolFailure, "internal: boom", "", `"code":"internal"`},
+		{
+			"explain", exitToolFailure, "internal: open",
+			"{\"reason\":\"documents_open\"}\n", `"detail":{"reason":"documents_open"}`,
+		},
+		{"picky", exitToolUsage, "invalid_args: no such argument", "", `"code":"invalid_args"`},
+	} {
+		t.Run(c.tool, func(t *testing.T) {
+			r := invoke(t, opts{dir: dir}, "call", c.tool)
+			if r.code != c.code || r.stdout != c.stdout || !strings.Contains(r.stderr, c.stderr) {
+				t.Fatalf("%+v", r)
+			}
+			raw := invoke(t, opts{dir: dir}, "call", "--raw", c.tool)
+			if raw.code != c.code || !strings.Contains(raw.stdout, `"ok":false`) || !strings.Contains(raw.stdout, c.raw) {
+				t.Fatalf("%+v", raw)
+			}
+		})
 	}
 }
 
@@ -307,24 +338,18 @@ func fakeApp(t *testing.T) string {
 	return app
 }
 
+// version と --version は同じものを出す。
 func TestVersion(t *testing.T) {
-	r := invoke(t, opts{}, "version")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":6`) {
-		t.Fatalf("%+v", r)
+	for _, arg := range []string{"version", "--version"} {
+		r := invoke(t, opts{}, arg)
+		if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":6`) {
+			t.Fatalf("%s: %+v", arg, r)
+		}
 	}
 }
 
-// busySpool は、Vectorworks は動いている（ロックが掴まれている）が応えないスプールを作る
-// （保存の確認のダイアログを開いている間など）。返す関数で終了を真似る。
-func busySpool(t *testing.T) (string, func()) {
-	t.Helper()
-	dir := fakeplugin.NewDir(t)
-	release := fakeplugin.HoldLock(t, dir)
-	return dir, release
-}
-
 func TestCallWhileBusyTimesOut(t *testing.T) {
-	dir, _ := busySpool(t)
+	dir, _ := fakeplugin.NewHeldDir(t)
 	r := invoke(t, opts{dir: dir}, "call", "ping", "--timeout", "0.3")
 	if r.code != exitTimeout {
 		t.Fatalf("%+v", r)
@@ -334,7 +359,7 @@ func TestCallWhileBusyTimesOut(t *testing.T) {
 // 終了を待つ呼ぶ側は status を繰り返すので、応えなくてもロックが掴まれている間は
 // 動いていると答え、放されたら止まったと答える（保存の確認のダイアログを止まったと誤らない）。
 func TestStatusWhileBusyUntilTheProcessEnds(t *testing.T) {
-	dir, quit := busySpool(t)
+	dir, quit := fakeplugin.NewHeldDir(t)
 	r := invoke(t, opts{dir: dir}, "status")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"running":true`) {
 		t.Fatalf("a held lock must count as running: %+v", r)
@@ -372,13 +397,6 @@ func TestHelp(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 	if r := invoke(t, opts{}, "help", "nope"); r.code != exitUsage {
-		t.Fatalf("%+v", r)
-	}
-}
-
-func TestVersionFlag(t *testing.T) {
-	r := invoke(t, opts{}, "--version")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":6`) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -505,7 +523,7 @@ func TestFlagsFromEnv(t *testing.T) {
 		t.Fatalf("--no-raw over VW2026_CALL_RAW: %+v", r)
 	}
 
-	busy, _ := busySpool(t)
+	busy, _ := fakeplugin.NewHeldDir(t)
 	short := map[string]string{"VW2026_CALL_TIMEOUT": "0.3"}
 	if r := invoke(t, opts{dir: busy, vars: short}, "call", "ping"); r.code != exitTimeout {
 		t.Fatalf("VW2026_CALL_TIMEOUT: %+v", r)
@@ -558,7 +576,7 @@ func TestNotRunningShowsTheSpool(t *testing.T) {
 
 // 待つ間にブリッジが止まった（ロックが放された）ときも、求めたスプールの場所を示して 5 で終わる。
 func TestCallStoppedWhileWaitingShowsTheSpool(t *testing.T) {
-	dir, quit := busySpool(t)
+	dir, quit := fakeplugin.NewHeldDir(t)
 	stopped := make(chan struct{})
 	// 要求が置かれてから（call が待ち始めてから）ロックを放す。call はロックを締切のときに
 	// 見るので、締切より前に放せばよく、締切には余裕を持たせる。
@@ -600,42 +618,30 @@ func TestSpoolNotLocated(t *testing.T) {
 	}
 }
 
-// TestEveryFlagHasEnv は、ヘルプを除くすべての指定に環境変数があり、invoke がそれを
-// 置き直すこと、オン・オフの指定が --no-<flag> を持つことを確かめる（指定を足して環境変数を付け忘れないように）。
+// TestEveryFlagHasEnv は、ヘルプと隠した指定を除くすべての指定に環境変数があり、オン・オフの指定が
+// --no-<flag> を持つことを確かめる（指定を足して環境変数を付け忘れないように。invoke が置き直す環境変数は、
+// envVars がコマンドの定義から集める）。
 func TestEveryFlagHasEnv(t *testing.T) {
-	known := map[string]bool{}
-	for _, name := range envVars {
-		known[name] = true
-	}
-	for _, node := range kong.Must(&cli{}).Model.Leaves(true) {
-		for _, group := range node.AllFlags(false) {
-			for _, flag := range group {
-				if flag.Name == "help" {
-					continue
-				}
-				// 隠した指定（初回のスクリプトだけが一時フォルダの CLI に渡す --plugins-dir）は、環境変数を持たない
-				// （持つと、入った CLI にも効いてしまう）。
-				if flag.Hidden {
-					if len(flag.Envs) != 0 {
-						t.Errorf("%s --%s is hidden but has an environment variable", node.Path(), flag.Name)
-					}
-					continue
-				}
-				// オン・オフの指定は --no-<flag> で打ち消せるようにする（環境変数でオンにしたものを戻すため）。
-				if flag.IsBool() && flag.Tag.Negatable == "" {
-					t.Errorf("%s --%s is not negatable (add negatable:\"\")", node.Path(), flag.Name)
-				}
-				if len(flag.Envs) == 0 {
-					t.Errorf("%s --%s has no environment variable", node.Path(), flag.Name)
-				}
-				for _, name := range flag.Envs {
-					if !known[name] {
-						t.Errorf("%s is missing from envVars", name)
-					}
-				}
-			}
+	eachFlag(func(node *kong.Node, flag *kong.Flag) {
+		if flag.Name == "help" {
+			return
 		}
-	}
+		// 隠した指定（初回のスクリプトだけが一時フォルダの CLI に渡す --plugins-dir）は、環境変数を持たない
+		// （持つと、入った CLI にも効いてしまう）。
+		if flag.Hidden {
+			if len(flag.Envs) != 0 {
+				t.Errorf("%s --%s is hidden but has an environment variable", node.Path(), flag.Name)
+			}
+			return
+		}
+		// オン・オフの指定は --no-<flag> で打ち消せるようにする（環境変数でオンにしたものを戻すため）。
+		if flag.IsBool() && flag.Tag.Negatable == "" {
+			t.Errorf("%s --%s is not negatable (add negatable:\"\")", node.Path(), flag.Name)
+		}
+		if len(flag.Envs) == 0 {
+			t.Errorf("%s --%s has no environment variable", node.Path(), flag.Name)
+		}
+	})
 }
 
 // TestEnvNamesDoNotCollide は、VW2026_<コマンド>_ で始まる環境変数を、そのコマンド（とその下の
@@ -655,20 +661,16 @@ func TestEnvNamesDoNotCollide(t *testing.T) {
 		}
 	}
 	walk(app.Model.Children)
-	for _, leaf := range app.Model.Leaves(true) {
-		for _, group := range leaf.AllFlags(false) {
-			for _, flag := range group {
-				for _, name := range flag.Envs {
-					for path, prefix := range prefixes {
-						within := leaf.Path() == path || strings.HasPrefix(leaf.Path(), path+" ")
-						if strings.HasPrefix(name, prefix) && !within {
-							t.Errorf("%s --%s uses %s, which belongs to %s", leaf.Path(), flag.Name, name, path)
-						}
-					}
+	eachFlag(func(leaf *kong.Node, flag *kong.Flag) {
+		for _, name := range flag.Envs {
+			for path, prefix := range prefixes {
+				within := leaf.Path() == path || strings.HasPrefix(leaf.Path(), path+" ")
+				if strings.HasPrefix(name, prefix) && !within {
+					t.Errorf("%s --%s uses %s, which belongs to %s", leaf.Path(), flag.Name, name, path)
 				}
 			}
 		}
-	}
+	})
 }
 
 // 本番の外の世界は、どの接点も埋まっている（main は run に渡すだけ）。場所を求める関数は呼ばない

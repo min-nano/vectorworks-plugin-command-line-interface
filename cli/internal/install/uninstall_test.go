@@ -117,7 +117,7 @@ func TestUninstallRefusesForeignFolders(t *testing.T) {
 func TestUninstallRenameFailure(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
-	failRename(t, filepath.Join(h.plugins, "cli"))
+	failRename(t, filepath.Join(h.plugins, "cli"), "")
 	before := snapshot(t, h.plugins)
 	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "current directory") {
 		t.Fatal(err)
