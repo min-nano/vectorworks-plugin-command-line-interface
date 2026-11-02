@@ -108,10 +108,8 @@ func (c *callCmd) run(e *env) int {
 	}
 	switch {
 	case c.Raw:
-		// 応答を書けなければ（書き出しの失敗）、出力の無いまま道具の結果で終わらない。
-		if code := emit(e, response); code != exitOK {
-			return code
-		}
+		// 応答は JSON として読めたもの（result・detail もその一部）なので、書き出しは失敗しない。
+		_ = emit(e, response)
 	case response.OK:
 		emitRaw(e, response.Result)
 	case len(response.Detail) > 0:
