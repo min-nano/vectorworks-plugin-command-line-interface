@@ -25,12 +25,25 @@ type result struct {
 	stderr string
 }
 
-// envVars は、コマンドが読む環境変数のすべて。
-var envVars = []string{
-	"VW2026_APP", "VW2026_SESSION",
-	"VW2026_CALL_RAW", "VW2026_CALL_TIMEOUT", "VW2026_SESSION_TIMEOUT",
-	"VW2026_REGISTRY", "VW2026_INSTALL_CHECK",
-}
+// envVars は、コマンドが読む環境変数のすべて。コマンドの定義（kong のタグ）から集める（手で並べると、
+// 指定を足したときに書き足し忘れる）。
+var envVars = func() []string {
+	seen := map[string]bool{}
+	var names []string
+	for _, node := range kong.Must(&cli{}).Model.Leaves(true) {
+		for _, group := range node.AllFlags(false) {
+			for _, flag := range group {
+				for _, name := range flag.Envs {
+					if !seen[name] {
+						seen[name] = true
+						names = append(names, name)
+					}
+				}
+			}
+		}
+	}
+	return names
+}()
 
 // opts は、テストが run に与える外の世界。零値は、何も無いスプール・環境変数なし・空の標準入力・
 // 成功する起動。
@@ -161,8 +174,7 @@ func TestCallArgsFromStdin(t *testing.T) {
 // 標準入力を読めなければ、要求を置かずに 1 で終わる。応える偽のプラグインは使わず、ロックだけを
 // 掴んでおき、終わったあとに要求も待つ印も残っていないことを見る。
 func TestCallArgsFromUnreadableStdin(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
+	dir, _ := fakeplugin.NewHeldDir(t)
 	broken := iotest.ErrReader(errors.New("broken pipe"))
 	r := invoke(t, opts{dir: dir, stdin: broken}, "call", "x", "-")
 	if r.code != exitFailure || r.stdout != "" || !strings.Contains(r.stderr, "read stdin: broken pipe") {
@@ -179,36 +191,32 @@ func TestCallArgsFromUnreadableStdin(t *testing.T) {
 	}
 }
 
+// 道具の失敗は、種別ごとの終了コードで終わり、理由を標準エラーに書く。標準出力には detail があれば
+// それだけを出し（無ければ何も出さない）、--raw なら応答ごと出す。
 func TestCallToolError(t *testing.T) {
 	dir := echoBridge(t)
-	r := invoke(t, opts{dir: dir}, "call", "fail")
-	if r.code != exitToolFailure || r.stdout != "" || !strings.Contains(r.stderr, "internal: boom") {
-		t.Fatalf("%+v", r)
-	}
-	raw := invoke(t, opts{dir: dir}, "call", "--raw", "fail")
-	if raw.code != exitToolFailure || !strings.Contains(raw.stdout, `"ok":false`) || !strings.Contains(raw.stdout, `"code":"internal"`) {
-		t.Fatalf("%+v", raw)
-	}
-}
-
-// 道具が失敗の detail を返せば、標準出力に出す（--raw なら応答ごと）。
-func TestCallToolErrorDetail(t *testing.T) {
-	dir := echoBridge(t)
-	r := invoke(t, opts{dir: dir}, "call", "explain")
-	if r.code != exitToolFailure || r.stdout != "{\"reason\":\"documents_open\"}\n" || !strings.Contains(r.stderr, "internal: open") {
-		t.Fatalf("%+v", r)
-	}
-	raw := invoke(t, opts{dir: dir}, "call", "--raw", "explain")
-	if raw.code != exitToolFailure || !strings.Contains(raw.stdout, `"detail":{"reason":"documents_open"}`) {
-		t.Fatalf("%+v", raw)
-	}
-}
-
-func TestCallToolUsageError(t *testing.T) {
-	dir := echoBridge(t)
-	r := invoke(t, opts{dir: dir}, "call", "picky")
-	if r.code != exitToolUsage || r.stdout != "" || !strings.Contains(r.stderr, "invalid_args: no such argument") {
-		t.Fatalf("%+v", r)
+	for _, c := range []struct {
+		tool   string
+		code   int
+		stderr string
+		stdout string
+		// raw は --raw の出力に含まれるもの。
+		raw string
+	}{
+		{"fail", exitToolFailure, "internal: boom", "", `"code":"internal"`},
+		{"explain", exitToolFailure, "internal: open", "{\"reason\":\"documents_open\"}\n", `"detail":{"reason":"documents_open"}`},
+		{"picky", exitToolUsage, "invalid_args: no such argument", "", `"code":"invalid_args"`},
+	} {
+		t.Run(c.tool, func(t *testing.T) {
+			r := invoke(t, opts{dir: dir}, "call", c.tool)
+			if r.code != c.code || r.stdout != c.stdout || !strings.Contains(r.stderr, c.stderr) {
+				t.Fatalf("%+v", r)
+			}
+			raw := invoke(t, opts{dir: dir}, "call", "--raw", c.tool)
+			if raw.code != c.code || !strings.Contains(raw.stdout, `"ok":false`) || !strings.Contains(raw.stdout, c.raw) {
+				t.Fatalf("%+v", raw)
+			}
+		})
 	}
 }
 
@@ -276,10 +284,13 @@ func fakeApp(t *testing.T) string {
 	return app
 }
 
+// version と --version は同じものを出す。
 func TestVersion(t *testing.T) {
-	r := invoke(t, opts{}, "version")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":6`) {
-		t.Fatalf("%+v", r)
+	for _, arg := range []string{"version", "--version"} {
+		r := invoke(t, opts{}, arg)
+		if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":6`) {
+			t.Fatalf("%s: %+v", arg, r)
+		}
 	}
 }
 
@@ -287,9 +298,7 @@ func TestVersion(t *testing.T) {
 // （保存の確認のダイアログを開いている間など）。返す関数で終了を真似る。
 func busySpool(t *testing.T) (string, func()) {
 	t.Helper()
-	dir := fakeplugin.NewDir(t)
-	release := fakeplugin.HoldLock(t, dir)
-	return dir, release
+	return fakeplugin.NewHeldDir(t)
 }
 
 func TestCallWhileBusyTimesOut(t *testing.T) {
@@ -341,13 +350,6 @@ func TestHelp(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 	if r := invoke(t, opts{}, "help", "nope"); r.code != exitUsage {
-		t.Fatalf("%+v", r)
-	}
-}
-
-func TestVersionFlag(t *testing.T) {
-	r := invoke(t, opts{}, "--version")
-	if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":6`) {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -572,10 +574,6 @@ func TestSpoolNotLocated(t *testing.T) {
 // TestEveryFlagHasEnv は、ヘルプを除くすべての指定に環境変数があり、invoke がそれを
 // 置き直すこと、オン・オフの指定が --no-<flag> を持つことを確かめる（指定を足して環境変数を付け忘れないように）。
 func TestEveryFlagHasEnv(t *testing.T) {
-	known := map[string]bool{}
-	for _, name := range envVars {
-		known[name] = true
-	}
 	for _, node := range kong.Must(&cli{}).Model.Leaves(true) {
 		for _, group := range node.AllFlags(false) {
 			for _, flag := range group {
@@ -596,11 +594,6 @@ func TestEveryFlagHasEnv(t *testing.T) {
 				}
 				if len(flag.Envs) == 0 {
 					t.Errorf("%s --%s has no environment variable", node.Path(), flag.Name)
-				}
-				for _, name := range flag.Envs {
-					if !known[name] {
-						t.Errorf("%s is missing from envVars", name)
-					}
 				}
 			}
 		}

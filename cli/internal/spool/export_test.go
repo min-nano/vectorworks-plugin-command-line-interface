@@ -17,3 +17,6 @@ func SetTakenGrace(t *testing.T, d time.Duration) {
 	takenGrace = d
 	t.Cleanup(func() { takenGrace = old })
 }
+
+// CheckResponse は、届いた応答の確かめ（checkResponse）をファイルを使わずに呼ばせる。
+var CheckResponse = checkResponse
