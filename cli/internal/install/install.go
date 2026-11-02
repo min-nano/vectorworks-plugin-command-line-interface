@@ -132,9 +132,6 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 	if err := CheckRegistries(o.Registries); err != nil {
 		return nil, err
 	}
-	if err := checkCLI(p.plugins, name); err != nil {
-		return nil, err
-	}
 	result := &InstallResult{
 		Name:       name,
 		Requested:  requested,
@@ -142,13 +139,13 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 		Target:     o.Target,
 		PluginsDir: p.plugins,
 	}
-	// Vectorworks が動いていれば、レジストリ・マニフェストを取る前に答える（ネットワークの誤りや記録の誤りより先に、
-	// 終了コード 6。同じタグでも動いていればフックを走らせない）。--check は動いていてもよい。付け替えの直前にも
+	// cli の記録と、Vectorworks が動いているかを、レジストリ・マニフェストを取る前に答える（ネットワークの誤りや
+	// 記録の誤りより先に。同じタグでも動いていればフックを走らせない）。--check は動いていてもよい。付け替えの直前にも
 	// もう一度見る（replace）。
-	if !check {
-		if err := stopped(p); err != nil {
-			return result, err
-		}
+	if err := precheck(p, name, !check); errors.Is(err, ErrRunning) {
+		return result, err
+	} else if err != nil {
+		return nil, err
 	}
 	entry, source, err := o.lookup(name)
 	if err != nil {
