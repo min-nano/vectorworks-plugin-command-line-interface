@@ -363,10 +363,13 @@ func TestNoCLIIsAnsweredBeforeRunning(t *testing.T) {
 	h.mustInstall(release{name: "demo", tag: "d1"})
 	os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
 	defer h.holdLock()()
-	if _, err := h.install("demo", "d1"); errors.Is(err, ErrRunning) || err == nil || !strings.Contains(err.Error(), "has no cli") {
+	noCLI := func(err error) bool {
+		return err != nil && !errors.Is(err, ErrRunning) && strings.Contains(err.Error(), "has no cli")
+	}
+	if _, err := h.install("demo", "d1"); !noCLI(err) {
 		t.Fatalf("install: %v", err)
 	}
-	if _, err := Uninstall(h.options(), "demo"); errors.Is(err, ErrRunning) || err == nil || !strings.Contains(err.Error(), "has no cli") {
+	if _, err := Uninstall(h.options(), "demo"); !noCLI(err) {
 		t.Fatalf("uninstall: %v", err)
 	}
 	if !exist(filepath.Join(h.plugins, "demo")) {

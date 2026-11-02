@@ -32,8 +32,8 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	// install と同じ順に、cli の記録を Vectorworks が動いているかより先に確かめる。cli の無い <Plug-Ins> では
-	// 動いているかを判定できず、Vectorworks を終えて走らせ直しても通らない誤りを先に答える。
+	// install と同じ順に、cli の記録を Vectorworks が動いているかより先に確かめる。cli の記録の誤りは、
+	// Vectorworks を終えて走らせ直しても通らないので、先に答える（終了コード 6 で待たせない）。
 	if err := checkCLI(p.plugins, name); err != nil {
 		return nil, err
 	}
