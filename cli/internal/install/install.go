@@ -172,24 +172,11 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 	upToDate := rule.ByTag() && same(requested)
 	// タグで直接指す規則で、入っているものと同じタグとターゲットなら、マニフェストも取らない。
 	if !upToDate {
-		location := rule.Location(requested)
-		data, err := o.fetch(location)
+		result.Tag, asset, err = o.manifestAsset(rule, name, requested)
 		if err != nil {
-			return nil, fmt.Errorf("manifest: %w", err)
+			return nil, err
 		}
-		manifest, err := registry.ParseManifest(data, registry.IsURL(location))
-		if err != nil {
-			return nil, fmt.Errorf("manifest %s: %w", location, err)
-		}
-		if rule.ByTag() && manifest.Tag != requested {
-			return nil, fmt.Errorf("manifest %s has tag %q, not %q", location, manifest.Tag, requested)
-		}
-		asset, ok = manifest.Targets[o.Target]
-		if !ok {
-			return nil, fmt.Errorf("%s@%s does not support %s", name, manifest.Tag, o.Target)
-		}
-		result.Tag = manifest.Tag
-		upToDate = same(manifest.Tag)
+		upToDate = same(result.Tag)
 	}
 	if check {
 		result.Outcome = OutcomeAvailable
@@ -251,6 +238,28 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 	result.Outcome = OutcomeInstalled
 	result.Hook = hook
 	return result, nil
+}
+
+// manifestAsset は、規則 rule の指すマニフェストを取り、そのタグと今のターゲットの asset を返す
+// （docs/plugin/install-and-update.md「流れ」の 4）。
+func (o *Options) manifestAsset(rule registry.Rule, name, requested string) (string, registry.Asset, error) {
+	location := rule.Location(requested)
+	data, err := o.fetch(location)
+	if err != nil {
+		return "", registry.Asset{}, fmt.Errorf("manifest: %w", err)
+	}
+	manifest, err := registry.ParseManifest(data, registry.IsURL(location))
+	if err != nil {
+		return "", registry.Asset{}, fmt.Errorf("manifest %s: %w", location, err)
+	}
+	if rule.ByTag() && manifest.Tag != requested {
+		return "", registry.Asset{}, fmt.Errorf("manifest %s has tag %q, not %q", location, manifest.Tag, requested)
+	}
+	asset, ok := manifest.Targets[o.Target]
+	if !ok {
+		return "", registry.Asset{}, fmt.Errorf("%s@%s does not support %s", name, manifest.Tag, o.Target)
+	}
+	return manifest.Tag, asset, nil
 }
 
 // inspect は入れる先のフォルダを確かめる（docs/plugin/install-and-update.md「入れる先のフォルダ」）。
