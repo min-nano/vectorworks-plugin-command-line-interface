@@ -106,18 +106,24 @@ func (c *callCmd) run(e *env) int {
 	if err != nil {
 		return failed(e, bridge, err)
 	}
+	code := exitOK
 	switch {
 	case c.Raw:
-		// 応答は JSON として読めたもの（result・detail もその一部）なので、書き出しは失敗しない。
-		_ = emit(e, response)
+		code = emit(e, response)
 	case response.OK:
-		emitRaw(e, response.Result)
+		code = emitRaw(e, response.Result)
 	case len(response.Detail) > 0:
 		// 呼ぶ側が失敗の原因を機械的に読めるように（docs/protocol.md「応答」の detail）。
-		emitRaw(e, response.Detail)
+		code = emitRaw(e, response.Detail)
 	}
 	if !response.OK {
 		fmt.Fprintf(e.stderr, "vw2026: %s: %s: %s\n", c.Tool, response.Code, response.Error)
+	}
+	// 出力を書けなければ、道具の結果より先にその失敗で終わる（空や途中までの出力を正しいものとして扱わせない）。
+	if code != exitOK {
+		return code
+	}
+	if !response.OK {
 		return toolCodeFor(response.Code)
 	}
 	return exitOK

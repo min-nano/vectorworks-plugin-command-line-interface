@@ -163,8 +163,8 @@ struct ToolContext {
 using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolStatus &status);
 
 struct Tool {
-	// [a-z0-9_]+(\.[a-z0-9_]+)*
-	const char *name;
+	// [a-z0-9_]+(\.[a-z0-9_]+)*（通信規則の綴りの std::string_view をそのまま使える）
+	std::string_view name;
 	// 日本語。呼ぶ側がそのまま読む。
 	const char *description;
 	// JSON Schema（文字列）。tools の結果にそのまま載る。

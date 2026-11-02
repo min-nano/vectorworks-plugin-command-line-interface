@@ -310,11 +310,15 @@ func emit(e *env, value any) int {
 		fmt.Fprintf(e.stderr, "vw2026: encode output: %v\n", err)
 		return exitFailure
 	}
-	emitRaw(e, data)
-	return exitOK
+	return emitRaw(e, data)
 }
 
-// emitRaw は data をそのまま 1 行で書く。
-func emitRaw(e *env, data []byte) {
-	fmt.Fprintf(e.stdout, "%s\n", data)
+// emitRaw は data をそのまま 1 行で書く。書けなければ（ディスクが一杯・読む側がパイプを閉じた）失敗の終了コードを
+// 返す（呼ぶ側のスクリプトが、空や途中までの出力を正しいものとして扱わないように）。
+func emitRaw(e *env, data []byte) int {
+	if _, err := fmt.Fprintf(e.stdout, "%s\n", data); err != nil {
+		fmt.Fprintf(e.stderr, "vw2026: write output: %v\n", err)
+		return exitFailure
+	}
+	return exitOK
 }

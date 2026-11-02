@@ -50,6 +50,13 @@ func TestCommandExplicitMustBeAFile(t *testing.T) {
 	}
 }
 
+// Vectorworks の動かない OS では、既定のものを起動しない。
+func TestCommandUnsupportedOS(t *testing.T) {
+	if argv, err := command("plan9", ""); err == nil {
+		t.Fatalf("want an error, got %v", argv)
+	}
+}
+
 func TestCommandDefault(t *testing.T) {
 	switch runtime.GOOS {
 	case "darwin":

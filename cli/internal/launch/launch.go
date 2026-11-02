@@ -5,8 +5,8 @@
 // 動いていれば起動しない（実行ファイルを直接起動すると 2 つ目が立ち上がりうる）。どちらも
 // 既に動いていたときを成功とし、OS によって結果を変えない。
 // 既定の場所を探し回らない（ほかの場所は app で明示する）。
-// app（VW2026_APP）で明示でき、.app で終わらなければ実行ファイルとしてそのまま起動する
-// （テスト用の代替プログラムもこの経路）。
+// app で明示でき、.app で終わらなければ実行ファイルとしてそのまま起動する（テスト用の代替プログラムも
+// この経路）。app をどの指定（フラグ・環境変数）で受けるかは呼ぶ側が決め、誤りの案内も呼ぶ側が付ける。
 package launch
 
 import (
@@ -28,13 +28,18 @@ const defaultWindowsExe = `Vectorworks 2026\Vectorworks2026.exe`
 
 // Command は起動するコマンド（argv）を返す。
 func Command(app string) ([]string, error) {
-	if app != "" && !(runtime.GOOS == "darwin" && strings.HasSuffix(strings.TrimRight(app, "/"), ".app")) {
+	return command(runtime.GOOS, app)
+}
+
+// command は goos での Command（テストが、走っている OS のほかの道も確かめる）。
+func command(goos, app string) ([]string, error) {
+	if app != "" && !(goos == "darwin" && strings.HasSuffix(strings.TrimRight(app, "/"), ".app")) {
 		if info, err := os.Stat(app); err != nil || info.IsDir() {
-			return nil, fmt.Errorf("--app (VW2026_APP) does not point to a file: %s", app)
+			return nil, fmt.Errorf("%s is not a file", app)
 		}
 		return []string{app}, nil
 	}
-	switch runtime.GOOS {
+	switch goos {
 	case "darwin":
 		if app == "" {
 			app = DefaultMacApp
@@ -45,9 +50,9 @@ func Command(app string) ([]string, error) {
 		if info, err := os.Stat(exe); err == nil && !info.IsDir() {
 			return []string{exe}, nil
 		}
-		return nil, fmt.Errorf("Vectorworks 2026 was not found at %s; name Vectorworks2026.exe with --app (VW2026_APP)", exe)
+		return nil, fmt.Errorf("Vectorworks 2026 was not found at %s", exe)
 	default:
-		return nil, errors.New("launching is not supported on this OS; set VW2026_APP")
+		return nil, errors.New("launching Vectorworks is not supported on this OS")
 	}
 }
 
