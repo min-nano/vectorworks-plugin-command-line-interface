@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -333,8 +334,10 @@ func TestInstallRefusesForeignFolders(t *testing.T) {
 	}
 }
 
-// cli 以外は、cli が入っている <Plug-Ins> にだけ入れ、そこからだけ外す（Vectorworks が動いているかを
-// <Plug-Ins>/cli/spool のロックで判定するため）。
+// cli 以外は、cli が入っている <Plug-Ins> にだけ入れ、そこからだけ外す（Vectorworks が
+// 動いているかを <Plug-Ins>/cli/spool のロックで判定するため）。cli の記録の module が
+// 無ければ、Vectorworks が動いていても、install と uninstall はどちらも cli の記録の誤りを
+// 答え（同じ順に確かめる）、<Plug-Ins> も <Work> も変えない。
 func TestOtherPluginNeedsCLI(t *testing.T) {
 	h := newHarness(t)
 	h.publish(release{name: "demo", tag: "d1"})
@@ -344,36 +347,26 @@ func TestOtherPluginNeedsCLI(t *testing.T) {
 	if exist(filepath.Join(h.plugins, "demo")) {
 		t.Fatal("installed without cli")
 	}
-	h.installCLI()
-	h.mustInstall(release{name: "demo", tag: "d1"})
-	os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
-	if _, err := Uninstall(h.options(), "demo"); err == nil || !strings.Contains(err.Error(), "has no cli") {
-		t.Fatal(err)
-	}
-	if !exist(filepath.Join(h.plugins, "demo")) {
-		t.Fatal("uninstalled without cli")
-	}
-}
-
-// cli の記録が無く、Vectorworks も動いているとき、install と uninstall はどちらも cli の記録の誤りを答える
-// （同じ順に確かめる。cli の無い <Plug-Ins> では動いているかを判定できない）。
-func TestNoCLIIsAnsweredBeforeRunning(t *testing.T) {
-	h := newHarness(t)
-	h.installCLI()
-	h.mustInstall(release{name: "demo", tag: "d1"})
-	os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
-	defer h.holdLock()()
-	noCLI := func(err error) bool {
-		return err != nil && !errors.Is(err, ErrRunning) && strings.Contains(err.Error(), "has no cli")
-	}
-	if _, err := h.install("demo", "d1"); !noCLI(err) {
-		t.Fatalf("install: %v", err)
-	}
-	if _, err := Uninstall(h.options(), "demo"); !noCLI(err) {
-		t.Fatalf("uninstall: %v", err)
-	}
-	if !exist(filepath.Join(h.plugins, "demo")) {
-		t.Fatal("uninstalled without cli")
+	for _, running := range []bool{false, true} {
+		t.Run(fmt.Sprintf("running=%v", running), func(t *testing.T) {
+			h := newHarness(t)
+			h.installCLI()
+			h.mustInstall(release{name: "demo", tag: "d1"})
+			os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
+			if running {
+				defer h.holdLock()()
+			}
+			plugins, work := snapshot(t, h.plugins), snapshot(t, h.work)
+			install := func() error { _, err := h.install("demo", "d1"); return err }
+			uninstall := func() error { _, err := Uninstall(h.options(), "demo"); return err }
+			for name, run := range map[string]func() error{"install": install, "uninstall": uninstall} {
+				if err := run(); err == nil || !strings.Contains(err.Error(), "has no cli") {
+					t.Errorf("%s: %v", name, err)
+				}
+			}
+			sameSnapshot(t, plugins, snapshot(t, h.plugins))
+			sameSnapshot(t, work, snapshot(t, h.work))
+		})
 	}
 }
 
