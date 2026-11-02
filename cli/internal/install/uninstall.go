@@ -163,15 +163,15 @@ func runningResult(name string) *UninstallResult {
 }
 
 // removeEmptyWork は、<Work> に staging / old の空のディレクトリしか無ければ、<Work> ごと消す。
-// staging / old は空のディレクトリのときだけ消し、<Work> は空になったときだけ消える（removeFile の os.Remove は
+// staging / old は空のディレクトリのときだけ消し、<Work> は空になったときだけ消える（os.Remove は
 // 空でないディレクトリを消さない）。
 func removeEmptyWork(p places) {
 	for _, dir := range []string{p.staging, p.old} {
 		if entries, err := os.ReadDir(dir); err == nil && len(entries) == 0 {
-			_ = removeFile(dir)
+			_ = os.Remove(dir)
 		}
 	}
-	_ = removeFile(p.work)
+	_ = os.Remove(p.work)
 }
 
 // installedIn は、<Plug-Ins> の直下で、名前の一致する記録のあるフォルダの名前を返す。

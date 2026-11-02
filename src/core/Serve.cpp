@@ -150,6 +150,7 @@ std::optional<Json> refuseOutsideSession(const std::string &current, const Reque
 // runTool は道具を実行して応答を返す（通信規則「応答」）。道具 1 つの失敗で橋を止めないよう、
 // 例外はここで受ける。quit は、道具が成功して終了の依頼を立てたときだけ真にする。
 Json runTool(const Tool &tool, const Json &args, const ToolContext &context, bool &quit) {
+	quit = false;
 	ToolStatus status;
 	Json result;
 	try {

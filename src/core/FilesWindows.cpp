@@ -187,7 +187,8 @@ bool makeDirectories(const std::string &path, std::string &error) {
 	if (isDirectory(wide)) {
 		return true;
 	}
-	// root はルートの終わりの \ の位置（UNC の share が無ければ npos で、何も作りに行かない）。
+	// root はルートの終わりの \ の位置。UNC で share の後ろに \ が無ければ npos で、
+	// 途中のフォルダは作らない（path そのものは下の CreateDirectoryW が作りに行く）。
 	std::size_t root = 0;
 	if (wide.starts_with(kExtendedUncPrefix)) {
 		// \\?\UNC\server\share\ の share の後ろの \。
