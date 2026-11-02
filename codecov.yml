@@ -6,3 +6,10 @@ fixes:
 # The fake plugin is test code; keep the numbers about production code only.
 ignore:
   - "cli/internal/fakeplugin"
+# Report only after all four coverage uploads for a commit have arrived (go.yml and
+# cpp.yml, each on macOS and Windows). Some lines run on one OS only, so a status
+# sent after the first upload marks codecov/patch as failed, and the merge queue
+# drops the pull request on that first failure.
+codecov:
+  notify:
+    after_n_builds: 4
