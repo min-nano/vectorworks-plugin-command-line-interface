@@ -108,7 +108,10 @@ func (c *callCmd) run(e *env) int {
 	}
 	switch {
 	case c.Raw:
-		_ = emit(e, response)
+		// 応答を書けなければ（書き出しの失敗）、出力の無いまま道具の結果で終わらない。
+		if code := emit(e, response); code != exitOK {
+			return code
+		}
 	case response.OK:
 		emitRaw(e, response.Result)
 	case len(response.Detail) > 0:
