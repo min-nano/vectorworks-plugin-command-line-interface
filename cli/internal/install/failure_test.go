@@ -1098,7 +1098,6 @@ func TestUninstallCLIHookSuccessWhileLockedInOld(t *testing.T) {
 	done := lockAtWhenSignaled(h, filepath.Join(old, spool.SpoolDirName), signal, await)
 	result, err := Uninstall(h.options(), "cli")
 	<-done
-	// フォルダを移してフックも走らせたので、「何もしなかった」の ErrRunning にはしない。
 	if err == nil || errors.Is(err, ErrRunning) || result != nil || !strings.Contains(err.Error(), old) {
 		t.Fatalf("%+v %v", result, err)
 	}
