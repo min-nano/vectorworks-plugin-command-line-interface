@@ -1,6 +1,8 @@
 package install
 
 import (
+	"archive/zip"
+	"bytes"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -144,23 +146,51 @@ func TestInstallSameTagWithoutTheHookFile(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// zip でないもの・ファイルでない項目は断る。
+// 展開を失敗にするもの: zip でないもの・ファイルでない項目・展開先の中にとどまる ..（区切りの .. は名前に
+// 使えない）・ファイルの項目の下の項目（フォルダを作れない）・知らない圧縮の方法の項目（読めない）。
 func TestExtractRefuses(t *testing.T) {
+	for name, c := range map[string]struct {
+		zip func(t *testing.T) []byte
+		// want は誤りの文言に含まれるもの（空なら失敗するだけを見る）。
+		want string
+	}{
+		"not a zip": {func(*testing.T) []byte { return []byte("not a zip") }, ""},
+		"device": {func(t *testing.T) []byte {
+			return makeZip(t, []entry{{name: "dev", mode: os.ModeDevice | 0o644}})
+		}, "not a file"},
+		"dot dot inside": {func(t *testing.T) []byte { return makeZip(t, []entry{{name: "a/../b", body: "x"}}) }, "contains .."},
+		"file under a file": {func(t *testing.T) []byte {
+			return makeZip(t, []entry{{name: "a", body: "file"}, {name: "a/b", body: "x"}})
+		}, ""},
+		"unknown compression": {func(t *testing.T) []byte {
+			var buf bytes.Buffer
+			w := zip.NewWriter(&buf)
+			f, err := w.CreateRaw(&zip.FileHeader{Name: "a", Method: 99})
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.Write([]byte("x"))
+			w.Close()
+			return buf.Bytes()
+		}, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "x.zip")
+			os.WriteFile(path, c.zip(t), 0o644)
+			if _, err := extract(path, filepath.Join(dir, "out")); err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// 項目の中のディレクトリは作る。
+func TestExtractMakesFolders(t *testing.T) {
 	dir := t.TempDir()
-	notZip := filepath.Join(dir, "x.zip")
-	os.WriteFile(notZip, []byte("not a zip"), 0o644)
-	if _, err := extract(notZip, filepath.Join(dir, "out")); err == nil {
-		t.Fatal("should refuse something that is not a zip")
-	}
-	device := filepath.Join(dir, "device.zip")
-	os.WriteFile(device, makeZip(t, []entry{{name: "dev", mode: os.ModeDevice | 0o644}}), 0o644)
-	if _, err := extract(device, filepath.Join(dir, "out2")); err == nil || !strings.Contains(err.Error(), "not a file") {
-		t.Fatal(err)
-	}
-	// 項目の中のディレクトリは作る。
-	folders := filepath.Join(dir, "folders.zip")
-	os.WriteFile(folders, makeZip(t, []entry{{name: "a/", mode: os.ModeDir | 0o755}, {name: "a/b/c", body: "c"}}), 0o644)
-	if _, err := extract(folders, filepath.Join(dir, "out3")); err != nil || !exist(filepath.Join(dir, "out3", "a", "b", "c")) {
+	path := filepath.Join(dir, "folders.zip")
+	os.WriteFile(path, makeZip(t, []entry{{name: "a/", mode: os.ModeDir | 0o755}, {name: "a/b/c", body: "c"}}), 0o644)
+	if _, err := extract(path, filepath.Join(dir, "out")); err != nil || !exist(filepath.Join(dir, "out", "a", "b", "c")) {
 		t.Fatal(err)
 	}
 }

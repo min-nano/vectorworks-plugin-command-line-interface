@@ -466,14 +466,12 @@ func sameSnapshot(t *testing.T, before, after map[string]string) {
 // failRename は、from からの名前の変更を失敗させる。
 func failRename(t *testing.T, from string) {
 	t.Helper()
-	original := rename
-	rename = func(oldpath, newpath string) error {
+	renameWhen(t, func(oldpath, newpath string) error {
 		if oldpath == from {
 			return &os.LinkError{Op: "rename", Old: oldpath, New: newpath, Err: os.ErrPermission}
 		}
-		return original(oldpath, newpath)
-	}
-	t.Cleanup(func() { rename = original })
+		return nil
+	})
 }
 
 // fileURL は、絶対パス path を指す file:// の URL（Windows は file:///C:/…。空白などは %XX にする）。
