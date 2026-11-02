@@ -11,10 +11,9 @@ import (
 
 type uninstallCmd struct {
 	Name string `arg:"" help:"Plug-in to uninstall, such as cli."`
-	// 初回のスクリプトだけが一時フォルダの CLI に渡す隠した指定（help に出さず、環境変数も持たない。入った CLI は
-	// 自分の入った <Plug-Ins> を使い、これを断る）。与えていない（nil）と空の値（使い方の誤り）を分けるため、
-	// ポインタで受ける。
-	PluginsDir *string `name:"plugins-dir" hidden:"" placeholder:"DIR" help:"Folder of plug-ins, for the first-time script only."`
+
+	// 初回のスクリプトだけが渡す --plugins-dir（pluginsDirFlag）
+	pluginsDirFlag `embed:""`
 }
 
 func (uninstallCmd) Help() string {
@@ -95,9 +94,7 @@ func (c *uninstallCmd) run(e *env) int {
 	var inside *install.RunsInsideError
 	switch {
 	case errors.Is(err, install.ErrRunning):
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
-		emit(e, result)
-		return exitRunning
+		return deployRunning(e, err, result)
 	case errors.As(err, &inside):
 		// 入れた cli の vw2026 では外さず、入っているタグの初回のスクリプトと CLI で外すよう案内する。
 		// PR のプレリリースは PR を閉じると消えるので、latest で外すコマンドも示す。

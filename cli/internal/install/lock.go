@@ -44,6 +44,10 @@ func running(p places) bool {
 	return held || err != nil
 }
 
+// startedMeanwhile は、フックの間（始めの確かめのあと）に Vectorworks が起動したとみなしたときの文言（running が
+// 真。install と uninstall で同じに書く）。
+const startedMeanwhile = "Vectorworks started meanwhile (or its lock cannot be read)"
+
 // checkCLI は、cli 以外を入れる・外すときに、<Plug-Ins>/cli/ に正しい記録があるかを確かめる。
 // cli の無い <Plug-Ins> では Vectorworks が動いているかを判定できないため。
 func checkCLI(plugins, name string) error {

@@ -13,13 +13,12 @@ import (
 type installCmd struct {
 	Plugin string `arg:"" placeholder:"NAME@TAG" help:"Plug-in to install and its tag, such as cli@latest."`
 	Check  bool   `env:"VW2026_INSTALL_CHECK" negatable:"" help:"Only tell whether a new build is available; change nothing."`
-	// 初回のスクリプトだけが一時フォルダの CLI に渡す隠した指定（help に出さず、環境変数も持たない。入った CLI は
-	// 自分の入った <Plug-Ins> を使い、これを断る）。与えていない（nil）と空の値（使い方の誤り）を分けるため、
-	// ポインタで受ける。
-	PluginsDir *string `name:"plugins-dir" hidden:"" placeholder:"DIR" help:"Folder of plug-ins, for the first-time script only."`
 	// sep:"none" で、URL のコンマで分けない（kong は既定で、引数と環境変数の値をコンマで分ける）。空白で
 	// 分けるのは run の中（URL は空白を含まない）。
 	Registry []string `env:"VW2026_REGISTRY" sep:"none" placeholder:"URL" help:"Registry (an https:// or a file:// URL) to look the name up in after the default one (repeatable; spaces separate several; an empty value is wrong usage)."`
+
+	// 初回のスクリプトだけが渡す --plugins-dir（pluginsDirFlag）
+	pluginsDirFlag `embed:""`
 }
 
 func (installCmd) Help() string {
@@ -145,13 +144,18 @@ func (c *installCmd) run(e *env) int {
 	result, err := install.Install(options, name, tag, c.Check)
 	if err != nil {
 		if errors.Is(err, install.ErrRunning) {
-			fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
-			emit(e, result)
-			return exitRunning
+			return deployRunning(e, err, result)
 		}
 		return deployFailed(e, name, err)
 	}
 	return emit(e, result)
+}
+
+// pluginsDirFlag は、初回のスクリプトだけが一時フォルダの CLI に渡す隠した指定（install と uninstall で同じ。help に
+// 出さず、環境変数も持たない。入った CLI は自分の入った <Plug-Ins> を使い、これを断る）。与えていない（nil）と空の値
+// （使い方の誤り）を分けるため、ポインタで受ける。
+type pluginsDirFlag struct {
+	PluginsDir *string `name:"plugins-dir" hidden:"" placeholder:"DIR" help:"Folder of plug-ins, for the first-time script only."`
 }
 
 // deployOptions は install / uninstall に渡す場所を env から求める。<Plug-Ins> は、入った CLI なら自分の入った
@@ -202,6 +206,14 @@ func deployOptions(e *env, given *string) (install.Options, error) {
 func isTerminal(w io.Writer) bool {
 	file, ok := w.(*os.File)
 	return ok && terminal(file.Fd())
+}
+
+// deployRunning は、Vectorworks が動いていて何もしなかったこと（ErrRunning）を標準エラーと標準出力の JSON（result）に
+// 書き、終了コード 6 を返す。
+func deployRunning(e *env, err error, result any) int {
+	fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+	emit(e, result)
+	return exitRunning
 }
 
 // deployFailed は失敗を標準出力の JSON（message）と標準エラーに書き、終了コードを返す。

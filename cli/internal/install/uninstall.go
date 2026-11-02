@@ -84,7 +84,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 			return nil, err
 		}
 		if err := rename(p.dest, p.oldDir); err != nil {
-			_ = os.Remove(p.marker)
+			_ = removeFile(p.marker)
 			return nil, renameError(p.dest, err)
 		}
 	case exists(p.oldDir):
@@ -97,13 +97,10 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		}
 		resumed = true
 	default:
-		_ = os.Remove(p.marker)
-		// 前の回が消しきれなかった組み立ての場所（discard の残り）・よけた CLI・空の <Work> も、外したときと同じく
-		// 片付ける（初回のスクリプトの uninstall が、入っていなくても何も残さないように）。
+		// 前の回が消しきれなかった組み立ての場所（discard の残り）・続ける先の無い印・よけた CLI・空の <Work> も、
+		// 外したときと同じく片付ける（初回のスクリプトの uninstall が、入っていなくても何も残さないように）。
 		_ = removeStaging(p)
-		left := cleanOldCLIs(p.old)
-		removeEmptyWork(p)
-		return &UninstallResult{Outcome: OutcomeNotInstall, Name: name, Remaining: installedIn(p.plugins), Left: left}, nil
+		return finishUninstall(p, name, OutcomeNotInstall, nil), nil
 	}
 
 	hook, err := o.runHook("uninstall", record.Hooks.Uninstall, p.oldDir, hookEnv{
@@ -117,39 +114,37 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		// 戻す前にロックを見る（install の undoHook と同じ）。フックの間に起動した Vectorworks の下へ
 		// フォルダを戻さず、印を残して、終了してからの uninstall が続きから走れるようにする。
 		if running(p) {
-			return nil, fmt.Errorf("%w; Vectorworks started meanwhile (or its lock cannot be read), so %s stays in %s: "+
-				"quit Vectorworks, then run "+
-				"uninstall again (it goes on from the hook)", err, name, p.oldDir)
+			return nil, fmt.Errorf("%w; %s, so %s stays in %s: quit Vectorworks, then run uninstall again "+
+				"(it goes on from the hook)", err, startedMeanwhile, name, p.oldDir)
 		}
 		if renameErr := rename(p.oldDir, p.dest); renameErr != nil {
 			return nil, fmt.Errorf("%w; %s cannot be put back (%v): move it back to %s by hand", err, p.oldDir, renameErr, p.dest)
 		}
-		_ = os.Remove(p.marker)
+		_ = removeFile(p.marker)
 		return nil, fmt.Errorf("%w; %s is put back", err, p.dest)
 	}
 	// フックの間に Vectorworks が起動していれば消さない（cli は、移したフォルダのスプールとロックを、動いている
 	// Vectorworks が使っているかもしれない）。印を残すので、終了してからの uninstall が続きから走る。フォルダを
 	// 移してフックも走らせたので、「何もしなかった」の ErrRunning（終了コード 6）ではなく、失敗にする。
 	if running(p) {
-		return nil, fmt.Errorf("the uninstall hook ran, but Vectorworks started meanwhile (or its lock cannot be read), "+
-			"so %s stays in %s: quit "+
-			"Vectorworks, then run uninstall again (it goes on from the hook)", name, p.oldDir)
+		return nil, fmt.Errorf("the uninstall hook ran, but %s, so %s stays in %s: quit Vectorworks, then run "+
+			"uninstall again (it goes on from the hook)", startedMeanwhile, name, p.oldDir)
 	}
 	// 組み立ての場所へ移してから消す（消すのが途中で止まっても、記録の消えた半分のフォルダを old に残さない）。
 	if err := o.discard(p, name); err != nil {
 		return nil, fmt.Errorf("%s is out of the folder of plug-ins, but %s cannot be deleted (%v); run uninstall again",
 			name, p.oldDir, err)
 	}
-	_ = os.Remove(p.marker)
+	return finishUninstall(p, name, OutcomeUninstalled, hook), nil
+}
+
+// finishUninstall は、外し終えたとき（uninstalled）と入っていなかったとき（not_installed）の後始末と出力。印を消し、
+// よけた CLI を消してみて、空の <Work> を消す。
+func finishUninstall(p places, name, outcome string, hook json.RawMessage) *UninstallResult {
+	_ = removeFile(p.marker)
 	left := cleanOldCLIs(p.old)
 	removeEmptyWork(p)
-	return &UninstallResult{
-		Outcome:   OutcomeUninstalled,
-		Name:      name,
-		Hook:      hook,
-		Remaining: installedIn(p.plugins),
-		Left:      left,
-	}, nil
+	return &UninstallResult{Outcome: outcome, Name: name, Hook: hook, Remaining: installedIn(p.plugins), Left: left}
 }
 
 // runningResult は、Vectorworks が動いていて止めたときの出力（どこで分かっても同じ形にする）。
@@ -158,15 +153,15 @@ func runningResult(name string) *UninstallResult {
 }
 
 // removeEmptyWork は、<Work> に staging / old の空のディレクトリしか無ければ、<Work> ごと消す。
-// staging / old は空のディレクトリのときだけ消し、<Work> は空になったときだけ消える（os.Remove は
+// staging / old は空のディレクトリのときだけ消し、<Work> は空になったときだけ消える（removeFile の os.Remove は
 // 空でないディレクトリを消さない）。
 func removeEmptyWork(p places) {
 	for _, dir := range []string{p.staging, p.old} {
 		if entries, err := os.ReadDir(dir); err == nil && len(entries) == 0 {
-			_ = os.Remove(dir)
+			_ = removeFile(dir)
 		}
 	}
-	_ = os.Remove(p.work)
+	_ = removeFile(p.work)
 }
 
 // installedIn は、<Plug-Ins> の直下で、名前の一致する記録のあるフォルダの名前を返す。

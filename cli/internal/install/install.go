@@ -223,7 +223,7 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 	// ので、そのときは <Plug-Ins>/<name>/ が無い）。どの道でも先に消す（残すと、このあとの install が付け替えの
 	// 途中で止まったときに、次の uninstall がそれを中断した uninstall とみなし、唯一残った old/<name>/ を消す）。
 	if installed != nil {
-		_ = os.Remove(p.marker)
+		_ = removeFile(p.marker)
 	}
 	if upToDate {
 		// 同じタグなら、zip を取らず付け替えもせずに、記録に写したフックだけを走らせる。始めの確かめのあと、レジストリと

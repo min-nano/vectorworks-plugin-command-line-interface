@@ -356,6 +356,10 @@ func TestCallTakenThenAnsweredInGrace(t *testing.T) {
 		{"malformed", `{"ok":tr`, func(_ *Response, err error) bool {
 			return errors.Is(err, ErrMalformedResponse)
 		}},
+		// null は JSON として読めるが、応答のオブジェクトではない（届かなかったとみなして待ち続けない）。
+		{"null", `null`, func(_ *Response, err error) bool {
+			return errors.Is(err, ErrMalformedResponse)
+		}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			SetTakenGrace(t, 5*time.Second)

@@ -104,7 +104,7 @@ func (o *Options) finishInstall(p places, name, tag string, moved *movedCLI, had
 		fmt.Fprintf(o.stderr(), "vw2026: the previous version is kept in %s%s\n", keptDir, note)
 	}
 	_ = removeStaging(p)
-	_ = os.Remove(p.marker)
+	_ = removeFile(p.marker)
 	// この回がよけた CLI を前の版へ戻したとき（戻せなかったときは、手で戻す場所として知らせている。undoHook の keep
 	// と同じ）は、よけた CLI を消さない。次の install・uninstall が消す。よけていなければ、前の回までの残りを消してみる。
 	if moved == nil || keptDir == "" {
@@ -140,12 +140,12 @@ func (o *Options) undoHook(p places, hadOld bool, moved *movedCLI, cause error) 
 			note = moved.restoreInto(p.dest, p.oldDir)
 		}
 		// 取った zip はもう要らない（同じタグで走らせ直す install は zip を取らない）。
-		_ = os.Remove(p.stageZip)
+		_ = removeFile(p.stageZip)
 		return fmt.Errorf("%w; %s, so the new version stays in %s%s: quit Vectorworks, "+
 			"then run install with the same tag again (it runs only the hook)%s", cause, reason, p.dest, previous, note)
 	}
 	if running(p) {
-		return keep("Vectorworks started meanwhile (or its lock cannot be read)")
+		return keep(startedMeanwhile)
 	}
 	// 新しい版は名前の変更でよける（消すのはあと。削除が途中で止まると、半分消えたプラグインが
 	// Plug-Ins に残るため）。
