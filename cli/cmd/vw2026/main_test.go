@@ -243,16 +243,20 @@ func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("no space
 // 出力を書けなければ、道具の結果（成功の 0 や道具の失敗の終了コード）ではなく失敗で終わる。
 func TestCallCannotWriteOutput(t *testing.T) {
 	dir := echoBridge(t)
-	for _, args := range [][]string{{"call", "ping"}, {"call", "--raw", "ping"}, {"call", "explain"}} {
-		r := invoke(t, opts{dir: dir, stdout: failingWriter{}}, args...)
-		if r.code != exitFailure || !strings.Contains(r.stderr, "write output: no space left on device") {
-			t.Errorf("%v: %+v", args, r)
+	// stderr は標準エラーに含まれるもの（道具の失敗の理由は、出力を書けなくても残す）。
+	for _, c := range []struct {
+		args   []string
+		stderr string
+	}{
+		{[]string{"call", "ping"}, ""},
+		{[]string{"call", "--raw", "ping"}, ""},
+		{[]string{"call", "explain"}, "internal: open"},
+	} {
+		r := invoke(t, opts{dir: dir, stdout: failingWriter{}}, c.args...)
+		if r.code != exitFailure || !strings.Contains(r.stderr, "write output: no space left on device") ||
+			!strings.Contains(r.stderr, c.stderr) {
+			t.Errorf("%v: %+v", c.args, r)
 		}
-	}
-	// 道具の失敗の理由は、出力を書けなくても標準エラーに残す。
-	r := invoke(t, opts{dir: dir, stdout: failingWriter{}}, "call", "explain")
-	if !strings.Contains(r.stderr, "internal: open") {
-		t.Errorf("%+v", r)
 	}
 }
 
