@@ -60,7 +60,8 @@ func (c *launchCmd) run(e *env) int {
 	}
 	argv, err := launch.Command(c.App)
 	if err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+		// 起動するものの指定（フラグと環境変数）は、それを定義するここで案内する。
+		fmt.Fprintf(e.stderr, "vw2026: %v; give the application with --app (VW2026_APP)\n", err)
 		return exitFailure
 	}
 	if err := e.start(argv); err != nil {
