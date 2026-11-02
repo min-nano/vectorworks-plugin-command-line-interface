@@ -25,14 +25,12 @@ func TestInstallSidestepsTheRunningCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	var moved []string
-	original := rename
-	rename = func(from, to string) error {
+	renameWhen(t, func(from, to string) error {
 		if from == resolved {
 			moved = append(moved, to)
 		}
-		return original(from, to)
-	}
-	t.Cleanup(func() { rename = original })
+		return nil
+	})
 	o := h.options()
 	o.Executable = h.fakeExecutable()
 	if _, err := Install(o, "cli", "c2", false); err != nil {
@@ -60,14 +58,12 @@ func TestCleanOldCLIs(t *testing.T) {
 	}
 	os.Mkdir(filepath.Join(old, "vw2026.old-dir"), 0o700)
 	busy := filepath.Join(old, "vw2026.old-busy")
-	original := removeFile
-	removeFile = func(path string) error {
+	pathOpWhen(t, &removeFile, func(path string) error {
 		if path == busy {
 			return os.ErrPermission
 		}
-		return original(path)
-	}
-	t.Cleanup(func() { removeFile = original })
+		return nil
+	})
 	h.mustInstall(release{name: "cli", tag: "c2"})
 	if !exist(busy) || exist(filepath.Join(old, "vw2026.old-1")) || exist(filepath.Join(old, "vw2026.exe.old-2")) {
 		t.Fatal("install should delete what it can")

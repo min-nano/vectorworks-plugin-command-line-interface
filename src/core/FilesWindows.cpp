@@ -36,6 +36,12 @@ std::string narrow(std::wstring_view wide) {
 	return text;
 }
 
+// extended が付ける頭。ドライブからの絶対パスには \\?\ を、
+// UNC（\\server\…）には \\?\UNC\ を付ける。
+// makeDirectories は、この長さからルートの終わりを求める。
+constexpr std::wstring_view kExtendedPrefix = L"\\\\?\\";
+constexpr std::wstring_view kExtendedUncPrefix = L"\\\\?\\UNC\\";
+
 // extended はパスを \\?\ を付けた UTF-16 にする（スプールのファイルはすべてこれで開く）。
 //
 // 付けないと、CON・NUL・AUX・COM1 などの名前は（Windows 10 までは拡張子があっても）ファイルでは
@@ -50,17 +56,17 @@ std::string narrow(std::wstring_view wide) {
 std::wstring extended(std::string_view path) {
 	std::wstring wide = widen(path);
 	std::replace(wide.begin(), wide.end(), L'/', L'\\');
-	if (wide.starts_with(L"\\\\?\\")) {
+	if (wide.starts_with(kExtendedPrefix)) {
 		return wide;
 	}
 	if (wide.starts_with(L"\\\\.\\")) {
 		return {};
 	}
 	if (wide.size() >= 3 && wide[1] == L':' && wide[2] == L'\\') {
-		return L"\\\\?\\" + wide;
+		return std::wstring(kExtendedPrefix) + wide;
 	}
 	if (wide.starts_with(L"\\\\")) {
-		return L"\\\\?\\UNC\\" + wide.substr(2);
+		return std::wstring(kExtendedUncPrefix) + wide.substr(2);
 	}
 	return {};
 }
@@ -181,12 +187,17 @@ bool makeDirectories(const std::string &path, std::string &error) {
 	if (isDirectory(wide)) {
 		return true;
 	}
+	// root はルートの終わりの \ の位置。UNC で share の後ろに \ が無ければ npos で、
+	// 途中のフォルダは作らない（path そのものは下の CreateDirectoryW が作りに行く）。
 	std::size_t root = 0;
-	if (wide.starts_with(L"\\\\?\\UNC\\")) {
-		std::size_t server = wide.find(L'\\', 8);
+	if (wide.starts_with(kExtendedUncPrefix)) {
+		// \\?\UNC\server\share\ の share の後ろの \。
+		std::size_t server = wide.find(L'\\', kExtendedUncPrefix.size());
 		root = server == std::wstring::npos ? server : wide.find(L'\\', server + 1);
-	} else if (wide.size() >= 7 && wide[5] == L':') {
-		root = 6;
+	} else if (std::size_t drive = kExtendedPrefix.size();
+	           wide.size() > drive + 2 && wide[drive + 1] == L':') {
+		// \\?\C:\ の : の後ろの \。
+		root = drive + 2;
 	}
 	for (std::size_t at = root == std::wstring::npos ? root : wide.find(L'\\', root + 1);
 	     at != std::wstring::npos; at = wide.find(L'\\', at + 1)) {

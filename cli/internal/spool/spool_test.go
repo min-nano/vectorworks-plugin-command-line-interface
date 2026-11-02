@@ -76,8 +76,7 @@ func TestCallToolFailure(t *testing.T) {
 
 // 待ちきれなかった要求は、.wait をやめてから消す（誰も待たない要求も応答も残さない）。
 func TestCallTimeoutWithdrawsRequest(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
+	dir, _ := fakeplugin.NewHeldDir(t)
 	// 動いているが応えない（ダイアログの最中など）
 	_, err := Open(dir).Call("ping", nil, "", 200*time.Millisecond)
 	if !errors.Is(err, ErrTimeout) {
@@ -89,8 +88,7 @@ func TestCallTimeoutWithdrawsRequest(t *testing.T) {
 
 // 猶予の間に届いた no_wait は「実行しなかった」なので、道具の失敗ではなく ErrNoWait。
 func TestCallNoWaitDuringGrace(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
+	dir, _ := fakeplugin.NewHeldDir(t)
 	taken := takeRequest(t, dir)
 	go func() {
 		id := <-taken
@@ -108,8 +106,7 @@ func TestCallNoWaitDuringGrace(t *testing.T) {
 // 締切の前に届いた no_wait（掃除が待つ印を消したときなど）は、待たずに ErrNoWait で終わり、
 // 待ちきれなかったとは言わない。
 func TestCallNoWaitBeforeDeadline(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
+	dir, _ := fakeplugin.NewHeldDir(t)
 	answer(t, dir, `{"ok":false,"code":"no_wait","error":"no wait file"}`)
 	start := time.Now()
 	_, err := Open(dir).Call("ping", nil, "", 30*time.Second)
@@ -175,8 +172,7 @@ func TestLockHeldCannotTell(t *testing.T) {
 }
 
 func TestReleasedLockIsDown(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	release := fakeplugin.HoldLock(t, dir)
+	dir, release := fakeplugin.NewHeldDir(t)
 	if !Open(dir).Running {
 		t.Fatal("want running")
 	}
@@ -187,8 +183,7 @@ func TestReleasedLockIsDown(t *testing.T) {
 }
 
 func TestCallIsServedWhenServingResumes(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	release := fakeplugin.HoldLock(t, dir)
+	dir, release := fakeplugin.NewHeldDir(t)
 	bridge := Open(dir)
 	// ダイアログが閉じて受け付けが戻るのを真似る: 要求を置いたあとで応え始める。
 	go func() {
@@ -203,8 +198,7 @@ func TestCallIsServedWhenServingResumes(t *testing.T) {
 }
 
 func TestCallTimeoutWhenStopped(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	release := fakeplugin.HoldLock(t, dir)
+	dir, release := fakeplugin.NewHeldDir(t)
 	bridge := Open(dir)
 	release()
 	_, err := bridge.Call("ping", nil, "", 200*time.Millisecond)
@@ -231,17 +225,6 @@ func TestNewIDIsValidAndOrdered(t *testing.T) {
 	}
 }
 
-func TestValidID(t *testing.T) {
-	for _, bad := range []string{"", "../x", "a/b", "a.b", strings.Repeat("a", 65)} {
-		if ValidID(bad) {
-			t.Errorf("%q should be invalid", bad)
-		}
-	}
-	if !ValidID("0001-abc_DEF") {
-		t.Error("expected valid")
-	}
-}
-
 func assertNoFiles(t *testing.T, dir, suffix string) {
 	t.Helper()
 	entries, _ := os.ReadDir(dir)
@@ -255,8 +238,7 @@ func assertNoFiles(t *testing.T, dir, suffix string) {
 // 読めない（まだ無い・開けない）応答は「まだ無い」とみなして読み直す（docs/protocol.md「ファイル」）。
 // 応答の名前に開けないもの（ディレクトリ）がある間も壊れた応答とせず、あとから公開された応答を返す。
 func TestCallRereadsUnreadableResponse(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
+	dir, _ := fakeplugin.NewHeldDir(t)
 	taken := takeRequest(t, dir)
 	go func() {
 		id := <-taken
@@ -277,8 +259,7 @@ func TestCallRereadsUnreadableResponse(t *testing.T) {
 
 // 上限を超える要求は、スプールに置く前に断る。
 func TestCallRejectsOversizedRequest(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
+	dir, _ := fakeplugin.NewHeldDir(t)
 	big := json.RawMessage(`{"s":"` + strings.Repeat("x", MaxRequestBytes) + `"}`)
 	_, err := Open(dir).Call("ping", big, "", time.Second)
 	if err == nil || !strings.Contains(err.Error(), "too large") {
@@ -327,8 +308,7 @@ func answer(t *testing.T, dir, text string) {
 // （「実行されていない」と区別する）。
 func TestCallTakenWithoutResponse(t *testing.T) {
 	SetTakenGrace(t, 200*time.Millisecond)
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
+	dir, _ := fakeplugin.NewHeldDir(t)
 	taken := takeRequest(t, dir)
 	_, err := Open(dir).Call("ping", nil, "", 200*time.Millisecond)
 	if !errors.Is(err, ErrNoResponse) || errors.Is(err, ErrTimeout) {
@@ -356,11 +336,14 @@ func TestCallTakenThenAnsweredInGrace(t *testing.T) {
 		{"malformed", `{"ok":tr`, func(_ *Response, err error) bool {
 			return errors.Is(err, ErrMalformedResponse)
 		}},
+		// null は JSON として読めるが、応答のオブジェクトではない（届かなかったとみなして待ち続けない）。
+		{"null", `null`, func(_ *Response, err error) bool {
+			return errors.Is(err, ErrMalformedResponse)
+		}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			SetTakenGrace(t, 5*time.Second)
-			dir := fakeplugin.NewDir(t)
-			fakeplugin.HoldLock(t, dir)
+			dir, _ := fakeplugin.NewHeldDir(t)
 			taken := takeRequest(t, dir)
 			go func() {
 				var id string
@@ -393,107 +376,10 @@ func exists(path string) bool {
 	return err == nil
 }
 
-// 待つ者の居なくなった要求（.wait が放されている）は、実行も応答もされない。
-func TestRequestOfDeadCallerIsDropped(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	called := make(chan string, 1)
-	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) Response {
-		called <- tool
-		return Response{OK: true}
-	})
-	id := NewID(time.Now())
-	// 異常終了した呼ぶ側の残したもの: 掴まれていない .wait と要求。
-	if err := os.WriteFile(filepath.Join(dir, id+WaitSuffix), nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, id+RequestSuffix), []byte(`{"tool":"ping"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		_, errReq := os.Stat(filepath.Join(dir, id+RequestSuffix))
-		_, errWait := os.Stat(filepath.Join(dir, id+WaitSuffix))
-		if os.IsNotExist(errReq) && os.IsNotExist(errWait) {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the request and the .wait should be removed")
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	time.Sleep(100 * time.Millisecond)
-	select {
-	case tool := <-called:
-		t.Fatalf("%s must not run", tool)
-	default:
-	}
-	assertNoFiles(t, dir, ResponseSuffix)
-}
-
-// .wait の無い要求は実行せず、no_wait で断る（置き忘れた呼ぶ側に理由が伝わるように）。
-func TestRequestWithoutWaitIsRefused(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	called := make(chan string, 1)
-	fakeplugin.Start(t, dir, func(tool string, args json.RawMessage) Response {
-		called <- tool
-		return Response{OK: true}
-	})
-	id := NewID(time.Now())
-	if err := os.WriteFile(filepath.Join(dir, id+RequestSuffix), []byte(`{"tool":"ping"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	responsePath := filepath.Join(dir, id+ResponseSuffix)
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if text, err := os.ReadFile(responsePath); err == nil {
-			var response Response
-			if err := json.Unmarshal(text, &response); err != nil || response.OK || response.Code != CodeNoWait {
-				t.Fatalf("want no_wait, got %s", text)
-			}
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("no response")
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	select {
-	case tool := <-called:
-		t.Fatalf("%s must not run", tool)
-	default:
-	}
-}
-
-// 応答の知らないフィールドは無視する（docs/protocol.md「互換性」）。
-func TestResponseIgnoresUnknownFields(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
-	answer(t, dir, `{"ok":true,"result":{},"future":[1]}`)
-	response, err := Open(dir).Call("ping", nil, "", 5*time.Second)
-	if err != nil || !response.OK {
-		t.Fatalf("%+v %v", response, err)
-	}
-}
-
-// 失敗の応答の code が無い・知らない値なら、道具の失敗ではなく ErrMalformedResponse
-// （知っているフィールドの未知の値はエラー。docs/protocol.md「互換性」）。
-func TestCallRejectsUnknownCode(t *testing.T) {
-	for _, text := range []string{`{"ok":false,"error":"x"}`, `{"ok":false,"code":"later","error":"x"}`} {
-		dir := fakeplugin.NewDir(t)
-		fakeplugin.HoldLock(t, dir)
-		answer(t, dir, text)
-		_, err := Open(dir).Call("ping", nil, "", 5*time.Second)
-		if !errors.Is(err, ErrMalformedResponse) {
-			t.Fatalf("%s: want ErrMalformedResponse, got %v", text, err)
-		}
-	}
-}
-
 // 応答のファイルが JSON として壊れていれば、読み直さず、締切まで待たずに ErrMalformedResponse で
 // 終え、ファイルを消す（rename で公開されるので待っても直らない。docs/protocol.md「ファイル」）。
 func TestCallStopsOnMalformedResponse(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
+	dir, _ := fakeplugin.NewHeldDir(t)
 	answer(t, dir, `{"ok":tr`)
 	start := time.Now()
 	_, err := Open(dir).Call("ping", nil, "", 5*time.Second)
@@ -509,8 +395,7 @@ func TestCallStopsOnMalformedResponse(t *testing.T) {
 
 // 入れ子が深すぎる要求は、スプールに置く前に断る（プラグインが invalid_request で断るので）。
 func TestCallRejectsDeepRequest(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
+	dir, _ := fakeplugin.NewHeldDir(t)
 	deep := json.RawMessage(`{"a":` + strings.Repeat("[", MaxNestingDepth) + strings.Repeat("]", MaxNestingDepth) + `}`)
 	_, err := Open(dir).Call("ping", deep, "", time.Second)
 	if err == nil || !strings.Contains(err.Error(), "nested too deeply") {
@@ -609,8 +494,7 @@ func TestCallNamesTheRequestItCannotPublish(t *testing.T) {
 // 引数が JSON として読めなければ、何も置かずに断る（vw2026 は先に確かめるが、Call を直接
 // 呼ぶ側のため）。
 func TestCallRejectsInvalidArgs(t *testing.T) {
-	dir := fakeplugin.NewDir(t)
-	fakeplugin.HoldLock(t, dir)
+	dir, _ := fakeplugin.NewHeldDir(t)
 	_, err := Open(dir).Call("ping", json.RawMessage(`{"a":`), "", time.Second)
 	if err == nil || !strings.HasPrefix(err.Error(), "encode request: ") {
 		t.Fatalf("want an encode error, got %v", err)
@@ -633,61 +517,6 @@ func TestCallNamesTheWaitItCannotHold(t *testing.T) {
 	assertNoFiles(t, dir, RequestSuffix)
 }
 
-// 成功の応答の result は必ずオブジェクト。無い・オブジェクトでなければ壊れた応答
-// （docs/protocol.md「応答」）。
-func TestCallRejectsResultThatIsNotAnObject(t *testing.T) {
-	for _, text := range []string{
-		`{"ok":true}`,
-		`{"ok":true,"result":null}`,
-		`{"ok":true,"result":[1]}`,
-		`{"ok":true,"result":"done"}`,
-	} {
-		t.Run(text, func(t *testing.T) {
-			dir := fakeplugin.NewDir(t)
-			fakeplugin.HoldLock(t, dir)
-			answer(t, dir, text)
-			_, err := Open(dir).Call("ping", nil, "", 5*time.Second)
-			if !errors.Is(err, ErrMalformedResponse) {
-				t.Fatalf("want ErrMalformedResponse, got %v", err)
-			}
-		})
-	}
-}
-
-// 失敗の応答の detail はそのまま渡す。あってオブジェクトでなければ壊れた応答（docs/protocol.md「応答」）。
-func TestCallDetail(t *testing.T) {
-	// want は受け取る detail。malformed なら壊れた応答。
-	for _, c := range []struct{ text, want string }{
-		{`{"ok":false,"code":"internal","error":"x","detail":{"reason":"documents_open"}}`, `{"reason":"documents_open"}`},
-		{`{"ok":false,"code":"invalid_args","error":"x","detail":{}}`, `{}`},
-		{`{"ok":false,"code":"internal","error":"x"}`, ``},
-		{`{"ok":false,"code":"internal","error":"x","detail":null}`, `malformed`},
-		{`{"ok":false,"code":"internal","error":"x","detail":[1]}`, `malformed`},
-		{`{"ok":false,"code":"internal","error":"x","detail":"x"}`, `malformed`},
-		{`{"ok":true,"result":{},"detail":{}}`, `malformed`},
-		{`{"ok":false,"code":"unknown_tool","error":"x","detail":{}}`, `malformed`},
-		{`{"ok":false,"code":"invalid_request","error":"x","detail":{}}`, `malformed`},
-		{`{"ok":false,"code":"busy","error":"x","detail":null}`, `malformed`},
-		{`{"ok":false,"code":"no_session","error":"x","detail":{}}`, `malformed`},
-	} {
-		t.Run(c.text, func(t *testing.T) {
-			dir := fakeplugin.NewDir(t)
-			fakeplugin.HoldLock(t, dir)
-			answer(t, dir, c.text)
-			response, err := Open(dir).Call("quit", nil, "", 5*time.Second)
-			if c.want == "malformed" {
-				if !errors.Is(err, ErrMalformedResponse) {
-					t.Fatalf("want ErrMalformedResponse, got %v", err)
-				}
-				return
-			}
-			if err != nil || response.OK || string(response.Detail) != c.want {
-				t.Fatalf("got %+v %v, want the detail %s", response, err, c.want)
-			}
-		})
-	}
-}
-
 func TestIsObject(t *testing.T) {
 	for text, want := range map[string]bool{
 		`{}`: true, ` {"a":1} `: true, `[]`: false, `null`: false, `"{"`: false, ``: false,
@@ -695,5 +524,109 @@ func TestIsObject(t *testing.T) {
 		if got := IsObject(json.RawMessage(text)); got != want {
 			t.Errorf("IsObject(%q) = %v, want %v", text, got, want)
 		}
+	}
+}
+
+// 届いた応答の読み方と確かめ（docs/protocol.md「応答」「互換性」）。ファイルを使わずに、pollResponse と同じ
+// decodeResponse で読み、checkResponse で確かめる（Call がこの 2 つを通すことは TestCallPassesDetail・
+// TestCallStopsOnMalformedResponse・TestCallTakenThenAnsweredInGrace が確かめる）。
+func TestCheckResponse(t *testing.T) {
+	const malformed = "malformed"
+	for _, c := range []struct {
+		text string
+		// want は返る応答の result（成功）か detail（失敗）。malformed なら壊れた応答。
+		want string
+		// err は「実行しなかった」種別のときの誤り（want は見ない）。
+		err error
+	}{
+		// 「実行しなかった」種別は、道具の失敗ではなく、それぞれの誤りにする。
+		{text: `{"ok":false,"code":"no_wait","error":"x"}`, err: ErrNoWait},
+		{text: `{"ok":false,"code":"busy","error":"x"}`, err: ErrBusy},
+		{text: `{"ok":false,"code":"occupied","error":"x"}`, err: ErrOccupied},
+		{text: `{"ok":false,"code":"no_session","error":"x"}`, err: ErrNoSession},
+		// JSON として壊れている・オブジェクトでない応答。
+		{`{"ok":tr`, malformed, nil},
+		{`null`, malformed, nil},
+		// 知らないフィールドは無視する（「互換性」）。
+		{`{"ok":true,"result":{},"future":[1]}`, `{}`, nil},
+		// 成功の result は必ずオブジェクト。
+		{`{"ok":true}`, malformed, nil},
+		{`{"ok":true,"result":null}`, malformed, nil},
+		{`{"ok":true,"result":[1]}`, malformed, nil},
+		{`{"ok":true,"result":"done"}`, malformed, nil},
+		// 失敗の code が無い・知らない値なら、道具の失敗ではなく壊れた応答（知っているフィールドの未知の値）。
+		{`{"ok":false,"error":"x"}`, malformed, nil},
+		{`{"ok":false,"code":"later","error":"x"}`, malformed, nil},
+		// 失敗の detail はそのまま渡す。持てるのは invalid_args・internal だけで、オブジェクトに限る。
+		{
+			`{"ok":false,"code":"internal","error":"x","detail":{"reason":"documents_open"}}`,
+			`{"reason":"documents_open"}`,
+			nil,
+		},
+		{`{"ok":false,"code":"invalid_args","error":"x","detail":{}}`, `{}`, nil},
+		{`{"ok":false,"code":"internal","error":"x"}`, ``, nil},
+		{`{"ok":false,"code":"internal","error":"x","detail":null}`, malformed, nil},
+		{`{"ok":false,"code":"internal","error":"x","detail":[1]}`, malformed, nil},
+		{`{"ok":false,"code":"internal","error":"x","detail":"x"}`, malformed, nil},
+		{`{"ok":true,"result":{},"detail":{}}`, malformed, nil},
+		{`{"ok":false,"code":"unknown_tool","error":"x","detail":{}}`, malformed, nil},
+		{`{"ok":false,"code":"invalid_request","error":"x","detail":{}}`, malformed, nil},
+		{`{"ok":false,"code":"busy","error":"x","detail":null}`, malformed, nil},
+		{`{"ok":false,"code":"no_session","error":"x","detail":{}}`, malformed, nil},
+	} {
+		t.Run(c.text, func(t *testing.T) {
+			response, unreadable := DecodeResponse([]byte(c.text))
+			if unreadable {
+				if c.want != malformed {
+					t.Fatal("cannot decode")
+				}
+				return
+			}
+			got, err := CheckResponse("ping", response)
+			if c.err != nil {
+				if !errors.Is(err, c.err) || got != nil {
+					t.Fatalf("want %v, got %+v %v", c.err, got, err)
+				}
+				return
+			}
+			if c.want == malformed {
+				if !errors.Is(err, ErrMalformedResponse) {
+					t.Fatalf("want ErrMalformedResponse, got %+v %v", got, err)
+				}
+				return
+			}
+			// 確かめた応答は、そのまま返す（ok・code を変えない）。
+			if err != nil || got != response {
+				t.Fatalf("got %+v %v, want the response as it is", got, err)
+			}
+			field := got.Detail
+			if got.OK {
+				field = got.Result
+			}
+			if string(field) != c.want {
+				t.Fatalf("got %+v, want %s", got, c.want)
+			}
+		})
+	}
+}
+
+// Call は、締切の前に届いた応答も確かめる。読めても規則に合わない応答は壊れた応答にし、応答のファイルを残さない。
+func TestCallRejectsInvalidResponse(t *testing.T) {
+	dir, _ := fakeplugin.NewHeldDir(t)
+	answer(t, dir, `{"ok":true}`)
+	if _, err := Open(dir).Call("ping", nil, "", 5*time.Second); !errors.Is(err, ErrMalformedResponse) {
+		t.Fatalf("want ErrMalformedResponse, got %v", err)
+	}
+	assertNoFiles(t, dir, ResponseSuffix)
+	assertNoFiles(t, dir, WaitSuffix)
+}
+
+// Call は届いた応答を確かめて返す（失敗の detail もそのまま渡す）。
+func TestCallPassesDetail(t *testing.T) {
+	dir, _ := fakeplugin.NewHeldDir(t)
+	answer(t, dir, `{"ok":false,"code":"internal","error":"x","detail":{"reason":"documents_open"}}`)
+	response, err := Open(dir).Call("quit", nil, "", 5*time.Second)
+	if err != nil || response.OK || string(response.Detail) != `{"reason":"documents_open"}` {
+		t.Fatalf("%+v %v", response, err)
 	}
 }

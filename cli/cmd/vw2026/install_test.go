@@ -382,3 +382,15 @@ func TestUsageBeforeLocating(t *testing.T) {
 		}
 	}
 }
+
+// Vectorworks が動いていて、結果を作る前に分かったとき（結果が nil）も、null ではなく outcome と name を書く。
+func TestDeployRunningWithoutResult(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	e := &env{stdout: &stdout, stderr: &stderr}
+	var result *install.InstallResult
+	if code := deployRunning(e, "demo", install.ErrRunning, result); code != exitRunning ||
+		strings.TrimSpace(stdout.String()) != `{"name":"demo","outcome":"vectorworks_running"}` ||
+		!strings.Contains(stderr.String(), "Vectorworks is running") {
+		t.Fatalf("%d %q %q", code, stdout.String(), stderr.String())
+	}
+}
