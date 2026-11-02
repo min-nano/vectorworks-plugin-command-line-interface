@@ -290,8 +290,8 @@ std::vector<Tool> loadTools() {
 	std::vector<Tool> tools;
 	for (std::size_t i = 0; i < gFakes.size() && i < kRunners.size(); ++i) {
 		const Fake &fake = gFakes[i];
-		tools.push_back({fake.name.c_str(), fake.description.c_str(), fake.inputSchema.c_str(),
-		                 fake.kind, kRunners[i]});
+		tools.push_back({fake.name, fake.description.c_str(), fake.inputSchema.c_str(), fake.kind,
+		                 kRunners[i]});
 	}
 	return tools;
 }
