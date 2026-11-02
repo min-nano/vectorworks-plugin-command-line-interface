@@ -147,19 +147,24 @@ std::optional<Json> refuseOutsideSession(const std::string &current, const Reque
 	return std::nullopt;
 }
 
+// ToolReply は道具を実行した結果。応答と、終了の依頼（道具が成功して立てたときだけ真）。
+struct ToolReply {
+	Json response;
+	bool quit = false;
+};
+
 // runTool は道具を実行して応答を返す（通信規則「応答」）。道具 1 つの失敗で橋を止めないよう、
-// 例外はここで受ける。quit は、道具が成功して終了の依頼を立てたときだけ真にする。
-Json runTool(const Tool &tool, const Json &args, const ToolContext &context, bool &quit) {
-	quit = false;
+// 例外はここで受ける。
+ToolReply runTool(const Tool &tool, const Json &args, const ToolContext &context) {
 	ToolStatus status;
 	Json result;
 	try {
 		result = tool.run(args, context, status);
 	} catch (const std::exception &exception) {
-		return failure(protocol::kCodeInternal,
-		               std::string("道具の中で例外が起きました: ") + exception.what());
+		return {failure(protocol::kCodeInternal,
+		                std::string("道具の中で例外が起きました: ") + exception.what())};
 	} catch (...) {
-		return failure(protocol::kCodeInternal, "道具の中で例外が起きました");
+		return {failure(protocol::kCodeInternal, "道具の中で例外が起きました")};
 	}
 	// 終了の依頼は、道具が成功したときだけ出す（失敗した quit は終了を頼まない）。
 	// 種類では決めない。
@@ -167,12 +172,12 @@ Json runTool(const Tool &tool, const Json &args, const ToolContext &context, boo
 		// detail は JSON のオブジェクト（通信規則「応答」）。オブジェクトでない値は
 		// 道具の不具合として internal で応え、detail を付けない。
 		if (!status.detail.isNull() && !status.detail.isObject()) {
-			return failure(protocol::kCodeInternal,
-			               toolDefect(tool.name, "detail がオブジェクトではありません"));
+			return {failure(protocol::kCodeInternal,
+			                toolDefect(tool.name, "detail がオブジェクトではありません"))};
 		}
 		std::string_view code = status.code == ErrorCode::InvalidArgs ? protocol::kCodeInvalidArgs
 		                                                              : protocol::kCodeInternal;
-		return failure(code, std::move(status.message), std::move(status.detail));
+		return {failure(code, std::move(status.message), std::move(status.detail))};
 	}
 	// result は必ずオブジェクト（通信規則「応答」）。値を返さない道具は {} にする。
 	// オブジェクトでない値は道具の不具合として internal で応え、失敗なので終了を頼まない（失敗の
@@ -180,11 +185,10 @@ Json runTool(const Tool &tool, const Json &args, const ToolContext &context, boo
 	if (result.isNull()) {
 		result = Json::object();
 	} else if (!result.isObject()) {
-		return failure(protocol::kCodeInternal,
-		               toolDefect(tool.name, "結果がオブジェクトではありません"));
+		return {failure(protocol::kCodeInternal,
+		                toolDefect(tool.name, "結果がオブジェクトではありません"))};
 	}
-	quit = status.quit;
-	return success(std::move(result));
+	return {success(std::move(result)), status.quit};
 }
 
 }
@@ -370,11 +374,10 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		}
 	}
 
-	bool quit = false;
-	Json response = runTool(*tool, request->args, ToolContext{inSession()}, quit);
+	ToolReply reply = runTool(*tool, request->args, ToolContext{inSession()});
 	// 道具はもう実行したので、ここで投げると、実行した要求に internal で応えることになる（避け
 	// られない。応答を書き出すための確保だけが残る）。
-	return respond(response, quit);
+	return respond(reply.response, reply.quit);
 }
 
 }

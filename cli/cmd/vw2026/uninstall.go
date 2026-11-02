@@ -56,9 +56,11 @@ hook.
 
 Like install, uninstall changes nothing while Vectorworks is running with the
 bridge (exit status 6), and a plug-in other than cli is uninstalled only from a
-folder of plug-ins that has cli. Uninstalling cli does not refuse while other
-plug-ins remain, but without vw2026 they can no longer be uninstalled; see
-"remaining".
+folder of plug-ins that has cli. Like install, it checks the cli first: when
+that folder has no cli that vw2026 installed, it fails with 1 even while
+Vectorworks is running (quitting Vectorworks would not help). Uninstalling cli
+does not refuse while other plug-ins remain, but without vw2026 they can no
+longer be uninstalled; see "remaining".
 
 It prints one line of JSON with one of these outcomes:
 
@@ -94,7 +96,7 @@ func (c *uninstallCmd) run(e *env) int {
 	var inside *install.RunsInsideError
 	switch {
 	case errors.Is(err, install.ErrRunning):
-		return deployRunning(e, err, result)
+		return deployRunning(e, c.Name, err, result)
 	case errors.As(err, &inside):
 		// 入れた cli の vw2026 では外さず、入っているタグの初回のスクリプトと CLI で外すよう案内する。
 		// PR のプレリリースは PR を閉じると消えるので、latest で外すコマンドも示す。

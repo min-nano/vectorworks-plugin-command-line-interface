@@ -240,18 +240,19 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		}
 		return fmt.Errorf("%w (%s, %s; %s)", ErrTimeout, tool, timeout, reason)
 	}
-	// receive は until まで応答を待つ。届けば確かめた結果を返し、届かなければ (nil, nil)。
-	receive := func(until time.Time) (*Response, error) {
+	// receive は until まで応答を待つ。届けば arrived を真にして、確かめた結果を返す。
+	receive := func(until time.Time) (response *Response, arrived bool, err error) {
 		response, malformed := pollResponse(responsePath, until)
 		switch {
 		case malformed:
-			return nil, fmt.Errorf("%w (%s; the response file is not a valid response object)", ErrMalformedResponse, tool)
+			return nil, true, fmt.Errorf("%w (%s; the response file is not a valid response object)", ErrMalformedResponse, tool)
 		case response == nil:
-			return nil, nil
+			return nil, false, nil
 		}
-		return checkResponse(tool, response)
+		response, err = checkResponse(tool, response)
+		return response, true, err
 	}
-	if response, err := receive(deadline); response != nil || err != nil {
+	if response, arrived, err := receive(deadline); arrived {
 		return response, err
 	}
 
@@ -261,7 +262,7 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 	if os.Remove(requestPath) == nil {
 		return nil, notRun("a dialog may be open")
 	}
-	if response, err := receive(time.Now().Add(takenGrace)); response != nil || err != nil {
+	if response, arrived, err := receive(time.Now().Add(takenGrace)); arrived {
 		return response, err
 	}
 	return nil, fmt.Errorf("%w (%s, %s; it may have run)", ErrNoResponse, tool, timeout)

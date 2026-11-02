@@ -46,7 +46,9 @@ sha256. The plug-in goes into <Plug-Ins>/<NAME>/ with a record of the install
 hook runs: for cli, the hook puts vw2026 on the PATH. Install does not touch a
 folder of that name that vw2026 did not install, or that came from another
 registry. A plug-in other than cli goes only into a folder of plug-ins that
-has cli.
+has cli; install checks this before whether Vectorworks is running, so it fails
+with 1 for a folder without cli even while Vectorworks is running (quitting
+Vectorworks would not help).
 
 When the installed plug-in already has the tag (and the target), install
 neither downloads the zip nor replaces the folder: it runs the install hook of
@@ -144,7 +146,7 @@ func (c *installCmd) run(e *env) int {
 	result, err := install.Install(options, name, tag, c.Check)
 	if err != nil {
 		if errors.Is(err, install.ErrRunning) {
-			return deployRunning(e, err, result)
+			return deployRunning(e, name, err, result)
 		}
 		return deployFailed(e, name, err)
 	}
@@ -209,10 +211,15 @@ func isTerminal(w io.Writer) bool {
 }
 
 // deployRunning は、Vectorworks が動いていて何もしなかったこと（ErrRunning）を標準エラーと標準出力の JSON（result）に
-// 書き、終了コード 6 を返す。
-func deployRunning(e *env, err error, result any) int {
+// 書き、終了コード 6 を返す。result は型付きのポインタで受け、nil なら（結果を作る前に分かったとき）outcome と name
+// だけを書く（any で受けると、nil のポインタが null と書かれる）。
+func deployRunning[T any](e *env, name string, err error, result *T) int {
 	fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
-	emit(e, result)
+	if result == nil {
+		emit(e, map[string]any{"outcome": install.OutcomeRunning, "name": name})
+	} else {
+		emit(e, result)
+	}
 	return exitRunning
 }
 
