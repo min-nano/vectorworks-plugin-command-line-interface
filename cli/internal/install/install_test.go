@@ -355,6 +355,25 @@ func TestOtherPluginNeedsCLI(t *testing.T) {
 	}
 }
 
+// cli の記録が無く、Vectorworks も動いているとき、install と uninstall はどちらも cli の記録の誤りを答える
+// （同じ順に確かめる。cli の無い <Plug-Ins> では動いているかを判定できない）。
+func TestNoCLIIsAnsweredBeforeRunning(t *testing.T) {
+	h := newHarness(t)
+	h.installCLI()
+	h.mustInstall(release{name: "demo", tag: "d1"})
+	os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
+	defer h.holdLock()()
+	if _, err := h.install("demo", "d1"); errors.Is(err, ErrRunning) || err == nil || !strings.Contains(err.Error(), "has no cli") {
+		t.Fatalf("install: %v", err)
+	}
+	if _, err := Uninstall(h.options(), "demo"); errors.Is(err, ErrRunning) || err == nil || !strings.Contains(err.Error(), "has no cli") {
+		t.Fatalf("uninstall: %v", err)
+	}
+	if !exist(filepath.Join(h.plugins, "demo")) {
+		t.Fatal("uninstalled without cli")
+	}
+}
+
 // 付け替えの 1 つ目（<Plug-Ins>/<name> を移す）と 2 つ目（組み立てたものを置く）の失敗で元に戻る。
 func TestInstallRenameFailureRestores(t *testing.T) {
 	for name, from := range map[string]func(h *harness) string{
