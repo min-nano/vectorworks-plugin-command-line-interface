@@ -187,9 +187,3 @@ func installedIn(plugins string) []string {
 	sort.Strings(names)
 	return names
 }
-
-// IsUsage は使い方の誤りか。
-func IsUsage(err error) bool {
-	var usage *UsageError
-	return errors.As(err, &usage)
-}
