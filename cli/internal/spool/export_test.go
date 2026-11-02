@@ -17,3 +17,10 @@ func SetTakenGrace(t *testing.T, d time.Duration) {
 	takenGrace = d
 	t.Cleanup(func() { takenGrace = old })
 }
+
+// DecodeResponse・CheckResponse は、応答を読む処理と確かめ（decodeResponse・checkResponse）を、ファイルを
+// 使わずに呼ばせる。
+var (
+	DecodeResponse = decodeResponse
+	CheckResponse  = checkResponse
+)
