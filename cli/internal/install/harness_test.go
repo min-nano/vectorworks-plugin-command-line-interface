@@ -495,7 +495,7 @@ func exist(path string) bool {
 	return err == nil
 }
 
-// fakeCLI は <Plug-Ins>/cli/ に入れた cli を作る（cli 以外を入れるテストの前提）。
+// installCLI は <Plug-Ins>/cli/ に入れた cli を作る（cli 以外を入れるテストの前提）。
 func (h *harness) installCLI() {
 	h.t.Helper()
 	h.mustInstall(release{name: "cli", tag: "c1"})

@@ -110,10 +110,10 @@ func (c *callCmd) run(e *env) int {
 	case c.Raw:
 		_ = emit(e, response)
 	case response.OK:
-		_ = emitRaw(e, response.Result)
+		emitRaw(e, response.Result)
 	case len(response.Detail) > 0:
 		// 呼ぶ側が失敗の原因を機械的に読めるように（docs/protocol.md「応答」の detail）。
-		_ = emitRaw(e, response.Detail)
+		emitRaw(e, response.Detail)
 	}
 	if !response.OK {
 		fmt.Fprintf(e.stderr, "vw2026: %s: %s: %s\n", c.Tool, response.Code, response.Error)

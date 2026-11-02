@@ -60,9 +60,6 @@ func ValidTag(tag string) bool {
 	return len(tag) <= 128 && tagPattern.MatchString(tag)
 }
 
-// Targets は CLI が知るターゲット。
-var Targets = []string{"macos-arm64", "macos-x64", "windows-x64"}
-
 // Registry はレジストリ 1 つ。
 type Registry struct {
 	Plugins map[string]Entry

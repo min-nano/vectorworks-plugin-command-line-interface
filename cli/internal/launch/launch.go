@@ -30,7 +30,7 @@ const defaultWindowsExe = `Vectorworks 2026\Vectorworks2026.exe`
 func Command(app string) ([]string, error) {
 	if app != "" && !(runtime.GOOS == "darwin" && strings.HasSuffix(strings.TrimRight(app, "/"), ".app")) {
 		if info, err := os.Stat(app); err != nil || info.IsDir() {
-			return nil, fmt.Errorf("VW2026_APP does not point to a file: %s", app)
+			return nil, fmt.Errorf("--app (VW2026_APP) does not point to a file: %s", app)
 		}
 		return []string{app}, nil
 	}
@@ -45,9 +45,9 @@ func Command(app string) ([]string, error) {
 		if info, err := os.Stat(exe); err == nil && !info.IsDir() {
 			return []string{exe}, nil
 		}
-		return nil, fmt.Errorf("Vectorworks 2026 was not found at %s; set VW2026_APP to Vectorworks2026.exe", exe)
+		return nil, fmt.Errorf("Vectorworks 2026 was not found at %s; name Vectorworks2026.exe with --app (VW2026_APP)", exe)
 	default:
-		return nil, errors.New("launching is not supported on this OS; set VW2026_APP")
+		return nil, errors.New("launching is not supported on this OS; name the executable with --app (VW2026_APP)")
 	}
 }
 

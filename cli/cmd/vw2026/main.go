@@ -310,11 +310,11 @@ func emit(e *env, value any) int {
 		fmt.Fprintf(e.stderr, "vw2026: encode output: %v\n", err)
 		return exitFailure
 	}
-	return emitRaw(e, data)
+	emitRaw(e, data)
+	return exitOK
 }
 
 // emitRaw は data をそのまま 1 行で書く。
-func emitRaw(e *env, data []byte) int {
+func emitRaw(e *env, data []byte) {
 	fmt.Fprintf(e.stdout, "%s\n", data)
-	return exitOK
 }
