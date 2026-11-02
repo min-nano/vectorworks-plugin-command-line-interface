@@ -2,6 +2,7 @@
 
 #include <charconv>
 #include <system_error>
+#include <type_traits>
 #include <unordered_map>
 
 namespace VwCli::core {
@@ -478,7 +479,20 @@ std::optional<Json> Json::parse(std::string_view text, int maxDepth, std::string
 	return JsonParser(text, maxDepth).parse(error);
 }
 
-Json::Type Json::type() const { return static_cast<Type>(value_.index()); }
+Json::Type Json::type() const {
+	// index をそのまま Type にするので、Type の並びを Value の候補の並びに縛る
+	// （片方だけを並べ替えるとビルドが通らない）。
+	constexpr auto at = [](Type type) { return static_cast<std::size_t>(type); };
+	static_assert(std::variant_size_v<Value> == at(Type::Object) + 1);
+	static_assert(
+	    std::is_same_v<std::variant_alternative_t<at(Type::Null), Value>, std::monostate>);
+	static_assert(std::is_same_v<std::variant_alternative_t<at(Type::Bool), Value>, bool>);
+	static_assert(std::is_same_v<std::variant_alternative_t<at(Type::Number), Value>, Number>);
+	static_assert(std::is_same_v<std::variant_alternative_t<at(Type::String), Value>, std::string>);
+	static_assert(std::is_same_v<std::variant_alternative_t<at(Type::Array), Value>, Array>);
+	static_assert(std::is_same_v<std::variant_alternative_t<at(Type::Object), Value>, Object>);
+	return static_cast<Type>(value_.index());
+}
 
 bool Json::asBool() const { return std::get<bool>(value_); }
 
