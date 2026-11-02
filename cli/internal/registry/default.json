@@ -1,0 +1,17 @@
+{
+	"registry_version": 1,
+	"plugins": {
+		"cli": {
+			"manifests": [
+				{
+					"match": "latest",
+					"path": "https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/vw2026.json"
+				},
+				{
+					"match": "*",
+					"path": "https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/{tag}/vw2026.json"
+				}
+			]
+		}
+	}
+}

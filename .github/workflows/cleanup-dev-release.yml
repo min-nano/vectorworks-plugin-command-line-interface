@@ -7,8 +7,10 @@ on:
 permissions:
   contents: read
 
-# PR が閉じたら、その PR のプレリリース（dev-<slug>-<PR 番号>）とタグを消す
-# （docs/plugin/build-and-release.md「CI」）。
+# PR が閉じたら、その PR のプレリリース（dev-<slug>-<PR 番号>-<短い sha>）をリリースとタグごとすべて
+# 消す（docs/plugin/build-and-release.md「CI」）。タグは push ごとに新しく付くので、末尾の
+# -<PR 番号>-<短い sha> で見分ける（ブランチの名前が変わって slug が違うものも含む）。push で止められた
+# release の下書きはまだタグが無いので、リリースの一覧からタグ名で見分けて消す。
 jobs:
   cleanup:
     # プレリリースを作るのは同じリポジトリの PR だけ。
@@ -16,7 +18,7 @@ jobs:
     # build.yml と同じグループで走り、その PR の走っているビルドを止めてから消す（消したあとに
     # 公開されない）。グループの式は build.yml と同じものにする（片方だけ変えると同じグループに
     # 入らない）。PR では PR 番号になる。github.ref で組むと、マージで閉じた PR では main になり、
-    # main の push のビルドを止めて stable が作られない。ジョブの段に置き、片付けが走るとき
+    # main の push のビルドを止めて main のリリースが作られない。ジョブの段に置き、片付けが走るとき
     # （同じリポジトリの PR）だけグループを取る。
     concurrency:
       group: build-${{ github.event.pull_request.number || github.ref }}
@@ -27,22 +29,26 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      BRANCH: ${{ github.head_ref }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
-      # タグの名前を作るスクリプトだけを、ビルドしたのと同じ head から取る。
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          sparse-checkout: scripts/dev-tag.sh
-          sparse-checkout-cone-mode: false
+      # 形は scripts/dev-tag.sh が作るもの（slug が空なら dev-<PR 番号>-<短い sha>）。末尾の -<短い sha> の
+      # 無いもの（dev-<slug>-<PR 番号>）は、段 3b より前の dev-tag.sh が作った形で、その頃から開いている PR
+      # のプレリリースも消すために当てる。短い sha は 7 桁なので、ほかの PR の新しい形のタグには当たらない。
+      # 前の形のプレリリースが残っていなければ、(-[0-9a-f]{7})? の ? を除いてよい。
       - run: |
           set -eu
-          tag="$(scripts/dev-tag.sh "$BRANCH" "$PR_NUMBER")"
-          if gh release view "$tag" > /dev/null 2>&1; then
-            gh release delete "$tag" --cleanup-tag --yes
-          fi
-          if gh api "repos/$GH_REPO/git/ref/tags/$tag" > /dev/null 2>&1; then
-            gh api -X DELETE "repos/$GH_REPO/git/refs/tags/$tag"
-          fi
-          echo "removed $tag"
+          api="repos/$GH_REPO"
+          pattern="^dev-(.*-)?$PR_NUMBER(-[0-9a-f]{7})?\$"
+          # 下書きを含むリリース。消してもタグは残るので、タグは次で消す。
+          gh api --paginate "$api/releases?per_page=100" | jq -s 'add // []' |
+            jq -r --arg pattern "$pattern" '.[] | select(.tag_name | test($pattern)) | "\(.id) \(.tag_name)"' |
+            while read -r id tag; do
+              gh api -X DELETE "$api/releases/$id"
+              echo "removed the release $tag"
+            done
+          gh api --paginate "$api/git/matching-refs/tags/dev-" | jq -s 'add // []' |
+            jq -r --arg pattern "$pattern" '.[] | .ref | ltrimstr("refs/tags/") | select(test($pattern))' |
+            while read -r tag; do
+              gh api -X DELETE "$api/git/refs/tags/$tag"
+              echo "removed the tag $tag"
+            done

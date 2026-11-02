@@ -40,7 +40,7 @@ powershell="$(git ls-files -co --exclude-standard -- '*.ps1' '*.psm1' '*.psd1')"
 
 if [ "$fix" = true ]; then
 	"$gofmt" -w cli
-	shfmt -w "$root/scripts"
+	shfmt -w "$root/scripts" "$root/tests/hooks"
 	# clang-format は対象が無いと標準入力を読むので、対象があるときだけ走らせる。
 	# shellcheck disable=SC2086
 	[ -z "$cpp" ] || clang-format -i $cpp
@@ -57,7 +57,7 @@ if [ -n "$files" ]; then
 	status=1
 fi
 # shfmt は .editorconfig の設定を読む（フラグで上書きしない）。整形が必要ならコード 1 で終了する。
-shfmt -l "$root/scripts" || status=1
+shfmt -l "$root/scripts" "$root/tests/hooks" || status=1
 # clang-format は整形が必要なファイルを並べないので、1 つずつ確かめて並べる。
 for file in $cpp; do
 	clang-format --dry-run --Werror "$file" 2>/dev/null || {

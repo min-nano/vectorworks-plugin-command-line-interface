@@ -139,6 +139,13 @@ type Bridge struct {
 	newID func(time.Time) string
 }
 
+// LockHeld は、スプール dir のロックが掴まれているか（Open と同じ判定。docs/protocol.md「生存の判定」）。
+// 無い以外の理由でロックを調べられなければ、その誤りも返す。Open はそれを「動いていない」とするが、
+// install・uninstall は、動いているかが分からないとして何も変えない。
+func LockHeld(dir string) (bool, error) {
+	return lockState(filepath.Join(dir, LockFile))
+}
+
 // Open はその場所のブリッジの状態を判定する（docs/protocol.md「生存の判定」）。
 //
 // 生死はロックだけで決まる。刻みが届かずに応えない間も、ロックは掴まれたまま。
@@ -146,7 +153,8 @@ func Open(dir string) *Bridge {
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 		return &Bridge{Dir: dir, Reason: "not found"}
 	}
-	if !lockHeld(filepath.Join(dir, LockFile)) {
+	// 調べられないロックは「動いていない」とする（install・uninstall は LockHeld で誤りを見て、何も変えない）。
+	if held, _ := lockState(filepath.Join(dir, LockFile)); !held {
 		return &Bridge{Dir: dir, Reason: "not running"}
 	}
 	return &Bridge{Dir: dir, Running: true}

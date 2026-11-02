@@ -47,10 +47,10 @@ PSScriptAnalyzer も選べるためです。これで YAML と Markdown を除�
 | C++ / Objective-C++ | clang-format | `.clang-format`（LLVM の既定に `UseTab: ForIndentation`・`IndentWidth`・`TabWidth`・`ColumnLimit: 100`・`AccessModifierOffset` だけを足す。ブレースは既定の `Attach`） | `tools/requirements.txt`（pip の `clang-format==X`。3 OS で同じ出力。`format.sh` は PATH の版が違えば止める） | いま |
 | PowerShell | `Invoke-Formatter`（PSScriptAnalyzer） | `PSScriptAnalyzerSettings.psd1`（`CodeFormatting` と同じ規則で、`PSUseConsistentIndentation` の `Kind = 'tab'`） | `scripts/powershell.ps1` の `$version`（`Install-Module -RequiredVersion`。`-Mode Install` で入る） | いま |
 
-対象は、Go は `cli/`、sh は `scripts/`、C++ と PowerShell は git が追う・無視しないファイル
+対象は、Go は `cli/`、sh は `scripts/` と `tests/hooks/`、C++ と PowerShell は git が追う・無視しないファイル
 （`git ls-files -co --exclude-standard`。ビルドの出力や SDK の写しを含めない）です。PowerShell の
 整形と検査は `scripts/powershell.ps1` を通して行います（PSScriptAnalyzer を呼ぶための入口で、
-`format.sh` と `lint.sh` が呼ぶ）。
+`format.sh` と `lint.sh` が呼ぶ。フックのテストの Pester の版もここに置き、`hooks.yml` が呼ぶ）。
 
 Go で書かれたツールは `tools/go.mod` に `tool` で書き、`go -C tools tool <名前>` で呼びます。Go は
 すでに要るので、ほかのパッケージ管理を足さずに済みます。CLI の `go.mod` とは分けるので、
