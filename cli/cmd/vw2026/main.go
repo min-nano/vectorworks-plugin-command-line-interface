@@ -199,7 +199,8 @@ The session ends when Vectorworks quits, so take a new one after the restart.
 The commands exit with
 
 	0  success
-	1  any other failure (cannot write, cannot start, cannot locate the spool)
+	1  any other failure (cannot write, cannot start, cannot locate the spool,
+	   cannot write the output: a tool or install may have run then)
 	2  wrong usage
 	3  timed out, or refused for a missing wait file (the tool did not run and will not run;
 	   Vectorworks is running)
@@ -313,8 +314,9 @@ func emit(e *env, value any) int {
 	return emitRaw(e, data)
 }
 
-// emitRaw は data をそのまま 1 行で書く。書けなければ（ディスクが一杯・読む側がパイプを閉じた）失敗の終了コードを
-// 返す（呼ぶ側のスクリプトが、空や途中までの出力を正しいものとして扱わないように）。
+// emitRaw は data をそのまま 1 行で書く。書けなければ（ディスクが一杯など）失敗の終了コードを返す（呼ぶ側の
+// スクリプトが、空や途中までの出力を正しいものとして扱わないように）。読む側が閉じたパイプへの書き込みは、
+// macOS と Linux では Go の既定どおり SIGPIPE で終わり、ここへは来ない（Windows では誤りとして来る）。
 func emitRaw(e *env, data []byte) int {
 	if _, err := fmt.Fprintf(e.stdout, "%s\n", data); err != nil {
 		fmt.Fprintf(e.stderr, "vw2026: write output: %v\n", err)
