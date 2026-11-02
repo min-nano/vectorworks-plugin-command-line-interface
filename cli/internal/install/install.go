@@ -269,6 +269,19 @@ func checkCLI(plugins, name string) error {
 	return nil
 }
 
+// precheck は、install・uninstall が何かを変える前の確かめを、両方で同じ順にする。cli の記録（checkCLI）を、
+// Vectorworks が動いているか（stopped）より先に確かめる（cli の記録の誤りは、Vectorworks を終えて走らせ直しても
+// 通らないので、先に答える）。running が偽なら（install --check）動いているかは見ない。
+func precheck(p places, name string, running bool) error {
+	if err := checkCLI(p.plugins, name); err != nil {
+		return err
+	}
+	if running {
+		return stopped(p)
+	}
+	return nil
+}
+
 // CheckName は名前の書き方を確かめる（誤りは使い方の誤り）。呼ぶ側（cmd）は、場所を求める前にこれで確かめる
 // （場所が分からないときも、書き方の誤りを使い方の誤りとして答える）。
 func CheckName(name string) error {
@@ -323,9 +336,6 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 	if err := CheckRegistries(o.Registries); err != nil {
 		return nil, err
 	}
-	if err := checkCLI(p.plugins, name); err != nil {
-		return nil, err
-	}
 	result := &InstallResult{
 		Name:       name,
 		Requested:  requested,
@@ -333,13 +343,13 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 		Target:     o.Target,
 		PluginsDir: p.plugins,
 	}
-	// Vectorworks が動いていれば、レジストリ・マニフェストを取る前に答える（ネットワークの誤りや記録の誤りより先に、
-	// 終了コード 6。同じタグでも動いていればフックを走らせない）。--check は動いていてもよい。付け替えの直前にも
+	// cli の記録と、Vectorworks が動いているかを、レジストリ・マニフェストを取る前に答える（ネットワークの誤りや
+	// 記録の誤りより先に。同じタグでも動いていればフックを走らせない）。--check は動いていてもよい。付け替えの直前にも
 	// もう一度見る（replace）。
-	if !check {
-		if err := stopped(p); err != nil {
-			return result, err
-		}
+	if err := precheck(p, name, !check); errors.Is(err, ErrRunning) {
+		return result, err
+	} else if err != nil {
+		return nil, err
 	}
 	entry, source, err := o.lookup(name)
 	if err != nil {
