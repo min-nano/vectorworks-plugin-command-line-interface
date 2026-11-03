@@ -10,8 +10,16 @@ shfmt_scripts() {
 }
 
 # require_clang は、PATH の clang-format・clang-tidy（$1）が tools/requirements.txt の版でなければ止める
-# （版で出力と指摘が変わるため）。
+# （版で出力と指摘が変わるため）。tools/requirements.txt の clang-format と clang-tidy の版が違っても止める
+# （同じ版にそろえる。docs/lint.md）。2 つは PyPI の別のパッケージで、版の出る時期が違うので、Dependabot は
+# 片方だけを上げた PR を作ることがある。ここで止めて、もう片方の版が出るまでマージさせない。
 require_clang() {
+	format="$(sed -n 's/^clang-format==//p' tools/requirements.txt)"
+	tidy="$(sed -n 's/^clang-tidy==//p' tools/requirements.txt)"
+	if [ "$format" != "$tidy" ]; then
+		echo "tools/requirements.txt pins clang-format $format and clang-tidy $tidy; pin both to the same version" >&2
+		exit 1
+	fi
 	want="$(sed -n "s/^$1==//p" tools/requirements.txt)"
 	if ! "$1" --version 2>/dev/null | grep -qF "version $want"; then
 		echo "$1 $want is required: pip install -r tools/requirements.txt" >&2
