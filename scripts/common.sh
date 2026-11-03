@@ -21,13 +21,15 @@ require_clang() {
 	clang_pin clang-tidy
 	common_tidy="$common_pin"
 	if [ "$common_format" != "$common_tidy" ]; then
-		echo "tools/requirements.txt pins clang-format $common_format and clang-tidy $common_tidy;" \
-			"pin both to the same version" >&2
+		echo "tools/requirements.txt pins clang-format $common_format and" \
+			"clang-tidy $common_tidy; pin both to the same version" >&2
 		exit 1
 	fi
-	common_found="$("$1" --version 2>/dev/null | sed -n 's/.*version \([0-9][0-9.]*\).*/\1/p' | head -n 1)"
+	common_found="$("$1" --version 2>/dev/null |
+		sed -n 's/.*version \([0-9][0-9.]*\).*/\1/p' | head -n 1)"
 	if [ "$common_found" != "$common_format" ]; then
-		echo "$1 $common_format is required (found ${common_found:-none}): pip install -r tools/requirements.txt" >&2
+		echo "$1 $common_format is required (found ${common_found:-none}):" \
+			"pip install -r tools/requirements.txt" >&2
 		exit 1
 	fi
 }
@@ -44,7 +46,8 @@ clang_pin() {
 	if [ -z "$common_line" ]; then
 		echo "tools/requirements.txt does not pin $1 with ==" >&2
 	else
-		echo "tools/requirements.txt pins $1 as \"$common_line\"; write it as $1==<version> (digits and dots) alone on the line" >&2
+		echo "tools/requirements.txt pins $1 as \"$common_line\";" \
+			"write it as $1==<version> (digits and dots) alone on the line" >&2
 	fi
 	exit 1
 }

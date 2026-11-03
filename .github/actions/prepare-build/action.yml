@@ -1,5 +1,7 @@
 name: prepare-build
-description: build.yml の build-mac と build-windows が共に使う、取り出したあとの準備（SDK・Go・build.json）。SDK の場所と取る URL は、ジョブの環境変数 VW_SDK_DIR と VW_SDK_URL から読む。
+description: >-
+  build.yml の build-mac と build-windows が共に使う、取り出したあとの準備（SDK・Go・build.json）。
+  SDK の場所と取る URL は、ジョブの環境変数 VW_SDK_DIR と VW_SDK_URL から読む。
 inputs:
   sha:
     description: meta が決めたコミット。取り出したものがこれと同じかを確かめる。

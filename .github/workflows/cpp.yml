@@ -33,7 +33,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - run: cmake -S . -B build -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=${{ matrix.sanitizers }} -DVW_ENABLE_COVERAGE=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
+      # 折り返しは YAML の >-（行を空白でつなぐ）で行う。Windows の既定のシェル（pwsh）は \ でつなげないため。
+      - run: >-
+          cmake -S . -B build -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON
+          -DVW_ENABLE_SANITIZERS=${{ matrix.sanitizers }} -DVW_ENABLE_COVERAGE=ON
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
       - run: cmake --build build --config Debug
       # msvc はテストを計測の下で 1 回だけ走らせる（下のステップ）。
       - if: matrix.coverage != 'msvc'
