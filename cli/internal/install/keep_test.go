@@ -24,14 +24,17 @@ func failRecordWrite(t *testing.T, dir string) (restore func()) {
 	})
 }
 
-// checkMovedCLI は、よけた CLI の行き先を確かめる。old に残ったよけた CLI が moved 個で、0 個なら前の版のフォルダ
-// dir に c1 の vw2026 が戻っている。
-func checkMovedCLI(t *testing.T, h *harness, dir string, moved int) {
+// checkMovedCLI は、よけた CLI の行き先を確かめる。old に残ったよけた CLI が moved 個で、残ったなら（戻せなかった）
+// 知らせた文言 message が前の版のフォルダ dir の中の戻す先を示し、0 個なら dir に c1 の vw2026 が戻っている。
+func checkMovedCLI(t *testing.T, h *harness, dir string, moved int, message string) {
 	t.Helper()
 	if left, _ := filepath.Glob(filepath.Join(h.work, "old", oldCLIName+"*")); len(left) != moved {
 		t.Fatalf("%d moved vw2026 should stay in old: %v", moved, left)
 	}
 	if moved > 0 {
+		if target := filepath.Join(dir, "bin", "vw2026"); !strings.Contains(message, target) {
+			t.Fatalf("the message should name where to put vw2026 back (%s): %s", target, message)
+		}
 		return
 	}
 	if data, err := os.ReadFile(filepath.Join(dir, "bin", "vw2026")); err != nil || string(data) != "cli c1" {
@@ -246,15 +249,16 @@ func TestHookBreaksTheRecord(t *testing.T) {
 
 // フックが通ったのに hook_pending を外せず前の版を残すときは、よけた CLI を前の版のフォルダへ戻す（後始末が、
 // 前の版の vw2026 をよけた名前のまま消さない）。戻せなければ、知らせた場所のまま消さない（後始末が消すと、知らせた
-// 場所に無い）。どのケースも、標準エラーの文言・old に残ったよけた CLI の数・前の版の vw2026 を同じ形で確かめる。
+// 場所に無い）。どのケースも、標準エラーの文言（共通の文言と、ケースごとに足す extra）・old に残ったよけた CLI の
+// 数・前の版の vw2026 と戻す先の案内を同じ形で確かめる。
 func TestCannotClearHookPendingPutsTheMovedCLIBack(t *testing.T) {
 	for _, c := range []struct {
 		name    string
 		blocked bool
-		stderr  string
+		extra   string
 		moved   int
 	}{
-		{"put back", false, "hook succeeded", 0},
+		{"put back", false, "", 0},
 		{"cannot put back", true, "the vw2026 of the previous version is in", 1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -268,25 +272,26 @@ func TestCannotClearHookPendingPutsTheMovedCLIBack(t *testing.T) {
 			o, stderr := h.capturing()
 			o.Executable = h.fakeExecutable()
 			if result, err := Install(o, "cli", "c2", false); err != nil || result.Outcome != outcomeInstalled ||
-				!strings.Contains(stderr.String(), "hook succeeded") || !strings.Contains(stderr.String(), c.stderr) {
+				!strings.Contains(stderr.String(), "hook succeeded") ||
+				!strings.Contains(stderr.String(), c.extra) {
 				t.Fatalf("%+v %v %s", result, err, stderr.String())
 			}
-			checkMovedCLI(t, h, filepath.Join(h.work, "old", "cli"), c.moved)
+			checkMovedCLI(t, h, filepath.Join(h.work, "old", "cli"), c.moved, stderr.String())
 		})
 	}
 }
 
 // 新しい版を残すとき、よけた CLI は前の版のフォルダ（old）の元の場所へ戻す（前の版を手で戻しても CLI が欠けず、
-// 後始末がよけた名前のまま消さない）。戻せなければ、その場所を知らせる。どのケースも、誤りの文言・old に残った
-// よけた CLI の数・前の版の vw2026 を同じ形で確かめる。
+// 後始末がよけた名前のまま消さない）。戻せなければ、その場所を知らせる。どのケースも、誤りの文言（共通の文言と、
+// ケースごとに足す extra）・old に残ったよけた CLI の数・前の版の vw2026 と戻す先の案内を同じ形で確かめる。
 func TestKeepPutsTheMovedCLIIntoThePreviousVersion(t *testing.T) {
 	for _, c := range []struct {
 		name    string
 		blocked bool
-		err     string
+		extra   string
 		moved   int
 	}{
-		{"put back", false, "Vectorworks started", 0},
+		{"put back", false, "", 0},
 		{"cannot put back", true, "the vw2026 of the previous version is in", 1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -301,25 +306,27 @@ func TestKeepPutsTheMovedCLIIntoThePreviousVersion(t *testing.T) {
 			o.Executable = h.fakeExecutable()
 			_, err := Install(o, "cli", "c2", false)
 			<-done
-			if err == nil || !strings.Contains(err.Error(), "Vectorworks started") || !strings.Contains(err.Error(), c.err) {
+			if err == nil || !strings.Contains(err.Error(), "Vectorworks started") ||
+				!strings.Contains(err.Error(), c.extra) {
 				t.Fatal(err)
 			}
-			checkMovedCLI(t, h, filepath.Join(h.work, "old", "cli"), c.moved)
+			checkMovedCLI(t, h, filepath.Join(h.work, "old", "cli"), c.moved, err.Error())
 		})
 	}
 }
 
 // 記録の無い前の版を .kept-<時刻> へ脇へ移したときは、よけた CLI をそこへ戻す（利用者が戻すかもしれない版から、
-// vw2026 を消さない）。戻せなければ、その場所を知らせ、よけた CLI を消さない。どのケースも、標準エラーの文言・
-// 脇へ移した版・old に残ったよけた CLI の数・脇へ移した版の vw2026 を同じ形で確かめる。
+// vw2026 を消さない）。戻せなければ、その場所を知らせ、よけた CLI を消さない。どのケースも、標準エラーの文言
+// （共通の文言と、ケースごとに足す extra）・脇へ移した版・old に残ったよけた CLI の数・脇へ移した版の vw2026 と
+// 戻す先の案内を同じ形で確かめる。
 func TestKeptPreviousVersionGetsTheMovedCLI(t *testing.T) {
 	for _, c := range []struct {
 		name    string
 		blocked bool
-		stderr  string
+		extra   string
 		moved   int
 	}{
-		{"put back", false, "so it is kept in", 0},
+		{"put back", false, "", 0},
 		{"cannot put back", true, "the vw2026 of the previous version is in", 1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -339,14 +346,15 @@ func TestKeptPreviousVersionGetsTheMovedCLI(t *testing.T) {
 			o, stderr := h.capturing()
 			o.Executable = h.fakeExecutable()
 			if result, err := Install(o, "cli", "c2", false); err != nil || result.Outcome != outcomeInstalled ||
-				!strings.Contains(stderr.String(), "so it is kept in") || !strings.Contains(stderr.String(), c.stderr) {
+				!strings.Contains(stderr.String(), "so it is kept in") ||
+				!strings.Contains(stderr.String(), c.extra) {
 				t.Fatalf("%+v %v %s", result, err, stderr.String())
 			}
 			kept, _ := filepath.Glob(filepath.Join(h.work, "old", "cli.kept-*"))
 			if len(kept) != 1 {
 				t.Fatal("kept:", kept, stderr.String())
 			}
-			checkMovedCLI(t, h, kept[0], c.moved)
+			checkMovedCLI(t, h, kept[0], c.moved, stderr.String())
 		})
 	}
 }
