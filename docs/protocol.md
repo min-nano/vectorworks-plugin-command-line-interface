@@ -423,7 +423,7 @@
 
 | 道具 | 結果 |
 | --- | --- |
-| `tools` | `{"protocol":6,"tools":[{"name":…,"description":…,"inputSchema":{…},"kind":…}]}`。`inputSchema` は JSON Schema。`kind` は `read` / `write` / `app` の 3 つに限る（`app` は Vectorworks そのものに働く道具。図面を変えるか・Vectorworks を終わらせるかを呼ぶ側が判定できるように）。図面を変えるかが分からない道具は `write` とする |
+| `tools` | `{"protocol":6,"tools":[{"name":…,"description":…,"inputSchema":{…},"kind":…}]}`。`inputSchema` は JSON Schema。`kind` は `read` / `write` / `app` の 3 つに限る（`write` は図面の中身を変える道具、`app` は Vectorworks・図面のファイルや窓に働き、図面の中身は変えない道具。呼ぶ側が図面を変えるかと、占有が要るかを判定できるように。Vectorworks を終わらせるかは種類では決まらない）。図面を変えるかが分からない道具は `write` とする |
 | `session_start` | `{"session":"<印>"}`。[占有](#占有セッション)を始める |
 | `session_end` | `{"ended":true}`。占有を終える（要求に `session` が要る） |
 | `ping` | `{"version":…,"branch":…,"protocol":6,"pid":…,"session":…,…}`。プラグインの版（短い sha）・作ったブランチ・通信規則の版・受け付けている Vectorworks のプロセス ID。ほかのフィールドは[道具「ping」](plugin/tools.md#ping) |

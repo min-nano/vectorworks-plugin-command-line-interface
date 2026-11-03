@@ -1,15 +1,10 @@
-# Windows の実機での実測（段 2）
+# Windows の実機での確かめ方
 
-段 2 の実機確認で、Windows の Vectorworks の起動・終了と、プラグインの有無による違いを測った記録です。
-**解決していないことを含みます**（下記「分かっていないこと」）。結論のうち設計に関わるものは
-[SDK の調査 0](../sdk-research.md#0-拡張機能を-1-つも登録しないプラグインの読み込み) にも書いています。
+Windows の Vectorworks の起動・終了と、プラグインの有無による違いを実機で確かめる手順です。段 2 の実機確認で
+使い、[実装の順序「実機の確かめ方」](plan.md#実機の確かめ方)から指しています。
 
-**このページは、SDK リファレンスで調べ終わるまでの一時の記録です。** Vectorworks の挙動と実測の
-数値は、[#257](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/257)（終了時の
-アクセス違反）と [#258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)
-（開発元不明のダイアログ）で `Findings/` に反映したらそちらへ移し、ここにはこのプラグインの
-確かめ方（「確かめ方」の節。[実装の順序「実機の確かめ方」](plan.md#実機の確かめ方)から指している）
-だけを残します。
+段 2 で測った結果は SDK リファレンスの `Findings/` へ移しました（下記「結果の移った先」）。このプラグインでの扱いは
+[SDK の調査 0](../sdk-research.md#0-拡張機能を-1-つも登録しないプラグインの読み込み) にあります。
 
 ## 環境
 
@@ -41,61 +36,14 @@
   に `DumpType=2`。`%LOCALAPPDATA%\CrashDumps\` に 1 つ 2.5 GB 前後の完全なダンプが書かれる）を読む。
   VM ごと止まったかは System のイベント 1001（バグチェック）で見る。
 
-## 結果
+## 結果の移った先
 
-### プラグインが読み込まれ、受け付けること
+段 2 の実測（上の環境。プラグインは `0683df0` と `296a797`）は、次の調査で `Findings/` に反映しました。
 
-- 留めた版は、起動から 10〜50 秒前後で `cli.vlb` がプロセスに載り、`vw2026 status` が `running:true` に
-  なってから 0.2〜2.4 秒で `call ping` が応えた。`running:true` になるまでは起動から 36〜308 秒だった
-  （ホーム画面の前のこともある）。
-- `ping` は図面が無いとき `document_open:false`・`current_layer:null`、新しい図面を開いたとき
-  `document_open:true`・`current_layer:"レイヤ-1"` を返した。
-
-### 起動・終了
-
-| プラグイン | 図面 | 回数 | 終了コード 0 | `0xC0000005` | 途中で落ちた |
-| --- | --- | --- | --- | --- | --- |
-| `0683df0` | 開かない | 5 | 5 | 0 | 0 |
-| `296a797` | 開かない | 11 | 8 | 3 | 0 |
-| `296a797` | 新しい図面を開いて閉じる | 2 | —（1 回は正常に閉じたが終了コードを読めなかった。ダンプ無し） | 0 | 1（最初の描画中） |
-| なし | 開かない | 4 | 4 | 0 | 0 |
-| なし | 新しい図面を開いて閉じる | 2 | 2 | 0 | 0 |
-
-- **終了時の `0xC0000005`** は、閉じる指示から終わるまでに 45 秒前後かかり、Sentry のダンプは残らなかった。
-  LocalDumps で取った 1 件では、落ちたスレッドは**すでに外された `libcef.dll` の中を実行していた**
-  （例外は実行の違反で、番地はどの読み込まれたモジュールにも入らず、外されたモジュールの一覧の
-  `libcef.dll` の範囲に入る。スレッドの開始番地も同じ範囲）。スタックは `kernel32.dll` と `ntdll.dll` の
-  スレッドの始まりだけで、`cli.vlb` の番地は無かった。`cli.vlb` は落ちた時点でも読み込まれたままだった。
-  → **Vectorworks の終了の途中で CEF のスレッドが残ったまま `libcef.dll` が外された**と読める。
-- **新しい図面の最初の描画中に落ちた 1 回**は、`VW User Log.txt` が「ホーム画面を閉じる → 新しい図面 →
-  Direct3D 11 の初期化 → `PaintArea begin`」の直後に Sentry へ送っている。Sentry のダンプの例外は
-  `MaxonDocumentBuilder.vlb` の中での番地 0 の読み出しで、落ちたスレッドのスタックには Direct3D 11・
-  WARP・Cineware・Maxon のモジュールが並び、`cli.vlb` の番地は無かった。
-
-### VM ごとの停止
-
-起動や終了の前後で、VM ごと止まったことが 2 回あった（バグチェック `0xD1`。番地は前の記録と同じ
-`viogpudo.sys` のもの。UTM の virtio GPU ドライバ。SDK リファレンスの
-[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)
-の「読み違えやすいところ」）。そのときの Vectorworks の終了コードは取れていない。
-
-### 開発元不明のプラグイン
-
-[#258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258) と
-[#264](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/264) で `Findings/` に
-反映したので、そちらへ移しました（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の「開発元不明のプラグイン」のダイアログ）。
-このプラグインでの扱いは[構成「拡張機能を登録しない」](architecture.md#拡張機能を登録しない)です。
-
-## 分かっていないこと
-
-- **終了時の `0xC0000005` とプラグインの関係。** 落ちたのは `libcef.dll` の後始末で、`cli.vlb` は
-  関わっていない。図面を開かずに閉じた回で数えると、`296a797` で 11 回中 3 回、`0683df0` で 5 回中
-  0 回、なしで 4 回中 0 回である。`0683df0` と `296a797` の違いは、タイマーを作れなかったときに
-  やり直すか（やり直すと留めるのが重なる）と刻印の書き方だけで、タイマーを 1 度で作れた回の動きは
-  同じである。版の差か偶然か、プラグインが終了の順序や時間を変えて起こりやすくしているかは、
-  回数が少なく判断できない。
-  [SDK リファレンス #257](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/257)
-  で調べる。
-- **新しい図面の描画中に落ちたこととプラグインの関係。** 1 回だけで、なしでは 2 回とも落ちていない。
-- この VM（ARM64 上の x64 エミュレーション・WARP の描画・GPU のドライバ）に固有のことかどうか。
-  x64 の実機では測っていない。
+| 実測 | 移った先 |
+| --- | --- |
+| 拡張機能を登録しないプラグインが読み込まれ、受け付けること | [Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の「拡張機能を 1 つも登録しないモジュールも、有効なら起動時から常駐する」（[#252](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/252)） |
+| 終了時の `0xC0000005`（すでに外された `libcef.dll` の中で落ちる） | 同じページの「OS タイマーを持つ常駐プラグイン（留めたモジュール）は、終了時の落ち方を変えない」（[#257](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/257)）。82 回で差が無く、`296a797` を 40 回閉じても再現しなかった |
+| 新しい図面の最初の描画中に `MaxonDocumentBuilder.vlb` の中で落ちた 1 回 | 同じページの「新しい図面の最初の描画——30 回で 1 度も落ちなかった」（[#270](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/270)） |
+| VM ごとの停止（`viogpudo.sys` のバグチェック `0xD1`） | 同じページの「読み違えやすいところ」 |
+| 開発元不明のプラグイン | 同じページの「開発元不明のプラグイン」のダイアログ（[#258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)・[#264](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/264)）。このプラグインでの扱いは[構成「拡張機能を登録しない」](architecture.md#拡張機能を登録しない) |
