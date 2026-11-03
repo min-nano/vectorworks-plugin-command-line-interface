@@ -16,12 +16,10 @@ shfmt_scripts() {
 # Dependabot は片方だけを上げた PR を作ることがある。ここで止めて、もう片方の版が出るまでマージさせない。
 # sh には local が無いので、呼ぶ側の変数と重ならないよう、名前を common_ で始める。
 require_clang() {
-	common_format="$(sed -n 's/^clang-format==\([0-9][0-9.]*\)$/\1/p' tools/requirements.txt)"
-	common_tidy="$(sed -n 's/^clang-tidy==\([0-9][0-9.]*\)$/\1/p' tools/requirements.txt)"
-	if [ -z "$common_format" ] || [ -z "$common_tidy" ]; then
-		echo "tools/requirements.txt must pin clang-format and clang-tidy with ==" >&2
-		exit 1
-	fi
+	clang_pin clang-format
+	common_format="$common_pin"
+	clang_pin clang-tidy
+	common_tidy="$common_pin"
 	if [ "$common_format" != "$common_tidy" ]; then
 		echo "tools/requirements.txt pins clang-format $common_format and clang-tidy $common_tidy;" \
 			"pin both to the same version" >&2
@@ -32,6 +30,23 @@ require_clang() {
 		echo "$1 $common_format is required (found ${common_found:-none}): pip install -r tools/requirements.txt" >&2
 		exit 1
 	fi
+}
+
+# clang_pin は、tools/requirements.txt の $1（clang-format か clang-tidy）を固定した版を common_pin に入れる。行末の
+# CR は除く（Windows で autocrlf の checkout）。== の行が無いときと、== の行から版（数字とドット）を読めないとき
+# （接尾辞の付いた版・行末のコメント）は止め、読めなかったときはその行を示す（固定していないと誤って伝えない）。
+clang_pin() {
+	common_line="$(tr -d '\r' <tools/requirements.txt | grep "^$1==" || true)"
+	common_pin="$(printf '%s\n' "$common_line" | sed -n "s/^$1==\([0-9][0-9.]*\)\$/\1/p")"
+	if [ -n "$common_pin" ]; then
+		return
+	fi
+	if [ -z "$common_line" ]; then
+		echo "tools/requirements.txt does not pin $1 with ==" >&2
+	else
+		echo "tools/requirements.txt pins $1 as \"$common_line\"; write it as $1==<version> (digits and dots) alone on the line" >&2
+	fi
+	exit 1
 }
 
 # powershell_files は、git が追う・無視しない PowerShell のファイルを並べる（ビルドの出力や SDK の写しを

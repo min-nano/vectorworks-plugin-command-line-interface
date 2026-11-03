@@ -107,7 +107,6 @@ jobs:
         with:
           sha: ${{ needs.meta.outputs.sha }}
           sdk-cache-prefix: vw-sdk-2026-mac
-          sdk-dir: ${{ env.VW_SDK_DIR }}
       # SDK リファレンスの plugin/ が実機で読み込まれているビルドと同じ Xcode に合わせる。
       - run: sudo xcode-select -s /Applications/Xcode_16.2.app
       - name: plug-in
@@ -177,7 +176,6 @@ jobs:
         with:
           sha: ${{ needs.meta.outputs.sha }}
           sdk-cache-prefix: vw-sdk-2026-win
-          sdk-dir: ${{ env.VW_SDK_DIR }}
       - name: plug-in
         env:
           BRANCH: ${{ needs.meta.outputs.branch }}

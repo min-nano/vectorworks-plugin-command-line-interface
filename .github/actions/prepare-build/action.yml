@@ -1,14 +1,11 @@
 name: prepare-build
-description: build.yml の build-mac と build-windows が共に使う、取り出したあとの準備（SDK・Go・build.json）。
+description: build.yml の build-mac と build-windows が共に使う、取り出したあとの準備（SDK・Go・build.json）。SDK の場所と取る URL は、ジョブの環境変数 VW_SDK_DIR と VW_SDK_URL から読む。
 inputs:
   sha:
     description: meta が決めたコミット。取り出したものがこれと同じかを確かめる。
     required: true
   sdk-cache-prefix:
     description: SDK のキャッシュのキーの前置き（scripts/vw-sdk-cache-key.sh に渡す）。
-    required: true
-  sdk-dir:
-    description: SDK を置く場所（ジョブの VW_SDK_DIR。scripts/fetch-vw-sdk.sh は環境変数の VW_SDK_DIR と VW_SDK_URL を読む）。
     required: true
 runs:
   using: composite
@@ -24,9 +21,10 @@ runs:
       run: scripts/vw-sdk-cache-key.sh "$PREFIX"
       env:
         PREFIX: ${{ inputs.sdk-cache-prefix }}
+    # キャッシュする場所は、scripts/fetch-vw-sdk.sh が SDK を置く場所と同じ環境変数から取る（食い違わないように）。
     - uses: actions/cache@v6
       with:
-        path: ${{ inputs.sdk-dir }}
+        path: ${{ env.VW_SDK_DIR }}
         key: ${{ steps.sdk-key.outputs.key }}
         restore-keys: ${{ steps.sdk-key.outputs.restore-keys }}
     - shell: bash

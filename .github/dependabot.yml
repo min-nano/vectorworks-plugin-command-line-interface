@@ -4,11 +4,15 @@ updates:
     directory: /cli
     schedule:
       interval: daily
-  # .github/actions/ の composite action も同じ PR で上げる。
+  # .github/actions/ の composite action も同じ PR で上げる（groups が無いと、ディレクトリごとに別の PR になり、
+  # 両方がマージされるまでワークフローと composite action で版が食い違う）。
   - package-ecosystem: github-actions
     directories: ["/", "/.github/actions/*"]
     schedule:
       interval: daily
+    groups:
+      actions:
+        patterns: ["*"]
   - package-ecosystem: gomod
     directory: /tools
     schedule:
