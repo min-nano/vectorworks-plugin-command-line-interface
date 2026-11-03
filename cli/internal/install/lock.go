@@ -63,15 +63,18 @@ func checkCLI(plugins, name string) error {
 			"uninstalls a plug-in only in the folder of plug-ins that has cli (it tells "+
 			"whether Vectorworks is running from the lock of cli). If an install or "+
 			"uninstall of cli stopped halfway, quit Vectorworks, run that install or "+
-			"uninstall of cli again with the first-time script (get-vw2026), then run "+
-			"this again", plugins)
+			"uninstall of cli again with the first-time script (get-vw2026; give it "+
+			"--plugins-dir %s unless this is the default folder of plug-ins), then run "+
+			"this again", plugins, plugins)
 	}
 	return nil
 }
 
 // precheck は、install・uninstall が何かを変える前の確かめを、両方で同じ順にする。cli の記録（checkCLI）を、
 // Vectorworks が動いているか（stopped）より先に確かめる（cli の記録の誤りは、Vectorworks を終えて走らせ直しても
-// 通らないので、先に答える）。running が偽なら（install --check）動いているかは見ない。
+// 通らないので、先に答える）。cli の install・uninstall が途中で止まって cli が無いときは、
+// Vectorworks を終えて先にそれを終えれば通る（checkCLI の文言がそう案内する）。running が
+// 偽なら（install --check）動いているかは見ない。
 func precheck(p places, name string, running bool) error {
 	if err := checkCLI(p.plugins, name); err != nil {
 		return err

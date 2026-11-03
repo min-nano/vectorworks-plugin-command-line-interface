@@ -400,7 +400,8 @@ func TestNoCLIAfterStoppedCLISwap(t *testing.T) {
 	plugins, work := snapshot(t, h.plugins), snapshot(t, h.work)
 	noCLI := func(err error) bool {
 		return err != nil && strings.Contains(err.Error(), "has no cli") &&
-			strings.Contains(err.Error(), "quit Vectorworks")
+			strings.Contains(err.Error(), "quit Vectorworks") &&
+			strings.Contains(err.Error(), "--plugins-dir "+h.plugins)
 	}
 	if _, err := h.install("demo", "d1"); !noCLI(err) {
 		t.Fatalf("install: %v", err)
