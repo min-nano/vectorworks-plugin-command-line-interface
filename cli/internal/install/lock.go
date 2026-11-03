@@ -73,13 +73,13 @@ func checkCLI(plugins, name string) error {
 // precheck は、install・uninstall が何かを変える前の確かめを、両方で同じ順にする。cli の記録（checkCLI）を、
 // Vectorworks が動いているか（stopped）より先に確かめる（cli の記録の誤りは、Vectorworks を終えて走らせ直しても
 // 通らないので、先に答える）。cli の install・uninstall が途中で止まって cli が無いときは、
-// Vectorworks を終えて先にそれを終えれば通る（checkCLI の文言がそう案内する）。running が
+// Vectorworks を終えて先にそれを終えれば通る（checkCLI の文言がそう案内する）。checkLock が
 // 偽なら（install --check）動いているかは見ない。
-func precheck(p places, name string, running bool) error {
+func precheck(p places, name string, checkLock bool) error {
 	if err := checkCLI(p.plugins, name); err != nil {
 		return err
 	}
-	if running {
+	if checkLock {
 		return stopped(p)
 	}
 	return nil

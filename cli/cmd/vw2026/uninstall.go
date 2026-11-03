@@ -99,7 +99,7 @@ func (c *uninstallCmd) run(e *env) int {
 	var inside *install.RunsInsideError
 	switch {
 	case errors.Is(err, install.ErrRunning):
-		return deployRunning(e, c.Name, err, result)
+		return deployRunning(e, err, result)
 	case errors.As(err, &inside):
 		// 入れた cli の vw2026 では外さず、入っているタグの初回のスクリプトと CLI で外すよう案内する。
 		// PR のプレリリースは PR を閉じると消えるので、latest で外すコマンドも示す。
