@@ -564,7 +564,8 @@ func TestUninstallCannotDeleteTheFolder(t *testing.T) {
 	old := filepath.Join(h.work, "old", "cli")
 	marker := filepath.Join(h.work, "old", "cli.uninstalling")
 	restore := failRename(t, old, filepath.Join(h.work, "staging", "cli"))
-	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "run uninstall again") {
+	if _, err := Uninstall(h.options(), "cli"); err == nil ||
+		!strings.Contains(err.Error(), "run uninstall cli again") {
 		t.Fatal(err)
 	}
 	if !exist(marker) || !validRecord(old, "cli") || exist(filepath.Join(h.plugins, "cli")) {
@@ -722,7 +723,7 @@ func TestDiscardWithoutStaging(t *testing.T) {
 }
 
 // uninstall の discard が失敗したら（<Work>/staging を作れない・old から組み立ての場所へ移せない）、old へ移した
-// フォルダと印を残して失敗にする（走らせ直すと続きから走る）。走らせ直す案内（run uninstall again）は 1 つだけで、
+// フォルダと印を残して失敗にする（走らせ直すと続きから走る）。走らせ直す案内（run uninstall demo again）は 1 つだけで、
 // 誤りの連鎖は discard の中まで続かない（cmd が ErrRunning などを discard の中から拾わないように）。
 func TestUninstallDiscardFailure(t *testing.T) {
 	for name, fail := range map[string]func(t *testing.T, h *harness){
@@ -742,7 +743,8 @@ func TestUninstallDiscardFailure(t *testing.T) {
 			fail(t, h)
 			_, err := Uninstall(h.options(), "demo")
 			if err == nil || !strings.Contains(err.Error(), "demo is out of the folder of plug-ins, but") ||
-				strings.Count(err.Error(), "again") != 1 || !strings.Contains(err.Error(), "run uninstall again") ||
+				strings.Count(err.Error(), "again") != 1 ||
+				!strings.Contains(err.Error(), "run uninstall demo again") ||
 				errors.Is(err, errInjected) {
 				t.Fatal(err)
 			}
@@ -750,6 +752,28 @@ func TestUninstallDiscardFailure(t *testing.T) {
 				t.Fatal("should keep old and the marker")
 			}
 		})
+	}
+}
+
+// install の付け替えの前の片付け（settleOld の discard）が失敗したら、何も変えずに失敗にし、走らせ直す
+// install <name>@<tag> を 1 つだけ案内する（settleOld が受け取った again が discard・renameError まで届く）。
+func TestInstallDiscardFailure(t *testing.T) {
+	h := newHarness(t)
+	h.installCLI()
+	// 前回の残り（記録の正しい前の版）が old にあると、付け替えの前に組み立ての場所へ移してから消す。
+	old := filepath.Join(h.work, "old", "cli")
+	if err := os.CopyFS(old, os.DirFS(filepath.Join(h.plugins, "cli"))); err != nil {
+		t.Fatal(err)
+	}
+	h.publish(release{name: "cli", tag: "c2"})
+	failRename(t, old, filepath.Join(h.work, "staging", "cli"))
+	_, err := h.install("cli", "c2")
+	if err == nil || strings.Count(err.Error(), "again") != 1 ||
+		!strings.Contains(err.Error(), "run install cli@c2 again") {
+		t.Fatal(err)
+	}
+	if h.installedVersion("cli") != "c1" || !validRecord(old, "cli") {
+		t.Fatal("should change nothing")
 	}
 }
 
@@ -937,7 +961,8 @@ func TestUninstallCannotEmptyTheStaging(t *testing.T) {
 	h.installCLI()
 	old := filepath.Join(h.work, "old", "cli")
 	os.MkdirAll(filepath.Join(h.work, "staging", "cli.zip", "x"), 0o700)
-	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "run uninstall again") {
+	if _, err := Uninstall(h.options(), "cli"); err == nil ||
+		!strings.Contains(err.Error(), "run uninstall cli again") {
 		t.Fatal(err)
 	}
 	if !validRecord(old, "cli") || !exist(filepath.Join(h.work, "old", "cli.uninstalling")) {

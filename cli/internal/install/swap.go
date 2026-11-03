@@ -53,7 +53,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 		if err := rename(p.dest, p.oldDir); err != nil {
 			note := moved.restore()
 			_ = removeStaging(p)
-			return nil, fmt.Errorf("%w%s", renameError(p.dest, err, "install"), note)
+			return nil, fmt.Errorf("%w%s", renameError(p.dest, err, again), note)
 		}
 	}
 	if err := mkdirAll(p.plugins, 0o755); err != nil {
@@ -67,7 +67,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 		name: name, tag: tag, previous: previous, target: o.Target, pluginDir: p.dest, installDir: p.dest,
 	})
 	if err != nil {
-		return nil, undoHook(p, hadOld, moved, err)
+		return nil, undoHook(p, hadOld, moved, again, err)
 	}
 	o.finishInstall(p, name, tag, moved, hadOld)
 	return hook, nil
@@ -87,10 +87,11 @@ func (o *Options) finishInstall(p places, name, tag string, moved *movedCLI, had
 	// かもしれない）。
 	var kept error
 	keptDir := ""
+	again := fmt.Sprintf("install %s@%s", name, tag)
 	if err := clearHookPending(p.dest); err != nil {
-		kept = fmt.Errorf("cannot record that the install hook succeeded (%v); run install with the same tag again", err)
+		kept = fmt.Errorf("cannot record that the install hook succeeded (%v); run %s again",
+			err, again)
 	} else {
-		again := fmt.Sprintf("install %s@%s", name, tag)
 		cleanUp := "the new version is installed; quit Vectorworks, then run " + again +
 			" again to clean it up"
 		keptDir, kept = o.settleOld(p, name, again, cleanUp)
@@ -130,8 +131,8 @@ func undoSwap(p places, hadOld bool, moved *movedCLI, cause error) error {
 }
 
 // undoHook はフックが失敗したときに前の版へ戻す。戻す前にロックを見て、Vectorworks が起動していれば
-// 新しい版を残す（動いているプラグインのロックごと消さない）。
-func undoHook(p places, hadOld bool, moved *movedCLI, cause error) error {
+// 新しい版を残す（動いているプラグインのロックごと消さない）。again は、走らせ直すコマンド（install <name>@<tag>）。
+func undoHook(p places, hadOld bool, moved *movedCLI, again string, cause error) error {
 	previous := ""
 	if hadOld {
 		previous = fmt.Sprintf(" (the previous one is in %s)", p.oldDir)
@@ -146,7 +147,8 @@ func undoHook(p places, hadOld bool, moved *movedCLI, cause error) error {
 		// 取った zip はもう要らない（同じタグで走らせ直す install は zip を取らない）。
 		_ = removeFile(p.stageZip)
 		return fmt.Errorf("%w; %s, so the new version stays in %s%s: quit Vectorworks, "+
-			"then run install with the same tag again (it runs only the hook)%s", cause, reason, p.dest, previous, note)
+			"then run %s again (it runs only the hook)%s",
+			cause, reason, p.dest, previous, again, note)
 	}
 	if running(p) {
 		return keep(startedMeanwhile)
@@ -231,7 +233,7 @@ func (o *Options) settleOld(p places, name, again, advice string) (string, error
 // 移してから消す。消すのが途中で止まっても（Windows でウイルス対策がファイルを開いているなど）、半分
 // 消えたフォルダは old に残らず（記録が先に消えて、次の回が唯一の版と見分けられなくなることがない）、
 // 次の install・uninstall が組み立ての場所として消す。移せなければ何も変えずに失敗にする。どの失敗も、command
-// （走らせ直すコマンド。install <name>@<tag> か uninstall）を走らせ直すよう案内する文言で返す（呼ぶ側は案内を足さない）。
+// （走らせ直すコマンド。install <name>@<tag> か uninstall <name>）を走らせ直すよう案内する文言で返す（呼ぶ側は案内を足さない）。
 func (o *Options) discard(p places, name, command string) error {
 	if err := removeStaging(p); err != nil {
 		return fmt.Errorf("%w; run %s again", err, command)
@@ -252,7 +254,7 @@ func (o *Options) discard(p places, name, command string) error {
 
 // renameError は付け替えの 1 つ目（<Plug-Ins>/<name> を移す）が失敗したときの文言。Windows では、
 // フォルダの中のものを開いているプロセスが居ると名前を変えられない。どれかは見分けられない。command（走らせ直す
-// コマンド。install <name>@<tag> か uninstall）を走らせ直すよう案内する。
+// コマンド。install <name>@<tag> か uninstall <name>）を走らせ直すよう案内する。
 func renameError(dir string, err error, command string) error {
 	return fmt.Errorf("cannot rename %s (%w). Close what has files in it open (Explorer, antivirus software, "+
 		"Vectorworks), move the current directory of terminals and other programs out of it, then run %s again",
