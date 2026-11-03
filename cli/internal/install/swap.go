@@ -91,7 +91,8 @@ func (o *Options) finishInstall(p places, name, tag string, moved *movedCLI, had
 		kept = fmt.Errorf("cannot record that the install hook succeeded (%v); run install with the same tag again", err)
 	} else {
 		again := fmt.Sprintf("install %s@%s", name, tag)
-		cleanUp := "the new version is installed; quit Vectorworks, then run " + again + " again to clean it up"
+		cleanUp := "the new version is installed; quit Vectorworks, then run " + again +
+			" again to clean it up"
 		keptDir, kept = o.settleOld(p, name, again, cleanUp)
 	}
 	if kept != nil && hadOld && exists(p.oldDir) {
