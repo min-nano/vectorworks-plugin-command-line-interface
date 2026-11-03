@@ -43,6 +43,8 @@ struct Opened {
 
 // openRegular は通常のファイルだけを開く。
 Opened openRegular(const std::string &path, int flags, mode_t mode = 0) {
+	// open のフラグ（O_*）は POSIX が int と決めているので、符号付きのまま組み合わせる。
+	// NOLINTNEXTLINE(bugprone-signed-bitwise)
 	int fd = ::open(path.c_str(), flags | kOpenFlags, mode);
 	if (fd < 0) {
 		int failure = errno;

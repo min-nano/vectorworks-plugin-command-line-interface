@@ -1,0 +1,25 @@
+name: setup-checks
+description: format.yml と lint.yml が共に使う、整形と検査のツールの準備（docs/format.md・docs/lint.md）。
+runs:
+  using: composite
+  steps:
+    # go vet はビルドと同じ cli/go.mod の Go で実行する。整形と検査のツールは、開発者環境で
+    # scripts/format.sh・scripts/lint.sh を実行するときと同様に、tools/go.mod に記述したバージョンの
+    # Go へ go が切り替えて実行する（呼ぶ側が GOTOOLCHAIN=auto を渡す）。
+    - uses: actions/setup-go@v7
+      with:
+        go-version-file: cli/go.mod
+        cache-dependency-path: |
+          tools/go.sum
+          cli/go.sum
+    # clang-format と clang-tidy は tools/requirements.txt の版を pip で入れる（ランナーの版は決まらない）。
+    - name: clang
+      shell: bash
+      run: |
+        python3 -m venv "$RUNNER_TEMP/venv"
+        "$RUNNER_TEMP/venv/bin/pip" install -r tools/requirements.txt
+        echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+    # PSScriptAnalyzer は scripts/powershell.ps1 が固定した版を入れる（pwsh はランナーにある）。
+    - name: PSScriptAnalyzer
+      shell: bash
+      run: pwsh -NoProfile -File scripts/powershell.ps1 -Mode Install

@@ -10,9 +10,9 @@ permissions:
   contents: read
 
 # cli のフック（scripts/hooks/）のテスト（docs/plugin/install-and-update.md「テスト」）。フックが
-# 走るのと同じもの（mac の /bin/sh・Windows PowerShell 5.1）で走らせる。どちらも HOME と
-# VW2026_HOOK_* に一時ディレクトリを渡し、Windows は利用者の Path を偽の置き場所に替えるので、
-# ランナーの利用者の場所に触れない。必須のチェックにできるよう、パスで絞らない。
+# 走るのと同じもの（mac の /bin/sh・Windows PowerShell 5.1）で走らせる。どちらも VW2026_HOOK_* に
+# 一時ディレクトリを渡し、mac は HOME も一時ディレクトリにし、Windows は利用者の Path を偽の置き場所に
+# 替えるので、ランナーの利用者の場所に触れない。必須のチェックにできるよう、パスで絞らない。
 jobs:
   sh:
     runs-on: macos-latest

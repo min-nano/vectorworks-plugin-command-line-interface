@@ -44,7 +44,7 @@ PSScriptAnalyzer も選べるためです。これで YAML と Markdown を除�
 | --- | --- | --- | --- | --- |
 | Go | gofmt | なし（設定できない） | `tools/go.mod` の Go の gofmt（PATH のものは使わない） | いま |
 | sh | shfmt | `.editorconfig` を読む。フラグで上書きしない | `tools/go.mod` | いま |
-| C++ / Objective-C++ | clang-format | `.clang-format`（LLVM の既定に `UseTab: ForIndentation`・`IndentWidth`・`TabWidth`・`ColumnLimit: 100`・`AccessModifierOffset` だけを足す。ブレースは既定の `Attach`） | `tools/requirements.txt`（pip の `clang-format==X`。3 OS で同じ出力。`format.sh` は PATH の版が違えば止める） | いま |
+| C++ / Objective-C++ | clang-format | `.clang-format`（LLVM の既定に `UseTab: ForIndentation`・`IndentWidth`・`TabWidth`・`ColumnLimit: 100`・`AccessModifierOffset` だけを足す。ブレースは既定の `Attach`） | `tools/requirements.txt`（pip の `clang-format==X`。3 OS で同じ出力。clang-tidy と同じ版にする。`format.sh` は、PATH の版が違うときと、clang-tidy の版と違うときに止める。[検査](lint.md)） | いま |
 | PowerShell | `Invoke-Formatter`（PSScriptAnalyzer） | `PSScriptAnalyzerSettings.psd1`（`CodeFormatting` と同じ規則で、`PSUseConsistentIndentation` の `Kind = 'tab'`） | `scripts/powershell.ps1` の `$version`（`Install-Module -RequiredVersion`。`-Mode Install` で入る） | いま |
 
 対象は、Go は `cli/`、sh は `scripts/` と `tests/hooks/`、C++ と PowerShell は git が追う・無視しないファイル

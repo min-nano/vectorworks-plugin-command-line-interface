@@ -7,6 +7,8 @@ set -eu
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
+# shellcheck source=scripts/common.sh
+. "$root/scripts/common.sh"
 
 # 書き換えは --fix を指定したときだけ行う（打ち間違いで書き換えないため）。
 case "$#:${1-}" in
@@ -18,29 +20,19 @@ case "$#:${1-}" in
 	;;
 esac
 
-# 整形ツールは go.mod の無いリポジトリのルートでは動かないので、tools/ で実行し、絶対パスを渡す。
-shfmt() {
-	go -C tools tool shfmt "$@"
-}
-
 # PATH 上の gofmt は手元の Go の版になるので、tools/go.mod の Go の gofmt を使う（CI と同じ版）。
 gofmt="$(go -C tools env GOROOT)/bin/gofmt"
 
-# clang-format は版で出力が変わるので、tools/requirements.txt の版でなければ止める。
-want="$(sed -n 's/^clang-format==//p' tools/requirements.txt)"
-if ! clang-format --version 2>/dev/null | grep -qF "version $want"; then
-	echo "clang-format $want is required: pip install -r tools/requirements.txt" >&2
-	exit 1
-fi
+require_clang clang-format
 
 # 対象は git が追う・無視しないファイル（ビルドの出力や SDK の写しを含めない）。ファイル名に
 # 空白を含めない前提で、行ごとに引数へ分ける。
 cpp="$(git ls-files -co --exclude-standard -- '*.cpp' '*.h' '*.mm')"
-powershell="$(git ls-files -co --exclude-standard -- '*.ps1' '*.psm1' '*.psd1')"
+powershell="$(powershell_files)"
 
 if [ "$fix" = true ]; then
 	"$gofmt" -w cli
-	shfmt -w "$root/scripts" "$root/tests/hooks"
+	shfmt_scripts -w
 	# clang-format は対象が無いと標準入力を読むので、対象があるときだけ走らせる。
 	# shellcheck disable=SC2086
 	[ -z "$cpp" ] || clang-format -i $cpp
@@ -57,7 +49,7 @@ if [ -n "$files" ]; then
 	status=1
 fi
 # shfmt は .editorconfig の設定を読む（フラグで上書きしない）。整形が必要ならコード 1 で終了する。
-shfmt -l "$root/scripts" "$root/tests/hooks" || status=1
+shfmt_scripts -l || status=1
 # clang-format は整形が必要なファイルを並べないので、1 つずつ確かめて並べる。
 for file in $cpp; do
 	clang-format --dry-run --Werror "$file" 2>/dev/null || {
