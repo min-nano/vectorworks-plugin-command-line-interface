@@ -12,21 +12,13 @@ namespace {
 // mac のプラグインのバンドル（<name>.vwlibrary）の名前の終わり。
 constexpr std::string_view kBundleSuffix = ".vwlibrary";
 
-bool isSeparator(char c) {
-#ifdef _WIN32
-	return c == '/' || c == '\\';
-#else
-	return c == '/';
-#endif
-}
-
 }
 
 std::optional<std::string> spoolDirOf(const std::string &modulePath) {
 	// 区切りの位置を並べる（先頭から）。
 	std::vector<std::size_t> separators;
 	for (std::size_t at = 0; at < modulePath.size(); ++at) {
-		if (isSeparator(modulePath[at])) {
+		if (files::isSeparator(modulePath[at])) {
 			separators.push_back(at);
 		}
 	}

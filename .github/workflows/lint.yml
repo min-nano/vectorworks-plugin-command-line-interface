@@ -18,15 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # go vet はビルドと同じ cli/go.mod の Go で実行する。検査ツールは、開発者環境で
-      # scripts/lint.sh を実行するときと同様に、tools/go.mod に記述したバージョンの Go へ go が
-      # 切り替えて実行する（GOTOOLCHAIN=auto）。
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: cli/go.mod
-          cache-dependency-path: |
-            tools/go.sum
-            cli/go.sum
+      # Go・clang-tidy・PSScriptAnalyzer（format.yml と同じ準備）。
+      - uses: ./.github/actions/setup-checks
       # ランナーに入っている shellcheck は版が決まらないので、版を指定して取り、中身を照合する。
       - name: shellcheck
         run: |
@@ -38,14 +31,6 @@ jobs:
           echo "${SHELLCHECK_SHA256}  ${archive}" | sha256sum -c -
           tar -xJf "$archive" -C "$dir" --strip-components=1
           echo "$dir" >> "$GITHUB_PATH"
-      # clang-tidy は tools/requirements.txt の版を pip で入れる（ランナーの版は決まらない）。
-      - name: clang-tidy
-        run: |
-          python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install -r tools/requirements.txt
-          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
-      # PSScriptAnalyzer は scripts/powershell.ps1 が固定した版を入れる（pwsh はランナーにある）。
-      - run: pwsh -NoProfile -File scripts/powershell.ps1 -Mode Install
       - run: scripts/lint.sh
         env:
           GOTOOLCHAIN: auto

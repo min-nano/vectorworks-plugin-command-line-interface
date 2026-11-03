@@ -4,15 +4,22 @@ updates:
     directory: /cli
     schedule:
       interval: daily
+  # .github/actions/ の composite action も同じ PR で上げる（groups が無いと、ディレクトリごとに別の PR になり、
+  # 両方がマージされるまでワークフローと composite action で版が食い違う）。
   - package-ecosystem: github-actions
-    directory: /
+    directories: ["/", "/.github/actions/*"]
     schedule:
       interval: daily
+    groups:
+      actions:
+        patterns: ["*"]
   - package-ecosystem: gomod
     directory: /tools
     schedule:
       interval: daily
-  # clang-format と clang-tidy は同じ版にそろえる（docs/lint.md）ので、1 つの PR で上げる。
+  # clang-format と clang-tidy は同じ版にそろえる（docs/lint.md）ので、1 つの PR で上げる。2 つは PyPI の別の
+  # パッケージで版の出る時期が違い、片方だけを上げた PR もできる。その PR は format.sh・lint.sh が止める
+  # （scripts/common.sh）ので、もう片方の版が出て、この PR が両方を上げる形になるまでマージしない。
   - package-ecosystem: pip
     directory: /tools
     schedule:
