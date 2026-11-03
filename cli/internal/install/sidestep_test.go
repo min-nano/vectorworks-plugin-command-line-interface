@@ -127,7 +127,7 @@ func TestSidestepFollowsTheLink(t *testing.T) {
 	o := h.options()
 	o.Executable = link
 	moved, err := o.sidestep(filepath.Join(h.plugins, "cli"), filepath.Join(h.work, "old"))
-	if err != nil || moved == nil || moved.from != h.fakeExecutable() || exist(h.fakeExecutable()) {
+	if err != nil || moved == nil || moved.from() != h.fakeExecutable() || exist(h.fakeExecutable()) {
 		t.Fatalf("%+v %v", moved, err)
 	}
 	if note := moved.restore(); note != "" || !exist(h.fakeExecutable()) {

@@ -25,12 +25,18 @@ var oldCLIName = func() string {
 	return oldCLIPrefixes[0]
 }()
 
-// movedCLI は、よけた CLI の元の場所と移した先。nil ならよけていない。rel は、よけたフォルダ（sidestep の dir）から
-// 元の場所への相対パス（restoreInto が前の版のフォルダの中の同じ場所を求める）。
+// movedCLI は、よけた CLI の元の場所（よけたフォルダ dir と、そこからの相対パス rel）と移した先 to。nil なら
+// よけていない。元の場所は dir と rel から求め（from）、別に持たない（restore と restoreInto の戻す先がずれない
+// ように）。
 type movedCLI struct {
-	from string
-	to   string
-	rel  string
+	dir string
+	rel string
+	to  string
+}
+
+// from は、よけた CLI の元の場所。
+func (m *movedCLI) from() string {
+	return filepath.Join(m.dir, m.rel)
 }
 
 // restore はよけた CLI を元の場所へ戻す（動いていても名前の変更はできる）。戻せなければ（Windows でウイルス
@@ -40,9 +46,9 @@ func (m *movedCLI) restore() string {
 	if m == nil {
 		return ""
 	}
-	if err := rename(m.to, m.from); err != nil {
+	if err := rename(m.to, m.from()); err != nil {
 		return fmt.Sprintf("; the running vw2026 cannot be moved back (%v): move it back from %s to %s by hand "+
-			"before the next install or uninstall (they delete it)", err, m.to, m.from)
+			"before the next install or uninstall (they delete it)", err, m.to, m.from())
 	}
 	return ""
 }
@@ -67,7 +73,7 @@ func (m *movedCLI) where() string {
 	if m == nil {
 		return ""
 	}
-	return fmt.Sprintf(", then move the running vw2026 back from %s to %s", m.to, m.from)
+	return fmt.Sprintf(", then move the running vw2026 back from %s to %s", m.to, m.from())
 }
 
 // sidestep は、走らせている CLI の実行ファイルが dir の中にあれば、old へ名前の変更で移す
@@ -85,7 +91,7 @@ func (o *Options) sidestep(dir, old string) (*movedCLI, error) {
 	if err := rename(executable, to); err != nil {
 		return nil, err
 	}
-	return &movedCLI{from: filepath.Join(dir, rel), to: to, rel: rel}, nil
+	return &movedCLI{dir: dir, rel: rel, to: to}, nil
 }
 
 // stamp は、<Work>/old/ の中で重ならない名前に付ける時刻。

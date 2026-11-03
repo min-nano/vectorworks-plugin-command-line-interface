@@ -51,7 +51,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 		if err := rename(p.dest, p.oldDir); err != nil {
 			note := moved.restore()
 			_ = removeStaging(p)
-			return nil, fmt.Errorf("%w%s", renameError(p.dest, err), note)
+			return nil, fmt.Errorf("%w%s", renameError(p.dest, err, "install"), note)
 		}
 	}
 	if err := mkdirAll(p.plugins, 0o755); err != nil {
@@ -210,11 +210,11 @@ func (o *Options) settleOld(p places, name, advice string) (string, error) {
 		return "", fmt.Errorf("%w; %s is left because Vectorworks may use it (%s)", err, p.oldDir, advice)
 	}
 	if validRecord(p.oldDir, name) {
-		return "", o.discard(p, name)
+		return "", o.discard(p, name, "install")
 	}
 	kept := filepath.Join(p.old, name+".kept-"+stamp())
 	if err := rename(p.oldDir, kept); err != nil {
-		return "", renameError(p.oldDir, err)
+		return "", renameError(p.oldDir, err, "install")
 	}
 	fmt.Fprintf(o.stderr(), "vw2026: the previous folder of %s has no valid record or module, so it is kept in %s "+
 		"(it may hold your files); delete it when it is no longer needed\n", name, kept)
@@ -224,17 +224,18 @@ func (o *Options) settleOld(p places, name, advice string) (string, error) {
 // discard は、確かめた <Work>/old/<name>/ を組み立ての場所（<Work>/staging/<name>/）へ名前の変更で
 // 移してから消す。消すのが途中で止まっても（Windows でウイルス対策がファイルを開いているなど）、半分
 // 消えたフォルダは old に残らず（記録が先に消えて、次の回が唯一の版と見分けられなくなることがない）、
-// 次の install・uninstall が組み立ての場所として消す。移せなければ何も変えずに失敗にする。
-func (o *Options) discard(p places, name string) error {
+// 次の install・uninstall が組み立ての場所として消す。移せなければ何も変えずに失敗にする。どの失敗も、command
+// （install か uninstall）を走らせ直すよう案内する文言で返す（呼ぶ側は案内を足さない）。
+func (o *Options) discard(p places, name, command string) error {
 	if err := removeStaging(p); err != nil {
-		return err
+		return fmt.Errorf("%w; run %s again", err, command)
 	}
 	// uninstall は空の <Work>/staging を消すので、どの道から来ても、ここで作る。
 	if err := mkdirAll(p.staging, 0o700); err != nil {
-		return err
+		return fmt.Errorf("%w; run %s again", err, command)
 	}
 	if err := rename(p.oldDir, p.stageDir); err != nil {
-		return renameError(p.oldDir, err)
+		return renameError(p.oldDir, err, command)
 	}
 	if err := removeAll(p.stageDir); err != nil {
 		fmt.Fprintf(o.stderr(), "vw2026: %s cannot be deleted yet (%v); the next install or uninstall of %s deletes it\n",
@@ -244,10 +245,12 @@ func (o *Options) discard(p places, name string) error {
 }
 
 // renameError は付け替えの 1 つ目（<Plug-Ins>/<name> を移す）が失敗したときの文言。Windows では、
-// フォルダの中のものを開いているプロセスが居ると名前を変えられない。どれかは見分けられない。
-func renameError(dir string, err error) error {
+// フォルダの中のものを開いているプロセスが居ると名前を変えられない。どれかは見分けられない。command（install か
+// uninstall）を走らせ直すよう案内する。
+func renameError(dir string, err error, command string) error {
 	return fmt.Errorf("cannot rename %s (%w). Close what has files in it open (Explorer, antivirus software, "+
-		"Vectorworks), move the current directory of terminals and other programs out of it, then run again", dir, err)
+		"Vectorworks), move the current directory of terminals and other programs out of it, then run %s again",
+		dir, err, command)
 }
 
 func exists(path string) bool {

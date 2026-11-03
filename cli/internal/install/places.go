@@ -210,7 +210,7 @@ func lexicallyIn(path, dir string) bool {
 }
 
 // resolvedPath は、path のリンクを解いた書き方。まだ無ければ、あるところまでの親を解き、残りをそのまま足す（根まで
-// 解けなければ、書いたまま）。
+// 解けなければ、書いたまま）。まだ無いかもしれない場所に使う。実在する実行ファイルは spool.ResolveLinks で解く。
 func resolvedPath(path string) string {
 	for current, rest := path, ""; ; {
 		real, err := filepath.EvalSymlinks(current)
