@@ -24,7 +24,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 | [B5](#b5-段-24-では実機の確かめ方が成り立たない) | 段 2〜4 では実機の確かめ方が成り立たない | 段 2 | 済（段の入れ替えで、`install` の無い段は 2 だけになった。[実装の順序「実機の確かめ方」](plugin/plan.md#実機の確かめ方)） |
 | [C1](#c1-読む道具の結果に決まっていない点がある) | 読む道具の結果に決まっていない点がある | 段 5 | `ping` の `current_layer` は済（図面が無ければ `null`。[道具「ping」](plugin/tools.md#ping)）。ほかは未着手 |
 | [C2](#c2-ほかのプラグインの機能と書く道具の順序が矛盾する) | ほかのプラグインの機能と書く道具の順序が矛盾する | 進め方 3・4 | 未着手（A3 で、`write` の道具は占有の中でだけ呼べることになった） |
-| [C3](#c3-そのほか) | PR のプレリリースの sha・終了の処理中のタイマー | 段 2（sha）・段 6（タイマー） | 済（sha はブランチの head。[ビルドとリリース「リリースの形」](plugin/build-and-release.md#リリースの形)。タイマーは止めなくてよい。[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・[#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)） |
+| [C3](#c3-そのほか) | PR のプレリリースの sha・終了の処理中のタイマー | 段 2（sha）・段 6（タイマー） | sha は済（ブランチの head。[ビルドとリリース「リリースの形」](plugin/build-and-release.md#リリースの形)）。タイマーは、刻みから終了を頼む道（mac・Windows）と Windows の利用者が閉じる道は止めなくてよいと分かった（[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・[#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)）。mac の利用者が閉じる道は測っていないので、段 6 の実機確認で見る |
 
 ## A. 段 4・6 の前に決めること
 
@@ -45,7 +45,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 
 ### A2. `quit`・`ping` が使う SDK 呼び出しが確かめられていない
 
-- [SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)では、次が未確認である。
+- [SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)では、次が未確認だった（下記の「済」で確かめ終えた）。
   - OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼んでよいか
   - 保存の確認を取り消したときに呼び出しから戻るか
 - [実装の順序](plugin/plan.md)の段 6（`quit`）には「使う SDK 呼び出しが SDK リファレンスで
@@ -217,7 +217,8 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 - **終了の処理中のタイマー。** Vectorworks が終わる途中（図面を閉じたあと、プロセスが終わる
   まで）に刻みが届いたときの扱い（タイマーを止める入口があるか）を、段 6 の実機確認の項目に
   入れる。
-  **済。** タイマーを止めなくてよい。刻みから終了を頼んだとき、mac では呼び出しが戻った後に刻みが 1〜数回
-  届くが、`GetOpenFilesList()`・`GetCurrentLayer()` などは落ちずに返る。Windows では呼び出しの後に刻みは
-  来ない。利用者が閉じる道でも、Windows では `kNotifyBeforeApplicationQuit` の後に刻みは来ない
+  **調べた範囲では、タイマーを止めなくてよい。** 刻みから終了を頼んだとき、mac では呼び出しが戻った後に刻みが
+  1〜数回届くが、`GetOpenFilesList()`・`GetCurrentLayer()` などは落ちずに返った（4 回）。Windows では呼び出しの
+  後に刻みは来ない。利用者が閉じる道でも、Windows では `kNotifyBeforeApplicationQuit` の後に刻みは来ない
   （[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9。[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・[#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)）。
+  **mac の利用者が閉じる道は測っていない**ので、段 6 の実機確認の項目に入れる（[実装の順序](plugin/plan.md)の段 6）。

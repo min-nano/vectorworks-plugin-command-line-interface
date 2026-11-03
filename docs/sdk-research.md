@@ -18,13 +18,15 @@ SDK リファレンスに記載がありませんでした。
 - **Windows も、留めた版（下記）は読み込まれ常駐した**（段 2 の実機確認。VW 2026 x64・Windows 11
   ARM64 の x64 エミュレーション）。起動の直後から `cli.vlb` がプロセスに居て、`call ping` が応えた。
   拡張機能を登録しない形のままでよい。
-- **Windows の Vectorworks が閉じたときにアクセス違反（`0xC0000005`）で終わることがあるのは、このプラグインに
-  依らない。** 段 2 の実機確認では、すでに外された `libcef.dll` の中で落ちた回が `296a797` で 11 回中 3 回あった。
-  [SDK リファレンス #257](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/257) で**分かった**（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の
-  「OS タイマーを持つ常駐プラグイン（留めたモジュール）は、終了時の落ち方を変えない」）。留めた `cli` を
-  入れても入れなくても、ホーム画面から閉じた 82 回はすべて終了コード 0 で終わり、`296a797` を 40 回閉じても
-  再現しなかった。タイマーを止める・留め方を変えるといった作法は要らない。図面を閉じてホーム画面へ戻った後に
-  閉じた回で 1 度出ており（[#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)。`cli` は入っていない）、原因は分かっていない。
+- **Windows の Vectorworks が閉じたときにアクセス違反（`0xC0000005`）で終わったのは、このプラグインの
+  せいではないと読める（推定）。** 段 2 の実機確認では、すでに外された `libcef.dll` の中で落ちた回が `296a797` で
+  11 回中 3 回あった。[SDK リファレンス #257](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/257) で調べた（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の
+  「OS タイマーを持つ常駐プラグイン（留めたモジュール）は、終了時の落ち方を変えない」）。ホーム画面から閉じた
+  82 回（`cli` の `296a797` と `0683df0`・リファレンスの殻・プラグインなし）はすべて終了コード 0 で終わり、
+  `296a797` だけでも 40 回閉じて再現しなかった。Findings はこれを「`cli` の有無ではなく当時の状況の側にあった
+  と読める」とし、**何が効いていたかは分かっていない**としている。タイマーを止める・留め方を変えるといった
+  作法は要らない。図面を閉じてホーム画面へ戻った後に閉じた回で 1 度出ており（[#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)。
+  入っていたのはリファレンスの殻だけで、`cli` は入っていない）、原因は分かっていない。
   新しい図面の最初の描画中に `MaxonDocumentBuilder.vlb` の中で落ちた 1 回も、30 回で再現せず、常駐する
   プラグインの有無で差が無かった（[#270](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/270)。同じページの「新しい図面の最初の描画」）。
   段 2 の確かめ方は [Windows の実機での確かめ方](plugin/windows-measurements.md)。
@@ -107,9 +109,10 @@ SDK リファレンスに記載がありませんでした。
   `GetOpenFilesList` の件数や読み戻した値で確かめる。
 - **`CloseDocument()` は保存の確認を出さずに未保存の変更を捨てる。** 道具には使わない
   （[設計「本番で常駐させる前提」](design.md#本番で常駐させる前提安全)）。
-
-- **OS タイマーの刻みの中から呼べる。** `save`・`close` の調査（[#243](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/243)）で、一覧・切り替え・
-  保存・「閉じる」を刻みの中から呼んで確かめた（[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)）。
+- **OS タイマーの刻みの中から呼べる。** 未保存の判定の調査（[#240](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/240)）と `save`・`close` の調査
+  （[#243](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/243)）で、一覧（`GetOpenFilesList`）・切り替え（`SwitchToOpenFile`）・開く
+  （`OpenDocumentPath`）・保存・「閉じる」を刻みの中から呼んで確かめた（[Findings「未保存の変更ありは読めない」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#未保存の変更ありは読めない)・
+  [「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)）。
 
 残っていること:
 
