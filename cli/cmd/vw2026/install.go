@@ -146,7 +146,7 @@ func (c *installCmd) run(e *env) int {
 	result, err := install.Install(options, name, tag, c.Check)
 	if err != nil {
 		if errors.Is(err, install.ErrRunning) {
-			return deployRunning(e, name, err, result)
+			return deployRunning(e, err, result)
 		}
 		return deployFailed(e, name, err)
 	}
@@ -211,15 +211,11 @@ func isTerminal(w io.Writer) bool {
 }
 
 // deployRunning は、Vectorworks が動いていて何もしなかったこと（ErrRunning）を標準エラーと標準出力の JSON（result）に
-// 書き、終了コード 6 を返す。result は型付きのポインタで受け、nil なら（結果を作る前に分かったとき）outcome と name
-// だけを書く（any で受けると、nil のポインタが null と書かれる）。
-func deployRunning[T any](e *env, name string, err error, result *T) int {
+// 書き、終了コード 6 を返す。install.Install と install.Uninstall は、ErrRunning を返すとき必ず結果も返す
+// （どこで分かっても同じ形。Uninstall は runningResult）。
+func deployRunning(e *env, err error, result any) int {
 	fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
-	if result == nil {
-		emit(e, map[string]any{"outcome": install.OutcomeRunning, "name": name})
-	} else {
-		emit(e, result)
-	}
+	emit(e, result)
 	return exitRunning
 }
 
