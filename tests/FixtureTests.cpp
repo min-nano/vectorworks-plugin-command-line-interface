@@ -254,7 +254,9 @@ constexpr std::array<ToolFn, sizeof...(I)> makeRunners(std::index_sequence<I...>
 	return {runFake<I>...};
 }
 
-constexpr auto kRunners = makeRunners(std::make_index_sequence<16>{});
+// 偽の道具の数の上限（fake-tools.json の道具がこれより多ければ、loadTools
+// が失敗にする。足りなくなったら 増やす。docs/fixtures.md「偽の道具の表」）。
+constexpr auto kRunners = makeRunners(std::make_index_sequence<32>{});
 
 std::vector<Tool> loadTools() {
 	using T = Json::Type;
@@ -275,13 +277,12 @@ std::vector<Tool> loadTools() {
 		        {"quit", T::Bool}},
 		       "fake-tools.json");
 		std::string kind = text(entry, "kind");
-		gFakes.push_back({text(entry, "name"), text(entry, "description"),
-		                  get(entry, "inputSchema").dump(),
-		                  kind == "read"    ? ToolKind::Read
-		                  : kind == "write" ? ToolKind::Write
-		                                    : ToolKind::App,
-		                  text(entry, "does"), get(entry, "detail"),
-		                  get(entry, "quit").isBool() && get(entry, "quit").asBool()});
+		gFakes.push_back(
+		    {text(entry, "name"), text(entry, "description"), get(entry, "inputSchema").dump(),
+			 kind == "read"    ? ToolKind::Read
+			 : kind == "write" ? ToolKind::Write
+			                   : ToolKind::App,
+			 text(entry, "does"), get(entry, "detail"), VwCli::test::isTrue(get(entry, "quit"))});
 		if (kind != "read" && kind != "write" && kind != "app") {
 			failAt("fake-tools.json", "unknown kind: " + kind);
 		}
@@ -298,7 +299,7 @@ std::vector<Tool> loadTools() {
 
 // --- 受け付けの見本（serve/*.json） -----------------------------------------------------------
 
-constexpr std::int64_t kNow = 1760000000000000000;
+using VwCli::test::kNow;
 constexpr std::string_view kSessionMark = "$session";
 
 // match は期待する値と実際の値を比べる。期待する値の文字列 $session は、id の綴りを満たす
@@ -407,7 +408,7 @@ private:
 		where_ = name_ + " step " + std::to_string(index + 1);
 
 		files::Lock other;
-		if (get(step, "other_bridge").isBool() && get(step, "other_bridge").asBool()) {
+		if (VwCli::test::isTrue(get(step, "other_bridge"))) {
 			std::string error;
 			CHECK(other.take(path(std::string(protocol::kLockFile)), error) ==
 			      files::Lock::Result::Taken);
@@ -464,7 +465,7 @@ private:
 		if ((phase.empty() ? "serving" : phase) != actualPhase) {
 			failAt(where_, "phase " + actualPhase + " (" + result.message + ")");
 		}
-		bool quit = get(expect, "quit").isBool() && get(expect, "quit").asBool();
+		bool quit = VwCli::test::isTrue(get(expect, "quit"));
 		if (quit != result.quit) {
 			failAt(where_, "quit " + std::to_string(result.quit));
 		}
@@ -537,8 +538,8 @@ private:
 				failAt(where_, "no response for " + id);
 				continue;
 			}
-			bool ok = get(*response, "ok").isBool() && get(*response, "ok").asBool();
-			bool wantOk = get(want, "ok").isBool() && get(want, "ok").asBool();
+			bool ok = VwCli::test::isTrue(get(*response, "ok"));
+			bool wantOk = VwCli::test::isTrue(get(want, "ok"));
 			bool good = ok == wantOk;
 			// detail は期待に書いたときだけ持ち、書いたものと一致する（無ければ持たない）。
 			const Json *detail = response->find("detail");

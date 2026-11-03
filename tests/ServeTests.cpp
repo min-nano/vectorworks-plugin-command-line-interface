@@ -25,7 +25,7 @@ using VwCli::test::TempDir;
 
 namespace {
 
-constexpr std::int64_t kNow = 1760000000000000000;
+using VwCli::test::kNow;
 
 // Caller は呼ぶ側を真似る。待つ印を掴んでから要求を置き、壊すと放す。
 class Caller {
@@ -41,11 +41,12 @@ public:
 
 	// response は応答を読む。無ければ null。
 	Json response(const std::string &id) const {
-		std::optional<std::string> text = files::read(dir_.sub(id + ".res.json"), 1 << 20);
+		std::optional<std::string> text =
+		    files::read(dir_.sub(id + ".res.json"), VwCli::core::protocol::kMaxRequestBytes);
 		if (!text) {
 			return Json();
 		}
-		std::optional<Json> value = Json::parse(*text, 64);
+		std::optional<Json> value = Json::parse(*text, VwCli::core::protocol::kMaxNestingDepth);
 		CHECK(value);
 		return value ? *value : Json();
 	}
@@ -54,7 +55,7 @@ public:
 	bool ok(const std::string &id) const {
 		Json value = response(id);
 		const Json *ok = value.find("ok");
-		return ok && ok->isBool() && ok->asBool();
+		return ok && VwCli::test::isTrue(*ok);
 	}
 
 	std::string code(const std::string &id) const {

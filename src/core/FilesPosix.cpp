@@ -71,9 +71,11 @@ Opened openRegular(const std::string &path, int flags, mode_t mode = 0) {
 
 }
 
+bool isSeparator(char c) { return c == '/'; }
+
 std::string join(const std::string &dir, std::string_view name) {
 	std::string path = dir;
-	if (!path.empty() && path.back() != '/') {
+	if (!path.empty() && !isSeparator(path.back())) {
 		path += '/';
 	}
 	path.append(name);
@@ -168,7 +170,7 @@ bool write(const std::string &path, std::string_view data) {
 	// 先に消してから新しく作る（O_EXCL。シンボリックリンクもたどらない）。あるものを開いて
 	// 切り詰めると、置かれたリンク（シンボリックリンクでも hard link でも）の先、つまりスプールの
 	// 外のファイルを壊してしまう。消すのは名前だけで、リンクの先は残る。
-	(void)::unlink(path.c_str());
+	(void)files::remove(path);
 	int fd = openRegular(path, O_WRONLY | O_CREAT | O_EXCL, 0600).fd;
 	if (fd < 0) {
 		return false;

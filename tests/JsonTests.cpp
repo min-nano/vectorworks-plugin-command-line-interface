@@ -7,6 +7,7 @@
 #include <string>
 
 using VwCli::core::Json;
+using VwCli::test::must;
 
 namespace {
 
@@ -14,16 +15,6 @@ constexpr int kDepth = 64;
 
 std::optional<Json> parse(std::string_view text, int depth = kDepth) {
 	return Json::parse(text, depth);
-}
-
-// must は読めるはずのテキストを読む（値で返すので、式の中で使っても寿命を気にしなくてよい）。
-Json must(std::string_view text) {
-	std::optional<Json> value = Json::parse(text, kDepth);
-	if (!value) {
-		VwCli::test::fail(__FILE__, __LINE__, "should parse: " + std::string(text));
-		return Json();
-	}
-	return *value;
 }
 
 std::string nested(char open, char close, int depth) {
