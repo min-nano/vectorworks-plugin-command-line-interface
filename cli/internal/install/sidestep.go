@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
 // oldCLIPrefixes は、よけた CLI の名前の頭（<Work>/old/ の直下の vw2026.old-* / vw2026.exe.old-*）。
@@ -23,10 +25,18 @@ var oldCLIName = func() string {
 	return oldCLIPrefixes[0]
 }()
 
-// movedCLI は、よけた CLI の元の場所と移した先。nil ならよけていない。
+// movedCLI は、よけた CLI の元の場所（よけたフォルダ dir と、そこからの相対パス rel）と移した先 to。nil なら
+// よけていない。元の場所は dir と rel から求め（from）、別に持たない（restore と restoreInto の戻す先がずれない
+// ように）。
 type movedCLI struct {
-	from string
-	to   string
+	dir string
+	rel string
+	to  string
+}
+
+// from は、よけた CLI の元の場所。
+func (m *movedCLI) from() string {
+	return filepath.Join(m.dir, m.rel)
 }
 
 // restore はよけた CLI を元の場所へ戻す（動いていても名前の変更はできる）。戻せなければ（Windows でウイルス
@@ -36,22 +46,20 @@ func (m *movedCLI) restore() string {
 	if m == nil {
 		return ""
 	}
-	if err := rename(m.to, m.from); err != nil {
+	if err := rename(m.to, m.from()); err != nil {
 		return fmt.Sprintf("; the running vw2026 cannot be moved back (%v): move it back from %s to %s by hand "+
-			"before the next install or uninstall (they delete it)", err, m.to, m.from)
+			"before the next install or uninstall (they delete it)", err, m.to, m.from())
 	}
 	return ""
 }
 
-// restoreInto は、よけた CLI を、dir の中の元の場所に当たる into の中の場所へ戻す（新しい版を残したときに、
-// 前の版のフォルダへ戻す）。戻せなければ、その場所を示す文言を返す（戻せたら空）。
-func (m *movedCLI) restoreInto(dir, into string) string {
+// restoreInto は、よけた CLI を、よけたフォルダの中の元の場所に当たる into の中の場所へ戻す（新しい版を残した
+// ときに、前の版のフォルダへ戻す）。戻せなければ、その場所を示す文言を返す（戻せたら空）。
+func (m *movedCLI) restoreInto(into string) string {
 	if m == nil {
 		return ""
 	}
-	// from は dir の下（sidestep が dir と相対パスから作った）なので、Rel は失敗しない。
-	rel, _ := filepath.Rel(dir, m.from)
-	target := filepath.Join(into, rel)
+	target := filepath.Join(into, m.rel)
 	if err := rename(m.to, target); err != nil {
 		return fmt.Sprintf("; the vw2026 of the previous version is in %s (%v): move it to %s if you put the previous "+
 			"version back, before the next install or uninstall (they delete it)", m.to, err, target)
@@ -65,7 +73,7 @@ func (m *movedCLI) where() string {
 	if m == nil {
 		return ""
 	}
-	return fmt.Sprintf(", then move the running vw2026 back from %s to %s", m.to, m.from)
+	return fmt.Sprintf(", then move the running vw2026 back from %s to %s", m.to, m.from())
 }
 
 // sidestep は、走らせている CLI の実行ファイルが dir の中にあれば、old へ名前の変更で移す
@@ -83,7 +91,7 @@ func (o *Options) sidestep(dir, old string) (*movedCLI, error) {
 	if err := rename(executable, to); err != nil {
 		return nil, err
 	}
-	return &movedCLI{from: filepath.Join(dir, rel), to: to}, nil
+	return &movedCLI{dir: dir, rel: rel, to: to}, nil
 }
 
 // stamp は、<Work>/old/ の中で重ならない名前に付ける時刻。
@@ -97,11 +105,8 @@ func (o *Options) runsFrom(dir string) (executable, rel string, ok bool) {
 	if o.Executable == "" {
 		return "", "", false
 	}
-	executable = o.Executable
 	// mac の ~/.local/bin/vw2026 はリンクなので、解いた先で決める。
-	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
-		executable = resolved
-	}
+	executable = spool.ResolveLinks(o.Executable)
 	rel, ok = within(executable, dir)
 	return executable, rel, ok
 }

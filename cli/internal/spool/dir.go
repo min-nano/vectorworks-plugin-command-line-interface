@@ -29,13 +29,21 @@ func Dir() (string, error) {
 // もの）は、入っている cli のスプールではない場所を返す。そこにロックを掴む者は居ないので、
 // 呼ぶ側には止まっていると見える（場所はコマンドが示す）。
 //
-// リンクを解けなければ（Windows の subst のドライブ・割り当てたネットワークドライブなどでは
-// EvalSymlinks が失敗することがある）、解く前のパスから求める。実行ファイルのパスは使えるので、
-// スプールを決められずに終わらせないため。
+// リンクを解けなければ、解く前のパスから求める（ResolveLinks）。
 func DirOf(executable string) string {
-	path := executable
+	return filepath.Join(filepath.Dir(filepath.Dir(ResolveLinks(executable))), SpoolDirName)
+}
+
+// ResolveLinks は、実行ファイルのパスのリンクを解いたものを返す（mac の ~/.local/bin/vw2026 は
+// <Plug-Ins>/cli/bin/vw2026 へのリンク）。解けなければ（Windows の subst のドライブ・割り当てたネットワーク
+// ドライブなどでは EvalSymlinks が失敗することがある）解く前のパスを返す。実行ファイルのパスは使えるので、
+// 場所を決められずに終わらせないため。スプールの場所（DirOf）と、install が自分の入った <Plug-Ins> と
+// 動いている自分を見つけるときに、同じ解き方を使う（実行ファイルの場所はスプールの場所と同じ決め方で求める）。
+// 実在する実行ファイルのパスに使う。まだ無いかもしれない場所（--plugins-dir・<Work>）を解くのは install の
+// resolvedPath で、あるところまでの親を解く。
+func ResolveLinks(executable string) string {
 	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
-		path = resolved
+		return resolved
 	}
-	return filepath.Join(filepath.Dir(filepath.Dir(path)), SpoolDirName)
+	return executable
 }

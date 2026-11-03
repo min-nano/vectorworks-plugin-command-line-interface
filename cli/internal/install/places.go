@@ -14,11 +14,11 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// WorkDirName は、利用者ごとの一時フォルダの下の <Work> の名前の頭（docs/plugin/install-and-update.md
+// workDirName は、利用者ごとの一時フォルダの下の <Work> の名前の頭（docs/plugin/install-and-update.md
 // 「作業の場所」。WorkDirFor が <Plug-Ins> ごとの鍵を足す）。vw2026 だけが使うので、通信規則の見本には載せない。
-const WorkDirName = "vectorworks2026-cli"
+const workDirName = "vectorworks2026-cli"
 
-// WorkDir は <Work> の頭（利用者ごとの一時フォルダの下の WorkDirName。WorkDirFor に渡す）を返す。場所の根は環境変数を
+// WorkDir は <Work> の頭（利用者ごとの一時フォルダの下の workDirName。WorkDirFor に渡す）を返す。場所の根は環境変数を
 // 読まずに OS の決まった場所から求める（走らせ方で場所が変わると、前の回が残した old/ を次の回が見つけられなくなる
 // ため）。
 func WorkDir() (string, error) {
@@ -26,7 +26,7 @@ func WorkDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(temp, WorkDirName), nil
+	return filepath.Join(temp, workDirName), nil
 }
 
 // WorkDirFor は、<Plug-Ins> plugins の <Work>（頭 base に - と鍵を足した名前）を返す。<Work>/old/<name>/ を
@@ -108,11 +108,7 @@ func PluginsDirOf(executable string) (dir string, ok bool) {
 	if executable == "" {
 		return "", false
 	}
-	path := executable
-	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
-		path = resolved
-	}
-	bin := filepath.Dir(path)
+	bin := filepath.Dir(spool.ResolveLinks(executable))
 	cli := filepath.Dir(bin)
 	// 名前は、Windows では大文字と小文字を区別せず、ほかでは区別して比べる（install が作る名前は bin と cli。区別する
 	// ボリュームの CLI/bin を cli/bin と取り違えて、別のフォルダのロックと記録を見ない）。
@@ -120,10 +116,10 @@ func PluginsDirOf(executable string) (dir string, ok bool) {
 	if runtime.GOOS == "windows" {
 		same = strings.EqualFold
 	}
-	if !same(filepath.Base(bin), "bin") || !same(filepath.Base(cli), CLIName) {
+	if !same(filepath.Base(bin), "bin") || !same(filepath.Base(cli), cliName) {
 		return "", false
 	}
-	for _, mark := range []string{RecordFile, CLIName + ".vwlibrary", CLIName + ".vlb", spool.SpoolDirName} {
+	for _, mark := range []string{RecordFile, cliName + ".vwlibrary", cliName + ".vlb", spool.SpoolDirName} {
 		if _, err := os.Lstat(filepath.Join(cli, mark)); err == nil {
 			return filepath.Dir(cli), true
 		}
@@ -214,7 +210,7 @@ func lexicallyIn(path, dir string) bool {
 }
 
 // resolvedPath は、path のリンクを解いた書き方。まだ無ければ、あるところまでの親を解き、残りをそのまま足す（根まで
-// 解けなければ、書いたまま）。
+// 解けなければ、書いたまま）。まだ無いかもしれない場所に使う。実在する実行ファイルは spool.ResolveLinks で解く。
 func resolvedPath(path string) string {
 	for current, rest := path, ""; ; {
 		real, err := filepath.EvalSymlinks(current)

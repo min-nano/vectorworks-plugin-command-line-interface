@@ -403,7 +403,7 @@ func (h *harness) installedVersion(name string) string {
 
 // holdLock は <Plug-Ins>/cli/spool/ のロックを掴む（Vectorworks が動いている）。
 func (h *harness) holdLock() func() {
-	dir := filepath.Join(h.plugins, CLIName, spool.SpoolDirName)
+	dir := filepath.Join(h.plugins, cliName, spool.SpoolDirName)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		h.t.Fatal(err)
 	}

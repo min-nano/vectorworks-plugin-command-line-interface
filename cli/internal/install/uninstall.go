@@ -32,9 +32,10 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	// install と同じ precheck で、cli の記録を Vectorworks が動いているかより先に確かめる。
+	// install と同じ precheck で、cli の記録を Vectorworks が動いているかより先に確かめる。ErrRunning（何も
+	// していない）を返すのはここだけで、あとで分かったときは何かを変えたあとなので失敗にする。
 	if err := precheck(p, name, true); errors.Is(err, ErrRunning) {
-		return runningResult(name), err
+		return &UninstallResult{Outcome: outcomeRunning, Name: name, Remaining: []string{}, Left: []string{}}, err
 	} else if err != nil {
 		return nil, err
 	}
@@ -47,10 +48,10 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		// 前の回が消しきれなかった組み立ての場所（discard の残り）・続ける先の無い印・よけた CLI・空の <Work> も、
 		// 外したときと同じく片付ける（初回のスクリプトの uninstall が、入っていなくても何も残さないように）。
 		_ = removeStaging(p)
-		return finishUninstall(p, name, OutcomeNotInstall, nil), nil
+		return finishUninstall(p, name, outcomeNotInstall, nil), nil
 	}
 
-	hook, err := o.runHook("uninstall", record.Hooks.Uninstall, p.oldDir, hookEnv{
+	hook, err := o.runHook("uninstall", record.Hooks.Uninstall, hookEnv{
 		name: name, tag: record.Tag, target: record.Target, pluginDir: p.oldDir, installDir: p.dest,
 	})
 	if err != nil {
@@ -78,11 +79,13 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 			"uninstall again (it goes on from the hook)", startedMeanwhile, name, p.oldDir)
 	}
 	// 組み立ての場所へ移してから消す（消すのが途中で止まっても、記録の消えた半分のフォルダを old に残さない）。
-	if err := o.discard(p, name); err != nil {
-		return nil, fmt.Errorf("%s is out of the folder of plug-ins, but %s cannot be deleted (%v); run uninstall again",
-			name, p.oldDir, err)
+	// 走らせ直す案内（run uninstall <name> again）は discard の文言にあるので、ここでは足さない。discard の誤りは %v で包み、cmd の見分け
+	// （ErrRunning・RunsInsideError・使い方の誤り）が discard の中まで見に行かないようにする（ErrRunning を返すのは
+	// 始めの確かめだけ）。
+	if err := o.discard(p, name, "uninstall "+name); err != nil {
+		return nil, fmt.Errorf("%s is out of the folder of plug-ins, but %s is not deleted yet: %v", name, p.oldDir, err)
 	}
-	return finishUninstall(p, name, OutcomeUninstalled, hook), nil
+	return finishUninstall(p, name, outcomeUninstalled, hook), nil
 }
 
 // takeOut は <Plug-Ins>/<name>/ を確かめて、印を書いてから <Work>/old/<name>/ へ移し（手順 2・3）、その記録を返す。
@@ -128,7 +131,7 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 		}
 		if err := rename(p.dest, p.oldDir); err != nil {
 			_ = removeFile(p.marker)
-			return nil, false, renameError(p.dest, err)
+			return nil, false, renameError(p.dest, err, "uninstall "+name)
 		}
 		return record, false, nil
 	case exists(p.oldDir):
@@ -153,21 +156,16 @@ func finishUninstall(p places, name, outcome string, hook json.RawMessage) *Unin
 	return &UninstallResult{Outcome: outcome, Name: name, Hook: hook, Remaining: installedIn(p.plugins), Left: left}
 }
 
-// runningResult は、Vectorworks が動いていて止めたときの出力（どこで分かっても同じ形にする）。
-func runningResult(name string) *UninstallResult {
-	return &UninstallResult{Outcome: OutcomeRunning, Name: name, Remaining: []string{}, Left: []string{}}
-}
-
 // removeEmptyWork は、<Work> に staging / old の空のディレクトリしか無ければ、<Work> ごと消す。
-// staging / old は空のディレクトリのときだけ消し、<Work> は空になったときだけ消える（os.Remove は
+// staging / old は空のディレクトリのときだけ消し、<Work> は空になったときだけ消える（removeFile の os.Remove は
 // 空でないディレクトリを消さない）。
 func removeEmptyWork(p places) {
 	for _, dir := range []string{p.staging, p.old} {
 		if entries, err := os.ReadDir(dir); err == nil && len(entries) == 0 {
-			_ = os.Remove(dir)
+			_ = removeFile(dir)
 		}
 	}
-	_ = os.Remove(p.work)
+	_ = removeFile(p.work)
 }
 
 // installedIn は、<Plug-Ins> の直下で、名前の一致する記録のあるフォルダの名前を返す。

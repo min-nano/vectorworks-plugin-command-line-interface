@@ -214,7 +214,7 @@ func isTerminal(w io.Writer) bool {
 
 // deployRunning は、Vectorworks が動いていて何もしなかったこと（ErrRunning）を標準エラーと標準出力の JSON（result）に
 // 書き、終了コード 6 を返す。install.Install と install.Uninstall は、ErrRunning を返すとき必ず結果も返す
-// （どこで分かっても同じ形。Uninstall は runningResult）。
+// （どこで分かっても同じ形。Uninstall は始めの確かめでだけ ErrRunning を返し、そこで結果を作る）。
 func deployRunning(e *env, err error, result any) int {
 	fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
 	emit(e, result)
