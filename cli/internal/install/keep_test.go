@@ -11,6 +11,27 @@ import (
 // 新しい版を残した install（フックの間に Vectorworks が起動した・フックが通ったのに記録を書き換えられなかった）と、
 // それを同じタグの install で終える流れ（docs/plugin/install-and-update.md）。
 
+// failRecordWrite は、dir の記録の書き換えを失敗させる（記録は隣に書いてから置き換えるので、隣のファイルを
+// 書けなくする）。返す関数で途中でも元に戻せる。
+func failRecordWrite(t *testing.T, dir string) (restore func()) {
+	t.Helper()
+	prefix := filepath.Join(dir, RecordFile) + ".new-"
+	return writeFileWhen(t, func(path string) error {
+		if strings.HasPrefix(path, prefix) {
+			return errInjected
+		}
+		return nil
+	})
+}
+
+// checkCLIBack は、前の版のフォルダ dir に、よけた CLI（c1 の vw2026）が戻ったかを確かめる。
+func checkCLIBack(t *testing.T, dir string) {
+	t.Helper()
+	if data, err := os.ReadFile(filepath.Join(dir, "bin", "vw2026")); err != nil || string(data) != "cli c1" {
+		t.Fatal("the previous version should have its vw2026 back:", string(data), err)
+	}
+}
+
 // keepNewVersion は、c1 を入れてから c2 を残した状態（c1 は old/cli）にする（keepVersion）。
 func keepNewVersion(t *testing.T, h *harness) {
 	t.Helper()

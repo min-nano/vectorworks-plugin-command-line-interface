@@ -426,16 +426,21 @@ func (h *harness) holdLock() func() {
 // lockingHook は、plan に、走り始めたら合図を出し、テストがロックを掴むまで待つこと（Signal・Await）を足す。
 // フックの間に Vectorworks が起動したことにするテストが、lockWhenHookStarts と組にして使う。
 func (h *harness) lockingHook(plan hookPlan) *hookPlan {
-	plan.Signal = filepath.Join(h.tmp, "hook-started")
-	plan.Await = filepath.Join(h.tmp, "locked")
+	plan.Signal, plan.Await = h.hookSignals()
 	return &plan
+}
+
+// hookSignals は、フックが走り始めたら作るファイルと、テストがロックを掴んだら作るファイル（lockingHook と
+// lockWhenHookStarts が同じものを使う）。
+func (h *harness) hookSignals() (signal, await string) {
+	return filepath.Join(h.tmp, "hook-started"), filepath.Join(h.tmp, "locked")
 }
 
 // lockWhenHookStarts は、lockingHook のフックの合図を待ってスプール dir のロックを掴み、フックに知らせる。done は
 // 掴み終えたら閉じる。unlock はロックを放す（Vectorworks の終了。done のあとで呼ぶ。呼ばなければテストの終わりに放す）。
+// ロックを掴めなければ HoldLock がテストを失敗にしてゴルーチンを終えるので、unlock は何もしない。
 func (h *harness) lockWhenHookStarts(dir string) (done <-chan struct{}, unlock func()) {
-	signal := filepath.Join(h.tmp, "hook-started")
-	await := filepath.Join(h.tmp, "locked")
+	signal, await := h.hookSignals()
 	finished := make(chan struct{})
 	var release func()
 	go func() {
@@ -449,7 +454,9 @@ func (h *harness) lockWhenHookStarts(dir string) (done <-chan struct{}, unlock f
 	}()
 	return finished, func() {
 		<-finished
-		release()
+		if release != nil {
+			release()
+		}
 	}
 }
 

@@ -135,27 +135,6 @@ func failRenameTo(t *testing.T, to string) {
 	})
 }
 
-// failRecordWrite は、dir の記録の書き換えを失敗させる（記録は隣に書いてから置き換えるので、隣のファイルを
-// 書けなくする）。返す関数で途中でも元に戻せる。
-func failRecordWrite(t *testing.T, dir string) (restore func()) {
-	t.Helper()
-	prefix := filepath.Join(dir, RecordFile) + ".new-"
-	return writeFileWhen(t, func(path string) error {
-		if strings.HasPrefix(path, prefix) {
-			return errInjected
-		}
-		return nil
-	})
-}
-
-// checkCLIBack は、前の版のフォルダ dir に、よけた CLI（c1 の vw2026）が戻ったかを確かめる。
-func checkCLIBack(t *testing.T, dir string) {
-	t.Helper()
-	if data, err := os.ReadFile(filepath.Join(dir, "bin", "vw2026")); err != nil || string(data) != "cli c1" {
-		t.Fatal("the previous version should have its vw2026 back:", string(data), err)
-	}
-}
-
 // 展開先を作れなければ、展開を失敗にする。
 func TestExtractCannotMakeTheFolder(t *testing.T) {
 	dir := t.TempDir()
