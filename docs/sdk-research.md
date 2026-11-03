@@ -5,7 +5,7 @@
 issue を立てて `Findings/` に反映されてから、それを根拠に実装します。待つ間は SDK に依らない
 作業（通信規則・CLI・SDK に依らない共通部）を進めます。
 
-## 0. 拡張機能を 1 つも登録しないプラグインの読み込み
+## 0. 拡張機能を 1 つも登録しないプラグインの読み込み（分かった）
 
 このプラグインはメニューも PIO も登録しません（[構成](plugin/architecture.md#拡張機能を登録しない)）。
 その形でも Vectorworks が読み込み、`plugin_module_main` を呼ぶか（＝OS タイマーを開始できるか）は
@@ -19,16 +19,13 @@ SDK リファレンスに記載がありませんでした。
   ARM64 の x64 エミュレーション）。起動の直後から `cli.vlb` がプロセスに居て、`call ping` が応えた。
   拡張機能を登録しない形のままでよい。
 - **Windows の Vectorworks が閉じたときにアクセス違反（`0xC0000005`）で終わったのは、このプラグインの
-  せいではないと読める（推定）。** 段 2 の実機確認では、すでに外された `libcef.dll` の中で落ちた回が `296a797` で
-  11 回中 3 回あった。[SDK リファレンス #257](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/257) で調べた（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の
-  「OS タイマーを持つ常駐プラグイン（留めたモジュール）は、終了時の落ち方を変えない」）。ホーム画面から閉じた
-  82 回（`cli` の `296a797` と `0683df0`・リファレンスの殻・プラグインなし）はすべて終了コード 0 で終わり、
-  `296a797` だけでも 40 回閉じて再現しなかった。Findings はこれを「`cli` の有無ではなく当時の状況の側にあった
-  と読める」とし、**何が効いていたかは分かっていない**としている。タイマーを止める・留め方を変えるといった
-  作法は要らない。図面を閉じてホーム画面へ戻った後に閉じた回で 1 度出ており（[#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)。
-  入っていたのはリファレンスの殻だけで、`cli` は入っていない）、原因は分かっていない。
-  新しい図面の最初の描画中に `MaxonDocumentBuilder.vlb` の中で落ちた 1 回も、30 回で再現せず、常駐する
-  プラグインの有無で差が無かった（[#270](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/270)。同じページの「新しい図面の最初の描画」）。
+  せいではないと読める（推定）。** 段 2 の実機確認で、すでに外された `libcef.dll` の中で落ちた回があった。
+  [SDK リファレンス #257](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/257) で調べ、留めた常駐プラグインの有無で終わり方に差は無く、
+  何が効いていたかは分かっていない（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の
+  「OS タイマーを持つ常駐プラグイン（留めたモジュール）は、終了時の落ち方を変えない」）。タイマーを止める・
+  留め方を変えるといった作法は要らない。`cli` の入っていない構成でも同じ落ち方が出ており
+  （[#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)）、原因は分かっていない。新しい図面の最初の描画中に `MaxonDocumentBuilder.vlb` の中で
+  落ちたことも、常駐するプラグインの有無で差が無かった（[#270](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/270)。同じページの「新しい図面の最初の描画」）。
   段 2 の確かめ方は [Windows の実機での確かめ方](plugin/windows-measurements.md)。
 - **Vectorworks は、開発元の分からないプラグインを読み込まないことがある（Windows も macOS も）。**
   起動の途中で「開発元不明のプラグイン」のダイアログが出て `cli` を「無効」と示し、その回は読み込まなかった。
@@ -131,7 +128,7 @@ SDK リファレンスに記載がありませんでした。
 | `ping` | `GetCurrentLayer()` で図面が開いているかを判定する | **分かった**（[Timers and Notifications](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 8。使い方は[道具「ping」](plugin/tools.md#ping)） |
 | `save` / `close` / `documents` | 図面の一覧（`GetOpenFilesList`）・指定した図面の保存（`SwitchToOpenFile` → `SaveActiveDocumentPath`。無題の図面を新しいパスへ）・メニュー「閉じる」（`DoMenuName("Close", 0)`） | 一覧・同じパスへの上書き保存・「閉じる」で保存の確認が出ることは [Findings「Documents」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md) にある。**分かった**（[#243](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/243)）。新しいパスへは通る・既存のファイルへは通らず（開いているファイルなら警告のダイアログが出る）・前面は戻せる・保存した直後なら確認なしに閉じる。使い方は[道具](plugin/tools.md#図面を扱う道具documentssaveclose) |
 | `quit`（未保存の判定） | 保存済みの図面の**変更あり**を読む | **分かった: 読めない**（[#240](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/240)。[Findings「未保存の変更ありは読めない」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#未保存の変更ありは読めない)）。`outSaved`・`fIsInMemoryOnly` は「ディスクにあるか」だけを表す。そのため `quit` は図面が 0 枚のときだけ受け付ける設計にした（[道具「quit」](plugin/tools.md#quit)） |
-| `quit` | OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼ぶ | **分かった**（[#230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・[#235](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/235)。[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9・[Documents「`CloseAllFilesAndQuitVectorworks`（終了）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md)）。刻みから呼べ、図面を閉じ終えてから戻り、終了はその後のイベントループで起きる（mac・Windows）。保存の確認を取り消すと呼び出しは戻り、図面は残る。確認の最中にもう一度呼ぶと確認が 2 つ重なって出る（落ちない）。Windows では呼んだタイマー自身が確認の最中に入り直すので、「終了の呼び出しの最中」を旗で持って見送る。利用者が開いたモーダルの最中も落ちない。終了の依頼の最中の判定を残すかは、これを踏まえて段 6 の前に決める（[設計のレビュー A4](design-review.md#a4-終了の依頼の最中に受け付けが入れ子になりうる)） |
+| `quit` | OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼ぶ | **分かった**（[#230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・[#235](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/235)。[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9・[Documents「`CloseAllFilesAndQuitVectorworks`（終了）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md)）。刻みから呼べ、図面を閉じ終えてから戻り、終了はその後のイベントループで起きる（mac・Windows）。保存の確認を取り消すと呼び出しは戻り、図面は残る。確認の最中にもう一度呼ぶと確認が 2 つ重なって出る（落ちない）。Windows では呼んだタイマー自身が確認の最中に入り直す（Findings は「終了の呼び出しの最中」を旗で持って見送る作りを勧める。このプラグインでどうするかは段 6 の前に決める）。利用者が開いたモーダルの最中も落ちない。終了の依頼の最中の判定を残すかは、これを踏まえて段 6 の前に決める（[設計のレビュー A4](design-review.md#a4-終了の依頼の最中に受け付けが入れ子になりうる)） |
 
 ## 5. 同じプラグインが 2 つあるときの挙動（調べていない。実装を待たせない）
 

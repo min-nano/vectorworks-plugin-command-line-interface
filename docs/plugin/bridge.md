@@ -176,8 +176,9 @@ struct Tool {
 
 - **道具を足すときに触るのは表の 1 行と中身 1 つだけ**です。CLI は道具を知らないので直しません。
 - `tools` の結果は `{"protocol":6,"tools":[{"name","description","inputSchema","kind"}]}`。
-  `kind` は `read` / `write` / `app` を小文字で載せます（呼ぶ側が「図面を変えるか」を
-  判定できるように）。予約された道具のうち `tools`・`session_start`・`session_end` は表に載せず、
+  `kind` は `read` / `write` / `app` を小文字で載せます（`write` は図面の中身を変える道具、`app` は
+  Vectorworks・図面のファイルや窓に働き、図面の中身は変えない道具。呼ぶ側が図面を変えるかと、占有が要るかを
+  判定できるように。Vectorworks を終わらせるかは種類では決まらない）。予約された道具のうち `tools`・`session_start`・`session_end` は表に載せず、
   `tools` の結果にも出しません。`ping` と `quit` は表に載せます（[通信規則「予約された道具」](../protocol.md#予約された道具)）。
 - 道具の結果は JSON のオブジェクトで返します（[通信規則「応答」](../protocol.md#応答idresjson)）。返す値が無ければ
   `Json()` でよく、`Server` が `{}` にします。オブジェクトでない値は道具の不具合として、`Server` が

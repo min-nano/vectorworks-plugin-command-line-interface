@@ -16,7 +16,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 | [A1](#a1-種類-app-と終了の依頼が同じ意味になっている) | 種類 `app` と終了の依頼が同じ意味になっている | 段 4 の前 | 済（終了の依頼は道具が返す印 `ToolStatus::quit` にし、`app` は占有の中でだけ呼べる種類に限る。段 4 の共通部の変更で実装した。[ブリッジ「道具の表」](plugin/bridge.md#道具の表)） |
 | [A2](#a2-quitping-が使う-sdk-呼び出しが確かめられていない) | `quit`・`ping` が使う SDK 呼び出しが確かめられていない | 段 6（`quit`）の前 | 済（`GetCurrentLayer()` は[道具「ping」](plugin/tools.md#ping)。`CloseAllFilesAndQuitVectorworks` は刻みから呼べ、保存の確認を取り消すと戻る。[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)。[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)） |
 | [A3](#a3-未決-2-が段-2-の作りを変える) | 未決 2 が段 2 の作りを変える | 段 2 の前 | 済（undo の記録が開いているかは見ない。書く道具は自分で記録を開いて閉じ、占有の中でだけ呼べる。受け付けの入れ子は `busy` で断る。[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)） |
-| [A4](#a4-終了の依頼の最中に受け付けが入れ子になりうる) | 終了の依頼の最中に受け付けが入れ子になりうる | 段 6 | 暫定（終了の依頼の最中は `write`・`app` を `busy` で断る。[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 の結果は出た。これを踏まえて段 6 の前に残すかを決める） |
+| [A4](#a4-終了の依頼の最中に受け付けが入れ子になりうる) | 終了の依頼の最中に受け付けが入れ子になりうる | 段 6 | 暫定（終了の依頼の最中は `write`・`app` を `busy` で断る。[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 の結果から、判定は残す。段 6 の前に、入れ子の判定にまとめるかを決める） |
 | [B1](#b1-更新の手順の見本が占有を残す) | 更新の手順の見本が占有を残す | 段 6 | 済（失敗の道筋で `session end` を呼ぶ形に直し、見本を `vw2026 --help` へ移した。[インストール「流れ」](plugin/install-and-update.md#流れ)） |
 | [B2](#b2-windows-の-path-の書き換えが既存の項目を壊しうる) | Windows の PATH の書き換えが既存の項目を壊しうる | 段 3b | 済（展開しない値を読み、型を保って書き戻す。`.NET` の `Microsoft.Win32.RegistryKey` で読み書きし、段 3b の `install-windows` ジョブが実物のレジストリで、値が無い・REG_SZ・REG_EXPAND_SZ の場合に型と既存の項目が保たれることを確かめた。[インストール「Windows の `Path` の読み書き」](plugin/install-and-update.md#windows-の-path-の読み書き)） |
 | [B3](#b3-vw2026_app-が環境変数の名前の決まりに反する) | `VW2026_APP` が環境変数の名前の決まりに反する | 最初の配布（段 2）の前 | 済（名前は値の通じる範囲で決める、と決まりを改めた。CLAUDE.md「Go」） |
@@ -94,16 +94,16 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
   道具には応える）、`Clock` が終了の依頼の前後で印を立てて `Quitting` を渡す。その間は種類
   `write`・`app` を `busy` で断るので、2 つ目の `quit` は重ならない。
 - **`quit` は図面が 0 枚のときだけ受け付ける**（[道具「quit」](plugin/tools.md#quit)）ので、保存の確認が開くのは、確かめてから
-  頼むまでの間に利用者が図面を開いた競合のときだけ。判定を残す理由は小さい。#230 の 4 の結果で残すかを決める。
+  頼むまでの間に利用者が図面を開いた競合のときだけ。
 - 守る相手は `quit` を頼んだ当の呼ぶ側の呼び直しだけ（`write`・`app` は占有の中でしか呼べない）。
-  保存の確認の中で 2 つ目の `CloseAllFilesAndQuitVectorworks` を呼んだときに何が起きるかを
-  [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 で確かめ、段 6 の前に、判定をやめるか、残すか、
-  入れ子の判定にまとめて保存の確認の間はすべて断るかを決める。
 - **#230 の 4 の結果。** 保存の確認の中から 2 つ目を呼ぶと、確認が 2 つ重なって出る（落ちない。両方取り消すと
   内側 → 外側の順に戻る）。mac では呼んだタイマー自身は確認の最中に入り直さないが、Windows では入り直し、
   そこから 2 つ目を呼べてしまう。Findings は「終了の呼び出しの最中」を旗で持って見送る作りを勧めている
   （Windows では必須。`IsCurrentlyBuildingAnUndoEvent()` は確認の最中も `no` なので判定に使えない。
-  [Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9「保存の確認の最中」）。決めるのは段 6 の前のまま。
+  [Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9「保存の確認の最中」）。
+- **暫定は Findings の勧めに合っている**（`Clock` が終了の依頼の前後で立てる印が、勧められている旗に当たる）。
+  Windows では入り直した刻みから 2 つ目を呼べてしまうので、判定をやめる道は採れない。段 6 の前に決めるのは、
+  この判定を入れ子の判定にまとめて、保存の確認の間はすべて断るかどうかだけである。
 
 ## B. 文書の誤りと、文書と実装の食い違い
 
