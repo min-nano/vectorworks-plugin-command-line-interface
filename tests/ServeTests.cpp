@@ -4,6 +4,7 @@
 #include "core/Protocol.h"
 #include "core/Serve.h"
 
+#include <cstddef>
 #include <filesystem>
 #include <memory>
 #include <span>
@@ -27,6 +28,10 @@ namespace {
 
 using VwCli::test::kNow;
 
+// 応答のファイルを読む上限。通信規則は応答の大きさを決めないので、要求の上限より大きく取る（FixtureTests
+// と同じ）。
+constexpr std::size_t kMaxResponseBytes = VwCli::core::protocol::kMaxRequestBytes * 2;
+
 // Caller は呼ぶ側を真似る。待つ印を掴んでから要求を置き、壊すと放す。
 class Caller {
 public:
@@ -42,7 +47,7 @@ public:
 	// response は応答を読む。無ければ null。
 	Json response(const std::string &id) const {
 		std::optional<std::string> text =
-		    files::read(dir_.sub(id + ".res.json"), VwCli::core::protocol::kMaxRequestBytes);
+		    files::read(dir_.sub(id + ".res.json"), kMaxResponseBytes);
 		if (!text) {
 			return Json();
 		}

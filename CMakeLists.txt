@@ -9,7 +9,7 @@ cmake_minimum_required(VERSION 3.20)
 #   cmake -S . -B build -A x64 -DVW_SDK_DIR=<SDKLib を含むフォルダ>                     # Windows
 #   cmake --build build --config Release --target VwCli
 #
-# 単体テスト（SDK は要らない。CI の cpp.yml と同じ指定。CLAUDE.md「C++」）:
+# 単体テスト（SDK は要らない。CLAUDE.md「C++」の手元のテストと同じ指定。CI の cpp.yml はカバレッジも測る）:
 #   cmake -S . -B build -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=ON \
 #     -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
 #   cmake --build build

@@ -66,10 +66,11 @@ std::string utf8(const std::filesystem::path &path) {
 	return std::string(text.begin(), text.end());
 }
 
-core::Json must(std::string_view text) {
+core::Json must(std::string_view text, std::source_location where) {
 	std::optional<core::Json> value = core::Json::parse(text, core::protocol::kMaxNestingDepth);
 	if (!value) {
-		fail(__FILE__, __LINE__, "should parse: " + std::string(text));
+		fail(where.file_name(), static_cast<int>(where.line()),
+		     "should parse: " + std::string(text));
 		return core::Json();
 	}
 	return *value;
