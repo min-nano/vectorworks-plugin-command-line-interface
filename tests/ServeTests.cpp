@@ -272,7 +272,9 @@ TEST(ServeIssuesSessionsSpelledLikeIds) {
 	std::string session = startSession(server, caller, "1");
 	CHECK(VwCli::core::protocol::validId(session));
 	CHECK_EQ(session.size(), std::size_t{36});
-	CHECK_EQ(session.substr(0, 20), std::string("1760000000000000000-"));
+	// 印の頭は、受け付けに渡した今の時刻と区切り。
+	std::string head = std::to_string(kNow) + "-";
+	CHECK_EQ(session.substr(0, head.size()), head);
 	// 2 つ目の印は別の乱数になる。
 	caller.put("2", R"({"tool":"session_end","session":")" + session + R"("})");
 	server.serve(kTools, kNow);
