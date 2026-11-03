@@ -19,8 +19,8 @@ import (
 // RecordFile は入れたときの記録（docs/registry.md「入れたときの記録」）。
 const RecordFile = "vw2026-install.json"
 
-// RecordVersion は読み書きする record_version。
-const RecordVersion = 1
+// recordVersion は読み書きする record_version。
+const recordVersion = 1
 
 // Record は入れたときの記録。プラグインのフォルダの中にだけ置き、フォルダと一緒に付け替える。
 type Record struct {
@@ -106,8 +106,8 @@ func readRecord(dir string) (*Record, error) {
 	switch {
 	case raw.RecordVersion == nil:
 		return nil, errors.New("record_version is missing")
-	case *raw.RecordVersion != RecordVersion:
-		return nil, fmt.Errorf("unknown record_version %d (this vw2026 reads %d)", *raw.RecordVersion, RecordVersion)
+	case *raw.RecordVersion != recordVersion:
+		return nil, fmt.Errorf("unknown record_version %d (this vw2026 reads %d)", *raw.RecordVersion, recordVersion)
 	case raw.Name == "" || raw.Registry == "" || raw.Target == "" || raw.Module == "":
 		return nil, errors.New("the record lacks name, registry, target or module")
 	case !registry.ValidTag(raw.Tag):
@@ -178,7 +178,7 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 	}
 	// フックが通るまでは hook_pending（付け替えのあとフックが失敗して残した・フックの途中で止まった版を見分ける）。
 	record := &Record{
-		RecordVersion: RecordVersion,
+		RecordVersion: recordVersion,
 		Name:          name,
 		Registry:      source,
 		Tag:           tag,

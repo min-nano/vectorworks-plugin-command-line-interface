@@ -83,14 +83,15 @@ func scriptIn(dir string, argv []string) (string, error) {
 var windowsRunnable = []string{".exe", ".com", ".cmd", ".bat"}
 
 // runHook はフックを 1 つ走らせ、標準出力の JSON のオブジェクトを返す（docs/registry.md「書き方」）。
-// argv が nil なら走らせずに nil。作業ディレクトリはプラグインのフォルダ、標準入力は閉じて渡し、
+// argv が nil なら走らせずに nil。スクリプトを探す場所と作業ディレクトリはプラグインのフォルダ（env.pluginDir）、
+// 標準入力は閉じて渡し、
 // 標準エラーはそのまま流す。0 以外で終わる・標準出力が空でも JSON のオブジェクト 1 つでもないと
 // 失敗にする。時間の上限は持たない。
-func (o *Options) runHook(kind string, argv []string, dir string, env hookEnv) (json.RawMessage, error) {
+func (o *Options) runHook(kind string, argv []string, env hookEnv) (json.RawMessage, error) {
 	if argv == nil {
 		return nil, nil
 	}
-	path, err := scriptIn(dir, argv)
+	path, err := scriptIn(env.pluginDir, argv)
 	if err != nil {
 		return nil, fmt.Errorf("the %s hook: %w", kind, err)
 	}
@@ -109,7 +110,7 @@ func (o *Options) runHook(kind string, argv []string, dir string, env hookEnv) (
 	// 捨てて読み続け、フックを止めない。終わったあとで失敗にする）。
 	stdout := &boundedBuffer{max: maxDocument}
 	cmd := exec.Command(command[0], command[1:]...)
-	cmd.Dir = dir
+	cmd.Dir = env.pluginDir
 	cmd.Env = env.environ()
 	cmd.Stdout = stdout
 	cmd.Stderr = o.stderr()

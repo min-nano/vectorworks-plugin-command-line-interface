@@ -19,7 +19,7 @@ import (
 func TestInstallFirstTime(t *testing.T) {
 	h := newHarness(t)
 	result := h.mustInstall(release{name: "cli", tag: "c1"})
-	if result.Outcome != OutcomeInstalled || result.Tag != "c1" || result.Requested != "c1" ||
+	if result.Outcome != outcomeInstalled || result.Tag != "c1" || result.Requested != "c1" ||
 		result.Target != testTarget || result.Registry != "default" || result.PluginsDir != h.plugins ||
 		string(result.Hook) != `{"ran":"install","tag":"c1"}` {
 		t.Fatalf("%+v", result)
@@ -92,7 +92,7 @@ func TestInstallUpdatesAndCleansUp(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	result := h.mustInstall(release{name: "cli", tag: "c2"})
-	if result.Outcome != OutcomeInstalled || h.installedVersion("cli") != "c2" {
+	if result.Outcome != outcomeInstalled || h.installedVersion("cli") != "c2" {
 		t.Fatalf("%+v", result)
 	}
 	for _, path := range []string{"staging/cli", "staging/cli.zip", "old/cli"} {
@@ -118,7 +118,7 @@ func TestInstallSameTagRunsOnlyTheRecordedHook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Outcome != OutcomeUpToDate || string(result.Hook) != `{"ran":"install","tag":"c1"}` {
+	if result.Outcome != outcomeUpToDate || string(result.Hook) != `{"ran":"install","tag":"c1"}` {
 		t.Fatalf("%+v", result)
 	}
 	if h.hit("/cli/c1/vw2026.json") != 1 || h.hit(zip) != 1 {
@@ -136,11 +136,11 @@ func TestInstallLatestFetchesOnlyTheManifest(t *testing.T) {
 	h := newHarness(t)
 	zip := h.publish(release{name: "cli", tag: "c1", latest: true})
 	result, err := h.install("cli", "latest")
-	if err != nil || result.Outcome != OutcomeInstalled || result.Tag != "c1" || result.Requested != "latest" {
+	if err != nil || result.Outcome != outcomeInstalled || result.Tag != "c1" || result.Requested != "latest" {
 		t.Fatalf("%+v %v", result, err)
 	}
 	result, err = h.install("cli", "latest")
-	if err != nil || result.Outcome != OutcomeUpToDate || result.Tag != "c1" {
+	if err != nil || result.Outcome != outcomeUpToDate || result.Tag != "c1" {
 		t.Fatalf("%+v %v", result, err)
 	}
 	if h.hit("/cli/latest/vw2026.json") != 2 || h.hit(zip) != 1 {
@@ -155,7 +155,7 @@ func TestInstallSameTagOtherTargetReinstalls(t *testing.T) {
 	path := filepath.Join(h.plugins, "cli", RecordFile)
 	rewriteRecord(t, path, func(r *Record) { r.Target = "macos-x64" })
 	result, err := h.install("cli", "c1")
-	if err != nil || result.Outcome != OutcomeInstalled {
+	if err != nil || result.Outcome != outcomeInstalled {
 		t.Fatalf("%+v %v", result, err)
 	}
 	if h.hit("/cli/c1/vw2026.json") != 2 {
@@ -171,7 +171,7 @@ func TestInstallSameTagWithoutModuleReinstalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := h.install("cli", "c1")
-	if err != nil || result.Outcome != OutcomeInstalled || !exist(filepath.Join(h.plugins, "cli", "cli.vwlibrary")) {
+	if err != nil || result.Outcome != outcomeInstalled || !exist(filepath.Join(h.plugins, "cli", "cli.vwlibrary")) {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
@@ -200,7 +200,7 @@ func TestInstallCheck(t *testing.T) {
 		}
 		return result
 	}
-	if r := check("latest"); r.Outcome != OutcomeAvailable || r.Tag != "c1" {
+	if r := check("latest"); r.Outcome != outcomeAvailable || r.Tag != "c1" {
 		t.Fatalf("nothing installed: %+v", r)
 	}
 	if exist(filepath.Join(h.plugins, "cli")) || exist(h.work) {
@@ -210,11 +210,11 @@ func TestInstallCheck(t *testing.T) {
 	// --check は Vectorworks が動いていても答える。
 	h.holdLock()
 	before := snapshot(t, h.plugins)
-	if r := check("latest"); r.Outcome != OutcomeUpToDate {
+	if r := check("latest"); r.Outcome != outcomeUpToDate {
 		t.Fatalf("%+v", r)
 	}
 	h.publish(release{name: "cli", tag: "c2", latest: true})
-	if r := check("latest"); r.Outcome != OutcomeAvailable || r.Tag != "c2" {
+	if r := check("latest"); r.Outcome != outcomeAvailable || r.Tag != "c2" {
 		t.Fatalf("%+v", r)
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
@@ -232,7 +232,7 @@ func TestInstallWhileRunning(t *testing.T) {
 	before := snapshot(t, h.plugins)
 	for _, tag := range []string{"c1", "c2"} {
 		result, err := h.install("cli", tag)
-		if !errors.Is(err, ErrRunning) || result == nil || result.Outcome != OutcomeRunning {
+		if !errors.Is(err, ErrRunning) || result == nil || result.Outcome != outcomeRunning {
 			t.Fatalf("%s: %+v %v", tag, result, err)
 		}
 	}
@@ -253,7 +253,7 @@ func TestInstallLockTakenWhileDownloading(t *testing.T) {
 	h.onGet(zip, func() { h.holdLock() })
 	before := snapshot(t, h.plugins)
 	result, err := h.install("cli", "c2")
-	if !errors.Is(err, ErrRunning) || result.Outcome != OutcomeRunning {
+	if !errors.Is(err, ErrRunning) || result.Outcome != outcomeRunning {
 		t.Fatalf("%+v %v", result, err)
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
@@ -542,13 +542,13 @@ func TestInstallHookFailureWhileRunningKeepsTheNewVersion(t *testing.T) {
 	}
 	// 同じタグで走らせ直すと、フックだけが走り、退避した前の版を片付ける。
 	os.WriteFile(filepath.Join(h.plugins, "cli", "hooks", "install.hook"), []byte(planJSON(t, hookPlan{Stdout: "{}"})), 0o644)
-	if result, err := h.install("cli", "c2"); err != nil || result.Outcome != OutcomeUpToDate {
+	if result, err := h.install("cli", "c2"); err != nil || result.Outcome != outcomeUpToDate {
 		t.Fatalf("%+v %v", result, err)
 	}
 	if exist(old) {
 		t.Fatal("left the previous version")
 	}
-	if result, err := Uninstall(h.options(), "cli"); err != nil || result.Outcome != OutcomeUninstalled {
+	if result, err := Uninstall(h.options(), "cli"); err != nil || result.Outcome != outcomeUninstalled {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
@@ -563,7 +563,7 @@ func TestInstallSameTagCannotSettleOld(t *testing.T) {
 	var stderr bytes.Buffer
 	o := h.options()
 	o.Stderr = &stderr
-	if result, err := Install(o, "cli", "c1", false); err != nil || result.Outcome != OutcomeUpToDate {
+	if result, err := Install(o, "cli", "c1", false); err != nil || result.Outcome != outcomeUpToDate {
 		t.Fatalf("%+v %v", result, err)
 	}
 	if !exist(old) || !strings.Contains(stderr.String(), old) {
@@ -762,7 +762,7 @@ func TestInstallFromPaths(t *testing.T) {
 	o := h.options()
 	o.Registries = []string{fileURL(registryPath)}
 	result, err := Install(o, "local", "l1", false)
-	if err != nil || result.Outcome != OutcomeInstalled || result.Hook != nil || h.installedVersion("local") != "l1" {
+	if err != nil || result.Outcome != outcomeInstalled || result.Hook != nil || h.installedVersion("local") != "l1" {
 		t.Fatalf("%+v %v", result, err)
 	}
 }

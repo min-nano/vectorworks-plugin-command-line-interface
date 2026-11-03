@@ -17,7 +17,7 @@ func TestUninstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Outcome != OutcomeUninstalled || string(result.Hook) != `{"ran":"uninstall"}` ||
+	if result.Outcome != outcomeUninstalled || string(result.Hook) != `{"ran":"uninstall"}` ||
 		!reflect.DeepEqual(result.Remaining, []string{"cli"}) || len(result.Left) != 0 {
 		t.Fatalf("%+v", result)
 	}
@@ -34,7 +34,7 @@ func TestUninstall(t *testing.T) {
 		t.Fatalf("%+v", last)
 	}
 	again, err := Uninstall(h.options(), "demo")
-	if err != nil || again.Outcome != OutcomeNotInstall {
+	if err != nil || again.Outcome != outcomeNotInstall {
 		t.Fatalf("%+v %v", again, err)
 	}
 }
@@ -45,7 +45,7 @@ func TestUninstallCLIRemovesTheWorkFolder(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
 	result, err := Uninstall(h.options(), "cli")
-	if err != nil || result.Outcome != OutcomeUninstalled || len(result.Remaining) != 0 {
+	if err != nil || result.Outcome != outcomeUninstalled || len(result.Remaining) != 0 {
 		t.Fatalf("%+v %v", result, err)
 	}
 	if exist(h.work) {
@@ -59,7 +59,7 @@ func TestUninstallWhileRunning(t *testing.T) {
 	h.holdLock()
 	before := snapshot(t, h.plugins)
 	result, err := Uninstall(h.options(), "cli")
-	if !errors.Is(err, ErrRunning) || result.Outcome != OutcomeRunning {
+	if !errors.Is(err, ErrRunning) || result.Outcome != outcomeRunning {
 		t.Fatalf("%+v %v", result, err)
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
@@ -160,7 +160,7 @@ func TestUninstallResumes(t *testing.T) {
 	}
 	os.WriteFile(marker, nil, 0o600)
 	result, err := Uninstall(h.options(), "demo")
-	if err != nil || result.Outcome != OutcomeUninstalled || exist(old) || exist(marker) {
+	if err != nil || result.Outcome != outcomeUninstalled || exist(old) || exist(marker) {
 		t.Fatalf("%+v %v", result, err)
 	}
 	if runs := h.hookRuns("demo"); runs[len(runs)-1].Env["VW2026_HOOK_PLUGIN_DIR"] != old {
@@ -211,7 +211,7 @@ func TestUninstallStaleMarker(t *testing.T) {
 	os.MkdirAll(filepath.Dir(marker), 0o700)
 	os.WriteFile(marker, nil, 0o600)
 	result, err := Uninstall(h.options(), "demo")
-	if err != nil || result.Outcome != OutcomeNotInstall || !reflect.DeepEqual(result.Remaining, []string{"cli"}) || exist(marker) {
+	if err != nil || result.Outcome != outcomeNotInstall || !reflect.DeepEqual(result.Remaining, []string{"cli"}) || exist(marker) {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
@@ -224,13 +224,13 @@ func TestUninstallNotInstalledCleansUp(t *testing.T) {
 	os.WriteFile(moved, nil, 0o700)
 	os.MkdirAll(filepath.Join(h.work, "staging", "cli"), 0o700)
 	result, err := Uninstall(h.options(), "cli")
-	if err != nil || result.Outcome != OutcomeNotInstall || len(result.Left) != 0 || exist(moved) || exist(h.work) {
+	if err != nil || result.Outcome != outcomeNotInstall || len(result.Left) != 0 || exist(moved) || exist(h.work) {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
 
 // 走らせている CLI が外すフォルダの中にあれば（入れた cli の vw2026 で uninstall cli）、何も変えずに
-// ErrRunsInside で断る（フォルダの外の CLI、初回のスクリプトで外す）。リンクを通して走らせても同じ。
+// RunsInsideError で断る（フォルダの外の CLI、初回のスクリプトで外す）。リンクを通して走らせても同じ。
 func TestUninstallFromInsideTheFolder(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -239,7 +239,7 @@ func TestUninstallFromInsideTheFolder(t *testing.T) {
 	o.Executable = filepath.Join(h.plugins, "cli", "bin", "vw2026")
 	_, err := Uninstall(o, "cli")
 	var inside *RunsInsideError
-	if !errors.Is(err, ErrRunsInside) || !errors.As(err, &inside) || inside.Tag != "c1" || !strings.Contains(err.Error(), "nothing is removed") {
+	if !errors.As(err, &inside) || inside.Tag != "c1" || !strings.Contains(err.Error(), "nothing is removed") {
 		t.Fatal(err)
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
@@ -248,7 +248,7 @@ func TestUninstallFromInsideTheFolder(t *testing.T) {
 	}
 	// フォルダの外の CLI なら外せる。
 	o.Executable = filepath.Join(h.tmp, "elsewhere", "vw2026")
-	if result, err := Uninstall(o, "cli"); err != nil || result.Outcome != OutcomeUninstalled {
+	if result, err := Uninstall(o, "cli"); err != nil || result.Outcome != outcomeUninstalled {
 		t.Fatalf("%+v %v", result, err)
 	}
 }

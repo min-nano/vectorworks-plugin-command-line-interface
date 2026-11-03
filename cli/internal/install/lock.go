@@ -14,7 +14,7 @@ import (
 // 場所）、動いているかが分からないという誤りも返す（判定そのもの、spool.Open の意味は変えない）。
 func lockState(p places) (bool, error) {
 	var unknown error
-	for _, dir := range []string{filepath.Join(p.plugins, CLIName), filepath.Join(p.old, CLIName)} {
+	for _, dir := range []string{filepath.Join(p.plugins, cliName), filepath.Join(p.old, cliName)} {
 		held, err := spool.LockHeld(filepath.Join(dir, spool.SpoolDirName))
 		if held {
 			return true, nil
@@ -27,8 +27,10 @@ func lockState(p places) (bool, error) {
 	return false, unknown
 }
 
-// stopped は、何かを変える前の確かめ（始め・同じタグのフックの前・付け替えの前）。Vectorworks が居れば ErrRunning
-// （終了コード 6）、ロックを調べられなければその誤り（終了コード 1）を返す。どちらも何も変えていないときに使う。
+// stopped は、何かを変える前の確かめ（始め・同じタグのフックの前・付け替えの前・前の版を片付ける前）。Vectorworks が
+// 居れば ErrRunning（終了コード 6）、ロックを調べられなければその誤り（終了コード 1）を返す。フックが通ったあとに
+// 前の版を片付ける前（finishInstall の settleOld）にも使うが、そこで返った誤りは知らせるだけで、install の結果は
+// 変えない（新しい版は入っている）。
 func stopped(p places) error {
 	held, err := lockState(p)
 	if held {
@@ -54,11 +56,11 @@ const startedMeanwhile = "Vectorworks started meanwhile (or its lock cannot be r
 // 終えてそれを終えるよう添える（止まった状態は読まない。続け方は install cli /
 // uninstall cli が答える。CLAUDE.md の守ること 3）。
 func checkCLI(plugins, name string) error {
-	if name == CLIName {
+	if name == cliName {
 		return nil
 	}
-	dir := filepath.Join(plugins, CLIName)
-	if !validRecord(dir, CLIName) {
+	dir := filepath.Join(plugins, cliName)
+	if !validRecord(dir, cliName) {
 		return fmt.Errorf("%s has no cli that vw2026 installed; vw2026 installs and "+
 			"uninstalls a plug-in only in the folder of plug-ins that has cli (it tells "+
 			"whether Vectorworks is running from the lock of cli). If an install or "+

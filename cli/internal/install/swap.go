@@ -55,17 +55,17 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 		}
 	}
 	if err := mkdirAll(p.plugins, 0o755); err != nil {
-		return nil, o.undoSwap(p, hadOld, moved, err)
+		return nil, undoSwap(p, hadOld, moved, err)
 	}
 	if err := rename(p.stageDir, p.dest); err != nil {
-		return nil, o.undoSwap(p, hadOld, moved, err)
+		return nil, undoSwap(p, hadOld, moved, err)
 	}
 
-	hook, err := o.runHook("install", record.Hooks.Install, p.dest, hookEnv{
+	hook, err := o.runHook("install", record.Hooks.Install, hookEnv{
 		name: name, tag: tag, previous: previous, target: o.Target, pluginDir: p.dest, installDir: p.dest,
 	})
 	if err != nil {
-		return nil, o.undoHook(p, hadOld, moved, err)
+		return nil, undoHook(p, hadOld, moved, err)
 	}
 	o.finishInstall(p, name, tag, moved, hadOld)
 	return hook, nil
@@ -96,7 +96,7 @@ func (o *Options) finishInstall(p places, name, tag string, moved *movedCLI, had
 	}
 	note := ""
 	if hadOld && keptDir != "" {
-		note = moved.restoreInto(p.dest, keptDir)
+		note = moved.restoreInto(keptDir)
 	}
 	if kept != nil {
 		fmt.Fprintf(o.stderr(), "vw2026: %v%s\n", kept, note)
@@ -113,7 +113,7 @@ func (o *Options) finishInstall(p places, name, tag string, moved *movedCLI, had
 }
 
 // undoSwap は付け替えの 2 つ目が失敗したときに、1 つ目とよけた CLI を戻す。
-func (o *Options) undoSwap(p places, hadOld bool, moved *movedCLI, cause error) error {
+func undoSwap(p places, hadOld bool, moved *movedCLI, cause error) error {
 	if hadOld {
 		if err := rename(p.oldDir, p.dest); err != nil {
 			return fmt.Errorf("cannot put %s into %s (%v), nor put the previous version back (%v); "+
@@ -127,7 +127,7 @@ func (o *Options) undoSwap(p places, hadOld bool, moved *movedCLI, cause error) 
 
 // undoHook はフックが失敗したときに前の版へ戻す。戻す前にロックを見て、Vectorworks が起動していれば
 // 新しい版を残す（動いているプラグインのロックごと消さない）。
-func (o *Options) undoHook(p places, hadOld bool, moved *movedCLI, cause error) error {
+func undoHook(p places, hadOld bool, moved *movedCLI, cause error) error {
 	previous := ""
 	if hadOld {
 		previous = fmt.Sprintf(" (the previous one is in %s)", p.oldDir)
@@ -137,7 +137,7 @@ func (o *Options) undoHook(p places, hadOld bool, moved *movedCLI, cause error) 
 		// 後始末がよけた名前のまま消さないように）。戻せなければ、その場所を知らせる。
 		note := ""
 		if hadOld {
-			note = moved.restoreInto(p.dest, p.oldDir)
+			note = moved.restoreInto(p.oldDir)
 		}
 		// 取った zip はもう要らない（同じタグで走らせ直す install は zip を取らない）。
 		_ = removeFile(p.stageZip)

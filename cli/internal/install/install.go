@@ -19,18 +19,18 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
 
-// CLIName は cli のプラグインの名前（フォルダ名）。ロックの場所・ほかのプラグインを cli のある <Plug-Ins> に
+// cliName は cli のプラグインの名前（フォルダ名）。ロックの場所・ほかのプラグインを cli のある <Plug-Ins> に
 // だけ入れる確かめ・入った CLI が自分の入った <Plug-Ins> を求める（PluginsDirOf）ためだけに使う。
-const CLIName = "cli"
+const cliName = "cli"
 
 // 出力の outcome。
 const (
-	OutcomeInstalled   = "installed"
-	OutcomeUpToDate    = "up_to_date"
-	OutcomeAvailable   = "available"
-	OutcomeRunning     = "vectorworks_running"
-	OutcomeUninstalled = "uninstalled"
-	OutcomeNotInstall  = "not_installed"
+	outcomeInstalled   = "installed"
+	outcomeUpToDate    = "up_to_date"
+	outcomeAvailable   = "available"
+	outcomeRunning     = "vectorworks_running"
+	outcomeUninstalled = "uninstalled"
+	outcomeNotInstall  = "not_installed"
 )
 
 // Options は配置に要る外の世界。
@@ -107,7 +107,7 @@ func Install(o Options, name, requested string, check bool) (*InstallResult, err
 	// 返さない（呼ぶ側は failed を出す）。
 	switch {
 	case errors.Is(err, ErrRunning) && result != nil:
-		result.Outcome = OutcomeRunning
+		result.Outcome = outcomeRunning
 		return result, err
 	case err != nil:
 		return nil, err
@@ -176,11 +176,11 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 		upToDate = same(result.Tag)
 	}
 	if check {
-		result.Outcome = OutcomeAvailable
+		result.Outcome = outcomeAvailable
 		// 入っている版のフックがまだ通っていなければ（hook_pending）、同じタグでも入れ終えていないので available
 		// （同じタグの install でフックを走らせる）。
 		if upToDate && !installed.HookPending {
-			result.Outcome = OutcomeUpToDate
+			result.Outcome = outcomeUpToDate
 		}
 		return result, nil
 	}
@@ -215,7 +215,7 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 		if err := stopped(p); err != nil {
 			return result, err
 		}
-		hook, err := o.runHook("install", installed.Hooks.Install, p.dest, hookEnv{
+		hook, err := o.runHook("install", installed.Hooks.Install, hookEnv{
 			name: name, tag: installed.Tag, previous: previousTag(p, name, installed), target: o.Target,
 			pluginDir: p.dest, installDir: p.dest,
 		})
@@ -224,7 +224,7 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 		}
 		// 新しい版を残した install の続きなら、フックが通ったので、付け替えのあとと同じく印を外して片付ける。
 		o.finishInstall(p, name, installed.Tag, nil, false)
-		result.Outcome = OutcomeUpToDate
+		result.Outcome = outcomeUpToDate
 		result.Hook = hook
 		return result, nil
 	}
@@ -232,7 +232,7 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 	if err != nil {
 		return result, err
 	}
-	result.Outcome = OutcomeInstalled
+	result.Outcome = outcomeInstalled
 	result.Hook = hook
 	return result, nil
 }

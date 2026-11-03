@@ -82,6 +82,6 @@
 `src/core/Protocol.h` の `kSpoolDirName` に置きます。CLI 側の `cli/internal/spool` の `SpoolDirName` と
 対で、両側のテストが[通信規則の見本](../fixtures.md)の `constants.json` に照らします
 （[通信規則](../protocol.md#スプールの場所)）。`<Work>` のディレクトリ名の頭（`vectorworks2026-cli`）は
-`vw2026` だけが使うので、`cli/internal/install` の `WorkDirName` に置きます（見本には載せない）。
+`vw2026` だけが使うので、`cli/internal/install` の `workDirName` に置きます（見本には載せない）。
 CLI の実行ファイルを置く `bin` は、`vw2026` が実行ファイルのあるフォルダの親をスプールの親とするだけで、
 名前としては使いません。

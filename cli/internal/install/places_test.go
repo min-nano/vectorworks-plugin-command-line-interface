@@ -28,7 +28,7 @@ func TestPlacesIgnoreEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !filepath.IsAbs(work) || filepath.Base(work) != WorkDirName || filepath.Base(plugins) != "Plug-Ins" {
+	if !filepath.IsAbs(work) || filepath.Base(work) != workDirName || filepath.Base(plugins) != "Plug-Ins" {
 		t.Fatalf("%s %s", work, plugins)
 	}
 	elsewhere := t.TempDir()

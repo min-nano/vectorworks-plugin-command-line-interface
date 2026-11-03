@@ -78,8 +78,8 @@ func TestMatch(t *testing.T) {
 		{"a*a", "a", false},
 		{"**", "x", true},
 	} {
-		if got := Match(c.pattern, c.s); got != c.want {
-			t.Errorf("Match(%q, %q) = %v", c.pattern, c.s, got)
+		if got := match(c.pattern, c.s); got != c.want {
+			t.Errorf("match(%q, %q) = %v", c.pattern, c.s, got)
 		}
 	}
 }
@@ -201,12 +201,12 @@ func TestScript(t *testing.T) {
 
 func TestCheckRelative(t *testing.T) {
 	for _, path := range []string{"a", "a/b", "a/.b", "a..b"} {
-		if err := CheckRelative(path); err != nil {
+		if err := checkRelative(path); err != nil {
 			t.Errorf("%q: %v", path, err)
 		}
 	}
 	for _, path := range []string{"", "-a", `a\b`, "/a", "../a", "a/../../b", "a/.."} {
-		if err := CheckRelative(path); err == nil {
+		if err := checkRelative(path); err == nil {
 			t.Errorf("%q should be refused", path)
 		}
 	}
@@ -218,7 +218,7 @@ func TestCheckRelative(t *testing.T) {
 
 // 間の部分が見つからなければ合わない。手元のレジストリでも相対パスは断る。読めないマニフェストは断る。
 func TestRegistryEdges(t *testing.T) {
-	if Match("a*b*c", "a-x-c") {
+	if match("a*b*c", "a-x-c") {
 		t.Error("a*b*c should not match a-x-c")
 	}
 	relative := `{"registry_version":1,"plugins":{"a":{"manifests":[{"match":"*","path":"x/{tag}.json"}]}}}`

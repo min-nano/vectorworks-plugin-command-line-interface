@@ -60,10 +60,10 @@ func TestWorkDirFor(t *testing.T) {
 	b := filepath.Join(tmp, "b", "Plug-Ins")
 	os.MkdirAll(a, 0o755)
 	os.MkdirAll(b, 0o755)
-	base := filepath.Join(tmp, WorkDirName)
+	base := filepath.Join(tmp, workDirName)
 	work := WorkDirFor(base, a)
-	if filepath.Dir(work) != tmp || !strings.HasPrefix(filepath.Base(work), WorkDirName+"-") ||
-		len(filepath.Base(work)) != len(WorkDirName)+1+12 {
+	if filepath.Dir(work) != tmp || !strings.HasPrefix(filepath.Base(work), workDirName+"-") ||
+		len(filepath.Base(work)) != len(workDirName)+1+12 {
 		t.Fatal(work)
 	}
 	if WorkDirFor(base, b) == work || WorkDirFor(base, a+string(filepath.Separator)) != work {
