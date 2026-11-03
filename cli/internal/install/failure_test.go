@@ -699,19 +699,54 @@ func TestDiscardWithoutStaging(t *testing.T) {
 	}
 }
 
-// discard が <Work>/staging を作れなければ、old へ移したフォルダと印を残して失敗にする（走らせ直すと続きから走る）。
-func TestDiscardCannotMakeTheStaging(t *testing.T) {
+// uninstall の discard が失敗したら（<Work>/staging を作れない・old から組み立ての場所へ移せない）、old へ移した
+// フォルダと印を残して失敗にする（走らせ直すと続きから走る）。走らせ直す案内（run uninstall again）は 1 つだけで、
+// 誤りの連鎖は discard の中まで続かない（cmd が ErrRunning などを discard の中から拾わないように）。
+func TestUninstallDiscardFailure(t *testing.T) {
+	for name, fail := range map[string]func(t *testing.T, h *harness){
+		"staging": func(t *testing.T, h *harness) {
+			staging := filepath.Join(h.work, "staging")
+			os.RemoveAll(staging)
+			failMkdirAll(t, staging)
+		},
+		"rename": func(t *testing.T, h *harness) {
+			failRename(t, filepath.Join(h.work, "old", "demo"), filepath.Join(h.work, "staging", "demo"))
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			h.installCLI()
+			h.mustInstall(release{name: "demo", tag: "d1"})
+			fail(t, h)
+			_, err := Uninstall(h.options(), "demo")
+			if err == nil || !strings.Contains(err.Error(), "demo is out of the folder of plug-ins, but") ||
+				strings.Count(err.Error(), "again") != 1 || !strings.Contains(err.Error(), "run uninstall again") ||
+				errors.Is(err, errInjected) {
+				t.Fatal(err)
+			}
+			if !validRecord(filepath.Join(h.work, "old", "demo"), "demo") || !exists(filepath.Join(h.work, "old", "demo.uninstalling")) {
+				t.Fatal("should keep old and the marker")
+			}
+		})
+	}
+}
+
+// 空の <Work> を消せなくても、外したことは変わらない（残った <Work> は次の install・uninstall が使う）。
+func TestUninstallCannotRemoveTheEmptyWork(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
-	h.mustInstall(release{name: "demo", tag: "d1"})
-	staging := filepath.Join(h.work, "staging")
-	os.RemoveAll(staging)
-	failMkdirAll(t, staging)
-	if _, err := Uninstall(h.options(), "demo"); err == nil || !strings.Contains(err.Error(), "run uninstall again") {
-		t.Fatal(err)
+	pathOpWhen(t, &removeFile, func(path string) error {
+		if path == h.work {
+			return errInjected
+		}
+		return nil
+	})
+	result, err := Uninstall(h.options(), "cli")
+	if err != nil || result.Outcome != outcomeUninstalled {
+		t.Fatalf("%+v %v", result, err)
 	}
-	if !validRecord(filepath.Join(h.work, "old", "demo"), "demo") || !exists(filepath.Join(h.work, "old", "demo.uninstalling")) {
-		t.Fatal("should keep old and the marker")
+	if !exists(h.work) || exists(filepath.Join(h.work, "staging")) || exists(filepath.Join(h.work, "old")) {
+		t.Fatal("should remove the empty staging and old, and keep the work folder it cannot remove")
 	}
 }
 

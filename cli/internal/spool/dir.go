@@ -38,7 +38,9 @@ func DirOf(executable string) string {
 // <Plug-Ins>/cli/bin/vw2026 へのリンク）。解けなければ（Windows の subst のドライブ・割り当てたネットワーク
 // ドライブなどでは EvalSymlinks が失敗することがある）解く前のパスを返す。実行ファイルのパスは使えるので、
 // 場所を決められずに終わらせないため。スプールの場所（DirOf）と、install が自分の入った <Plug-Ins> と
-// 動いている自分を見つけるときに、同じ解き方を使う。
+// 動いている自分を見つけるときに、同じ解き方を使う（実行ファイルの場所はスプールの場所と同じ決め方で求める）。
+// 実在する実行ファイルのパスに使う。まだ無いかもしれない場所（--plugins-dir・<Work>）を解くのは install の
+// resolvedPath で、あるところまでの親を解く。
 func ResolveLinks(executable string) string {
 	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
 		return resolved

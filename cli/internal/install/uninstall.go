@@ -79,9 +79,11 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 			"uninstall again (it goes on from the hook)", startedMeanwhile, name, p.oldDir)
 	}
 	// 組み立ての場所へ移してから消す（消すのが途中で止まっても、記録の消えた半分のフォルダを old に残さない）。
-	if err := o.discard(p, name); err != nil {
-		return nil, fmt.Errorf("%s is out of the folder of plug-ins, but %s is not deleted yet (run uninstall again to "+
-			"delete it): %w", name, p.oldDir, err)
+	// 走らせ直す案内（run uninstall again）は discard の文言にあるので、ここでは足さない。discard の誤りは %v で包み、cmd の見分け
+	// （ErrRunning・RunsInsideError・使い方の誤り）が discard の中まで見に行かないようにする（ErrRunning を返すのは
+	// 始めの確かめだけ）。
+	if err := o.discard(p, name, "uninstall"); err != nil {
+		return nil, fmt.Errorf("%s is out of the folder of plug-ins, but %s is not deleted yet: %v", name, p.oldDir, err)
 	}
 	return finishUninstall(p, name, outcomeUninstalled, hook), nil
 }
@@ -129,7 +131,7 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 		}
 		if err := rename(p.dest, p.oldDir); err != nil {
 			_ = removeFile(p.marker)
-			return nil, false, renameError(p.dest, err)
+			return nil, false, renameError(p.dest, err, "uninstall")
 		}
 		return record, false, nil
 	case exists(p.oldDir):
