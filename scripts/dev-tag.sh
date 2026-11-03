@@ -6,7 +6,8 @@
 # 切って末尾の -・_・. を落としたもの（タグを 128 文字の上限に収めるため）。別のブランチが同じ slug に
 # なりうる（claude/foo と claude-foo、日本語だけの名前）ので、一意にするのは PR 番号と sha。
 # slug が空なら dev-<PR 番号>-<短い sha>。タグを作るのはこのスクリプトだけで、build.yml が使う
-# （cleanup-dev-release.yml はこの形の末尾の -<PR 番号>-<短い sha> で PR のタグを見分ける）。
+# （cleanup-dev-release.yml と build.yml の release の下書きの片付けは、この形の末尾の
+# -<PR 番号>-<短い sha> で PR のタグを見分ける）。
 #
 #   scripts/dev-tag.sh <branch> <PR 番号> <短い sha>
 set -eu
@@ -21,7 +22,7 @@ case "$pr" in
 	exit 1
 	;;
 esac
-# 短い sha は小文字の 16 進 7 桁（cleanup-dev-release.yml が同じ形で見分ける）。
+# 短い sha は小文字の 16 進 7 桁（cleanup-dev-release.yml と build.yml が同じ形で見分ける）。
 case "$sha" in
 [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
 *)

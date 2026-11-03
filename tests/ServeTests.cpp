@@ -120,6 +120,8 @@ Json badDetail(const Json &, const ToolContext &, ToolStatus &status) {
 
 Json throwsInt(const Json &, const ToolContext &, ToolStatus &) {
 	record("throws_int");
+	// std::exception から派生しない例外も受け止めることを確かめるので、わざと int を投げる。
+	// NOLINTNEXTLINE(bugprone-std-exception-baseclass)
 	throw 42;
 }
 

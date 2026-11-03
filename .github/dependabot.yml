@@ -4,8 +4,9 @@ updates:
     directory: /cli
     schedule:
       interval: daily
+  # .github/actions/ の composite action も同じ PR で上げる。
   - package-ecosystem: github-actions
-    directory: /
+    directories: ["/", "/.github/actions/*"]
     schedule:
       interval: daily
   - package-ecosystem: gomod

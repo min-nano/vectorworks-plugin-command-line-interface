@@ -1,8 +1,12 @@
 # C++ の検査（docs/lint.md）。既定（clang-analyzer）に、不具合につながる書き方（bugprone）を
 # 足すだけにし、指摘は失敗として扱う。
 #   - easily-swappable-parameters は同じ型の引数が並ぶだけで指摘し、直しようのないものが多いので外す。
+#   - signed-bitwise は正の整数のリテラル（1 << 20・0777 など）を数えない。符号の無い型に書き替えても
+#     読みやすくならず、負の値が混ざる誤りは変数の側で起きるため。
 Checks: >
   bugprone-*,
   -bugprone-easily-swappable-parameters
+CheckOptions:
+  bugprone-signed-bitwise.IgnorePositiveIntegerLiterals: true
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*/(src|tests)/.*'
