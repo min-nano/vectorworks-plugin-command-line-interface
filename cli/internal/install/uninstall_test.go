@@ -21,8 +21,8 @@ func TestUninstall(t *testing.T) {
 		!reflect.DeepEqual(result.Remaining, []string{"cli"}) || len(result.Left) != 0 {
 		t.Fatalf("%+v", result)
 	}
-	if exist(filepath.Join(h.plugins, "demo")) || exist(filepath.Join(h.work, "old", "demo")) ||
-		exist(filepath.Join(h.work, "old", "demo.uninstalling")) {
+	if exists(filepath.Join(h.plugins, "demo")) || exists(filepath.Join(h.work, "old", "demo")) ||
+		exists(filepath.Join(h.work, "old", "demo.uninstalling")) {
 		t.Fatal("left something")
 	}
 	// 記録のフックを、移した先で走らせる。
@@ -48,7 +48,7 @@ func TestUninstallCLIRemovesTheWorkFolder(t *testing.T) {
 	if err != nil || result.Outcome != outcomeUninstalled || len(result.Remaining) != 0 {
 		t.Fatalf("%+v %v", result, err)
 	}
-	if exist(h.work) {
+	if exists(h.work) {
 		t.Fatal("left the work folder")
 	}
 }
@@ -123,7 +123,7 @@ func TestUninstallRenameFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
-	if len(h.hookRuns("cli")) != 1 || exist(filepath.Join(h.work, "old", "cli.uninstalling")) {
+	if len(h.hookRuns("cli")) != 1 || exists(filepath.Join(h.work, "old", "cli.uninstalling")) {
 		t.Fatal("ran the hook or left the marker")
 	}
 }
@@ -137,7 +137,7 @@ func TestUninstallHookFailureRestores(t *testing.T) {
 		t.Fatal("should fail")
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
-	if exist(filepath.Join(h.work, "old", "cli.uninstalling")) || exist(filepath.Join(h.work, "old", "cli")) {
+	if exists(filepath.Join(h.work, "old", "cli.uninstalling")) || exists(filepath.Join(h.work, "old", "cli")) {
 		t.Fatal("left the marker or old")
 	}
 }
@@ -155,12 +155,12 @@ func TestUninstallResumes(t *testing.T) {
 	if _, err := Uninstall(h.options(), "demo"); err == nil || !strings.Contains(err.Error(), old) {
 		t.Fatalf("without the marker: %v", err)
 	}
-	if !exist(old) {
+	if !exists(old) {
 		t.Fatal("removed old without the marker")
 	}
 	os.WriteFile(marker, nil, 0o600)
 	result, err := Uninstall(h.options(), "demo")
-	if err != nil || result.Outcome != outcomeUninstalled || exist(old) || exist(marker) {
+	if err != nil || result.Outcome != outcomeUninstalled || exists(old) || exists(marker) {
 		t.Fatalf("%+v %v", result, err)
 	}
 	if runs := h.hookRuns("demo"); runs[len(runs)-1].Env["VW2026_HOOK_PLUGIN_DIR"] != old {
@@ -180,7 +180,7 @@ func TestUninstallResumedHookFailureDoesNotRestore(t *testing.T) {
 	if _, err := Uninstall(h.options(), "demo"); err == nil || !strings.Contains(err.Error(), old) {
 		t.Fatal(err)
 	}
-	if exist(filepath.Join(h.plugins, "demo")) || !exist(old) || !exist(marker) {
+	if exists(filepath.Join(h.plugins, "demo")) || !exists(old) || !exists(marker) {
 		t.Fatal("should leave old and the marker as they are")
 	}
 }
@@ -198,7 +198,7 @@ func TestUninstallRefusesLeftoverOld(t *testing.T) {
 		t.Fatal(err)
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
-	if !exist(filepath.Join(old, "version.txt")) || exist(filepath.Join(h.work, "old", "demo.uninstalling")) {
+	if !exists(filepath.Join(old, "version.txt")) || exists(filepath.Join(h.work, "old", "demo.uninstalling")) {
 		t.Fatal("removed old or left the marker")
 	}
 }
@@ -211,7 +211,7 @@ func TestUninstallStaleMarker(t *testing.T) {
 	os.MkdirAll(filepath.Dir(marker), 0o700)
 	os.WriteFile(marker, nil, 0o600)
 	result, err := Uninstall(h.options(), "demo")
-	if err != nil || result.Outcome != outcomeNotInstall || !reflect.DeepEqual(result.Remaining, []string{"cli"}) || exist(marker) {
+	if err != nil || result.Outcome != outcomeNotInstall || !reflect.DeepEqual(result.Remaining, []string{"cli"}) || exists(marker) {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
@@ -224,7 +224,7 @@ func TestUninstallNotInstalledCleansUp(t *testing.T) {
 	os.WriteFile(moved, nil, 0o700)
 	os.MkdirAll(filepath.Join(h.work, "staging", "cli"), 0o700)
 	result, err := Uninstall(h.options(), "cli")
-	if err != nil || result.Outcome != outcomeNotInstall || len(result.Left) != 0 || exist(moved) || exist(h.work) {
+	if err != nil || result.Outcome != outcomeNotInstall || len(result.Left) != 0 || exists(moved) || exists(h.work) {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
@@ -243,7 +243,7 @@ func TestUninstallFromInsideTheFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
-	if len(h.hookRuns("cli")) != 1 || exist(filepath.Join(h.work, "old", "cli.uninstalling")) {
+	if len(h.hookRuns("cli")) != 1 || exists(filepath.Join(h.work, "old", "cli.uninstalling")) {
 		t.Fatal("ran the hook or left the marker")
 	}
 	// フォルダの外の CLI なら外せる。
