@@ -23,7 +23,10 @@
 
 namespace VwCli::core::files {
 
-// join は dir と name を OS の区切りでつなぐ。
+// isSeparator は c がパスの区切りか（POSIX は /、Windows は \ と /）。
+bool isSeparator(char c);
+
+// join は dir と name を OS の区切りでつなぐ（dir が区切りで終わっていれば足さない）。
 std::string join(const std::string &dir, std::string_view name);
 
 // modulePathOf は、address を含むモジュール（プラグインでは cli.vlb か、cli.vwlibrary の中の

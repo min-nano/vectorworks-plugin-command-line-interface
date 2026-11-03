@@ -4,6 +4,7 @@
 #include "core/Protocol.h"
 #include "core/Serve.h"
 
+#include <cstddef>
 #include <filesystem>
 #include <memory>
 #include <span>
@@ -25,7 +26,11 @@ using VwCli::test::TempDir;
 
 namespace {
 
-constexpr std::int64_t kNow = 1760000000000000000;
+using VwCli::test::kNow;
+
+// 応答のファイルを読む上限。通信規則は応答の大きさを決めないので、要求の上限より大きく取る（FixtureTests
+// と同じ）。
+constexpr std::size_t kMaxResponseBytes = VwCli::core::protocol::kMaxRequestBytes * 2;
 
 // Caller は呼ぶ側を真似る。待つ印を掴んでから要求を置き、壊すと放す。
 class Caller {
@@ -41,11 +46,12 @@ public:
 
 	// response は応答を読む。無ければ null。
 	Json response(const std::string &id) const {
-		std::optional<std::string> text = files::read(dir_.sub(id + ".res.json"), 1 << 20);
+		std::optional<std::string> text =
+		    files::read(dir_.sub(id + ".res.json"), kMaxResponseBytes);
 		if (!text) {
 			return Json();
 		}
-		std::optional<Json> value = Json::parse(*text, 64);
+		std::optional<Json> value = Json::parse(*text, VwCli::core::protocol::kMaxNestingDepth);
 		CHECK(value);
 		return value ? *value : Json();
 	}
@@ -54,7 +60,7 @@ public:
 	bool ok(const std::string &id) const {
 		Json value = response(id);
 		const Json *ok = value.find("ok");
-		return ok && ok->isBool() && ok->asBool();
+		return ok && VwCli::test::isTrue(*ok);
 	}
 
 	std::string code(const std::string &id) const {
@@ -266,7 +272,9 @@ TEST(ServeIssuesSessionsSpelledLikeIds) {
 	std::string session = startSession(server, caller, "1");
 	CHECK(VwCli::core::protocol::validId(session));
 	CHECK_EQ(session.size(), std::size_t{36});
-	CHECK_EQ(session.substr(0, 20), std::string("1760000000000000000-"));
+	// 印の頭は、受け付けに渡した今の時刻と区切り。
+	std::string head = std::to_string(kNow) + "-";
+	CHECK_EQ(session.substr(0, head.size()), head);
 	// 2 つ目の印は別の乱数になる。
 	caller.put("2", R"({"tool":"session_end","session":")" + session + R"("})");
 	server.serve(kTools, kNow);

@@ -8,7 +8,7 @@ namespace VwCli::tools {
 
 namespace {
 
-// 段 2 に載せるのは ping だけ（docs/plugin/plan.md）。
+// 道具を足す段（docs/plugin/plan.md の段 5）までは、載せるのは ping だけ。
 // 名前は通信規則の綴り（core/Protocol.h）を使い、テストが確かめる名前と
 // 応える名前を 1 か所にする。
 constexpr core::Tool kTools[] = {
