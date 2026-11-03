@@ -218,7 +218,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
   まで）に刻みが届いたときの扱い（タイマーを止める入口があるか）を、段 6 の実機確認の項目に
   入れる。
   **調べた範囲では、タイマーを止めなくてよい。** 刻みから終了を頼んだとき、mac では呼び出しが戻った後に刻みが
-  1〜数回届くが、`GetOpenFilesList()`・`GetCurrentLayer()` などは落ちずに返った（4 回）。Windows では呼び出しの
+  1〜数回届くが、`GetOpenFilesList()`・`GetCurrentLayer()` などは落ちずに返った。Windows では呼び出しの
   後に刻みは来ない。利用者が閉じる道でも、Windows では `kNotifyBeforeApplicationQuit` の後に刻みは来ない
   （[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9。[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・[#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)）。
   **mac の利用者が閉じる道は測っていない**ので、段 6 の実機確認の項目に入れる（[実装の順序](plugin/plan.md)の段 6）。
