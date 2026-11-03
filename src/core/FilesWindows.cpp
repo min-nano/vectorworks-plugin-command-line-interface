@@ -148,9 +148,11 @@ Opened openFile(const std::string &path, DWORD access, DWORD share, DWORD dispos
 
 }
 
+bool isSeparator(char c) { return c == '\\' || c == '/'; }
+
 std::string join(const std::string &dir, std::string_view name) {
 	std::string path = dir;
-	if (!path.empty() && path.back() != '\\' && path.back() != '/') {
+	if (!path.empty() && !isSeparator(path.back())) {
 		path += '\\';
 	}
 	path.append(name);
@@ -264,7 +266,7 @@ bool write(const std::string &path, std::string_view data) {
 	// 壊してしまう。消すのは名前だけで、リンクの先は残る。読み取り専用の書きかけが残っていると
 	// 消せず、その id には応えられない（読み取り専用の属性を外すのはリンクの先に効きうるので、
 	// しない。スプールに書けるのは同じ利用者だけで、通信規則どおりの呼ぶ側はそうしたファイルを作らない）。
-	(void)::DeleteFileW(extended(path).c_str());
+	(void)files::remove(path);
 	HANDLE file = openFile(path, GENERIC_WRITE, 0, CREATE_NEW).handle;
 	if (file == INVALID_HANDLE_VALUE) {
 		return false;

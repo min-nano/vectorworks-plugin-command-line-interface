@@ -4,5 +4,9 @@
 Checks: >
   bugprone-*,
   -bugprone-easily-swappable-parameters
+# signed-bitwise は正の整数のリテラル（1 << 20・0777 など）を数えない。符号の無い型に書き替えても
+# 読みやすくならず、負の値が混ざる誤りは変数の側で起きるため。
+CheckOptions:
+  bugprone-signed-bitwise.IgnorePositiveIntegerLiterals: true
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*/(src|tests)/.*'

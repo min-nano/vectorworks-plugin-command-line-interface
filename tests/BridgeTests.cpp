@@ -84,6 +84,24 @@ DWORD setForeignReparsePoint(const std::filesystem::path &path) {
 
 }
 
+// join は区切りを 1 つだけ足す（dir が区切りで終わっていれば足さず、空なら name だけ）。
+// Windows は \ と / のどちらも区切りとみなし、足すのは \。
+TEST(FilesJoinAddsOneSeparator) {
+	CHECK(files::isSeparator('/'));
+	CHECK(!files::isSeparator('a'));
+	CHECK_EQ(files::join("", "b"), std::string("b"));
+	CHECK_EQ(files::join("/a/", "b"), std::string("/a/b"));
+#ifdef _WIN32
+	CHECK(files::isSeparator('\\'));
+	CHECK_EQ(files::join("C:\\a", "b"), std::string("C:\\a\\b"));
+	CHECK_EQ(files::join("C:\\a\\", "b"), std::string("C:\\a\\b"));
+#else
+	CHECK(!files::isSeparator('\\'));
+	CHECK_EQ(files::join("/a", "b"), std::string("/a/b"));
+	CHECK_EQ(files::join("/a\\", "b"), std::string("/a\\/b"));
+#endif
+}
+
 TEST(BridgePrepareCreatesMissingParents) {
 	TempDir dir;
 	Bridge bridge(dir.sub("a/b/spool"));

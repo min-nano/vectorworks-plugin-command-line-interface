@@ -14,22 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # 整形ツールは、開発者環境で scripts/format.sh を実行するときと同様に、tools/go.mod に
-      # 記述したバージョンの Go へ go が切り替えて実行する（GOTOOLCHAIN=auto）。
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: cli/go.mod
-          cache-dependency-path: |
-            tools/go.sum
-            cli/go.sum
-      # clang-format は tools/requirements.txt の版を pip で入れる（ランナーの版は決まらない）。
-      - name: clang-format
-        run: |
-          python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install -r tools/requirements.txt
-          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
-      # PSScriptAnalyzer は scripts/powershell.ps1 が固定した版を入れる（pwsh はランナーにある）。
-      - run: pwsh -NoProfile -File scripts/powershell.ps1 -Mode Install
+      # Go・clang-format・PSScriptAnalyzer（lint.yml と同じ準備）。
+      - uses: ./.github/actions/setup-checks
       - run: scripts/format.sh
         env:
           GOTOOLCHAIN: auto
