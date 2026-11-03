@@ -131,7 +131,7 @@ func TestHookLinger(t *testing.T) {
 	if release == "" {
 		return
 	}
-	for deadline := time.Now().Add(60 * time.Second); !exist(release) && time.Now().Before(deadline); {
+	for deadline := time.Now().Add(60 * time.Second); !exists(release) && time.Now().Before(deadline); {
 		time.Sleep(10 * time.Millisecond)
 	}
 	os.WriteFile(release+".done", nil, 0o600)
@@ -229,6 +229,14 @@ func (h *harness) options() Options {
 		Stderr:       testWriter{h.t},
 		Interpreters: map[string][]string{"sh": {os.Args[0], "-test.run=^TestHookHelper$", "--"}},
 	}
+}
+
+// capturing は、標準エラーを溜める Options と、溜めた中身を返す（文言を確かめるテストのため）。
+func (h *harness) capturing() (Options, *bytes.Buffer) {
+	var stderr bytes.Buffer
+	o := h.options()
+	o.Stderr = &stderr
+	return o, &stderr
 }
 
 type testWriter struct {
@@ -401,13 +409,48 @@ func (h *harness) installedVersion(name string) string {
 	return string(data)
 }
 
+// cliSpool は <Plug-Ins>/cli/spool/（入った cli のプラグインがロックを掴む場所）。
+func (h *harness) cliSpool() string {
+	return filepath.Join(h.plugins, cliName, spool.SpoolDirName)
+}
+
 // holdLock は <Plug-Ins>/cli/spool/ のロックを掴む（Vectorworks が動いている）。
 func (h *harness) holdLock() func() {
-	dir := filepath.Join(h.plugins, cliName, spool.SpoolDirName)
+	dir := h.cliSpool()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		h.t.Fatal(err)
 	}
 	return fakeplugin.HoldLock(h.t, dir)
+}
+
+// lockingHook は、plan に、走り始めたら合図を出し、テストがロックを掴むまで待つこと（Signal・Await）を足す。
+// フックの間に Vectorworks が起動したことにするテストが、lockWhenHookStarts と組にして使う。
+func (h *harness) lockingHook(plan hookPlan) *hookPlan {
+	plan.Signal = filepath.Join(h.tmp, "hook-started")
+	plan.Await = filepath.Join(h.tmp, "locked")
+	return &plan
+}
+
+// lockWhenHookStarts は、lockingHook のフックの合図を待ってスプール dir のロックを掴み、フックに知らせる。done は
+// 掴み終えたら閉じる。unlock はロックを放す（Vectorworks の終了。done のあとで呼ぶ。呼ばなければテストの終わりに放す）。
+func (h *harness) lockWhenHookStarts(dir string) (done <-chan struct{}, unlock func()) {
+	signal := filepath.Join(h.tmp, "hook-started")
+	await := filepath.Join(h.tmp, "locked")
+	finished := make(chan struct{})
+	var release func()
+	go func() {
+		defer close(finished)
+		for deadline := time.Now().Add(10 * time.Second); !exists(signal) && time.Now().Before(deadline); {
+			time.Sleep(10 * time.Millisecond)
+		}
+		os.MkdirAll(dir, 0o700)
+		release = fakeplugin.HoldLock(h.t, dir)
+		os.WriteFile(await, nil, 0o600)
+	}()
+	return finished, func() {
+		<-finished
+		release()
+	}
 }
 
 // snapshot はディレクトリの中身（相対パス → 中身。ディレクトリは "/"）。スプールの中は除く。
@@ -475,11 +518,6 @@ func fileURL(path string) string {
 func sha256Hex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
-}
-
-func exist(path string) bool {
-	_, err := os.Lstat(path)
-	return err == nil
 }
 
 // installCLI は <Plug-Ins>/cli/ に入れた cli を作る（cli 以外を入れるテストの前提）。

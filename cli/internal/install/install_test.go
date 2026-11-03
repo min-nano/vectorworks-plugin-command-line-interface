@@ -1,7 +1,6 @@
 package install
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
@@ -40,8 +38,8 @@ func TestInstallFirstTime(t *testing.T) {
 		t.Fatalf("%+v", record)
 	}
 	// 組み立ての場所は残らない。
-	if exist(filepath.Join(h.work, "staging", "cli")) || exist(filepath.Join(h.work, "staging", "cli.zip")) ||
-		exist(filepath.Join(h.work, "old", "cli")) {
+	if exists(filepath.Join(h.work, "staging", "cli")) || exists(filepath.Join(h.work, "staging", "cli.zip")) ||
+		exists(filepath.Join(h.work, "old", "cli")) {
 		t.Fatal("left the staging or old folder")
 	}
 }
@@ -96,7 +94,7 @@ func TestInstallUpdatesAndCleansUp(t *testing.T) {
 		t.Fatalf("%+v", result)
 	}
 	for _, path := range []string{"staging/cli", "staging/cli.zip", "old/cli"} {
-		if exist(filepath.Join(h.work, filepath.FromSlash(path))) {
+		if exists(filepath.Join(h.work, filepath.FromSlash(path))) {
 			t.Errorf("left %s", path)
 		}
 	}
@@ -171,7 +169,7 @@ func TestInstallSameTagWithoutModuleReinstalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := h.install("cli", "c1")
-	if err != nil || result.Outcome != outcomeInstalled || !exist(filepath.Join(h.plugins, "cli", "cli.vwlibrary")) {
+	if err != nil || result.Outcome != outcomeInstalled || !exists(filepath.Join(h.plugins, "cli", "cli.vwlibrary")) {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
@@ -203,7 +201,7 @@ func TestInstallCheck(t *testing.T) {
 	if r := check("latest"); r.Outcome != outcomeAvailable || r.Tag != "c1" {
 		t.Fatalf("nothing installed: %+v", r)
 	}
-	if exist(filepath.Join(h.plugins, "cli")) || exist(h.work) {
+	if exists(filepath.Join(h.plugins, "cli")) || exists(h.work) {
 		t.Fatal("--check changed something")
 	}
 	h.mustInstall(release{name: "cli", tag: "c1", latest: true})
@@ -257,7 +255,7 @@ func TestInstallLockTakenWhileDownloading(t *testing.T) {
 		t.Fatalf("%+v %v", result, err)
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
-	if exist(filepath.Join(h.work, "staging", "cli")) || exist(filepath.Join(h.work, "staging", "cli.zip")) {
+	if exists(filepath.Join(h.work, "staging", "cli")) || exists(filepath.Join(h.work, "staging", "cli.zip")) {
 		t.Fatal("left the staging folder")
 	}
 }
@@ -294,10 +292,10 @@ func TestInstallBadZipChangesNothing(t *testing.T) {
 				t.Fatalf("%+v", result)
 			}
 			sameSnapshot(t, before, snapshot(t, h.plugins))
-			if exist(filepath.Join(h.tmp, "escape")) || exist(filepath.Join(h.work, "escape")) {
+			if exists(filepath.Join(h.tmp, "escape")) || exists(filepath.Join(h.work, "escape")) {
 				t.Fatal("wrote outside the folder")
 			}
-			if exist(filepath.Join(h.work, "staging", "demo")) || exist(filepath.Join(h.work, "staging", "demo.zip")) {
+			if exists(filepath.Join(h.work, "staging", "demo")) || exists(filepath.Join(h.work, "staging", "demo.zip")) {
 				t.Fatal("left the staging folder")
 			}
 		})
@@ -346,7 +344,7 @@ func TestOtherPluginNeedsCLI(t *testing.T) {
 	if _, err := h.install("demo", "d1"); err == nil || !strings.Contains(err.Error(), "has no cli") {
 		t.Fatal(err)
 	}
-	if exist(filepath.Join(h.plugins, "demo")) {
+	if exists(filepath.Join(h.plugins, "demo")) {
 		t.Fatal("installed without cli")
 	}
 	for _, running := range []bool{false, true} {
@@ -471,7 +469,7 @@ func TestInstallHookFailureRestores(t *testing.T) {
 			if _, err := h.install("cli", "c0"); err == nil {
 				t.Fatal("should fail")
 			}
-			if exist(filepath.Join(h.plugins, "cli")) {
+			if exists(filepath.Join(h.plugins, "cli")) {
 				t.Fatal("left the first install")
 			}
 			h.mustInstall(release{name: "cli", tag: "c1"})
@@ -484,7 +482,7 @@ func TestInstallHookFailureRestores(t *testing.T) {
 				t.Fatal("should fail")
 			}
 			sameSnapshot(t, before, snapshot(t, h.plugins))
-			if exist(filepath.Join(h.work, "old", "cli")) || exist(filepath.Join(h.work, "staging", "cli")) {
+			if exists(filepath.Join(h.work, "old", "cli")) || exists(filepath.Join(h.work, "staging", "cli")) {
 				t.Fatal("left old or staging")
 			}
 		})
@@ -510,31 +508,18 @@ func TestHookOutput(t *testing.T) {
 func TestInstallHookFailureWhileRunningKeepsTheNewVersion(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
-	signal := filepath.Join(h.tmp, "hook-started")
-	await := filepath.Join(h.tmp, "locked")
-	plan := hookPlan{Exit: 1, Signal: signal, Await: await}
-	h.publish(release{name: "cli", tag: "c2", install: &plan})
-	done := make(chan struct{})
-	var release func()
-	go func() {
-		defer close(done)
-		// フックの合図を待つ
-		for !exist(signal) {
-			time.Sleep(10 * time.Millisecond)
-		}
-		release = h.holdLock()
-		os.WriteFile(await, nil, 0o600)
-	}()
+	h.publish(release{name: "cli", tag: "c2", install: h.lockingHook(hookPlan{Exit: 1})})
+	done, unlock := h.lockWhenHookStarts(h.cliSpool())
 	_, err := h.install("cli", "c2")
 	<-done
 	if err == nil || !strings.Contains(err.Error(), "Vectorworks started") {
 		t.Fatal(err)
 	}
 	old := filepath.Join(h.work, "old", "cli")
-	if h.installedVersion("cli") != "c2" || !exist(old) {
+	if h.installedVersion("cli") != "c2" || !exists(old) {
 		t.Fatal("the new version should stay, and the previous one in old")
 	}
-	release()
+	unlock()
 	// Vectorworks を終了しても、install を終えるまで uninstall は old を消さずに断り、同じタグの install を示す。
 	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "install cli@c2") ||
 		!strings.Contains(err.Error(), "registry default") || !strings.Contains(err.Error(), h.plugins) {
@@ -545,7 +530,7 @@ func TestInstallHookFailureWhileRunningKeepsTheNewVersion(t *testing.T) {
 	if result, err := h.install("cli", "c2"); err != nil || result.Outcome != outcomeUpToDate {
 		t.Fatalf("%+v %v", result, err)
 	}
-	if exist(old) {
+	if exists(old) {
 		t.Fatal("left the previous version")
 	}
 	if result, err := Uninstall(h.options(), "cli"); err != nil || result.Outcome != outcomeUninstalled {
@@ -560,13 +545,11 @@ func TestInstallSameTagCannotSettleOld(t *testing.T) {
 	old := filepath.Join(h.work, "old", "cli")
 	copyDir(t, filepath.Join(h.plugins, "cli"), old)
 	failRename(t, old, "")
-	var stderr bytes.Buffer
-	o := h.options()
-	o.Stderr = &stderr
+	o, stderr := h.capturing()
 	if result, err := Install(o, "cli", "c1", false); err != nil || result.Outcome != outcomeUpToDate {
 		t.Fatalf("%+v %v", result, err)
 	}
-	if !exist(old) || !strings.Contains(stderr.String(), old) {
+	if !exists(old) || !strings.Contains(stderr.String(), old) {
 		t.Fatalf("should leave old and say so: %s", stderr.String())
 	}
 }
@@ -578,7 +561,7 @@ func TestInstallRemovesUninstallMarker(t *testing.T) {
 	os.MkdirAll(filepath.Dir(marker), 0o700)
 	os.WriteFile(marker, nil, 0o600)
 	h.mustInstall(release{name: "cli", tag: "c1"})
-	if exist(marker) {
+	if exists(marker) {
 		t.Fatal("left the marker")
 	}
 }
@@ -591,7 +574,7 @@ func TestInstallLeftoverOld(t *testing.T) {
 	old := filepath.Join(h.work, "old", "cli")
 	copyDir(t, filepath.Join(h.plugins, "cli"), old)
 	h.mustInstall(release{name: "cli", tag: "c2"})
-	if exist(old) {
+	if exists(old) {
 		t.Fatal("left old")
 	}
 
@@ -599,7 +582,7 @@ func TestInstallLeftoverOld(t *testing.T) {
 	os.WriteFile(filepath.Join(old, RecordFile), []byte("{"), 0o644)
 	h.mustInstall(release{name: "cli", tag: "c3"})
 	kept, _ := filepath.Glob(filepath.Join(h.work, "old", "cli.kept-*"))
-	if exist(old) || len(kept) != 1 || !exist(filepath.Join(kept[0], RecordFile)) {
+	if exists(old) || len(kept) != 1 || !exists(filepath.Join(kept[0], RecordFile)) {
 		t.Fatalf("should move old aside: %v", kept)
 	}
 
@@ -611,7 +594,7 @@ func TestInstallLeftoverOld(t *testing.T) {
 	if _, err := h.install("cli", "c4"); err == nil || !strings.Contains(err.Error(), "only copy") {
 		t.Fatal(err)
 	}
-	if !exist(filepath.Join(old, "version.txt")) || exist(filepath.Join(h.plugins, "cli")) {
+	if !exists(filepath.Join(old, "version.txt")) || exists(filepath.Join(h.plugins, "cli")) {
 		t.Fatal("changed something")
 	}
 	// 印もあれば、止まった uninstall の続きを示す。
@@ -619,7 +602,7 @@ func TestInstallLeftoverOld(t *testing.T) {
 	if _, err := h.install("cli", "c4"); err == nil || !strings.Contains(err.Error(), "run uninstall cli again") {
 		t.Fatal(err)
 	}
-	if !exist(filepath.Join(old, "version.txt")) || exist(filepath.Join(h.plugins, "cli")) {
+	if !exists(filepath.Join(old, "version.txt")) || exists(filepath.Join(h.plugins, "cli")) {
 		t.Fatal("changed something")
 	}
 }
@@ -770,4 +753,13 @@ func TestInstallFromPaths(t *testing.T) {
 func jsonString(s string) string {
 	data, _ := json.Marshal(s)
 	return string(data)
+}
+
+// Default を渡さなければ、CLI に埋め込んだ既定のレジストリを引く。
+func TestLookupUsesTheEmbeddedRegistry(t *testing.T) {
+	o := Options{}
+	entry, source, err := o.lookup("cli")
+	if err != nil || source != registry.DefaultName || !strings.Contains(entry.Manifests[0].Path, "github.com") {
+		t.Fatalf("%v %s %v", entry, source, err)
+	}
 }

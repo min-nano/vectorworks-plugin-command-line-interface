@@ -51,9 +51,7 @@ func TestDownloadProgress(t *testing.T) {
 		"unknown":  {"/unknown.zip", false, []string{h.url("/unknown.zip") + "\n", "vw2026: downloaded 3.0 MiB\n"}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			var stderr bytes.Buffer
-			o := h.options()
-			o.Stderr = &stderr
+			o, stderr := h.capturing()
 			o.Terminal = c.terminal
 			if err := o.download(h.url(c.path), filepath.Join(t.TempDir(), "x.zip"), sum); err != nil {
 				t.Fatal(err)
