@@ -9,8 +9,9 @@ cmake_minimum_required(VERSION 3.20)
 #   cmake -S . -B build -A x64 -DVW_SDK_DIR=<SDKLib を含むフォルダ>                     # Windows
 #   cmake --build build --config Release --target VwCli
 #
-# 単体テスト（SDK は要らない）:
-#   cmake -S . -B build -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=ON
+# 単体テスト（SDK は要らない。CLAUDE.md「C++」の手元のテストと同じ指定。CI の cpp.yml はカバレッジも測る）:
+#   cmake -S . -B build -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=ON \
+#     -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
 #   cmake --build build
 #   ctest --test-dir build --output-on-failure
 
@@ -162,7 +163,8 @@ if(VW_BUILD_PLUGIN)
 		add_library(${target} MODULE ${VW_PLUGIN_SOURCES})
 		set_target_properties(${target} PROPERTIES OUTPUT_NAME "${name}")
 		target_link_libraries(${target} PRIVATE VwCliCore)
-		target_include_directories(${target} PRIVATE src "${CMAKE_CURRENT_BINARY_DIR}/generated")
+		# src は VwCliCore の PUBLIC の指定で入る。
+		target_include_directories(${target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 		# SDK のヘッダの警告は出さない。
 		target_include_directories(
 			${target} SYSTEM PRIVATE "${VW_SDK_INCLUDE}" "${VW_SDK_INCLUDE}/Kernel"

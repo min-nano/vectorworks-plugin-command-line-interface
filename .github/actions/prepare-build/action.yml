@@ -1,0 +1,41 @@
+name: prepare-build
+description: >-
+  build.yml の build-mac と build-windows が共に使う、取り出したあとの準備（SDK・Go・build.json）。
+  SDK の場所と取る URL は、ジョブの環境変数 VW_SDK_DIR と VW_SDK_URL から読む。
+inputs:
+  sha:
+    description: meta が決めたコミット。取り出したものがこれと同じかを確かめる。
+    required: true
+  sdk-cache-prefix:
+    description: SDK のキャッシュのキーの前置き（scripts/vw-sdk-cache-key.sh に渡す）。
+    required: true
+runs:
+  using: composite
+  steps:
+    # 版（VERSION・build.json）は meta が決めるので、取り出したものが meta の sha と同じかを確かめる。
+    # 取り出しはここに入れない（呼ぶ側のジョブに条件を書く。build.yml の取り出しの手順のコメント）。
+    - shell: bash
+      env:
+        SHA: ${{ inputs.sha }}
+      run: test "$(git rev-parse HEAD)" = "$SHA"
+    - id: sdk-key
+      shell: bash
+      run: scripts/vw-sdk-cache-key.sh "$PREFIX"
+      env:
+        PREFIX: ${{ inputs.sdk-cache-prefix }}
+    # キャッシュする場所は、scripts/fetch-vw-sdk.sh が SDK を置く場所と同じ環境変数から取る（食い違わないように）。
+    - uses: actions/cache@v6
+      with:
+        path: ${{ env.VW_SDK_DIR }}
+        key: ${{ steps.sdk-key.outputs.key }}
+        restore-keys: ${{ steps.sdk-key.outputs.restore-keys }}
+    - shell: bash
+      run: scripts/fetch-vw-sdk.sh
+    - uses: actions/setup-go@v7
+      with:
+        go-version-file: cli/go.mod
+        cache-dependency-path: cli/go.sum
+    - uses: actions/download-artifact@v8
+      with:
+        name: build-json
+        path: stage
