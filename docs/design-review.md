@@ -192,7 +192,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 - 図面が開かれていないときの各道具の応答（`internal` とする想定）。`ping` の `current_layer` は
   `null` に決めた（[道具「ping」](plugin/tools.md#ping)）
 
-`classes` が使う SDK 呼び出しは SDK リファレンスに無いので、issue を立てる
+`classes` が使う SDK 呼び出しは SDK リファレンスに無いので、issue を立てる（立てた: [#280](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/280)。レイヤは [#281](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/281)、オブジェクトの列挙と数え方は [#282](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/282)、Windows の `documents` / `save` / `close` は [#283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）
 （[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)）。
 
 ### C2. ほかのプラグインの機能と書く道具の順序が矛盾する
