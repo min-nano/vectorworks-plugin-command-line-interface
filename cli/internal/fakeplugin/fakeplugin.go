@@ -49,6 +49,14 @@ func NewDir(t *testing.T) string {
 	return dir
 }
 
+// NewHeldDir は NewDir で作ったスプールのロックを掴む（Vectorworks が動いている）。返す関数で放す
+// （終了を真似る。テストの終わりにも放す）。
+func NewHeldDir(t *testing.T) (dir string, release func()) {
+	t.Helper()
+	dir = NewDir(t)
+	return dir, HoldLock(t, dir)
+}
+
 // HoldLock はロックファイルを掴む（Vectorworks が動いている）。返す関数で放す（終了を真似る）。
 // テストの終わりにも放す。
 func HoldLock(t *testing.T, dir string) (release func()) {

@@ -9,19 +9,14 @@
 package install
 
 import (
-	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
-	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
 // CLIName は cli のプラグインの名前（フォルダ名）。ロックの場所・ほかのプラグインを cli のある <Plug-Ins> に
@@ -37,44 +32,6 @@ const (
 	OutcomeUninstalled = "uninstalled"
 	OutcomeNotInstall  = "not_installed"
 )
-
-// ErrRunning は、ロックを掴む Vectorworks が居るので何もしなかった（専用の終了コード）。
-var ErrRunning = errors.New("Vectorworks is running: quit it, then run again")
-
-// ErrRunsInside は、uninstall が外すフォルダの中で、走らせている CLI が動いている（入れた cli の vw2026 で
-// uninstall cli を走らせた）ので、何もしなかった。フォルダの外の CLI（初回のスクリプト）で外す。
-// 返る誤りは *RunsInsideError で、errors.Is で ErrRunsInside と比べられる。
-var ErrRunsInside = errors.New("vw2026 runs from the folder it would uninstall")
-
-// RunsInsideError は ErrRunsInside の中身。Tag は入っているタグ（外すのに使う初回のスクリプトと CLI の版）。
-type RunsInsideError struct {
-	Dir string
-	Tag string
-}
-
-func (e *RunsInsideError) Error() string {
-	return fmt.Sprintf("%v, %s; nothing is removed", ErrRunsInside, e.Dir)
-}
-
-// Is は ErrRunsInside と比べさせる。
-func (e *RunsInsideError) Is(target error) bool {
-	return target == ErrRunsInside
-}
-
-// UsageError は使い方の誤り（名前・タグ・指定の形）。
-type UsageError struct {
-	msg string
-}
-
-func (e *UsageError) Error() string {
-	return e.msg
-}
-
-// Usagef は使い方の誤り（IsUsage が真）を作る。コマンドの側で見つけた誤りも、install・uninstall の中で
-// 見つけたものと同じ出力（failed の JSON）と終了コードにするため、パッケージの外にも出す。
-func Usagef(format string, args ...any) error {
-	return &UsageError{fmt.Sprintf(format, args...)}
-}
 
 // Options は配置に要る外の世界。
 type Options struct {
@@ -113,160 +70,12 @@ type InstallResult struct {
 	Hook       json.RawMessage `json:"hook,omitempty"`
 }
 
-// places は、Options の場所から決まるパス。
-type places struct {
-	plugins  string
-	dest     string
-	work     string
-	staging  string
-	stageDir string
-	stageZip string
-	old      string
-	oldDir   string
-	marker   string
-}
-
-func (o *Options) places(name string) (places, error) {
-	// 場所は絶対パスだけを受け付ける（今の作業ディレクトリから絶対にすると、それが分からないときに
-	// 相対パスのまま名前の変更や削除へ進みうる。消すコードの歯止めに関わるため、組み立てない）。
-	switch {
-	case o.PluginsDir == "" || o.WorkDir == "":
-		return places{}, errors.New("the folder of plug-ins or the work folder is unknown")
-	case !filepath.IsAbs(o.PluginsDir):
-		return places{}, Usagef("the folder of plug-ins %q is not an absolute path", o.PluginsDir)
-	case !filepath.IsAbs(o.WorkDir):
-		return places{}, fmt.Errorf("the work folder %q is not an absolute path", o.WorkDir)
-	}
-	plugins := filepath.Clean(o.PluginsDir)
-	work := filepath.Clean(o.WorkDir)
-	// 片方がもう片方の中にあれば（初回のスクリプトに <Work>/old を --plugins-dir として渡したなど）、片付けが
-	// 入れたばかりのプラグインを消し、付け替えが自分を動かすので断る（消すコードの歯止め。守ること 9）。
-	if overlap(plugins, work) {
-		return places{}, fmt.Errorf("the folder of plug-ins %s and the work folder %s overlap (one is in the other); "+
-			"nothing is changed", plugins, work)
-	}
-	staging := filepath.Join(work, "staging")
-	old := filepath.Join(work, "old")
-	return places{
-		plugins:  plugins,
-		dest:     filepath.Join(plugins, name),
-		work:     work,
-		staging:  staging,
-		stageDir: filepath.Join(staging, name),
-		stageZip: filepath.Join(staging, name+".zip"),
-		old:      old,
-		oldDir:   filepath.Join(old, name),
-		marker:   filepath.Join(old, name+".uninstalling"),
-	}, nil
-}
-
-// overlap は、a と b の片方がもう片方と同じか、その中か。書いたままのパスと、リンクを解いたパス（resolvedPath。それぞれ
-// 1 回だけ解く）の書き方と、ディレクトリの同一性（SameDirectory・within）で決める。書き方は、まだ無い場所も見つける
-// （リンクを通して <Work> の下を指す --plugins-dir も、解いた書き方で見つける）。同一性は、Windows で EvalSymlinks が
-// 解かないジャンクション・subst のドライブ・割り当てたドライブ・短い名前も見つける。親を順に調べる within は、ほかで
-// 決まらないときだけ走らせる。
-func overlap(a, b string) bool {
-	ra, rb := resolvedPath(a), resolvedPath(b)
-	return lexicallyIn(a, b) || lexicallyIn(b, a) || lexicallyIn(ra, rb) || lexicallyIn(rb, ra) ||
-		SameDirectory(a, b) || isWithin(a, b) || isWithin(b, a)
-}
-
-// isWithin は within の真偽だけ。
-func isWithin(path, dir string) bool {
-	_, inside := within(path, dir)
-	return inside
-}
-
-// SameDirectory は、a と b が同じディレクトリか（書き方ではなく同一性で決める。どちらかが無ければ偽）。
-func SameDirectory(a, b string) bool {
-	x, errX := os.Stat(a)
-	y, errY := os.Stat(b)
-	return errX == nil && errY == nil && os.SameFile(x, y)
-}
-
-// lexicallyIn は、書き方で path が dir と同じか、その中か。大文字と小文字を区別しないのが既定の OS（mac・Windows）
-// だけ、その違いを除いて比べる（区別するボリュームの、大文字と小文字だけが違う別のフォルダを重ねない。区別しない
-// 名前の別の書き方は、あれば同一性の確かめでも見つける）。
-func lexicallyIn(path, dir string) bool {
-	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
-		path, dir = strings.ToLower(path), strings.ToLower(dir)
-	}
-	rel, err := filepath.Rel(dir, path)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-}
-
-// resolvedPath は、path のリンクを解いた書き方。まだ無ければ、あるところまでの親を解き、残りをそのまま足す（根まで
-// 解けなければ、書いたまま）。
-func resolvedPath(path string) string {
-	for current, rest := path, ""; ; {
-		real, err := filepath.EvalSymlinks(current)
-		parent := filepath.Dir(current)
-		if err == nil || parent == current {
-			return filepath.Join(cmp.Or(real, current), rest)
-		}
-		rest = filepath.Join(filepath.Base(current), rest)
-		current = parent
-	}
-}
-
 // stderr は、知らせの行き先（無ければ捨てる）。
 func (o *Options) stderr() io.Writer {
 	if o.Stderr == nil {
 		return io.Discard
 	}
 	return o.Stderr
-}
-
-// lockState は、Vectorworks が居るか（docs/protocol.md「生存の判定」）。<Plug-Ins>/cli/spool/ と、
-// <Work>/old/cli/spool/ の両方のロックを見る。cli の付け替え・uninstall の直前に前の版を読み込んだ
-// Vectorworks のロックは、フォルダと一緒に old/cli/spool/ へ移る（mac）ので、install・uninstall のどの確かめも
-// これだけを使い、道ごとに見る場所を変えない。どちらかのロックを無い以外の理由で調べられなければ（権限・壊れた
-// 場所）、動いているかが分からないという誤りも返す（判定そのもの、spool.Open の意味は変えない）。
-func lockState(p places) (bool, error) {
-	var unknown error
-	for _, dir := range []string{filepath.Join(p.plugins, CLIName), filepath.Join(p.old, CLIName)} {
-		held, err := spool.LockHeld(filepath.Join(dir, spool.SpoolDirName))
-		if held {
-			return true, nil
-		}
-		if err != nil && unknown == nil {
-			unknown = fmt.Errorf("cannot tell whether Vectorworks is running, as the lock in %s cannot be read (%v); "+
-				"nothing is changed", dir, err)
-		}
-	}
-	return false, unknown
-}
-
-// stopped は、何かを変える前の確かめ（始め・同じタグのフックの前・付け替えの前）。Vectorworks が居れば ErrRunning
-// （終了コード 6）、ロックを調べられなければその誤り（終了コード 1）を返す。どちらも何も変えていないときに使う。
-func stopped(p places) error {
-	held, err := lockState(p)
-	if held {
-		return ErrRunning
-	}
-	return err
-}
-
-// running は、Vectorworks が居るとみなすか。ロックを調べられないときも居るとみなす（付け替えやフックのあとの
-// 確かめで、動いているかもしれない Vectorworks の下でフォルダを動かさない）。何も変えていないときは stopped を使う。
-func running(p places) bool {
-	held, err := lockState(p)
-	return held || err != nil
-}
-
-// checkCLI は、cli 以外を入れる・外すときに、<Plug-Ins>/cli/ に正しい記録があるかを確かめる。
-// cli の無い <Plug-Ins> では Vectorworks が動いているかを判定できないため。
-func checkCLI(plugins, name string) error {
-	if name == CLIName {
-		return nil
-	}
-	dir := filepath.Join(plugins, CLIName)
-	if !validRecord(dir, CLIName) {
-		return fmt.Errorf("%s has no cli that vw2026 installed; vw2026 installs and uninstalls a plug-in only in the "+
-			"folder of plug-ins that has cli (it tells whether Vectorworks is running from the lock in %s)",
-			plugins, filepath.Join(dir, spool.SpoolDirName))
-	}
-	return nil
 }
 
 // CheckName は名前の書き方を確かめる（誤りは使い方の誤り）。呼ぶ側（cmd）は、場所を求める前にこれで確かめる
@@ -323,9 +132,6 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 	if err := CheckRegistries(o.Registries); err != nil {
 		return nil, err
 	}
-	if err := checkCLI(p.plugins, name); err != nil {
-		return nil, err
-	}
 	result := &InstallResult{
 		Name:       name,
 		Requested:  requested,
@@ -333,13 +139,13 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 		Target:     o.Target,
 		PluginsDir: p.plugins,
 	}
-	// Vectorworks が動いていれば、レジストリ・マニフェストを取る前に答える（ネットワークの誤りや記録の誤りより先に、
-	// 終了コード 6。同じタグでも動いていればフックを走らせない）。--check は動いていてもよい。付け替えの直前にも
+	// cli の記録と、Vectorworks が動いているかを、レジストリ・マニフェストを取る前に答える（ネットワークの誤りや
+	// 記録の誤りより先に。同じタグでも動いていればフックを走らせない）。--check は動いていてもよい。付け替えの直前にも
 	// もう一度見る（replace）。
-	if !check {
-		if err := stopped(p); err != nil {
-			return result, err
-		}
+	if err := precheck(p, name, !check); errors.Is(err, ErrRunning) {
+		return result, err
+	} else if err != nil {
+		return nil, err
 	}
 	entry, source, err := o.lookup(name)
 	if err != nil {
@@ -363,24 +169,11 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 	upToDate := rule.ByTag() && same(requested)
 	// タグで直接指す規則で、入っているものと同じタグとターゲットなら、マニフェストも取らない。
 	if !upToDate {
-		location := rule.Location(requested)
-		data, err := o.fetch(location)
+		result.Tag, asset, err = o.manifestAsset(rule, name, requested)
 		if err != nil {
-			return nil, fmt.Errorf("manifest: %w", err)
+			return nil, err
 		}
-		manifest, err := registry.ParseManifest(data, registry.IsURL(location))
-		if err != nil {
-			return nil, fmt.Errorf("manifest %s: %w", location, err)
-		}
-		if rule.ByTag() && manifest.Tag != requested {
-			return nil, fmt.Errorf("manifest %s has tag %q, not %q", location, manifest.Tag, requested)
-		}
-		asset, ok = manifest.Targets[o.Target]
-		if !ok {
-			return nil, fmt.Errorf("%s@%s does not support %s", name, manifest.Tag, o.Target)
-		}
-		result.Tag = manifest.Tag
-		upToDate = same(manifest.Tag)
+		upToDate = same(result.Tag)
 	}
 	if check {
 		result.Outcome = OutcomeAvailable
@@ -414,7 +207,7 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 	// ので、そのときは <Plug-Ins>/<name>/ が無い）。どの道でも先に消す（残すと、このあとの install が付け替えの
 	// 途中で止まったときに、次の uninstall がそれを中断した uninstall とみなし、唯一残った old/<name>/ を消す）。
 	if installed != nil {
-		_ = os.Remove(p.marker)
+		_ = removeFile(p.marker)
 	}
 	if upToDate {
 		// 同じタグなら、zip を取らず付け替えもせずに、記録に写したフックだけを走らせる。始めの確かめのあと、レジストリと
@@ -442,6 +235,28 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 	result.Outcome = OutcomeInstalled
 	result.Hook = hook
 	return result, nil
+}
+
+// manifestAsset は、規則 rule の指すマニフェストを取り、そのタグと今のターゲットの asset を返す
+// （docs/plugin/install-and-update.md「流れ」の 4）。
+func (o *Options) manifestAsset(rule registry.Rule, name, requested string) (string, registry.Asset, error) {
+	location := rule.Location(requested)
+	data, err := o.fetch(location)
+	if err != nil {
+		return "", registry.Asset{}, fmt.Errorf("manifest: %w", err)
+	}
+	manifest, err := registry.ParseManifest(data, registry.IsURL(location))
+	if err != nil {
+		return "", registry.Asset{}, fmt.Errorf("manifest %s: %w", location, err)
+	}
+	if rule.ByTag() && manifest.Tag != requested {
+		return "", registry.Asset{}, fmt.Errorf("manifest %s has tag %q, not %q", location, manifest.Tag, requested)
+	}
+	asset, ok := manifest.Targets[o.Target]
+	if !ok {
+		return "", registry.Asset{}, fmt.Errorf("%s@%s does not support %s", name, manifest.Tag, o.Target)
+	}
+	return manifest.Tag, asset, nil
 }
 
 // inspect は入れる先のフォルダを確かめる（docs/plugin/install-and-update.md「入れる先のフォルダ」）。
@@ -500,249 +315,4 @@ func pluginFolder(dest string) (bool, error) {
 		return false, fmt.Errorf("%s is not a folder that vw2026 installed (not a plain folder); vw2026 does not touch it", dest)
 	}
 	return true, nil
-}
-
-// replace は zip を取って組み立て、プラグインのフォルダを付け替えてフックを走らせる
-// （docs/plugin/install-and-update.md「入れ替えの手順」）。失敗したら <Plug-Ins> を元に戻す。
-func (o *Options) replace(p places, name, source, tag, previous string, asset registry.Asset) (json.RawMessage, error) {
-	for _, dir := range []string{p.staging, p.old} {
-		if err := mkdirAll(dir, 0o700); err != nil {
-			return nil, err
-		}
-	}
-	// 前回の残りの old を片付けてから、組み立ての場所（名前をそのまま組み立てたパスだけ）を消す。
-	// settleOld が消すものは組み立ての場所を通るので、この順にすると、消しきれなかったものがあれば
-	// removeStaging が失敗し、前の版のファイルを新しい版に混ぜて組み立てない。
-	if _, err := o.settleOld(p, name, "nothing is changed; quit Vectorworks, then run install again"); err != nil {
-		return nil, err
-	}
-	if err := removeStaging(p); err != nil {
-		return nil, err
-	}
-
-	// 組み立て。失敗したら組み立てたものを消す。
-	record, err := o.assemble(p, name, source, tag, asset)
-	if err != nil {
-		_ = removeStaging(p)
-		return nil, err
-	}
-
-	// 付け替えの直前にロックをもう一度見る（zip を取って組み立てる間に起動した Vectorworks を
-	// 見落とさないため）。
-	if err := stopped(p); err != nil {
-		_ = removeStaging(p)
-		return nil, err
-	}
-	moved, err := o.sidestep(p.dest, p.old)
-	if err != nil {
-		_ = removeStaging(p)
-		return nil, err
-	}
-	hadOld := exists(p.dest)
-	if hadOld {
-		if err := rename(p.dest, p.oldDir); err != nil {
-			note := moved.restore()
-			_ = removeStaging(p)
-			return nil, fmt.Errorf("%w%s", renameError(p.dest, err), note)
-		}
-	}
-	if err := mkdirAll(p.plugins, 0o755); err != nil {
-		return nil, o.undoSwap(p, hadOld, moved, err)
-	}
-	if err := rename(p.stageDir, p.dest); err != nil {
-		return nil, o.undoSwap(p, hadOld, moved, err)
-	}
-
-	hook, err := o.runHook("install", record.Hooks.Install, p.dest, hookEnv{
-		name: name, tag: tag, previous: previous, target: o.Target, pluginDir: p.dest, installDir: p.dest,
-	})
-	if err != nil {
-		return nil, o.undoHook(p, hadOld, moved, err)
-	}
-	o.finishInstall(p, name, tag, moved, hadOld)
-	return hook, nil
-}
-
-// finishInstall は install のフックが通ったあとの後始末（付け替えのあとも、同じタグでフックだけを走らせたあとも
-// これだけを使う）。退避した版を settleOld の規則で片付け（守ること 9 の歯止め。片付けられなくても入れたことは
-// 変わらないので、知らせるだけにする。次の install が片付ける）、組み立ての場所の残りと中断した uninstall の印を
-// 消し（印を残すと、次の install が付け替えの途中で止まったときに、次の uninstall が唯一残った old/<name>/ を
-// 消してしまう）、よけた CLI を消してみる（動いていて消せなければ残す）。
-func (o *Options) finishInstall(p places, name, tag string, moved *movedCLI, hadOld bool) {
-	// フックが通ったので、記録の hook_pending を外す。外せなければ知らせ、退避した版は片付けない（記録はまだ
-	// 通っていないと言うので、次の同じタグの install が前の版のタグでフックを走らせ直し、そこで外して片付ける）。
-	// 退避した版を残すときは、よけた CLI をその版のフォルダの元の場所へ戻す（undoHook の keep と同じ。利用者が前の版を
-	// 手で戻したときに CLI が欠けず、下の後始末がよけた名前のまま消さないように）。
-	// 記録の無い前の版を <Work>/old/<name>.kept-<時刻>/ へ脇へ移したときも、よけた CLI をそこへ戻す（利用者が戻す
-	// かもしれない）。
-	var kept error
-	keptDir := ""
-	if err := clearHookPending(p.dest); err != nil {
-		kept = fmt.Errorf("cannot record that the install hook succeeded (%v); run install with the same tag again", err)
-	} else {
-		keptDir, kept = o.settleOld(p, name, fmt.Sprintf("the new version is installed; quit Vectorworks, then run "+
-			"install %s@%s again to clean it up", name, tag))
-	}
-	if kept != nil && hadOld && exists(p.oldDir) {
-		keptDir = p.oldDir
-	}
-	note := ""
-	if hadOld && keptDir != "" {
-		note = moved.restoreInto(p.dest, keptDir)
-	}
-	if kept != nil {
-		fmt.Fprintf(o.stderr(), "vw2026: %v%s\n", kept, note)
-	} else if note != "" {
-		fmt.Fprintf(o.stderr(), "vw2026: the previous version is kept in %s%s\n", keptDir, note)
-	}
-	_ = removeStaging(p)
-	_ = os.Remove(p.marker)
-	// この回がよけた CLI を前の版へ戻したとき（戻せなかったときは、手で戻す場所として知らせている。undoHook の keep
-	// と同じ）は、よけた CLI を消さない。次の install・uninstall が消す。よけていなければ、前の回までの残りを消してみる。
-	if moved == nil || keptDir == "" {
-		cleanOldCLIs(p.old)
-	}
-}
-
-// undoSwap は付け替えの 2 つ目が失敗したときに、1 つ目とよけた CLI を戻す。
-func (o *Options) undoSwap(p places, hadOld bool, moved *movedCLI, cause error) error {
-	if hadOld {
-		if err := rename(p.oldDir, p.dest); err != nil {
-			return fmt.Errorf("cannot put %s into %s (%v), nor put the previous version back (%v); "+
-				"move %s back to %s by hand%s", p.stageDir, p.dest, cause, err, p.oldDir, p.dest, moved.where())
-		}
-	}
-	note := moved.restore()
-	_ = removeStaging(p)
-	return fmt.Errorf("cannot put %s into %s: %w%s", p.stageDir, p.dest, cause, note)
-}
-
-// undoHook はフックが失敗したときに前の版へ戻す。戻す前にロックを見て、Vectorworks が起動していれば
-// 新しい版を残す（動いているプラグインのロックごと消さない）。
-func (o *Options) undoHook(p places, hadOld bool, moved *movedCLI, cause error) error {
-	previous := ""
-	if hadOld {
-		previous = fmt.Sprintf(" (the previous one is in %s)", p.oldDir)
-	}
-	keep := func(reason string) error {
-		// よけた CLI は、前の版のフォルダ（old）の元の場所へ戻す（利用者が前の版を手で戻したときに CLI が欠けず、
-		// 後始末がよけた名前のまま消さないように）。戻せなければ、その場所を知らせる。
-		note := ""
-		if hadOld {
-			note = moved.restoreInto(p.dest, p.oldDir)
-		}
-		// 取った zip はもう要らない（同じタグで走らせ直す install は zip を取らない）。
-		_ = os.Remove(p.stageZip)
-		return fmt.Errorf("%w; %s, so the new version stays in %s%s: quit Vectorworks, "+
-			"then run install with the same tag again (it runs only the hook)%s", cause, reason, p.dest, previous, note)
-	}
-	if running(p) {
-		return keep("Vectorworks started meanwhile (or its lock cannot be read)")
-	}
-	// 新しい版は名前の変更でよける（消すのはあと。削除が途中で止まると、半分消えたプラグインが
-	// Plug-Ins に残るため）。
-	if err := rename(p.dest, p.stageDir); err != nil {
-		return keep(fmt.Sprintf("it cannot be moved away (%v; Vectorworks may have loaded it)", err))
-	}
-	if hadOld {
-		if err := rename(p.oldDir, p.dest); err != nil {
-			return fmt.Errorf("%w; the previous version cannot be put back (%v): move %s back to %s by hand%s",
-				cause, err, p.oldDir, p.dest, moved.where())
-		}
-	}
-	note := moved.restore()
-	_ = removeStaging(p)
-	if note != "" {
-		return fmt.Errorf("%w; the previous version is put back%s", cause, note)
-	}
-	return fmt.Errorf("%w; the previous state is restored", cause)
-}
-
-// removeStaging は組み立ての場所（<Work>/staging/<name>/ と <name>.zip）を消す。
-func removeStaging(p places) error {
-	if err := removeAll(p.stageDir); err != nil {
-		return err
-	}
-	if err := removeFile(p.stageZip); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return nil
-}
-
-// settleOld は <Work>/old/<name>/ を片付ける。install のどの道（付け替えの前・付け替えのあと・同じタグで
-// フックだけを走らせたあと）もこれだけを使う（docs/plugin/install-and-update.md「<Work>/old/<name>/ の
-// 片付け」）。
-//
-//   - <Plug-Ins>/<name>/ が無ければ、old が唯一の版かもしれないので、何も変えずに失敗にする（印があれば、
-//     止まった uninstall の続きを示す）。
-//   - 記録の名前が一致し module があれば、消す（守ること 9）。
-//   - そうでなければ（module の無いフォルダを入れ直した前の版など。利用者のファイルが入っているかも
-//     しれない）、消さずに <Work>/old/<name>.kept-<時刻>/ へ移して知らせる。old/<name>/ に置いたままに
-//     すると、次の install・uninstall が通らないため。
-//
-// 脇へ移したときは、その場所を返す。
-//
-// advice は、Vectorworks が使っているかもしれないので残すときに添える、次にすること（呼ぶ側が決める。付け替えの前は
-// 何も変えていない、付け替えのあとは新しい版が入っている）。
-func (o *Options) settleOld(p places, name, advice string) (string, error) {
-	switch {
-	case !exists(p.oldDir):
-		return "", nil
-	case !exists(p.dest) && exists(p.marker):
-		return "", fmt.Errorf("%s was left by an uninstall that stopped halfway; run uninstall %s again to finish it",
-			p.oldDir, name)
-	case !exists(p.dest):
-		return "", fmt.Errorf("%s was left by an install or uninstall that stopped halfway; it may be the only copy of %s. "+
-			"Move it back to %s or delete it, then run again", p.oldDir, name, p.dest)
-	}
-	// 動いている Vectorworks が使っているかもしれないものは、消しも移しもしない（フックの間に起動したとき。
-	// 始めの確かめでは居なかった）。付け替えの前なら、install は ErrRunning（ロックを調べられなければその誤り）で
-	// 何も変えずに終わる。
-	if err := stopped(p); err != nil {
-		return "", fmt.Errorf("%w; %s is left because Vectorworks may use it (%s)", err, p.oldDir, advice)
-	}
-	if validRecord(p.oldDir, name) {
-		return "", o.discard(p, name)
-	}
-	kept := filepath.Join(p.old, name+".kept-"+stamp())
-	if err := rename(p.oldDir, kept); err != nil {
-		return "", renameError(p.oldDir, err)
-	}
-	fmt.Fprintf(o.stderr(), "vw2026: the previous folder of %s has no valid record or module, so it is kept in %s "+
-		"(it may hold your files); delete it when it is no longer needed\n", name, kept)
-	return kept, nil
-}
-
-// discard は、確かめた <Work>/old/<name>/ を組み立ての場所（<Work>/staging/<name>/）へ名前の変更で
-// 移してから消す。消すのが途中で止まっても（Windows でウイルス対策がファイルを開いているなど）、半分
-// 消えたフォルダは old に残らず（記録が先に消えて、次の回が唯一の版と見分けられなくなることがない）、
-// 次の install・uninstall が組み立ての場所として消す。移せなければ何も変えずに失敗にする。
-func (o *Options) discard(p places, name string) error {
-	if err := removeStaging(p); err != nil {
-		return err
-	}
-	// uninstall は空の <Work>/staging を消すので、どの道から来ても、ここで作る。
-	if err := mkdirAll(p.staging, 0o700); err != nil {
-		return err
-	}
-	if err := rename(p.oldDir, p.stageDir); err != nil {
-		return renameError(p.oldDir, err)
-	}
-	if err := removeAll(p.stageDir); err != nil {
-		fmt.Fprintf(o.stderr(), "vw2026: %s cannot be deleted yet (%v); the next install or uninstall of %s deletes it\n",
-			p.stageDir, err, name)
-	}
-	return nil
-}
-
-// renameError は付け替えの 1 つ目（<Plug-Ins>/<name> を移す）が失敗したときの文言。Windows では、
-// フォルダの中のものを開いているプロセスが居ると名前を変えられない。どれかは見分けられない。
-func renameError(dir string, err error) error {
-	return fmt.Errorf("cannot rename %s (%w). Close what has files in it open (Explorer, antivirus software, "+
-		"Vectorworks), move the current directory of terminals and other programs out of it, then run again", dir, err)
-}
-
-func exists(path string) bool {
-	_, err := os.Lstat(path)
-	return err == nil
 }

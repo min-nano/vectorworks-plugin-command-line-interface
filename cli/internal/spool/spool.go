@@ -154,7 +154,7 @@ func Open(dir string) *Bridge {
 		return &Bridge{Dir: dir, Reason: "not found"}
 	}
 	// 調べられないロックは「動いていない」とする（install・uninstall は LockHeld で誤りを見て、何も変えない）。
-	if held, _ := lockState(filepath.Join(dir, LockFile)); !held {
+	if held, _ := LockHeld(dir); !held {
 		return &Bridge{Dir: dir, Reason: "not running"}
 	}
 	return &Bridge{Dir: dir, Running: true}
@@ -240,50 +240,20 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		}
 		return fmt.Errorf("%w (%s, %s; %s)", ErrTimeout, tool, timeout, reason)
 	}
-	received := func(response *Response) (*Response, error) {
-		// detail を持てるのは道具が返した失敗（invalid_args・internal）だけで、オブジェクトに限る
-		// （docs/protocol.md「応答」）。null も「無い」ではなく壊れた応答とする。
-		if response.Detail != nil {
-			if response.OK || (response.Code != CodeInvalidArgs && response.Code != CodeInternal) {
-				return nil, fmt.Errorf("%w (%s; a detail on a response that cannot carry one)", ErrMalformedResponse, tool)
-			}
-			if !IsObject(response.Detail) {
-				return nil, fmt.Errorf("%w (%s; the detail is not an object)", ErrMalformedResponse, tool)
-			}
+	// receive は until まで応答を待つ。届けば arrived を真にして、確かめた結果を返す。
+	receive := func(until time.Time) (response *Response, arrived bool, err error) {
+		response, malformed := pollResponse(responsePath, until)
+		switch {
+		case malformed:
+			return nil, true, fmt.Errorf("%w (%s; the response file is not a valid response object)", ErrMalformedResponse, tool)
+		case response == nil:
+			return nil, false, nil
 		}
-		if response.OK {
-			// 成功の result は必ずオブジェクト（docs/protocol.md「応答」）。
-			if !IsObject(response.Result) {
-				return nil, fmt.Errorf("%w (%s; the result is not an object)", ErrMalformedResponse, tool)
-			}
-			return response, nil
-		}
-		switch response.Code {
-		case CodeNoWait:
-			return nil, fmt.Errorf("%w (%s)", ErrNoWait, tool)
-		case CodeBusy:
-			if response.Error == "" {
-				return nil, fmt.Errorf("%w (%s did not run)", ErrBusy, tool)
-			}
-			return nil, fmt.Errorf("%w (%s did not run: %s)", ErrBusy, tool, response.Error)
-		case CodeOccupied:
-			return nil, fmt.Errorf("%w (%s did not run)", ErrOccupied, tool)
-		case CodeNoSession:
-			return nil, fmt.Errorf("%w (%s did not run)", ErrNoSession, tool)
-		case CodeInvalidRequest, CodeUnknownTool, CodeInvalidArgs, CodeInternal:
-			return response, nil
-		default:
-			return nil, fmt.Errorf("%w (%s; unknown code %q: %s)", ErrMalformedResponse, tool, response.Code, response.Error)
-		}
+		response, err = checkResponse(tool, response)
+		return response, true, err
 	}
-
-	malformed := func() error {
-		return fmt.Errorf("%w (%s; the response file is not a valid response object)", ErrMalformedResponse, tool)
-	}
-	if response, err := pollResponse(responsePath, deadline); err != nil {
-		return nil, malformed()
-	} else if response != nil {
-		return received(response)
+	if response, arrived, err := receive(deadline); arrived {
+		return response, err
 	}
 
 	// 待つのをやめてから要求を消す（消してからやめると、その間にプラグインが要求を取り出して
@@ -292,12 +262,50 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 	if os.Remove(requestPath) == nil {
 		return nil, notRun("a dialog may be open")
 	}
-	if response, err := pollResponse(responsePath, time.Now().Add(takenGrace)); err != nil {
-		return nil, malformed()
-	} else if response != nil {
-		return received(response)
+	if response, arrived, err := receive(time.Now().Add(takenGrace)); arrived {
+		return response, err
 	}
 	return nil, fmt.Errorf("%w (%s, %s; it may have run)", ErrNoResponse, tool, timeout)
+}
+
+// checkResponse は届いた応答を確かめ、呼ぶ側へ返す形にする（docs/protocol.md「応答」）。ファイルに触れない。
+// 道具の失敗（invalid_request・unknown_tool・invalid_args・internal）は応答のまま返し、「実行しなかった」種別は
+// それぞれの誤りに、規則に合わない応答は ErrMalformedResponse にする。
+func checkResponse(tool string, response *Response) (*Response, error) {
+	// detail を持てるのは道具が返した失敗（invalid_args・internal）だけで、オブジェクトに限る
+	// （docs/protocol.md「応答」）。null も「無い」ではなく壊れた応答とする。
+	if response.Detail != nil {
+		if response.OK || (response.Code != CodeInvalidArgs && response.Code != CodeInternal) {
+			return nil, fmt.Errorf("%w (%s; a detail on a response that cannot carry one)", ErrMalformedResponse, tool)
+		}
+		if !IsObject(response.Detail) {
+			return nil, fmt.Errorf("%w (%s; the detail is not an object)", ErrMalformedResponse, tool)
+		}
+	}
+	if response.OK {
+		// 成功の result は必ずオブジェクト（docs/protocol.md「応答」）。
+		if !IsObject(response.Result) {
+			return nil, fmt.Errorf("%w (%s; the result is not an object)", ErrMalformedResponse, tool)
+		}
+		return response, nil
+	}
+	switch response.Code {
+	case CodeNoWait:
+		return nil, fmt.Errorf("%w (%s)", ErrNoWait, tool)
+	case CodeBusy:
+		if response.Error == "" {
+			return nil, fmt.Errorf("%w (%s did not run)", ErrBusy, tool)
+		}
+		return nil, fmt.Errorf("%w (%s did not run: %s)", ErrBusy, tool, response.Error)
+	case CodeOccupied:
+		return nil, fmt.Errorf("%w (%s did not run)", ErrOccupied, tool)
+	case CodeNoSession:
+		return nil, fmt.Errorf("%w (%s did not run)", ErrNoSession, tool)
+	case CodeInvalidRequest, CodeUnknownTool, CodeInvalidArgs, CodeInternal:
+		return response, nil
+	default:
+		return nil, fmt.Errorf("%w (%s; unknown code %q: %s)", ErrMalformedResponse, tool, response.Code, response.Error)
+	}
 }
 
 // IsObject は data が JSON のオブジェクトか（前後の空白は除いて見る）。data は JSON として
@@ -309,26 +317,32 @@ func IsObject(data json.RawMessage) bool {
 
 // pollResponse は until まで応答のファイルを読み直す。届けば読んで消して返す。届かなければ nil。
 //
-// 読めない（まだ無い・開けない）応答は「まだ無い」とみなして読み直す。応答として読めない
-// （JSON として壊れている・形が合わない）応答は待たずに消して ErrMalformedResponse を返す。
-// 応答は rename で公開されるので、読めた応答は書き終えたもので、壊れていれば書き手の不具合で
-// あり、待っても直らない（docs/protocol.md「ファイル」）。
-func pollResponse(path string, until time.Time) (*Response, error) {
+// 読めない（まだ無い・開けない）応答は「まだ無い」とみなして読み直す。読めた応答は decodeResponse で読み、
+// 応答として読めなければ待たずに消して malformed を真にする。応答は rename で公開されるので、読めた応答は
+// 書き終えたもので、壊れていれば書き手の不具合であり、待っても直らない（docs/protocol.md「ファイル」）。
+func pollResponse(path string, until time.Time) (response *Response, malformed bool) {
 	for {
 		if text, err := os.ReadFile(path); err == nil {
 			// 消せなくても応答は取得できている。残骸はプラグイン側が開始時に掃除する。
 			_ = os.Remove(path)
-			var response Response
-			if json.Unmarshal(text, &response) != nil {
-				return nil, ErrMalformedResponse
-			}
-			return &response, nil
+			return decodeResponse(text)
 		}
 		if time.Now().After(until) {
-			return nil, nil
+			return nil, false
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+}
+
+// decodeResponse は応答のファイルの中身を読む。応答として読めなければ（JSON として壊れている・形が合わない）
+// malformed を真にする。知らないフィールドは無視する（docs/protocol.md「互換性」）。値で受け、null も届いた応答として
+// 返す（checkResponse が壊れた応答にする）。
+func decodeResponse(text []byte) (response *Response, malformed bool) {
+	var received Response
+	if json.Unmarshal(text, &received) != nil {
+		return nil, true
+	}
+	return &received, false
 }
 
 // NestingDepth は JSON の入れ子（オブジェクトと配列）の深さ。外側のオブジェクトを 1 と数える。

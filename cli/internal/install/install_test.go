@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -333,8 +334,10 @@ func TestInstallRefusesForeignFolders(t *testing.T) {
 	}
 }
 
-// cli 以外は、cli が入っている <Plug-Ins> にだけ入れ、そこからだけ外す（Vectorworks が動いているかを
-// <Plug-Ins>/cli/spool のロックで判定するため）。
+// cli 以外は、cli が入っている <Plug-Ins> にだけ入れ、そこからだけ外す（Vectorworks が
+// 動いているかを <Plug-Ins>/cli/spool のロックで判定するため）。cli の記録の module が
+// 無ければ、Vectorworks が動いていても、install と uninstall はどちらも cli の記録の誤りを
+// 答え（同じ順に確かめる）、<Plug-Ins> も <Work> も変えない。
 func TestOtherPluginNeedsCLI(t *testing.T) {
 	h := newHarness(t)
 	h.publish(release{name: "demo", tag: "d1"})
@@ -344,14 +347,31 @@ func TestOtherPluginNeedsCLI(t *testing.T) {
 	if exist(filepath.Join(h.plugins, "demo")) {
 		t.Fatal("installed without cli")
 	}
-	h.installCLI()
-	h.mustInstall(release{name: "demo", tag: "d1"})
-	os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
-	if _, err := Uninstall(h.options(), "demo"); err == nil || !strings.Contains(err.Error(), "has no cli") {
-		t.Fatal(err)
-	}
-	if !exist(filepath.Join(h.plugins, "demo")) {
-		t.Fatal("uninstalled without cli")
+	for _, running := range []bool{false, true} {
+		t.Run(fmt.Sprintf("running=%v", running), func(t *testing.T) {
+			h := newHarness(t)
+			h.installCLI()
+			h.mustInstall(release{name: "demo", tag: "d1"})
+			os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
+			if running {
+				defer h.holdLock()()
+			}
+			// 1 回ごとに、何も変えていないことを確かめる（片方が残したものを、もう片方が片付けて隠さないように）。
+			for _, c := range []struct {
+				name string
+				run  func() error
+			}{
+				{"install", func() error { _, err := h.install("demo", "d1"); return err }},
+				{"uninstall", func() error { _, err := Uninstall(h.options(), "demo"); return err }},
+			} {
+				plugins, work := snapshot(t, h.plugins), snapshot(t, h.work)
+				if err := c.run(); err == nil || !strings.Contains(err.Error(), "has no cli") {
+					t.Errorf("%s: %v", c.name, err)
+				}
+				sameSnapshot(t, plugins, snapshot(t, h.plugins))
+				sameSnapshot(t, work, snapshot(t, h.work))
+			}
+		})
 	}
 }
 
@@ -366,7 +386,7 @@ func TestInstallRenameFailureRestores(t *testing.T) {
 			h.mustInstall(release{name: "cli", tag: "c1"})
 			h.publish(release{name: "cli", tag: "c2"})
 			executable := filepath.Join(h.plugins, "cli", "bin", "vw2026")
-			failRename(t, from(h))
+			failRename(t, from(h), "")
 			before := snapshot(t, h.plugins)
 			o := h.options()
 			o.Executable = executable
@@ -501,7 +521,7 @@ func TestInstallSameTagCannotSettleOld(t *testing.T) {
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	old := filepath.Join(h.work, "old", "cli")
 	copyDir(t, filepath.Join(h.plugins, "cli"), old)
-	failRename(t, old)
+	failRename(t, old, "")
 	var stderr bytes.Buffer
 	o := h.options()
 	o.Stderr = &stderr
