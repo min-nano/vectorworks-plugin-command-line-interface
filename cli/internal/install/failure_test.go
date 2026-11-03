@@ -102,12 +102,12 @@ func failRemoveAll(t *testing.T, at string) {
 	})
 }
 
-// failRename は、from から to への名前の変更を失敗させる（to が空なら行き先を問わない。同じ from からほかへの
-// 変更は通す）。返す関数で途中でも元に戻せる。
+// failRename は、from から to への名前の変更を失敗させる（from が空なら移すものを、to が空なら行き先を問わない。
+// 合わない変更は通す）。返す関数で途中でも元に戻せる。
 func failRename(t *testing.T, from, to string) (restore func()) {
 	t.Helper()
 	return renameWhen(t, func(oldpath, newpath string) error {
-		if oldpath == from && (to == "" || newpath == to) {
+		if (from == "" || oldpath == from) && (to == "" || newpath == to) {
 			return errInjected
 		}
 		return nil
@@ -122,17 +122,6 @@ func resolved(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return got
-}
-
-// failRenameTo は、to への名前の変更を失敗させる（どこからでも）。
-func failRenameTo(t *testing.T, to string) {
-	t.Helper()
-	renameWhen(t, func(oldpath, newpath string) error {
-		if newpath == to {
-			return errInjected
-		}
-		return nil
-	})
 }
 
 // 展開先を作れなければ、展開を失敗にする。

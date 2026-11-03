@@ -437,27 +437,44 @@ func (h *harness) hookSignals() (signal, await string) {
 }
 
 // lockWhenHookStarts は、lockingHook のフックの合図を待ってスプール dir のロックを掴み、フックに知らせる。done は
-// 掴み終えたら閉じる。unlock はロックを放す（Vectorworks の終了。done のあとで呼ぶ。呼ばなければテストの終わりに放す）。
-// ロックを掴めなければ HoldLock がテストを失敗にしてゴルーチンを終えるので、unlock は何もしない。
+// 終えたら閉じる。unlock はロックを放す（Vectorworks の終了。done のあとで呼ぶ。呼ばなければテストの終わりに放す）。
+//
+// 前の回の合図のファイルは先に消す（残っていると、フックを待たずに掴んでしまう）。10 秒待っても合図が無ければ
+// （フックが走らなかった）、掴まずにテストを失敗にする。ロックを掴めなければ、テストを失敗にする（ゴルーチンの
+// 中なので t.Fatal ではなく t.Error）。どの道でも、フックが待つファイルを書いてから終える（フックを止めない）。
 func (h *harness) lockWhenHookStarts(dir string) (done <-chan struct{}, unlock func()) {
 	signal, await := h.hookSignals()
+	os.Remove(signal)
+	os.Remove(await)
 	finished := make(chan struct{})
 	var release func()
 	go func() {
 		defer close(finished)
+		defer os.WriteFile(await, nil, 0o600)
 		for deadline := time.Now().Add(10 * time.Second); !exists(signal) && time.Now().Before(deadline); {
 			time.Sleep(10 * time.Millisecond)
 		}
-		os.MkdirAll(dir, 0o700)
-		release = fakeplugin.HoldLock(h.t, dir)
-		os.WriteFile(await, nil, 0o600)
+		if !exists(signal) {
+			h.t.Error("the hook did not start within 10 seconds")
+			return
+		}
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			h.t.Error(err)
+			return
+		}
+		var err error
+		if release, err = fakeplugin.TryHoldLock(dir); err != nil {
+			h.t.Errorf("hold the lock in %s: %v", dir, err)
+		}
 	}()
-	return finished, func() {
+	unlock = func() {
 		<-finished
 		if release != nil {
 			release()
 		}
 	}
+	h.t.Cleanup(unlock)
+	return finished, unlock
 }
 
 // snapshot はディレクトリの中身（相対パス → 中身。ディレクトリは "/"）。スプールの中は除く。

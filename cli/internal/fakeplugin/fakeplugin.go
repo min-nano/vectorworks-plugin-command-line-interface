@@ -61,20 +61,29 @@ func NewHeldDir(t *testing.T) (dir string, release func()) {
 // テストの終わりにも放す。
 func HoldLock(t *testing.T, dir string) (release func()) {
 	t.Helper()
-	dir = extendedPath(dir)
-	unlock, err := lock(filepath.Join(dir, spool.LockFile))
+	release, err := TryHoldLock(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(release)
+	return release
+}
+
+// TryHoldLock は HoldLock と同じくロックファイルを掴むが、掴めなければテストを止めずに誤りを返す（テストの
+// ゴルーチンの外から掴むため。t.Fatal はテストのゴルーチンからしか呼べない）。返す関数は何度呼んでもよく、
+// テストの終わりに放すのは呼ぶ側が受け持つ。
+func TryHoldLock(dir string) (release func(), err error) {
+	unlock, err := lock(filepath.Join(extendedPath(dir), spool.LockFile))
+	if err != nil {
+		return nil, err
+	}
 	released := false
-	release = func() {
+	return func() {
 		if !released {
 			released = true
 			unlock()
 		}
-	}
-	t.Cleanup(release)
-	return release
+	}, nil
 }
 
 // Start はロックを掴み、前の回の残骸を消してから、要求に handle で応え続ける。テストの終わりに
