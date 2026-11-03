@@ -83,10 +83,9 @@ func scriptIn(dir string, argv []string) (string, error) {
 var windowsRunnable = []string{".exe", ".com", ".cmd", ".bat"}
 
 // runHook はフックを 1 つ走らせ、標準出力の JSON のオブジェクトを返す（docs/registry.md「書き方」）。
-// argv が nil なら走らせずに nil。スクリプトを探す場所と作業ディレクトリはプラグインのフォルダ（env.pluginDir）、
-// 標準入力は閉じて渡し、
-// 標準エラーはそのまま流す。0 以外で終わる・標準出力が空でも JSON のオブジェクト 1 つでもないと
-// 失敗にする。時間の上限は持たない。
+// argv が nil なら走らせずに nil。スクリプトを探す場所と作業ディレクトリはプラグインのフォルダ（env.pluginDir）。
+// 標準入力は閉じて渡し、標準エラーはそのまま流す。0 以外で終わる・標準出力が空でも JSON のオブジェクト 1 つでも
+// ないと失敗にする。時間の上限は持たない。
 func (o *Options) runHook(kind string, argv []string, env hookEnv) (json.RawMessage, error) {
 	if argv == nil {
 		return nil, nil
