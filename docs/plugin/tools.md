@@ -128,7 +128,8 @@
   SDK に無いので（[Findings「Layer Objects」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md)の 5）、
   プラグインが自分の表（下記）で引きます。表に無い番号は `null` です。
 - **`type_name` の表。** 綴りはこの表が真実です。レイヤの直下か図形の中に出ることを Findings で確かめた種別だけを
-  載せます（[Findings「Layer Objects」]({B}/Layer%20Objects.md)の 5。番号と定数は `Objs.TDType.h`）。綴りは定数の
+  載せます（[Findings「Layer Objects」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md)の 5。番号と定数は `Objs.TDType.h`）。
+  見本で出たシンボル定義（16）は、どのレイヤにも属さず `layer_objects` に出ないので載せません。綴りは定数の
   名前から先頭の `k` と末尾の `Node` を除いて作りましたが、決めるのは規則ではなくこの表です。**載せた綴りは
   変えません。** 表に行を足す（`null` だった番号に名前を付ける）のは互換の変更として行えるので、呼ぶ側は `null` を
   扱います。
