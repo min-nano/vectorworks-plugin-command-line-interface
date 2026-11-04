@@ -214,6 +214,8 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
   - `index` は型 0 と 90 を除いた並びの位置で、識別子には使えない。名前の無い図形の `name` は空文字列。
   - Windows の `documents` / `save` / `close`（パスを正規化しないこと・保存先が既にあれば呼ぶ前に `file_exists` で
     断ること・上書き保存には `GetOpenFilesList` の文字列を渡すこと）は、C1 とは別に[「図面を扱う道具」](plugin/tools.md#図面を扱う道具documentssaveclose)へ書いた。
+  - `save` の `to_is_open`・`file_exists` は `internal` にする（引数の形は正しく、いまの状態のために保存できない失敗。
+    `quit` の `documents_open`・`no_document` と揃える。`invalid_args` は引数を直さなければ通らないものに使う）。
 
 ### C2. ほかのプラグインの機能と書く道具の順序が矛盾する
 
