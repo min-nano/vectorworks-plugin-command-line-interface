@@ -27,7 +27,7 @@
 | 2 | なし（A2 の `ping`・A3・C1 の `ping` は済） |
 | 3a・3b | [SDK の調査 6](../sdk-research.md#6-プラグインのフォルダの中のモジュール以外のものとモジュールの読み込み元分かった)（済。`<Plug-Ins>/cli/` の中のモジュール以外のものは無視され、モジュールは置いた場所から読み込まれる。[SDK リファレンス #277](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/277)）・B2（Windows の PATH。済。段 3b の `install-windows` ジョブが実物のレジストリで確かめた）・[SDK リファレンス #258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)（済。「有効化」はモジュールのフルパスで覚え、同じパスのままフォルダごと付け替えても残る。[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の「開発元不明のプラグイン」のダイアログ） |
 | 4 | A1（種類 `app` と終了の依頼。済） |
-| 5 | C1（読む道具の結果。済。[道具「読む道具」](tools.md#読む道具layersclasseslayer_objectsobject_counts)）・[SDK リファレンス #288](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/288)（上書き保存がダイアログを出す場面・`to` の拡張子と親のフォルダ・mac の「すでに開かれています」の比べ方・上書き保存の取り消しの段。調査中。`save` の上書き保存の扱いと `to` の比べ方はこの結果を見て決める） |
+| 5 | C1（読む道具の結果。済。[道具「読む道具」](tools.md#読む道具layersclasseslayer_objectsobject_counts)）・[SDK リファレンス #288](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/288)（上書き保存がダイアログを出す場面・`to` の拡張子と親のフォルダ・mac の「すでに開かれています」の比べ方・保存（別名保存と上書き保存）のあとの取り消し。調査中。`save` の上書き保存の扱いと `to` の比べ方はこの結果を見て決める） |
 | 6 | A4（終了の依頼の最中の判定を入れ子の判定にまとめるか）・C3（mac の利用者が閉じる道の刻みを実機確認で見る）（A2・B1 は済） |
 
 段 1 で決めたこと（真実は各ページ）:

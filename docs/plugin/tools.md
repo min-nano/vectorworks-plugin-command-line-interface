@@ -282,10 +282,12 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   - **利用者が開いた図面の上書き保存がダイアログを出す場面（古い版のファイル・読み取り専用のファイルなど）と、`to` の
     拡張子・親のフォルダの扱いは確かめていません**（[SDK リファレンス #288](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/288)
     で調べている）。結果を見て、呼ぶ前に断るものを決めます。
-  - **保存は、Vectorworks の取り消しの履歴に段を 1 つ積みます**（別名保存で確かめた。[Findings「Undo」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md)の
-    「別名保存は取り消しの段を 1 つ積む」）。保存そのものは取り消せず、ファイルは保存したまま残ります。利用者が `save` の
-    あとに取り消しを押すと 1 回目は何も戻らず、2 回目からそれまでの操作が戻ります。上書き保存でも積むかは
-    [#288](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/288) で調べています。
+  - **保存のあとの取り消しの振る舞いは、まだ分かっていません。** [Findings「Undo」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md)の
+    「別名保存は取り消しの段を 1 つ積む」（#223。`DoMenuName("Undo", 0)` で取り消した）では、別名保存のあとの 1 回目の
+    取り消しで何も戻りませんでした。[Findings「Layer Objects」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md)の 4
+    （#282。人がメニューで取り消した）では 1 回で戻り、食い違っています。どちらにしても保存そのものは取り消されず、
+    ファイルは保存したまま残ります。別名保存と上書き保存の両方を [#288](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/288)
+    で測り直しています。
   - 内部では `GetOpenFilesList` からパスの一致する項目の `fileRef` を引き、`SwitchToOpenFile` →
     `SaveActiveDocumentPath` で保存します。**`to` を省いたときは、`GetOpenFilesList` が返した文字列をそのまま
     保存先に渡します**（Windows では、大文字と小文字だけが違うパスを渡すと自分のファイルが「既にある」として
