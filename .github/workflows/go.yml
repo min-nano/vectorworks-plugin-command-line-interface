@@ -14,7 +14,8 @@ permissions:
 jobs:
   test:
     # ジョブ名に go を付ける。cpp.yml と同じ名前だとチェックの名前が重なり、必須のチェックが
-    # どちらのジョブを指すか区別できないため（fuzz も同じ）。
+    # どちらのジョブを指すか区別できないため（fuzz も同じ。build も、build.yml の
+    # ビルドと見分けられるように付ける）。
     name: go test (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -72,6 +73,7 @@ jobs:
   # 配る 3 つのターゲットへ cgo なしでビルドできるかを、SDK を取らずに確かめる。配る実行ファイルは
   # build.yml が作るので、ここの出力は上げない。
   build:
+    name: go build
     needs: test
     runs-on: ubuntu-latest
     defaults:
