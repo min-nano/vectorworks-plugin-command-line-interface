@@ -12,10 +12,10 @@
 | --- | --- | --- | --- |
 | `tools` | （予約） | なし | [ブリッジ「道具の表」](bridge.md#道具の表) |
 | `ping` | read | なし | 下記 |
-| `layers` | read | `include_sheets`（既定 true） | `{"layers":[{"name","kind":"design"\|"sheet","scale","objects","current"}],"count"}` |
-| `classes` | read | なし | `{"classes":[名前…],"count"}` |
-| `layer_objects` | read | `layer`（必須）・`limit`（既定 50）・`offset`（既定 0）・`type`（省略＝すべての種別） | `{"layer","objects":[{"index","type","type_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}` |
-| `object_counts` | read | `layer`（省略＝図面全体） | `{"layer"?,"types":[{"type","type_name","count"}],"total"}`（種別番号の昇順） |
+| `layers` | read | `include_sheets`（既定 true） | `{"layers":[{"name","kind":"design"\|"sheet","referenced","scale","objects","current"}],"count"}`（[読む道具](#読む道具layersclasseslayer_objectsobject_counts)） |
+| `classes` | read | なし | `{"classes":[名前…],"count"}`（同上） |
+| `layer_objects` | read | `layer`（必須）・`limit`（既定 50）・`offset`（既定 0）・`type`（種別の番号。省略＝すべての種別） | `{"layer","unit":"mm","objects":[{"index","type","type_name","pio_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}`（同上） |
+| `object_counts` | read | `layer`（省略＝図面全体） | `{"layer"?,"types":[{"type","type_name","count"}],"total"}`（種別番号の昇順。同上） |
 | `documents` | read | なし | [図面を扱う道具](#図面を扱う道具documentssaveclose) |
 | `save` | app | `document`（必須）・`to`（省略可） | 同上 |
 | `close` | app | `document`（必須） | 同上 |
@@ -47,6 +47,82 @@
 ```
 
 例の `protocol` は書いた時点の版です（[通信規則「版」](../protocol.md#版)）。
+
+## 読む道具（`layers`・`classes`・`layer_objects`・`object_counts`）
+
+図面を読むだけの道具です（[実装の順序](plan.md)の段 5）。使う SDK 呼び出しと挙動は SDK リファレンスで
+確かめてあります（[SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)）。どれも前面の図面
+（アクティブな図面）を読みます。
+
+**共通の決めごと:**
+
+- **図面が開かれていなければ `internal` で失敗し、`detail` に `{"reason":"no_document"}` を付けます。**
+  SDK は図面が無くても落ちずに空の列を返します（[Findings「Layers and Stories」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)の「OS タイマーの刻みの中・図面 0 枚」・
+  [Findings「Attributes and Classes」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Attributes%20and%20Classes.md)の「タイマーの刻みから呼べる。図面 0 枚でも落ちない」）が、
+  空の結果（`object_counts` の `total:0` など）を「中身の無い図面」と見分けられなくなるので、失敗にします。
+  `documents` は失敗にせず、空の一覧を返します。`ping` は `current_layer` を `null` にします（[`ping`](#ping)）。
+- **`layer` はレイヤの名前で、`layers` の `name` と完全に一致するものを探します**（参照で入ってきたレイヤは
+  `NNA#1_<元の名前>` の形のまま渡す）。一致しなければ `invalid_args` で断ります。
+- **並び順は SDK の列の順で、背面→前面です**（`layers` も `layer_objects` も同じ向き）。画面の並びに
+  合わせて並べ替えることはしません（呼ぶ側が並べ替える）。
+
+### `layers`
+
+`GetDrawingHeader()` → `FirstMemberObj` → `NextObject` の列を、型が `kLayerNode`（31）のものだけに絞って返します
+（列の末尾に、レイヤではない型 0 のものが 1 つ居る）。
+
+| フィールド | 値 |
+| --- | --- |
+| `name` | レイヤの名前（`GetObjectName`）。参照で入ってきたレイヤは `NNA#1_<元の名前>` |
+| `kind` | `design`（`ovLayerType` が 1 か 3）・`sheet`（2） |
+| `referenced` | 参照で入ってきたデザインレイヤか（`ovLayerType` が 3） |
+| `scale` | 縮尺の分母（`GetLayerScaleN`。1/50 なら `50`、1:1 なら `1`）。**シートレイヤは SDK の返すとおり常に `1`** |
+| `objects` | レイヤの直下の図形の数（下記「数え方」） |
+| `current` | 現在のレイヤか（`GetCurrentLayer()` とハンドルが一致するか） |
+
+- **並びは作った順で、デザインレイヤとシートレイヤが入り混じります。** オーガナイザはデザインレイヤだけを
+  この逆の順（`#` の 1 が最前面）に見せ、シートレイヤはこの順のまま見せます
+  （[Findings「Layers and Stories」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)の「順序」）。
+- `include_sheets` が偽なら、`kind` が `sheet` のものを除きます。
+- **参照で入ってきたレイヤも返します**（`referenced` が真）。その直下には図形が見えないので、`objects` は 0 に
+  なります。
+
+### `classes`
+
+`ForEachClass(false, …)` で、前面の図面のクラスの名前を返します（[Findings「Attributes and Classes」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Attributes%20and%20Classes.md)の
+「クラスの一覧は `ForEachClass` で列挙する」）。
+
+- **参照している図面のクラス（`NNA#<n>_…`）は含めません**（`doGuestClasses` は偽）。オーガナイザと同じ顔ぶれです。
+- **並びはクラスの ID の順（作った順）です。** オーガナイザは名前の順に見せますが、その並べ方を真似ずに、
+  呼ぶ側が並べ替えます。
+- 階層の名前（`-` 区切り）は 1 つのクラスの名前のまま返します（親のクラスは実在しない）。
+
+### `layer_objects`・`object_counts`
+
+**数え方:** レイヤの**直下**の図形を数えます。グループ・シンボル・PIO・壁などは中身を数えずに 1 つです。
+`FirstMemberObj` → `NextObject` で辿り、終端（型 0）と undo の置き石（型 90。並べ替え・消去・取り消しで増え、
+保存しても消えないものがある）を除きます。これが情報パレットの「すべてを選択」の「N 図形」と一致します
+（オーガナイザに数の列は無い。[Findings「Layer Objects」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md)の「まとめ」・2・3）。
+グループの中へ降りる指定は持ちません。
+
+- **`object_counts` の図面全体は、`layers`（`include_sheets` が真）が返すすべてのレイヤの直下の数の和です。**
+  シートレイヤ（ビューポートなど）を含み、シンボルの定義（どのレイヤにも属さない）は含みません。
+- **`index`** は、`layer_objects` が返す並び（背面→前面。型 0 と 90 を除く）の中の 0 からの位置です。
+  `offset` もこの位置で数えます。消去・取り消し・並べ替えで変わるので、図形の識別子には使えません。
+- **`type`** は `GetObjectTypeN` の番号です（引数の `type` も番号）。**`type_name`** は、番号から名前を引く口が
+  SDK に無いので（[Findings「Layer Objects」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md)の 5）、
+  プラグインが自分の表で引きます。綴りは `Objs.TDType.h` の定数の名前から先頭の `k` と末尾の `Node` を除いて
+  snake_case にしたもの（`kLineNode` → `line`、`kParametricNode` → `parametric`）で、表に無い番号は `null` です。
+- **`pio_name`** は PIO（`type` が 86）の名前（`VWParametricObj::GetParametricName()`。`Door` など）で、PIO で
+  なければ `null` です。
+- **`name`** は `GetObjectName` のままで、名前の無い図形は空文字列（`""`）です（Vectorworks でも空の名前と
+  区別が無い）。**`class`** はクラスの名前（`GetObjectClass` → `ClassIDToName`）です。
+- **`bounds`** は `GetObjectBounds` の外形で、**単位は常に mm**です。結果の **`unit`** は常に `"mm"` で、
+  単位の取り違えを防ぐために置きます。値は図面の単位にもレイヤの縮尺にもよらない世界座標です。外形が取れない
+  図形は `null` です。
+  - 回した図形は外接矩形、3D の図形は平面の外接矩形です。
+  - 文字の大きさは、作ったときのレイヤの縮尺で決まります（1:50 のレイヤで作った文字は 50 倍）。
+  - シートレイヤの図形（ビューポートなど）は紙の上の mm です。
 
 ## `quit`
 

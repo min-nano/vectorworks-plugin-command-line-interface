@@ -22,7 +22,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 | [B3](#b3-vw2026_app-が環境変数の名前の決まりに反する) | `VW2026_APP` が環境変数の名前の決まりに反する | 最初の配布（段 2）の前 | 済（名前は値の通じる範囲で決める、と決まりを改めた。CLAUDE.md「Go」） |
 | [B4](#b4-sdk-の調査の古い参照) | SDK の調査の古い参照 | なし | 済 |
 | [B5](#b5-段-24-では実機の確かめ方が成り立たない) | 段 2〜4 では実機の確かめ方が成り立たない | 段 2 | 済（段の入れ替えで、`install` の無い段は 2 だけになった。[実装の順序「実機の確かめ方」](plugin/plan.md#実機の確かめ方)） |
-| [C1](#c1-読む道具の結果に決まっていない点がある) | 読む道具の結果に決まっていない点がある | 段 5 | `ping` の `current_layer` は済（図面が無ければ `null`。[道具「ping」](plugin/tools.md#ping)）。使う SDK 呼び出しは確かめられた（[#280](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/280)〜[#283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。ほかは未着手 |
+| [C1](#c1-読む道具の結果に決まっていない点がある) | 読む道具の結果に決まっていない点がある | 段 5 | 済（[道具「読む道具」](plugin/tools.md#読む道具layersclasseslayer_objectsobject_counts)に決めた。使う SDK 呼び出しは SDK リファレンス #280〜#283 で確かめた。実装は段 5） |
 | [C2](#c2-ほかのプラグインの機能と書く道具の順序が矛盾する) | ほかのプラグインの機能と書く道具の順序が矛盾する | 進め方 3・4 | 未着手（A3 で、`write` の道具は占有の中でだけ呼べることになった） |
 | [C3](#c3-そのほか) | PR のプレリリースの sha・終了の処理中のタイマー | 段 2（sha）・段 6（タイマー） | sha は済（ブランチの head。[ビルドとリリース「リリースの形」](plugin/build-and-release.md#リリースの形)）。タイマーは、刻みから終了を頼む道（mac・Windows）と Windows の利用者が閉じる道は止めなくてよいと分かった（[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・[#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)）。mac の利用者が閉じる道は測っていないので、段 6 の実機確認で見る |
 
@@ -181,8 +181,8 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 
 ### C1. 読む道具の結果に決まっていない点がある
 
-[最初に提供する道具](plugin/tools.md)で次が決まっていない。既定値はあとで変えると互換を崩すので、
-段 5 の PR で決めて tools.md に書く。
+[最初に提供する道具](plugin/tools.md)で次が決まっていなかった。既定値はあとで変えると互換を崩すので、
+段 5 の前に決めて tools.md に書いた。
 
 - `layer_objects` の `type` が種別の番号か名前か
 - `layers` の `scale` の形（数か比か）
@@ -192,11 +192,28 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 - 図面が開かれていないときの各道具の応答（`internal` とする想定）。`ping` の `current_layer` は
   `null` に決めた（[道具「ping」](plugin/tools.md#ping)）
 
-`classes` が使う SDK 呼び出しは SDK リファレンスに無いので、issue を立てる（立てた: [#280](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/280)。レイヤは [#281](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/281)、オブジェクトの列挙と数え方は [#282](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/282)、Windows の `documents` / `save` / `close` は [#283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）
-（[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)）。
-4 つとも `Findings/` に反映された。上の項目を決める材料（縮尺の値・外形の単位・数え方・種別の名前・図面が無いときの
-振る舞い）は [SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し) にまとめてある。Windows の
-`documents` / `save` / `close` の結果は[道具「図面を扱う道具」](plugin/tools.md#図面を扱う道具documentssaveclose)に反映した。
+使う SDK 呼び出しは SDK リファレンスで調べた（クラスは [#280](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/280)、レイヤは [#281](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/281)、
+オブジェクトの列挙と数え方は [#282](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/282)、Windows の `documents` / `save` / `close` は [#283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)。
+[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)）。調べた結果、次も段 5 の前に決める点として加わった。
+
+- 参照で入ってきたレイヤ（名前が `NNA#1_…`）・クラスの扱い
+- `layers`・`classes` の並び順（SDK の列の順か、オーガナイザの順か）
+- `layer_objects` の `index` の意味と、名前の無い図形の `name`
+
+- **済。** 次のとおり決めた（真実は[道具「読む道具」](plugin/tools.md#読む道具layersclasseslayer_objectsobject_counts)・
+  [「図面を扱う道具」](plugin/tools.md#図面を扱う道具documentssaveclose)）。
+  - `type` は `GetObjectTypeN` の番号（引数も番号）。`type_name` はプラグインの表で引き（SDK に口が無い）、
+    PIO の名前は `pio_name` に出す。
+  - `scale` は縮尺の分母。シートレイヤは SDK の返すとおり `1`。
+  - `bounds` は mm 固定（縮尺を掛けない世界座標）。結果に `unit`（常に `"mm"`）を置き、取り違えを防ぐ。
+  - 数えるのはレイヤの直下の図形で、終端（型 0）と undo の置き石（型 90）を除く（情報パレットの「N 図形」と一致する）。
+    図面全体はシートレイヤを含む。
+  - 図面が開かれていなければ `internal` で失敗し、`detail` の `reason` を `no_document` にする（`documents` は空の一覧）。
+  - 参照で入ってきたレイヤは返し、`referenced` で見分ける（`kind` は `design`）。クラスは参照のものを含めない。
+  - 並びは SDK の列の順（背面→前面。クラスは ID の順）で、画面の並びには並べ替えない。
+  - `index` は型 0 と 90 を除いた並びの位置で、識別子には使えない。名前の無い図形の `name` は空文字列。
+  - Windows の `documents` / `save` / `close`（パスを正規化しないこと・保存先が既にあれば呼ぶ前に `file_exists` で
+    断ること・上書き保存には `GetOpenFilesList` の文字列を渡すこと）は、C1 とは別に[「図面を扱う道具」](plugin/tools.md#図面を扱う道具documentssaveclose)へ書いた。
 
 ### C2. ほかのプラグインの機能と書く道具の順序が矛盾する
 
