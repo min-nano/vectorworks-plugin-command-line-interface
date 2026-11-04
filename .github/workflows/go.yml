@@ -13,7 +13,9 @@ permissions:
 # 整形と go vet は format.yml・lint.yml が行う（docs/format.md・docs/lint.md）。
 jobs:
   test:
-    name: test (${{ matrix.os }})
+    # ジョブ名に go を付ける。cpp.yml と同じ名前だとチェックの名前が重なり、必須のチェックが
+    # どちらのジョブを指すか区別できないため（fuzz も同じ）。
+    name: go test (${{ matrix.os }})
     strategy:
       fail-fast: false
       # Vectorworks の対応 OS (darwin・windows) でのみテストする。
@@ -46,6 +48,7 @@ jobs:
   # NestingDepth のファジング（cli/internal/spool/fuzz_test.go）。OS に依らない純粋な関数なので
   # ubuntu だけで回す。test の go test は種だけを確かめる。
   fuzz:
+    name: go fuzz
     runs-on: ubuntu-latest
     defaults:
       run:

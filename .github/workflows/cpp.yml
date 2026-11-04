@@ -13,7 +13,9 @@ permissions:
 # テストは通信規則の見本（protocol/fixtures）も読む。同じ見本を読む Go のテストは go.yml が走らせる。
 jobs:
   test:
-    name: test (${{ matrix.os }})
+    # ジョブ名に cpp を付ける。go.yml と同じ名前だとチェックの名前が重なり、必須のチェックが
+    # どちらのジョブを指すか区別できないため（fuzz も同じ）。
+    name: cpp test (${{ matrix.os }})
     strategy:
       fail-fast: false
       # Vectorworks の対応 OS（darwin・windows）でテストする。MSVC には UndefinedBehaviorSanitizer が
@@ -81,6 +83,7 @@ jobs:
 
   # libFuzzer は Apple の clang に無いので、ubuntu の clang で回す。単体テストも同じビルドで走らせる。
   fuzz:
+    name: cpp fuzz
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
