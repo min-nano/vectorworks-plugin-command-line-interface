@@ -463,6 +463,33 @@ jobs:
           "$RELEASE_DIR/bin/vw2026" version | tee "$RUNNER_TEMP/version.json"
           test "$(jq -r .version "$RUNNER_TEMP/version.json")" = "$VERSION"
 
+  # verify の結果を 1 つのチェックにまとめる（必須のチェックにするため）。verify は行列のジョブで、
+  # 公開しないとき（マージキュー・fork の PR）は release とともに行列を展開する前に飛ばされ、行列の値の
+  # 入った名前のチェックを出さないので、そのままでは必須にできない。公開するときは release と verify が
+  # 成功したこと、公開しないときはどちらも飛ばされたことを確かめる。always() にするのは、前のジョブが
+  # 失敗・中止したときに、このジョブまで飛ばされて成功として扱われないようにするため。
+  verify-result:
+    needs: [meta, release, verify]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          META: ${{ needs.meta.result }}
+          PUBLISH: ${{ needs.meta.outputs.publish }}
+          RELEASE: ${{ needs.release.result }}
+          VERIFY: ${{ needs.verify.result }}
+        run: |
+          set -eu
+          echo "meta: $META, publish: $PUBLISH, release: $RELEASE, verify: $VERIFY"
+          test "$META" = success
+          if [ "$PUBLISH" = true ]; then
+            test "$RELEASE" = success
+            test "$VERIFY" = success
+          else
+            test "$RELEASE" = skipped
+            test "$VERIFY" = skipped
+          fi
+
   # 実物の exe の入れ替え（docs/plugin/install-and-update.md「テスト」）。PR の CLI を <Plug-Ins>\cli\ に
   # 入れ、入った PR の CLI に install（タグの違う記録にしてから）と install cli@latest を走らせて、PR の Go の
   # コードに動いている自分をよけさせる（PR でよけ方を壊したら落ちる）。入った CLI の uninstall cli は断り、
