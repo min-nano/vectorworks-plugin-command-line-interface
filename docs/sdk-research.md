@@ -89,10 +89,10 @@ SDK リファレンスに記載がありませんでした。
 - Vectorworks 自身の外部からの受け口（macOS の Apple Events、起動引数でのスクリプト実行など）が
   あるか。
 
-## 3. 開いている図面の一覧と、前面の図面の切り替え（ほぼ分かった）
+## 3. 開いている図面の一覧と、前面の図面の切り替え（分かった）
 
 [設計「決めたこと」](design.md#決めたこと)の「対象の図面」のため。[Findings「Documents」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md) にまとまっています
-（実測はメニューコマンドの中から。VW 2026 / macOS）。
+（実測はメニューコマンドの中と OS タイマーの刻みの中から。VW 2026 / macOS。Windows は [#283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。
 
 | 問い | 答え |
 | --- | --- |
@@ -111,9 +111,15 @@ SDK リファレンスに記載がありませんでした。
   （`OpenDocumentPath`）・保存・「閉じる」を刻みの中から呼んで確かめた（[Findings「未保存の変更ありは読めない」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#未保存の変更ありは読めない)・
   [「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)）。
 
-残っていること:
-
-- Windows での挙動（[#283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283) で調べる）。
+- **Windows も振る舞いは mac と同じ**（[#283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)。[Findings「Documents」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)の
+  「Windows——振る舞いは mac と同じ。違うのはパスの比べ方と、開ける図面は 8 枚まで」）。違うのは次のとおり。
+  使い方は[道具「図面を扱う道具」](plugin/tools.md#図面を扱う道具documentssaveclose)。
+  - 図面のパスは、保存したときに渡した文字列がそのまま残る（区切りだけ `\` に揃う。ドライブ文字・名前の大小・
+    8.3 の短い名前は直らない）。
+  - 「すでに開かれています」の警告は、開いている図面のパスと文字列が完全に一致するときだけ出る。既にあるファイルへは
+    どの形で渡しても保存できず、自分のパスへの上書き保存も文字列が完全に一致するときだけ通る。
+  - 「閉じる」の保存の確認の最中に、呼んだ `SetTimer` の刻み自身が入り直す（mac は入り直さない）。
+  - 開いていられる図面は 8 枚まで（mac は測っていない）。260 文字を超えるパスへは保存できない。
 
 ## 4. 最初の道具が使う SDK 呼び出し
 
@@ -122,11 +128,11 @@ SDK リファレンスに記載がありませんでした。
 
 | 道具 | 呼び出し | リファレンス |
 | --- | --- | --- |
-| `layers` | デザインレイヤの列挙（`GetDrawingHeaderFristMember`＋`NextObject`） | [Layers and Stories「デザインレイヤの並びと並べ替え」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)にある。縮尺の読みは `GetLayerScaleN`（同「レイヤの縮尺」）。シートレイヤを含むか・種類の見分け・現在のレイヤの判定・縮尺の値の形は未確認（[#281](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/281) で調べる） |
-| `classes` | クラスの一覧 | 無い（[#280](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/280) で調べる。宣言は `ForEachClass`・`ClassIDToName`） |
-| `layer_objects` / `object_counts` | レイヤの中のオブジェクトの列挙・種別・名前・クラス・外形 | 種別（`GetObjectTypeN`）・外形（`GetObjectBounds`）は各ページに使い方がある。`WorldCoord` は mm 固定（[Parametric Objects](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Parametric%20Objects.md)）。辿ると終端の `kTermNode` も数える（[Dimensions](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Dimensions.md)）・取り消した図形は保存まで一覧に残る（[Documents](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md)）。列挙の順・グループ・シンボルの中を数えるか・種別の名前の引き方は未確認（[#282](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/282) で調べる） |
+| `layers` | レイヤの列挙（`FirstMemberObj(GetDrawingHeader())`＋`NextObject`、または `ForEachLayer`） | **分かった**（[#281](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/281)。[Layers and Stories「レイヤを列挙する（デザインとシート・種類・順序・現在・縮尺）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)。Windows）。シートレイヤも同じ列に作った順で並ぶ（オーガナイザはデザインレイヤだけ逆順に見せる）。列の末尾に型 `0` が 1 つ居るので `kLayerNode`（31）で絞る。種類は `ovLayerType`（デザイン `1`・シート `2`・参照で入ったデザインレイヤ `3`。名前は `NNA#<n>_<元の名前>`）。現在のレイヤは `GetCurrentLayer()` とハンドルの `==` で判定できる。縮尺は `GetLayerScaleN` で分母（1/50 なら `50`）、シートレイヤは常に `1`。刻みの中・図面 0 枚でも落ちない（列が空になる） |
+| `classes` | クラスの一覧（`ForEachClass`） | **分かった**（[#280](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/280)。[Attributes and Classes「クラスの一覧は `ForEachClass` で列挙する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Attributes%20and%20Classes.md)。Windows）。前面の図面のクラスだけを ID の順（作った順）に渡す（オーガナイザは名前の昇順）。`doGuestClasses` が真なら参照先のクラスが `NNA#<n>_<名前>` で後ろに足される（オーガナイザには出ない）。階層名（`-` 区切り）は 1 つのクラスで、親は作られない。刻みの中・図面 0 枚でも落ちない（0 件） |
+| `layer_objects` / `object_counts` | レイヤの中のオブジェクトの列挙・種別・名前・クラス・外形 | **分かった**（[#282](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/282)。[Layer Objects](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md)。mac・Windows）。`FirstMemberObj` → `NextObject` は作った順で、先頭が最背面。列には終端（型 `0`）と undo の置き石（型 `90`。並べ替え・消去・取り消しで増え、保存しても残ることがある）が混ざるので除く（`ForEachObjectN` は渡さない）。情報パレットの「N 図形」はレイヤの直下の数（グループ・シンボル・PIO・壁は 1 つ）で、オーガナイザに数の列は無い。種別の番号から名前を引く口は SDK に無い（自前の表。PIO は `GetParametricName`）。名前の無い図形の名前は空文字列。クラスは `GetObjectClass` → `ClassIDToName`。外形は縮尺を掛けない mm の外接矩形（文字は紙の上の大きさ×縮尺）。シートレイヤにはビューポート（型 `122`）が居る。刻みの中から辿ってよい |
 | `ping` | `GetCurrentLayer()` で図面が開いているかを判定する | **分かった**（[Timers and Notifications](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 8。使い方は[道具「ping」](plugin/tools.md#ping)） |
-| `save` / `close` / `documents` | 図面の一覧（`GetOpenFilesList`）・指定した図面の保存（`SwitchToOpenFile` → `SaveActiveDocumentPath`。無題の図面を新しいパスへ）・メニュー「閉じる」（`DoMenuName("Close", 0)`） | 一覧・同じパスへの上書き保存・「閉じる」で保存の確認が出ることは [Findings「Documents」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md) にある。**分かった**（[#243](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/243)）。新しいパスへは通る・既存のファイルへは通らず（開いているファイルなら警告のダイアログが出る）・前面は戻せる・保存した直後なら確認なしに閉じる。使い方は[道具](plugin/tools.md#図面を扱う道具documentssaveclose) |
+| `save` / `close` / `documents` | 図面の一覧（`GetOpenFilesList`）・指定した図面の保存（`SwitchToOpenFile` → `SaveActiveDocumentPath`。無題の図面を新しいパスへ）・メニュー「閉じる」（`DoMenuName("Close", 0)`） | 一覧・同じパスへの上書き保存・「閉じる」で保存の確認が出ることは [Findings「Documents」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md) にある。**分かった**（[#243](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/243)）。新しいパスへは通る・既存のファイルへは通らず（開いているファイルなら警告のダイアログが出る）・前面は戻せる・保存した直後なら確認なしに閉じる。Windows も同じ（[#283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)。違うのはパスの比べ方。上記 3）。使い方は[道具](plugin/tools.md#図面を扱う道具documentssaveclose) |
 | `quit`（未保存の判定） | 保存済みの図面の**変更あり**を読む | **分かった: 読めない**（[#240](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/240)。[Findings「未保存の変更ありは読めない」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#未保存の変更ありは読めない)）。`outSaved`・`fIsInMemoryOnly` は「ディスクにあるか」だけを表す。そのため `quit` は図面が 0 枚のときだけ受け付ける設計にした（[道具「quit」](plugin/tools.md#quit)） |
 | `quit` | OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼ぶ | **分かった**（[#230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・[#235](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/235)。[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9・[Documents「`CloseAllFilesAndQuitVectorworks`（終了）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md)）。刻みから呼べ、図面を閉じ終えてから戻り、終了はその後のイベントループで起きる（mac・Windows）。保存の確認を取り消すと呼び出しは戻り、図面は残る。確認の最中にもう一度呼ぶと確認が 2 つ重なって出る（落ちない）。Windows では呼んだタイマー自身が確認の最中に入り直す（Findings は「終了の呼び出しの最中」を旗で持って見送る作りを勧める。このプラグインでどうするかは段 6 の前に決める）。利用者が開いたモーダルの最中も落ちない。終了の依頼の最中の判定は残し、入れ子の判定にまとめるかを段 6 の前に決める（[設計のレビュー A4](design-review.md#a4-終了の依頼の最中に受け付けが入れ子になりうる)） |
 
