@@ -96,7 +96,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 
 `quit` の前に図面を保存して閉じるための道具です（[実装の順序](plan.md)の段 5）。使う SDK 呼び出しは SDK
 リファレンスで確かめてあります（[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)。
-VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比べ方。[同「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md)・[SDK リファレンス #283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。**変更を捨てて閉じる道具は持ちません**（人の変更を黙って捨てる手段を
+VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比べ方。[同「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・[SDK リファレンス #283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。**変更を捨てて閉じる道具は持ちません**（人の変更を黙って捨てる手段を
 作らない）。保存は呼ぶ側の責任で、保存してから閉じれば保存の確認は出ません。必要のない図面は、一時フォルダなどへ
 保存してから閉じ、ファイルは利用者が自分で消します。
 
@@ -124,12 +124,13 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     別名保存は図面のパスを保存先へ移す（「名前を付けて保存」と同じ）ので、利用者の図面に許すと、利用者が
     あとで ⌘S を押したときに一時フォルダのファイルへ保存されてしまうためです。無題の図面は元のファイルが
     無く、利用者の作業を移すことにならないので許します。結果の `path` は保存した後のパスです。
-  - **保存先が既にあるファイルへは保存できません**（SDK が `GSError` 50331649 を返し、何も起きない。
-    mac・Windows とも、どの形で渡しても）。**保存先が別の図面で開いているファイルなら、SDK が警告のダイアログを
+  - **`to` に既にあるファイルを渡しても保存できません**（SDK が `GSError` 50331649 を返し、何も起きない。
+    mac・Windows とも、どの形で渡しても）。図面自身のパスへの上書き保存（`to` を省く。下記）はこれに当たらず、
+    次の確かめは `to` を渡したときだけ行います。**保存先が別の図面で開いているファイルなら、SDK が警告のダイアログを
     出して人が OK を押すまで戻りません**（Windows では、開いている図面のパスと文字列が完全に一致するときだけ出る）。
     そこで、呼ぶ前に次の順に確かめて `invalid_args` で断ります。
-    1. `to` が開いている図面のパスと一致する（比べ方は下記「パスの一致の判定」）。どの図面と衝突したかを示すため、
-       先に確かめます。
+    1. `to` が開いている図面のパスと一致する（比べ方は下記「パスの一致の判定」）。保存先が開いている図面だと
+       示すため（`to_is_open`）、先に確かめます。
     2. `to` がディスクにある（ファイルシステムに聞く）。大文字と小文字・8.3 の短い名前・区切り文字の違いは
        ファイルシステムが吸収するので、文字列の比べ方に依らずに防げます。
 
@@ -137,7 +138,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     `reason` を付けます:** `to_is_open`（保存先が開いている図面）・`file_exists`（保存先が既にある）。どちらも
     `invalid_args` です。確かめてから保存するまでの間にファイルができた場合は、SDK のエラーを `internal` で返します
     （開いている図面でなければダイアログは出ない）。Windows で 260 文字を超える保存先も、SDK が断るので `internal` に
-    なります。
+    なります。どちらの `reason` も保存を呼ぶ前に返すことは、段 5 で無 SDK のテストで確かめます
+    （[実装の順序](plan.md)の段 5）。
   - 内部では `GetOpenFilesList` からパスの一致する項目の `fileRef` を引き、`SwitchToOpenFile` →
     `SaveActiveDocumentPath` で保存します。**`to` を省いたときは、`GetOpenFilesList` が返した文字列をそのまま
     保存先に渡します**（Windows では、大文字と小文字だけが違うパスを渡すと自分のファイルが「既にある」として
