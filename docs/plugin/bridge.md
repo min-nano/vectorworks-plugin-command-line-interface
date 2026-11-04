@@ -12,6 +12,7 @@
 | `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つ（`prepare` / `lock` / `sweep` / `poll` / `take` / `waitState` / `reply`）と、スプールの場所（モジュールのパスから求める `spoolDirOf` と、自分のモジュールに当てる `defaultSpoolDir`）。`Bridge` は場所を引数で受ける（テストは一時ディレクトリを渡す） |
 | `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（`core::Server::serve`。下記）と、占有の印（`Server` が発行した 1 つをメモリに持つ）。道具の表と時刻を引数で受けるので無 SDK でテストできる |
 | `src/core/Ping.{h,cpp}` | 依らない | 道具 `ping` の中身のうち SDK に依らない部分（引数の検査と結果の形）。SDK から読む値（現在のレイヤの名前）は引数で受ける |
+| `src/core/<道具>.{h,cpp}`（段 5 から） | 依らない | 段 5 の道具の中身のうち SDK に依らない部分（引数の検査・結果の形・`type_name` の表・`layer_objects` の絞り込みと頁送り・`no_document` の判定・`save` の保存先の確かめ）。SDK から読む値は引数で受ける |
 | `src/tools/ToolTable.cpp` | 依る | 道具の表 |
 | `src/tools/<道具>.cpp` | 依る | 道具の中身。SDK から値を読み、SDK に依らない部分は `src/core` の関数に渡す（無 SDK でテストするため） |
 | `src/Clock.cpp` | 依る | OS タイマーから `core::Server::serve(tools::table(), …)` を呼ぶ |

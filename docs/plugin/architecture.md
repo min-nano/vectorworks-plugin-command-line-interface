@@ -81,7 +81,7 @@ OS タイマー
 
 | 場面 | 判定 | 断る要求 | 理由 |
 | --- | --- | --- | --- |
-| 終了の依頼の最中 | `Clock` が `CloseAllFilesAndQuitVectorworks` の前後で印を立てて下ろし、その間の刻みで `core::Server::serve` に `Quitting` を渡す（保存の確認の間も刻む） | 種類 `write`・`app` | 保存しようとしている図面を書き換えない。終了の依頼を重ねない |
+| 終了の依頼の最中 | `Clock` が `CloseAllFilesAndQuitVectorworks` の前後で印を立てて下ろし、その間の刻みで `core::Server::serve` に `Quitting` を渡す（Windows は保存の確認の間も刻む。mac は呼んだタイマーが確認の間は刻まないので、この判定が効くのは Windows だけ） | 種類 `write`・`app` | 保存しようとしている図面を書き換えない。終了の依頼を重ねない |
 | 受け付けの入れ子 | `core::Server` が `serve` の途中かを持つ | すべて | 外の回の状態（並べた要求・占有の印）を取り合わない。道具の SDK 呼び出しの途中で SDK を呼ばない |
 
 - **受け付けの入れ子**は、道具の SDK 呼び出しが中でイベントを回したとき（モーダルダイアログ・進捗の
@@ -90,14 +90,18 @@ OS タイマー
   飛ばします。段 5 の `close` は、保存の確認が出ると人が答えるまで戻らず、その間イベントを回します
   （[道具「図面を扱う道具」](tools.md#図面を扱う道具documentssaveclose)）。`save` も、保存先が別の図面で開いている
   ファイルなら警告のダイアログでイベントを回しますが、そのときは呼ぶ前に断ります。
+- **このプラグインのタイマーは 1 本なので、受け付けの入れ子が起きるのは Windows だけです。** Windows はダイアログの
+  メッセージループが `WM_TIMER` を配り、呼んだタイマー自身が入り直します。mac の `CFRunLoopTimer` は自分の処理の
+  最中に同じタイマーを呼ばないので、道具の中のダイアログの間は刻まず、要求は応えられずにスプールに残ります
+  （同 4 の 9。呼ぶ側から見た扱いは[通信規則「生存の判定」](../protocol.md#生存の判定)）。
 - **終了の依頼の最中の判定は暫定です。** 守る相手は、`quit` を頼んだ当の呼ぶ側の呼び直しだけです
   （`write`・`app` は占有の中でしか呼べないため）。保存の確認の中で 2 つ目の
   `CloseAllFilesAndQuitVectorworks` を呼ぶと確認が重なって出て、Windows では呼んだタイマー自身が確認の最中に
   入り直すと分かりました（[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)。[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9）。
   この判定は Findings が勧める「終了の呼び出しの最中」の旗に当たるので残します。段 6 の前に、入れ子の判定に
   まとめて保存の確認の間はすべて断るかを決めます（[設計のレビュー A4](../design-review.md#a4-終了の依頼の最中に受け付けが入れ子になりうる)）。
-  終了の依頼は `serve` の外（タイマーが `serve` から戻ったあと）で行うので、保存の確認の間の刻みは
-  入れ子にならず、いまは読む道具に応えます。
+  終了の依頼は `serve` の外（タイマーが `serve` から戻ったあと）で行うので、保存の確認の間に入り直した刻み
+  （Windows）は入れ子にならず、いまは読む道具に応えます。mac は確認の間は刻まないので、何も応えません。
 - **undo の記録が開いているかは見ません。** 刻みの中から記録が開いて見えた実測は、どれもプラグイン
   自身の呼び出しが開いて閉じずに戻した記録でした（Findings の 6 はプローブの `DeleteObject` が開いた
   記録、[Undo](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md) の PIO・`CreateLocus`・スクリプトエンジンもプローブが呼んだもの）。

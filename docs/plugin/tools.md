@@ -14,8 +14,8 @@
   （`document` の図面・`layer` のレイヤ）が実在しない、道具の規則に反する組み合わせ（保存済みの図面への `save` の `to`）。
 - **`internal`** は、引数は正しく、名指すものも実在するが、それ以外の状態のために実行できないとき: 図面が無い
   （`no_document`）・図面が開いている（`quit` の `documents_open`）・保存先が埋まっている（`save` の `to_is_open`・
-  `file_exists`。`to` は新しく作るファイルを名指すので、既にあることは状態に当たる）・保存の確認が取り消された・
-  SDK の失敗・道具の中の例外。
+  `file_exists`。`to` は新しく作るファイルを名指すので、既にあることは状態に当たる）・図面が閉じなかった（`close` の
+  `not_closed`。保存の確認が取り消されたなど）・SDK の失敗（`save` の `save_failed`）・道具の中の例外。
 
 呼ぶ側が理由で分岐するときは、`code` ではなく `detail` の `reason` を見ます（`reason` を返す失敗だけ）。
 
@@ -122,8 +122,15 @@
 
 - **`object_counts` の図面全体は、`layers`（`include_sheets` が真）が返すすべてのレイヤの直下の数の和です。**
   シートレイヤ（ビューポートなど）を含み、シンボルの定義（どのレイヤにも属さない）は含みません。
-- **`index`** は、`layer_objects` が返す並び（背面→前面。型 0 と 90 を除く）の中の 0 からの位置です。
-  `offset` もこの位置で数えます。消去・取り消し・並べ替えで変わるので、図形の識別子には使えません。
+- **`layer_objects` に `type` を渡すと、その種別の図形だけに絞ってから数えます。** `offset` は絞ったあとの
+  並びで飛ばす数、`returned` は返した数、`total` は絞ったあとの数です（`offset` と `limit` で頁を送れるように）。
+- **`index`** は、レイヤの直下の並び（背面→前面。型 0 と 90 を除く）の中の 0 からの位置で、`type` で絞っても
+  変わりません（絞った結果どうしでも前後関係を比べられるように）。消去・取り消し・並べ替えで変わるので、
+  図形の識別子には使えません。
+- **`limit` は 1〜1000、`offset` は 0 以上、`type` は 0 以上の整数です。** 数は整数の綴り（小数部と指数部が
+  無い）だけを受け、`2.0` や範囲の外は `invalid_args` で断ります。`offset` が `total` 以上なら `objects` は空で
+  成功します。表に無い番号の `type` も断らず、合う図形が無ければ `total` は 0 です。`limit` に上限を設けるのは、
+  1 回の受け付けと応答を大きくしすぎないためです。
 - **`type`** は `GetObjectTypeN` の番号です（引数の `type` も番号）。**`type_name`** は、番号から名前を引く口が
   SDK に無いので（[Findings「Layer Objects」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md)の 5）、
   プラグインが自分の表（下記）で引きます。表に無い番号は `null` です。
@@ -228,6 +235,11 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
 | `save` | app | `document`（必須）・`to`（省略可） | `{"document","path"}`（保存した後の図面のパス） |
 | `close` | app | `document`（必須） | `{"closed":true}` |
 
+- **図面が 1 枚も開いていなければ、`save`・`close` は `internal` で失敗し、`detail` に `{"reason":"no_document"}` を
+  付けます**（[読む道具](#読む道具layersclasseslayer_objectsobject_counts)と同じ。`document` を確かめる前に返す）。
+  `documents` は失敗にせず、空の一覧を返します。
+- **`name`** は `path` の最後の区切り文字より後ろの部分です（SDK に名前を聞かずにパスから作る）。無題の図面は
+  「名称未設定 N」になります。
 - **`document`** は対象の図面のパスで、`documents` の `path` を渡します。パスは図面を一意に決めます
   （同じファイル名を別のフォルダに保存した 2 枚も見分けられる）。**無題の図面のパスは「アプリケーションの
   フォルダ＋名称未設定 N」**で、N はセッション全体の連番です（開いている間は重ならない。ファイルとしては
@@ -238,11 +250,14 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     同じファイルでも、保存したときの渡し方しだいで別の文字列になります。
 - **`save`** は対象の図面を保存します。種類は `app` です（図面の中身は変えず、ファイルに書く。
   [ブリッジ「道具の表」](bridge.md#道具の表)）。`to` を省くと、その図面自身のパスへ上書き保存します（無題の図面は
-  保存先が無いので `to` を要します。一時フォルダなどを指定する）。
+  保存先が無いので `to` を要します。一時フォルダなどを指定する。省くと `invalid_args`）。
   - **`to` を渡せるのは無題の図面だけです。** 保存済みの図面に `to` を渡すと `invalid_args` で断ります。
     別名保存は図面のパスを保存先へ移す（「名前を付けて保存」と同じ）ので、利用者の図面に許すと、利用者が
     あとで ⌘S を押したときに一時フォルダのファイルへ保存されてしまうためです。無題の図面は元のファイルが
-    無く、利用者の作業を移すことにならないので許します。結果の `path` は保存した後のパスです。
+    無く、利用者の作業を移すことにならないので許します。
+  - **結果の `path` は、保存のあとに `GetOpenFilesList` から読み直した文字列です**（`to` をそのまま返さない）。
+    Windows では `/` が `\` に揃って残るので、`to` をそのまま `close` の `document` に渡すと一致しません。読み直すのは、
+    保存の直後に前面になっている項目です（前面を戻す前に読む。`fileRef` が保存の前後で変わらないかには頼らない）。
   - **`to` に既にあるファイルを渡しても保存できません**（SDK が `GSError` 50331649 を返し、何も起きない。
     mac・Windows とも、どの形で渡しても）。図面自身のパスへの上書き保存（`to` を省く。下記）はこれに当たらず、
     次の確かめは `to` を渡したときだけ行います。**保存先が別の図面で開いているファイルなら、SDK が警告のダイアログを
@@ -260,6 +275,17 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     （開いている図面でなければダイアログは出ない）。Windows で 260 文字を超える保存先も、SDK が断るので `internal` に
     なります。どちらの `reason` も保存を呼ぶ前に返すことは、段 5 で無 SDK のテストで確かめます
     （[実装の順序](plan.md)の段 5）。
+  - **`SaveActiveDocumentPath` が 0 以外を返したら、`internal` で失敗し、`detail` に
+    `{"reason":"save_failed","gs_error":<値>}` を付けます。** `GSError` は SDK のエラーの番号（`Uint32`）で、値ごとの
+    意味は SDK に書かれていません（実測で出たのは 50331649＝`0x03000001` だけで、保存先が既にあるときも長すぎるときも
+    同じ値）。そのため理由を値で分けず、値をそのまま載せます。
+  - **利用者が開いた図面の上書き保存がダイアログを出す場面（古い版のファイル・読み取り専用のファイルなど）と、`to` の
+    拡張子・親のフォルダの扱いは確かめていません**（[SDK リファレンス #288](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/288)
+    で調べている）。結果を見て、呼ぶ前に断るものを決めます。
+  - **保存は、Vectorworks の取り消しの履歴に段を 1 つ積みます**（別名保存で確かめた。[Findings「Undo」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md)の
+    「別名保存は取り消しの段を 1 つ積む」）。保存そのものは取り消せず、ファイルは保存したまま残ります。利用者が `save` の
+    あとに取り消しを押すと 1 回目は何も戻らず、2 回目からそれまでの操作が戻ります。上書き保存でも積むかは
+    [#288](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/288) で調べています。
   - 内部では `GetOpenFilesList` からパスの一致する項目の `fileRef` を引き、`SwitchToOpenFile` →
     `SaveActiveDocumentPath` で保存します。**`to` を省いたときは、`GetOpenFilesList` が返した文字列をそのまま
     保存先に渡します**（Windows では、大文字と小文字だけが違うパスを渡すと自分のファイルが「既にある」として
@@ -279,11 +305,18 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   - **保存した直後の図面は、確認なしに閉じます。** 確認が出るのは、無題の図面（無変更でも）、
     `OpenDocumentPath` で開いただけの図面（何もしなくても。開いた時点で「変更あり」になる。同じパスへ
     `save` してから閉じれば出ない）、`MarkCurrentDocChanged()` した図面です。
-  - **確認が出ると、人が答えるまで呼び出しから戻りません。** その間の刻みの受け付けは入れ子になり、
-    要求を `busy` で断ります（[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。Windows では
-    `close` を呼んだタイマー自身も確認の最中に入り直しますが、これも入れ子として断られます（mac は入り直さない）。
+  - **確認が出ると、人が答えるまで呼び出しから戻りません。** その間の受け付けは OS で違います
+    （[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9・
+    [Findings「Documents」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)）。
+    - **Windows** では、`close` を呼んだタイマー自身が確認の最中に入り直します。その受け付けは入れ子になるので、
+      要求をすべて `busy` で断ります（[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
+    - **mac** では、タイマーは入り直しません（`CFRunLoopTimer` は自分の処理の最中に同じタイマーを呼ばない）。
+      このプラグインのタイマーは 1 本なので、確認の間は何も応えません（`ping` も）。要求はスプールに残り、
+      呼ぶ側は待つ上限を過ぎて終わります（[通信規則「生存の判定」](../protocol.md#生存の判定)）。
   - **戻り値（常に 0）では成否が分かりません。** 呼び出しの後に `GetOpenFilesList` を読み、対象の図面が
-    残っていれば（確認がキャンセルされた）`internal` で失敗します。
+    残っていれば `internal` で失敗し、`detail` に `{"reason":"not_closed"}` を付けます。残ったのが確認の取り消しの
+    ためかは SDK から読めないので（実測で残ったのは取り消したときだけ）、理由の綴りは「閉じなかった」にします。
+    確認で人が「保存しない」を選べば図面は閉じ、成功になります。
   - 閉じたあとに前面になるのは別の図面です。`close` の前の前面の図面が残っていれば、`SwitchToOpenFile` で
     戻します（前面を閉じたときは戻せない）。
 - **undo イベントの外で足された図形は「変更あり」にならず、`close` で確認なしに黙って捨てられます。**
