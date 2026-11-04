@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/launch"
 )
@@ -60,7 +61,12 @@ func (c *launchCmd) run(e *env) int {
 	}
 	argv, err := launch.Command(c.App)
 	if err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+		// 起動するものの指定（フラグと環境変数）は、それを定義するここで案内する。Windows では実行ファイルを指す。
+		what := "the application"
+		if runtime.GOOS == "windows" {
+			what = "Vectorworks2026.exe"
+		}
+		fmt.Fprintf(e.stderr, "vw2026: %v; point --app (VW2026_APP) to %s\n", err, what)
 		return exitFailure
 	}
 	if err := e.start(argv); err != nil {

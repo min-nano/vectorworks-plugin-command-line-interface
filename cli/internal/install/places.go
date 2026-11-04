@@ -1,8 +1,11 @@
 package install
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,11 +14,11 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// WorkDirName は、利用者ごとの一時フォルダの下の <Work> の名前の頭（docs/plugin/install-and-update.md
+// workDirName は、利用者ごとの一時フォルダの下の <Work> の名前の頭（docs/plugin/install-and-update.md
 // 「作業の場所」。WorkDirFor が <Plug-Ins> ごとの鍵を足す）。vw2026 だけが使うので、通信規則の見本には載せない。
-const WorkDirName = "vectorworks2026-cli"
+const workDirName = "vectorworks2026-cli"
 
-// WorkDir は <Work> の頭（利用者ごとの一時フォルダの下の WorkDirName。WorkDirFor に渡す）を返す。場所の根は環境変数を
+// WorkDir は <Work> の頭（利用者ごとの一時フォルダの下の workDirName。WorkDirFor に渡す）を返す。場所の根は環境変数を
 // 読まずに OS の決まった場所から求める（走らせ方で場所が変わると、前の回が残した old/ を次の回が見つけられなくなる
 // ため）。
 func WorkDir() (string, error) {
@@ -23,7 +26,7 @@ func WorkDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(temp, WorkDirName), nil
+	return filepath.Join(temp, workDirName), nil
 }
 
 // WorkDirFor は、<Plug-Ins> plugins の <Work>（頭 base に - と鍵を足した名前）を返す。<Work>/old/<name>/ を
@@ -105,11 +108,7 @@ func PluginsDirOf(executable string) (dir string, ok bool) {
 	if executable == "" {
 		return "", false
 	}
-	path := executable
-	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
-		path = resolved
-	}
-	bin := filepath.Dir(path)
+	bin := filepath.Dir(spool.ResolveLinks(executable))
 	cli := filepath.Dir(bin)
 	// 名前は、Windows では大文字と小文字を区別せず、ほかでは区別して比べる（install が作る名前は bin と cli。区別する
 	// ボリュームの CLI/bin を cli/bin と取り違えて、別のフォルダのロックと記録を見ない）。
@@ -117,13 +116,109 @@ func PluginsDirOf(executable string) (dir string, ok bool) {
 	if runtime.GOOS == "windows" {
 		same = strings.EqualFold
 	}
-	if !same(filepath.Base(bin), "bin") || !same(filepath.Base(cli), CLIName) {
+	if !same(filepath.Base(bin), "bin") || !same(filepath.Base(cli), cliName) {
 		return "", false
 	}
-	for _, mark := range []string{RecordFile, CLIName + ".vwlibrary", CLIName + ".vlb", spool.SpoolDirName} {
+	for _, mark := range []string{RecordFile, cliName + ".vwlibrary", cliName + ".vlb", spool.SpoolDirName} {
 		if _, err := os.Lstat(filepath.Join(cli, mark)); err == nil {
 			return filepath.Dir(cli), true
 		}
 	}
 	return "", false
+}
+
+// places は、Options の場所から決まるパス。
+type places struct {
+	plugins  string
+	dest     string
+	work     string
+	staging  string
+	stageDir string
+	stageZip string
+	old      string
+	oldDir   string
+	marker   string
+}
+
+func (o *Options) places(name string) (places, error) {
+	// 場所は絶対パスだけを受け付ける（今の作業ディレクトリから絶対にすると、それが分からないときに
+	// 相対パスのまま名前の変更や削除へ進みうる。消すコードの歯止めに関わるため、組み立てない）。
+	switch {
+	case o.PluginsDir == "" || o.WorkDir == "":
+		return places{}, errors.New("the folder of plug-ins or the work folder is unknown")
+	case !filepath.IsAbs(o.PluginsDir):
+		return places{}, Usagef("the folder of plug-ins %q is not an absolute path", o.PluginsDir)
+	case !filepath.IsAbs(o.WorkDir):
+		return places{}, fmt.Errorf("the work folder %q is not an absolute path", o.WorkDir)
+	}
+	plugins := filepath.Clean(o.PluginsDir)
+	work := filepath.Clean(o.WorkDir)
+	// 片方がもう片方の中にあれば（初回のスクリプトに <Work>/old を --plugins-dir として渡したなど）、片付けが
+	// 入れたばかりのプラグインを消し、付け替えが自分を動かすので断る（消すコードの歯止め。守ること 9）。
+	if overlap(plugins, work) {
+		return places{}, fmt.Errorf("the folder of plug-ins %s and the work folder %s overlap (one is in the other); "+
+			"nothing is changed", plugins, work)
+	}
+	staging := filepath.Join(work, "staging")
+	old := filepath.Join(work, "old")
+	return places{
+		plugins:  plugins,
+		dest:     filepath.Join(plugins, name),
+		work:     work,
+		staging:  staging,
+		stageDir: filepath.Join(staging, name),
+		stageZip: filepath.Join(staging, name+".zip"),
+		old:      old,
+		oldDir:   filepath.Join(old, name),
+		marker:   filepath.Join(old, name+".uninstalling"),
+	}, nil
+}
+
+// overlap は、a と b の片方がもう片方と同じか、その中か。書いたままのパスと、リンクを解いたパス（resolvedPath。それぞれ
+// 1 回だけ解く）の書き方と、ディレクトリの同一性（SameDirectory・within）で決める。書き方は、まだ無い場所も見つける
+// （リンクを通して <Work> の下を指す --plugins-dir も、解いた書き方で見つける）。同一性は、Windows で EvalSymlinks が
+// 解かないジャンクション・subst のドライブ・割り当てたドライブ・短い名前も見つける。親を順に調べる within は、ほかで
+// 決まらないときだけ走らせる。
+func overlap(a, b string) bool {
+	ra, rb := resolvedPath(a), resolvedPath(b)
+	return lexicallyIn(a, b) || lexicallyIn(b, a) || lexicallyIn(ra, rb) || lexicallyIn(rb, ra) ||
+		SameDirectory(a, b) || isWithin(a, b) || isWithin(b, a)
+}
+
+// isWithin は within の真偽だけ。
+func isWithin(path, dir string) bool {
+	_, inside := within(path, dir)
+	return inside
+}
+
+// SameDirectory は、a と b が同じディレクトリか（書き方ではなく同一性で決める。どちらかが無ければ偽）。
+func SameDirectory(a, b string) bool {
+	x, errX := os.Stat(a)
+	y, errY := os.Stat(b)
+	return errX == nil && errY == nil && os.SameFile(x, y)
+}
+
+// lexicallyIn は、書き方で path が dir と同じか、その中か。大文字と小文字を区別しないのが既定の OS（mac・Windows）
+// だけ、その違いを除いて比べる（区別するボリュームの、大文字と小文字だけが違う別のフォルダを重ねない。区別しない
+// 名前の別の書き方は、あれば同一性の確かめでも見つける）。
+func lexicallyIn(path, dir string) bool {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		path, dir = strings.ToLower(path), strings.ToLower(dir)
+	}
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// resolvedPath は、path のリンクを解いた書き方。まだ無ければ、あるところまでの親を解き、残りをそのまま足す（根まで
+// 解けなければ、書いたまま）。まだ無いかもしれない場所に使う。実在する実行ファイルは spool.ResolveLinks で解く。
+func resolvedPath(path string) string {
+	for current, rest := path, ""; ; {
+		real, err := filepath.EvalSymlinks(current)
+		parent := filepath.Dir(current)
+		if err == nil || parent == current {
+			return filepath.Join(cmp.Or(real, current), rest)
+		}
+		rest = filepath.Join(filepath.Base(current), rest)
+		current = parent
+	}
 }

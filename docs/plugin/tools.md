@@ -8,14 +8,25 @@
 引数は、省略できるものに既定値を設けます（表の「既定」）。知らない引数と、知っている引数の
 未知の値（型の違い・決まった綴り以外の値）は `invalid_args` で返します（[通信規則「互換性」](../protocol.md#互換性)）。
 
+**道具が返す失敗の `invalid_args` と `internal` は、次のように分けます**（[通信規則「応答」](../protocol.md#応答idresjson)）。
+
+- **`invalid_args`** は、引数そのものが誤っているとき: 知らない引数・型や値の誤り・必須の欠け、引数が名指すもの
+  （`document` の図面・`layer` のレイヤ）が実在しない、道具の規則に反する組み合わせ（保存済みの図面への `save` の `to`）。
+- **`internal`** は、引数は正しく、名指すものも実在するが、それ以外の状態のために実行できないとき: 図面が無い
+  （`no_document`）・図面が開いている（`quit` の `documents_open`）・保存先が埋まっている（`save` の `to_is_open`・
+  `file_exists`。`to` は新しく作るファイルを名指すので、既にあることは状態に当たる）・保存の確認が取り消された・
+  SDK の失敗・道具の中の例外。
+
+呼ぶ側が理由で分岐するときは、`code` ではなく `detail` の `reason` を見ます（`reason` を返す失敗だけ）。
+
 | 道具 | 種類 | 引数 | 結果 |
 | --- | --- | --- | --- |
 | `tools` | （予約） | なし | [ブリッジ「道具の表」](bridge.md#道具の表) |
 | `ping` | read | なし | 下記 |
-| `layers` | read | `include_sheets`（既定 true） | `{"layers":[{"name","kind":"design"\|"sheet","scale","objects","current"}],"count"}` |
-| `classes` | read | なし | `{"classes":[名前…],"count"}` |
-| `layer_objects` | read | `layer`（必須）・`limit`（既定 50）・`offset`（既定 0）・`type`（省略＝すべての種別） | `{"layer","objects":[{"index","type","type_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}` |
-| `object_counts` | read | `layer`（省略＝図面全体） | `{"layer"?,"types":[{"type","type_name","count"}],"total"}`（種別番号の昇順） |
+| `layers` | read | `include_sheets`（既定 true） | `{"layers":[{"name","kind":"design"\|"sheet","referenced","scale","objects","current"}],"count"}`（[読む道具](#読む道具layersclasseslayer_objectsobject_counts)） |
+| `classes` | read | なし | `{"classes":[名前…],"count"}`（同上） |
+| `layer_objects` | read | `layer`（必須）・`limit`（既定 50）・`offset`（既定 0）・`type`（種別の番号。省略＝すべての種別） | `{"layer","unit":"mm","objects":[{"index","type","type_name","pio_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}`（同上） |
+| `object_counts` | read | `layer`（省略＝図面全体） | `{"layer"?,"types":[{"type","type_name","count"}],"total"}`（種別番号の昇順。同上） |
 | `documents` | read | なし | [図面を扱う道具](#図面を扱う道具documentssaveclose) |
 | `save` | app | `document`（必須）・`to`（省略可） | 同上 |
 | `close` | app | `document`（必須） | 同上 |
@@ -47,6 +58,114 @@
 ```
 
 例の `protocol` は書いた時点の版です（[通信規則「版」](../protocol.md#版)）。
+
+## 読む道具（`layers`・`classes`・`layer_objects`・`object_counts`）
+
+図面を読むだけの道具です（[実装の順序](plan.md)の段 5）。使う SDK 呼び出しと挙動は SDK リファレンスで
+確かめてあります（[SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)）。どれも前面の図面
+（アクティブな図面）を読みます。
+
+**共通の決めごと:**
+
+- **図面が開かれていなければ `internal` で失敗し、`detail` に `{"reason":"no_document"}` を付けます。**
+  SDK は図面が無くても落ちずに空の列を返します（[Findings「Layers and Stories」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)の「OS タイマーの刻みの中・図面 0 枚」・
+  [Findings「Attributes and Classes」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Attributes%20and%20Classes.md)の「タイマーの刻みから呼べる。図面 0 枚でも落ちない」）が、
+  空の結果（`object_counts` の `total:0` など）を「中身の無い図面」と見分けられなくなるので、失敗にします。
+  `documents` は失敗にせず、空の一覧を返します。`ping` は `current_layer` を `null` にします（[`ping`](#ping)）。
+- **`layer` はレイヤの名前で、`layers` の `name` と完全に一致するものを探します**（参照で入ってきたレイヤは
+  `NNA#1_<元の名前>` の形のまま渡す）。一致しなければ `invalid_args` で断ります。図面が無いときは、`layer` を
+  確かめる前に `no_document` で失敗します。
+- **並び順は SDK の列の順で、背面→前面です**（`layers` も `layer_objects` も同じ向き）。画面の並びに
+  合わせて並べ替えることはしません（呼ぶ側が並べ替える）。
+
+### `layers`
+
+`GetDrawingHeader()` → `FirstMemberObj` → `NextObject` の列を、型が `kLayerNode`（31）のものだけに絞って返します
+（列の末尾に、レイヤではない型 0 のものが 1 つ居る。[Findings「Layers and Stories」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)の
+「レイヤを列挙する」）。
+
+| フィールド | 値 |
+| --- | --- |
+| `name` | レイヤの名前（`GetObjectName`）。参照で入ってきたレイヤは `NNA#1_<元の名前>` |
+| `kind` | `design`（`ovLayerType` が 1 か 3）・`sheet`（2）。それ以外の値（Findings で確かめていない種類）は `null` |
+| `referenced` | 参照で入ってきたデザインレイヤか（`ovLayerType` が 3） |
+| `scale` | 縮尺の分母（`GetLayerScaleN`。1/50 なら `50`、1:1 なら `1`）。**シートレイヤは SDK の返すとおり常に `1`** |
+| `objects` | レイヤの直下の図形の数（下記「数え方」） |
+| `current` | 現在のレイヤか（`GetCurrentLayer()` とハンドルが一致するか） |
+
+- **並びは作った順で、デザインレイヤとシートレイヤが入り混じります。** オーガナイザはデザインレイヤだけを
+  この逆の順（`#` の 1 が最前面）に見せ、シートレイヤはこの順のまま見せます
+  （[Findings「Layers and Stories」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)の「順序」）。
+- `include_sheets` が偽なら、`kind` が `sheet` のものを除きます（`kind` が `null` のものは除かない）。
+- **`kind` が `null` のレイヤも除かずに返し**、`objects` も数えます。`object_counts` の図面全体の和と食い違わない
+  ようにするためです。
+- **参照で入ってきたレイヤも返します**（`referenced` が真）。その直下には図形が見えないので、`objects` は 0 に
+  なります。
+
+### `classes`
+
+`ForEachClass(false, …)` で、前面の図面のクラスの名前を返します（[Findings「Attributes and Classes」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Attributes%20and%20Classes.md)の
+「クラスの一覧は `ForEachClass` で列挙する」）。
+
+- **参照している図面のクラス（`NNA#<n>_…`）は含めません**（`doGuestClasses` は偽）。オーガナイザと同じ顔ぶれです。
+- **並びはクラスの ID の順（作った順）です。** オーガナイザは名前の順に見せますが、その並べ方を真似ずに、
+  呼ぶ側が並べ替えます。
+- 階層の名前（`-` 区切り）は 1 つのクラスの名前のまま返します（親のクラスは実在しない）。
+
+### `layer_objects`・`object_counts`
+
+**数え方:** レイヤの**直下**の図形を数えます。グループ・シンボル・PIO・壁などは中身を数えずに 1 つです。
+`FirstMemberObj` → `NextObject` で辿り、終端（型 0）と undo の置き石（型 90。並べ替え・消去・取り消しで増え、
+保存しても消えないものがある）を除きます。これが情報パレットの「すべてを選択」の「N 図形」と一致します
+（オーガナイザに数の列は無い。[Findings「Layer Objects」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md)の「まとめ」・2・3）。
+グループの中へ降りる指定は持ちません。
+
+- **`object_counts` の図面全体は、`layers`（`include_sheets` が真）が返すすべてのレイヤの直下の数の和です。**
+  シートレイヤ（ビューポートなど）を含み、シンボルの定義（どのレイヤにも属さない）は含みません。
+- **`index`** は、`layer_objects` が返す並び（背面→前面。型 0 と 90 を除く）の中の 0 からの位置です。
+  `offset` もこの位置で数えます。消去・取り消し・並べ替えで変わるので、図形の識別子には使えません。
+- **`type`** は `GetObjectTypeN` の番号です（引数の `type` も番号）。**`type_name`** は、番号から名前を引く口が
+  SDK に無いので（[Findings「Layer Objects」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md)の 5）、
+  プラグインが自分の表（下記）で引きます。表に無い番号は `null` です。
+- **`type_name` の表。** 綴りはこの表が真実です。レイヤの直下か図形の中に出ることを Findings で確かめた種別だけを
+  載せます（[Findings「Layer Objects」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md)の 5。番号と定数は `Objs.TDType.h`）。
+  見本で出たシンボル定義（16）は、どのレイヤにも属さず `layer_objects` に出ないので載せません。綴りは定数の
+  名前から先頭の `k` と末尾の `Node` を除いて作りましたが、決めるのは規則ではなくこの表です。**載せた綴りは
+  変えません。** 表に行を足す（`null` だった番号に名前を付ける）のは互換の変更として行えるので、呼ぶ側は `null` を
+  扱います。
+
+  | `type` | 定数 | `type_name` |
+  | --- | --- | --- |
+  | 2 | `kLineNode` | `line` |
+  | 3 | `kBoxNode` | `box` |
+  | 4 | `kOvalNode` | `oval` |
+  | 5 | `kPolygonNode` | `polygon` |
+  | 6 | `kArcNode` | `arc` |
+  | 10 | `kTextNode` | `text` |
+  | 11 | `kGroupNode` | `group` |
+  | 15 | `kSymbolNode` | `symbol` |
+  | 17 | `kLocusNode` | `locus` |
+  | 21 | `kPolylineNode` | `polyline` |
+  | 24 | `kExtrudeNode` | `extrude` |
+  | 68 | `kWallNode` | `wall` |
+  | 84 | `kCSGTreeNode` | `csg_tree` |
+  | 86 | `kParametricNode` | `parametric` |
+  | 122 | `kViewportNode` | `viewport` |
+
+- **`pio_name`** は PIO（`type` が 86）の名前（`VWParametricObj::GetParametricName()`。`Door` など）で、PIO で
+  なければ `null` です。
+- **`name`** は `GetObjectName` のままで、名前の無い図形は空文字列（`""`）です（Vectorworks でも空の名前と
+  区別が無い）。**`class`** はクラスの名前（`GetObjectClass` → `ClassIDToName`）です。
+- **`bounds`** は `GetObjectBounds` の外形で、**単位は常に mm**です。結果の **`unit`** は常に `"mm"` で、
+  単位の取り違えを防ぐために置きます。値は図面の単位にもレイヤの縮尺にもよらない世界座標です。外形が取れない
+  図形は `null` です。
+  - **`left ≤ right`・`bottom ≤ top` です。** `left`・`right` は X の小さい側と大きい側、`bottom`・`top` は Y の
+    小さい側と大きい側で、プラグインが SDK の外形から最小と最大をとって入れます（画面の座標のように Y が下向きに
+    増えるとは読まない）。
+  - 回した図形は外接矩形、3D の図形は平面の外接矩形です。
+  - 文字の大きさは、作ったときのレイヤの縮尺で決まります（1:50 のレイヤで作った文字は 50 倍。
+    [Findings「Layer Objects」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md)の 6）。
+  - シートレイヤの図形（ビューポートなど）は紙の上の mm です。
 
 ## `quit`
 
@@ -85,7 +204,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
   `no_session`、ほかが占有していれば `occupied` で断られる）。Vectorworks が終われば占有も消えます。
 - **終了の依頼の最中は断られます**（`busy`。[通信規則「Vectorworks が処理中」](../protocol.md#vectorworks-が処理中)）。
   上の競合で保存の確認が開いている間に届いた 2 つ目の `quit` も `busy` で断られるので、終了の依頼は重なりません
-  （この判定を残すかは段 6 の前に決める。[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
+  （この判定は残す。段 6 の前に、入れ子の判定にまとめるかを決める。[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
 - **再起動の手段は持ちません**（第 2 引数は常に偽）。起動し直すのは呼ぶ側で、`session start` で占有を
   取ってから `quit`（`--session` を付ける）・止まるのを待つ・`launch`・動き出すのを待つ、を組み合わせます（更新を
   挟む形を含めて[インストール「流れ」](install-and-update.md#流れ)）。
@@ -96,7 +215,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 
 `quit` の前に図面を保存して閉じるための道具です（[実装の順序](plan.md)の段 5）。使う SDK 呼び出しは SDK
 リファレンスで確かめてあります（[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)。
-VW 2026 / macOS。Windows は未測定）。**変更を捨てて閉じる道具は持ちません**（人の変更を黙って捨てる手段を
+VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比べ方。[同「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・[SDK リファレンス #283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。**変更を捨てて閉じる道具は持ちません**（人の変更を黙って捨てる手段を
 作らない）。保存は呼ぶ側の責任で、保存してから閉じれば保存の確認は出ません。必要のない図面は、一時フォルダなどへ
 保存してから閉じ、ファイルは利用者が自分で消します。
 
@@ -114,6 +233,9 @@ VW 2026 / macOS。Windows は未測定）。**変更を捨てて閉じる道具�
   フォルダ＋名称未設定 N」**で、N はセッション全体の連番です（開いている間は重ならない。ファイルとしては
   存在しない）。`untitled` が真なら一度も保存していない図面です。開いている図面に一致しなければ
   `invalid_args` で断ります。
+  - **`path` は正規化しません。** SDK が返した文字列をそのまま返します。Windows では、保存したときに渡された
+    文字列がそのまま残り、区切りだけが `\` に揃います（ドライブ文字の大小・名前の大小・8.3 の短い名前は直らない）。
+    同じファイルでも、保存したときの渡し方しだいで別の文字列になります。
 - **`save`** は対象の図面を保存します。種類は `app` です（図面の中身は変えず、ファイルに書く。
   [ブリッジ「道具の表」](bridge.md#道具の表)）。`to` を省くと、その図面自身のパスへ上書き保存します（無題の図面は
   保存先が無いので `to` を要します。一時フォルダなどを指定する）。
@@ -121,20 +243,36 @@ VW 2026 / macOS。Windows は未測定）。**変更を捨てて閉じる道具�
     別名保存は図面のパスを保存先へ移す（「名前を付けて保存」と同じ）ので、利用者の図面に許すと、利用者が
     あとで ⌘S を押したときに一時フォルダのファイルへ保存されてしまうためです。無題の図面は元のファイルが
     無く、利用者の作業を移すことにならないので許します。結果の `path` は保存した後のパスです。
-  - **保存先が既にあるファイルへは保存できません**（SDK が `GSError` 50331649 を返し、何も起きない）。
-    **保存先が別の図面で開いているファイルなら、SDK が警告のダイアログを出して人が OK を押すまで戻りません。**
-    そこで **`to` が開いている図面のパスと一致するときは、呼ぶ前に `invalid_args` で断ります**。保存先が
-    開いていない既存ファイルのときは、SDK のエラーを `internal` で返します。上書きしたければ、呼ぶ側が先に
-    ファイルを消します。**呼ぶ側が機械的に見分けられるよう、失敗の `detail` に `reason` を付けます:**
-    `to_is_open`（保存先が開いている図面。`invalid_args`）・`file_exists`（保存先が既にある。`internal`）。
+  - **`to` に既にあるファイルを渡しても保存できません**（SDK が `GSError` 50331649 を返し、何も起きない。
+    mac・Windows とも、どの形で渡しても）。図面自身のパスへの上書き保存（`to` を省く。下記）はこれに当たらず、
+    次の確かめは `to` を渡したときだけ行います。**保存先が別の図面で開いているファイルなら、SDK が警告のダイアログを
+    出して人が OK を押すまで戻りません**（Windows では、開いている図面のパスと文字列が完全に一致するときだけ出る）。
+    そこで、呼ぶ前に次の順に確かめて `internal` で断ります。
+    1. `to` が開いている図面のパスと一致する（比べ方は下記「パスの一致の判定」）。保存先が開いている図面だと
+       示すため（`to_is_open`）、先に確かめます。
+    2. `to` がディスクにある（ファイルシステムに聞く）。大文字と小文字・8.3 の短い名前・区切り文字の違いは
+       ファイルシステムが吸収するので、文字列の比べ方に依らずに防げます。
+
+    上書きしたければ、呼ぶ側が先にファイルを消します。**呼ぶ側が機械的に見分けられるよう、失敗の `detail` に
+    `reason` を付けます:** `to_is_open`（保存先が開いている図面）・`file_exists`（保存先が既にある）。どちらも
+    `internal` です（`invalid_args` と `internal` の分け方は[冒頭](#最初に提供する道具)）。
+    確かめてから保存するまでの間にファイルができた場合は、SDK のエラーを `internal` で返します
+    （開いている図面でなければダイアログは出ない）。Windows で 260 文字を超える保存先も、SDK が断るので `internal` に
+    なります。どちらの `reason` も保存を呼ぶ前に返すことは、段 5 で無 SDK のテストで確かめます
+    （[実装の順序](plan.md)の段 5）。
   - 内部では `GetOpenFilesList` からパスの一致する項目の `fileRef` を引き、`SwitchToOpenFile` →
-    `SaveActiveDocumentPath` で保存します。**前面の図面とカレントレイヤは、保存の前後で元に戻せます**
+    `SaveActiveDocumentPath` で保存します。**`to` を省いたときは、`GetOpenFilesList` が返した文字列をそのまま
+    保存先に渡します**（Windows では、大文字と小文字だけが違うパスを渡すと自分のファイルが「既にある」として
+    断られ、上書き保存にならない）。**前面の図面とカレントレイヤは、保存の前後で元に戻せます**
     （戻すのも `SwitchToOpenFile`）。
 - **パスの一致の判定。** `document` は `documents` が返した文字列と**完全に一致**するものを探します（呼ぶ側は
   `documents` の結果をそのまま渡す）。`to` は新しいパスで、開いている図面の保存先との衝突を**見逃さない側**に倒して
   比べます: 絶対パスを要し（相対パスは `invalid_args`）、区切り文字を揃え、Unicode を正規化（NFC。macOS のファイル名は
   NFD で返ることがある）し、**大文字と小文字を区別せず**に比べます。大文字と小文字だけが違う別のファイルも断る
-  ことになりますが、警告のダイアログが出るより安全です。
+  ことになりますが、警告のダイアログが出るより安全です（ダイアログが出るのは文字列が完全に一致するときだけなので、
+  緩く比べて断れば必ずその手前で止まる）。ディスクにあるファイルはこの比べ方によらず 2 つ目の確かめで断るので、
+  この比べ方は、開いている図面との衝突を `to_is_open` として示すためのものです（8.3 の短い名前と長い名前の違いは
+  ここでは見分けず、`file_exists` で断る）。
 - **`close`** は対象の図面を閉じます。**保存はしません。** 種類は `app` です。
   対象の図面を `SwitchToOpenFile` で前面にしてから `DoMenuName("Close", 0)` を呼びます（メニューの「閉じる」と
   同じで、前面の図面に効く。`CloseDocument()` は確認なしで変更を捨てるので使いません）。
@@ -142,7 +280,8 @@ VW 2026 / macOS。Windows は未測定）。**変更を捨てて閉じる道具�
     `OpenDocumentPath` で開いただけの図面（何もしなくても。開いた時点で「変更あり」になる。同じパスへ
     `save` してから閉じれば出ない）、`MarkCurrentDocChanged()` した図面です。
   - **確認が出ると、人が答えるまで呼び出しから戻りません。** その間の刻みの受け付けは入れ子になり、
-    要求を `busy` で断ります（[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
+    要求を `busy` で断ります（[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。Windows では
+    `close` を呼んだタイマー自身も確認の最中に入り直しますが、これも入れ子として断られます（mac は入り直さない）。
   - **戻り値（常に 0）では成否が分かりません。** 呼び出しの後に `GetOpenFilesList` を読み、対象の図面が
     残っていれば（確認がキャンセルされた）`internal` で失敗します。
   - 閉じたあとに前面になるのは別の図面です。`close` の前の前面の図面が残っていれば、`SwitchToOpenFile` で

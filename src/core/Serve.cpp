@@ -34,6 +34,15 @@ Json staleSession() {
 	               "Vectorworks を起動し直しました）");
 }
 
+// occupied は、ほかの呼ぶ側が占有しているときの応答。
+Json occupied() { return failure(protocol::kCodeOccupied, "ほかの呼ぶ側が占有しています"); }
+
+// toolDefect は、道具の定義か返した値が通信規則に合わないときの文言
+// （道具の不具合。internal で応える）。
+std::string toolDefect(std::string_view name, std::string_view what) {
+	return "道具 " + std::string(name) + " の " + std::string(what);
+}
+
 struct Request {
 	std::string tool;
 	Json args;
@@ -111,16 +120,75 @@ std::optional<Json> toolsList(std::span<const Tool> tools, std::string &reason) 
 	for (const Tool &tool : tools) {
 		std::optional<Json> schema = Json::parse(tool.inputSchema, protocol::kMaxNestingDepth);
 		if (!schema) {
-			reason = std::string("道具 ") + tool.name + " の inputSchema が JSON として読めません";
+			reason = toolDefect(tool.name, "inputSchema が JSON として読めません");
 			return std::nullopt;
 		}
-		list.push(Json::object({{"name", Json::string(tool.name)},
+		list.push(Json::object({{"name", Json::string(std::string(tool.name))},
 		                        {"description", Json::string(tool.description)},
 		                        {"inputSchema", std::move(*schema)},
 		                        {"kind", Json::string(std::string(kindName(tool.kind)))}}));
 	}
 	return Json::object(
 	    {{"protocol", Json::integer(protocol::kVersion)}, {"tools", std::move(list)}});
+}
+
+// refuseOutsideSession は、占有の中でだけ呼べる要求（session_end・種類 Write と App）を、いまの占有
+// current に照らす（通信規則「占有」の表）。断るなら応答を返す。
+std::optional<Json> refuseOutsideSession(const std::string &current, const Request &request) {
+	if (current.empty()) {
+		if (!request.session.empty()) {
+			return staleSession();
+		}
+		return failure(protocol::kCodeNoSession, request.tool + " は占有の中でだけ呼べます");
+	}
+	if (request.session != current) {
+		return occupied();
+	}
+	return std::nullopt;
+}
+
+// ToolReply は道具を実行した結果。応答と、終了の依頼（道具が成功して立てたときだけ真）。
+struct ToolReply {
+	Json response;
+	bool quit = false;
+};
+
+// runTool は道具を実行して応答を返す（通信規則「応答」）。道具 1 つの失敗で橋を止めないよう、
+// 例外はここで受ける。
+ToolReply runTool(const Tool &tool, const Json &args, const ToolContext &context) {
+	ToolStatus status;
+	Json result;
+	try {
+		result = tool.run(args, context, status);
+	} catch (const std::exception &exception) {
+		return {failure(protocol::kCodeInternal,
+		                std::string("道具の中で例外が起きました: ") + exception.what())};
+	} catch (...) {
+		return {failure(protocol::kCodeInternal, "道具の中で例外が起きました")};
+	}
+	// 終了の依頼は、道具が成功したときだけ出す（失敗した quit は終了を頼まない）。
+	// 種類では決めない。
+	if (status.code != ErrorCode::None) {
+		// detail は JSON のオブジェクト（通信規則「応答」）。オブジェクトでない値は
+		// 道具の不具合として internal で応え、detail を付けない。
+		if (!status.detail.isNull() && !status.detail.isObject()) {
+			return {failure(protocol::kCodeInternal,
+			                toolDefect(tool.name, "detail がオブジェクトではありません"))};
+		}
+		std::string_view code = status.code == ErrorCode::InvalidArgs ? protocol::kCodeInvalidArgs
+		                                                              : protocol::kCodeInternal;
+		return {failure(code, std::move(status.message), std::move(status.detail))};
+	}
+	// result は必ずオブジェクト（通信規則「応答」）。値を返さない道具は {} にする。
+	// オブジェクトでない値は道具の不具合として internal で応え、失敗なので終了を頼まない（失敗の
+	// 終了コードを受け取った呼ぶ側が、終了していく Vectorworks に向かって動かないように）。
+	if (result.isNull()) {
+		result = Json::object();
+	} else if (!result.isObject()) {
+		return {failure(protocol::kCodeInternal,
+		                toolDefect(tool.name, "結果がオブジェクトではありません"))};
+	}
+	return {success(std::move(result)), status.quit};
 }
 
 }
@@ -261,21 +329,6 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		return respond(failure(protocol::kCodeInvalidRequest, reason));
 	}
 
-	// 占有の中でだけ呼べる要求（session_end・種類 Write と App）を占有に照らす（通信規則「占有」の
-	// 表）。断るなら応答を返す。
-	auto checkSession = [&]() -> std::optional<Json> {
-		if (session_.empty()) {
-			if (!request->session.empty()) {
-				return staleSession();
-			}
-			return failure(protocol::kCodeNoSession, request->tool + " は占有の中でだけ呼べます");
-		}
-		if (request->session != session_) {
-			return failure(protocol::kCodeOccupied, "ほかの呼ぶ側が占有しています");
-		}
-		return std::nullopt;
-	};
-
 	const std::string &name = request->tool;
 	if (name == protocol::kToolTools) {
 		std::optional<Json> list = toolsList(tools, reason);
@@ -286,7 +339,7 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 	}
 	if (name == protocol::kToolSessionStart) {
 		if (!session_.empty()) {
-			return respond(failure(protocol::kCodeOccupied, "ほかの呼ぶ側が占有しています"));
+			return respond(occupied());
 		}
 		if (!request->session.empty()) {
 			return respond(staleSession());
@@ -297,7 +350,7 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		return outcome;
 	}
 	if (name == protocol::kToolSessionEnd) {
-		if (std::optional<Json> refusal = checkSession()) {
+		if (std::optional<Json> refusal = refuseOutsideSession(session_, *request)) {
 			return respond(*refusal);
 		}
 		Outcome outcome = respond(success(Json::object({{"ended", Json::boolean(true)}})));
@@ -312,7 +365,7 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		return respond(failure(protocol::kCodeUnknownTool, "知らない道具です: " + name));
 	}
 	if (tool->kind != ToolKind::Read) {
-		if (std::optional<Json> refusal = checkSession()) {
+		if (std::optional<Json> refusal = refuseOutsideSession(session_, *request)) {
 			return respond(*refusal);
 		}
 		if (activity == Activity::Quitting) {
@@ -321,43 +374,10 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		}
 	}
 
-	// 道具 1 つの失敗で橋を止めない。例外はここで受ける。
-	ToolStatus status;
-	Json result;
-	try {
-		result = tool->run(request->args, ToolContext{inSession()}, status);
-	} catch (const std::exception &exception) {
-		return respond(failure(protocol::kCodeInternal,
-		                       std::string("道具の中で例外が起きました: ") + exception.what()));
-	} catch (...) {
-		return respond(failure(protocol::kCodeInternal, "道具の中で例外が起きました"));
-	}
-	// 終了の依頼は、道具が成功したときだけ出す（失敗した quit は終了を頼まない）。
-	// 種類では決めない。
-	if (status.code != ErrorCode::None) {
-		// detail は JSON のオブジェクト（通信規則「応答」）。オブジェクトでない値は
-		// 道具の不具合として internal で応え、detail を付けない。
-		if (!status.detail.isNull() && !status.detail.isObject()) {
-			return respond(
-			    failure(protocol::kCodeInternal,
-				        std::string("道具 ") + name + " の detail がオブジェクトではありません"));
-		}
-		std::string_view code = status.code == ErrorCode::InvalidArgs ? protocol::kCodeInvalidArgs
-		                                                              : protocol::kCodeInternal;
-		return respond(failure(code, std::move(status.message), std::move(status.detail)));
-	}
-	// result は必ずオブジェクト（通信規則「応答」）。値を返さない道具は {} にする。
-	// オブジェクトでない値は道具の不具合として internal で応え、失敗なので終了を頼まない（失敗の
-	// 終了コードを受け取った呼ぶ側が、終了していく Vectorworks に向かって動かないように）。
-	if (result.isNull()) {
-		result = Json::object();
-	} else if (!result.isObject()) {
-		return respond(failure(protocol::kCodeInternal, std::string("道具 ") + name +
-		                                                    " の結果がオブジェクトではありません"));
-	}
+	ToolReply reply = runTool(*tool, request->args, ToolContext{inSession()});
 	// 道具はもう実行したので、ここで投げると、実行した要求に internal で応えることになる（避け
 	// られない。応答を書き出すための確保だけが残る）。
-	return respond(success(std::move(result)), status.quit);
+	return respond(reply.response, reply.quit);
 }
 
 }

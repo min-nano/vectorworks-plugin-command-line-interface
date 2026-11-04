@@ -84,6 +84,24 @@ DWORD setForeignReparsePoint(const std::filesystem::path &path) {
 
 }
 
+// join は区切りを 1 つだけ足す（dir が区切りで終わっていれば足さず、空なら name だけ）。
+// Windows は \ と / のどちらも区切りとみなし、足すのは \。
+TEST(FilesJoinAddsOneSeparator) {
+	CHECK(files::isSeparator('/'));
+	CHECK(!files::isSeparator('a'));
+	CHECK_EQ(files::join("", "b"), std::string("b"));
+	CHECK_EQ(files::join("/a/", "b"), std::string("/a/b"));
+#ifdef _WIN32
+	CHECK(files::isSeparator('\\'));
+	CHECK_EQ(files::join("C:\\a", "b"), std::string("C:\\a\\b"));
+	CHECK_EQ(files::join("C:\\a\\", "b"), std::string("C:\\a\\b"));
+#else
+	CHECK(!files::isSeparator('\\'));
+	CHECK_EQ(files::join("/a", "b"), std::string("/a/b"));
+	CHECK_EQ(files::join("/a\\", "b"), std::string("/a\\/b"));
+#endif
+}
+
 TEST(BridgePrepareCreatesMissingParents) {
 	TempDir dir;
 	Bridge bridge(dir.sub("a/b/spool"));
@@ -389,6 +407,31 @@ TEST(BridgeRejectsReparsePointsThatAreNotLinks) {
 	CHECK(lock.take(lockPath, error) == files::Lock::Result::Failed);
 	CHECK(error.find("通常のファイルではありません") != std::string::npos);
 	cleanUp();
+}
+
+// UNC のパス（\\server\share\…）は \\?\UNC\ を付けて開き、
+// share の後ろから区切りごとに作る。管理用の共有 \\localhost\C$ など
+// （一時ディレクトリのドライブ）を通して、一時ディレクトリの下に作る。
+// 共有を使えなければ飛ばしたことを出力に残し、CI（runner は使える）では
+// 失敗にする。
+TEST(FilesMakeDirectoriesOnUncPathOnWindows) {
+	TempDir dir;
+	std::wstring local = dir.path().wstring();
+	REQUIRE(local.size() > 3 && local[1] == L':' && local[2] == L'\\');
+	std::filesystem::path unc =
+	    L"\\\\localhost\\" + std::wstring(1, local[0]) + L"$" + local.substr(2);
+	std::error_code ec;
+	if (!std::filesystem::is_directory(unc, ec)) {
+		REQUIRE(!inCi());
+		std::fprintf(stderr, "skip FilesMakeDirectoriesOnUncPathOnWindows: %s\n",
+		             VwCli::test::utf8(unc).c_str());
+		return;
+	}
+	std::string error;
+	CHECK(files::makeDirectories(VwCli::test::utf8(unc / "a" / "b"), error));
+	CHECK(std::filesystem::is_directory(dir.path() / "a" / "b"));
+	// 既にあれば何もしない。
+	CHECK(files::makeDirectories(VwCli::test::utf8(unc / "a" / "b"), error));
 }
 
 // 絶対パスでないパスは開かない（\\?\ を付けられず、予約された名前がデバイスを指すため）。

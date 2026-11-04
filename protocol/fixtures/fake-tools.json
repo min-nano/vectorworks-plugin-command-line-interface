@@ -62,7 +62,7 @@
 			"inputSchema": {"type": "object"},
 			"kind": "read",
 			"does": "invalid_args",
-			"detail": {"reason": "to_is_open"}
+			"detail": {"reason": "example"}
 		},
 		{
 			"name": "empty_detail",

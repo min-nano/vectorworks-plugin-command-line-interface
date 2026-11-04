@@ -130,7 +130,7 @@
 					},
 					"unknown": {"ok": false, "code": "unknown_tool"},
 					"bad-args": {"ok": false, "code": "invalid_args"},
-					"bad-args-detail": {"ok": false, "code": "invalid_args", "detail": {"reason": "to_is_open"}},
+					"bad-args-detail": {"ok": false, "code": "invalid_args", "detail": {"reason": "example"}},
 					"broken": {"ok": false, "code": "internal"},
 					"empty-detail": {"ok": true, "result": {}},
 					"throws": {"ok": false, "code": "internal"},

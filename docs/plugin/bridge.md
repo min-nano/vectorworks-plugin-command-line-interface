@@ -28,7 +28,7 @@
 - 場所は `<Plug-Ins>/cli/spool`（[通信規則「スプールの場所」](../protocol.md#スプールの場所)）。
   自分のモジュールの場所から求め（`files::modulePathOf` に自分の静的なデータの番地を渡して得たパスを `spoolDirOf` に渡す）、環境変数は
   読まず、**探索しません**。求められなければ、次の刻みでやり直します（`Clock` の `tick`）。
-- `prepare`: 無ければ 0700 で作る（親も無ければ作る）。持ち主と権限は確かめない。失敗したら
+- `prepare`: 無ければ 0700 で作る（親も無ければ作る。Windows は親のフォルダの権限を受け継ぐ）。持ち主と権限は確かめない。失敗したら
   次の回にやり直す（理由は受け付けの結果に載せる）。
 - `lock`: `bridge.lock` を掴む（POSIX は `flock(LOCK_EX|LOCK_NB)`、Windows は共有なしで開く。
   [通信規則「ロック」](../protocol.md#ロックbridgelock)）。取れたら終了まで放さない。POSIX は
@@ -163,8 +163,8 @@ struct ToolContext {
 using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolStatus &status);
 
 struct Tool {
-	// [a-z0-9_]+(\.[a-z0-9_]+)*
-	const char *name;
+	// [a-z0-9_]+(\.[a-z0-9_]+)*（通信規則の綴りの std::string_view をそのまま使える）
+	std::string_view name;
 	// 日本語。呼ぶ側がそのまま読む。
 	const char *description;
 	// JSON Schema（文字列）。tools の結果にそのまま載る。
@@ -176,8 +176,9 @@ struct Tool {
 
 - **道具を足すときに触るのは表の 1 行と中身 1 つだけ**です。CLI は道具を知らないので直しません。
 - `tools` の結果は `{"protocol":6,"tools":[{"name","description","inputSchema","kind"}]}`。
-  `kind` は `read` / `write` / `app` を小文字で載せます（呼ぶ側が「図面を変えるか」を
-  判定できるように）。予約された道具のうち `tools`・`session_start`・`session_end` は表に載せず、
+  `kind` は `read` / `write` / `app` を小文字で載せます（`write` は図面の中身を変える道具、`app` は
+  Vectorworks・図面のファイルや窓に働き、図面の中身は変えない道具。呼ぶ側が図面を変えるかと、占有が要るかを
+  判定できるように。Vectorworks を終わらせるかは種類では決まらない）。予約された道具のうち `tools`・`session_start`・`session_end` は表に載せず、
   `tools` の結果にも出しません。`ping` と `quit` は表に載せます（[通信規則「予約された道具」](../protocol.md#予約された道具)）。
 - 道具の結果は JSON のオブジェクトで返します（[通信規則「応答」](../protocol.md#応答idresjson)）。返す値が無ければ
   `Json()` でよく、`Server` が `{}` にします。オブジェクトでない値は道具の不具合として、`Server` が

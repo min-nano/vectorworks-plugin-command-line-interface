@@ -1,6 +1,9 @@
 package install
 
 import (
+	"archive/zip"
+	"bytes"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -106,14 +109,26 @@ func TestCheckRegistry(t *testing.T) {
 	}
 }
 
-// 場所が分からなければ、何も変えずに失敗にする。
-func TestMissingPlaces(t *testing.T) {
+// 場所が分からなければ、何も変えずに失敗にする。<Plug-Ins>・<Work> は絶対パスだけ（相対の <Plug-Ins> は
+// 使い方の誤り）で、整えた形で使う。
+func TestPlaces(t *testing.T) {
 	o := Options{Target: testTarget}
 	if _, err := Install(o, "cli", "latest", false); err == nil {
 		t.Fatal("install without places should fail")
 	}
 	if _, err := Uninstall(o, "cli"); err == nil {
 		t.Fatal("uninstall without places should fail")
+	}
+	dir := t.TempDir()
+	if _, err := (&Options{PluginsDir: "Plug-Ins", WorkDir: dir}).places("cli"); !IsUsage(err) {
+		t.Fatalf("a relative folder of plug-ins is wrong usage: %v", err)
+	}
+	if _, err := (&Options{PluginsDir: dir, WorkDir: "work"}).places("cli"); err == nil {
+		t.Fatal("a relative work folder should fail")
+	}
+	p, err := (&Options{PluginsDir: filepath.Join(dir, "a", "..", "Plug-Ins"), WorkDir: filepath.Join(dir, "work") + string(filepath.Separator)}).places("cli")
+	if err != nil || p.plugins != filepath.Join(dir, "Plug-Ins") || p.work != filepath.Join(dir, "work") {
+		t.Fatalf("%+v %v", p, err)
 	}
 }
 
@@ -144,23 +159,58 @@ func TestInstallSameTagWithoutTheHookFile(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// zip でないもの・ファイルでない項目は断る。
+// 展開を失敗にするもの: zip でないもの・ファイルでない項目・展開先の中にとどまる ..（区切りの .. は名前に
+// 使えない）・ファイルの項目の下の項目（フォルダを作れない）・知らない圧縮の方法の項目（読めない）。
 func TestExtractRefuses(t *testing.T) {
+	for name, c := range map[string]struct {
+		zip func(t *testing.T) []byte
+		// want は誤りの文言に含まれるもの（どの理由で断ったか）。
+		want string
+	}{
+		"not a zip": {func(*testing.T) []byte { return []byte("not a zip") }, "not a zip"},
+		"device": {func(t *testing.T) []byte {
+			return makeZip(t, []entry{{name: "dev", mode: os.ModeDevice | 0o644}})
+		}, "not a file"},
+		"dot dot inside": {func(t *testing.T) []byte {
+			return makeZip(t, []entry{{name: "a/../b", body: "x"}})
+		}, "contains .."},
+		"file under a file": {func(t *testing.T) []byte {
+			return makeZip(t, []entry{{name: "a", body: "file"}, {name: "a/b", body: "x"}})
+		}, "mkdir"},
+		"unknown compression": {func(t *testing.T) []byte {
+			var buf bytes.Buffer
+			w := zip.NewWriter(&buf)
+			f, err := w.CreateRaw(&zip.FileHeader{Name: "a", Method: 99})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.Write([]byte("x")); err != nil {
+				t.Fatal(err)
+			}
+			if err := w.Close(); err != nil {
+				t.Fatal(err)
+			}
+			return buf.Bytes()
+		}, "unsupported compression algorithm"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "x.zip")
+			os.WriteFile(path, c.zip(t), 0o644)
+			if _, err := extract(path, filepath.Join(dir, "out")); err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("want an error containing %q, got %v", c.want, err)
+			}
+		})
+	}
+}
+
+// 項目の中のディレクトリは作る。
+func TestExtractMakesFolders(t *testing.T) {
 	dir := t.TempDir()
-	notZip := filepath.Join(dir, "x.zip")
-	os.WriteFile(notZip, []byte("not a zip"), 0o644)
-	if _, err := extract(notZip, filepath.Join(dir, "out")); err == nil {
-		t.Fatal("should refuse something that is not a zip")
-	}
-	device := filepath.Join(dir, "device.zip")
-	os.WriteFile(device, makeZip(t, []entry{{name: "dev", mode: os.ModeDevice | 0o644}}), 0o644)
-	if _, err := extract(device, filepath.Join(dir, "out2")); err == nil || !strings.Contains(err.Error(), "not a file") {
-		t.Fatal(err)
-	}
-	// 項目の中のディレクトリは作る。
-	folders := filepath.Join(dir, "folders.zip")
-	os.WriteFile(folders, makeZip(t, []entry{{name: "a/", mode: os.ModeDir | 0o755}, {name: "a/b/c", body: "c"}}), 0o644)
-	if _, err := extract(folders, filepath.Join(dir, "out3")); err != nil || !exist(filepath.Join(dir, "out3", "a", "b", "c")) {
+	path := filepath.Join(dir, "folders.zip")
+	os.WriteFile(path, makeZip(t, []entry{{name: "a/", mode: os.ModeDir | 0o755}, {name: "a/b/c", body: "c"}}), 0o644)
+	out := filepath.Join(dir, "out")
+	if _, err := extract(path, out); err != nil || !exists(filepath.Join(out, "a", "b", "c")) {
 		t.Fatal(err)
 	}
 }
@@ -184,7 +234,7 @@ func TestUninstallRefusesUnreadableLeftover(t *testing.T) {
 	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), old) {
 		t.Fatal(err)
 	}
-	if !exist(filepath.Join(h.plugins, "cli")) || !exist(old) || exist(filepath.Join(h.work, "old", "cli.uninstalling")) {
+	if !exists(filepath.Join(h.plugins, "cli")) || !exists(old) || exists(filepath.Join(h.work, "old", "cli.uninstalling")) {
 		t.Fatal("changed something")
 	}
 }
@@ -201,7 +251,7 @@ func TestUninstallResumeNeedsAValidRecord(t *testing.T) {
 	if _, err := Uninstall(h.options(), "demo"); err == nil || !strings.Contains(err.Error(), old) {
 		t.Fatal(err)
 	}
-	if !exist(old) {
+	if !exists(old) {
 		t.Fatal("removed old")
 	}
 }
@@ -220,7 +270,7 @@ func TestUninstallKeepsOtherThings(t *testing.T) {
 	if err != nil || strings.Join(result.Remaining, ",") != "cli" {
 		t.Fatalf("%+v %v", result, err)
 	}
-	if !exist(other) {
+	if !exists(other) {
 		t.Fatal("removed something else in the work folder")
 	}
 	if names := installedIn(filepath.Join(h.tmp, "missing")); len(names) != 0 {
@@ -240,7 +290,7 @@ func TestSidestepOutside(t *testing.T) {
 	if moved, err := o.sidestep(filepath.Join(h.plugins, "cli"), filepath.Join(h.work, "old")); err != nil || moved != nil {
 		t.Fatalf("%+v %v", moved, err)
 	}
-	if !exist(outside) {
+	if !exists(outside) {
 		t.Fatal("moved the CLI outside the folder")
 	}
 }
@@ -276,5 +326,31 @@ func TestLookupBrokenRegistry(t *testing.T) {
 	o.Registries = []string{""}
 	if _, err := Install(o, "cli", "c1", false); !IsUsage(err) {
 		t.Fatal(err)
+	}
+}
+
+// 記録の先頭の BOM は許す（BOM を書くエディタで保存した記録も読む）。
+func TestRecordWithBOM(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	path := filepath.Join(h.plugins, "cli", RecordFile)
+	data, _ := os.ReadFile(path)
+	os.WriteFile(path, append([]byte("\xef\xbb\xbf"), data...), 0o644)
+	if result, err := h.install("cli", "c1"); err != nil || result.Outcome != outcomeUpToDate {
+		t.Fatalf("%+v %v", result, err)
+	}
+}
+
+// ./ で始まる項目の zip（zip -r x.zip ./ が作る）も入れられる。
+func TestInstallZipWithDotSlash(t *testing.T) {
+	h := newHarness(t)
+	h.installCLI()
+	h.publish(release{name: "demo", tag: "d1", hooks: &registry.Hooks{}, entries: []entry{
+		{name: "./", mode: fs.ModeDir | 0o755},
+		{name: "./demo.vwlibrary/x", body: "m"},
+		{name: "./version.txt", body: "d1"},
+	}})
+	if result, err := h.install("demo", "d1"); err != nil || result.Outcome != outcomeInstalled || h.installedVersion("demo") != "d1" {
+		t.Fatalf("%+v %v", result, err)
 	}
 }

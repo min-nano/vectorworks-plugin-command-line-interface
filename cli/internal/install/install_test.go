@@ -1,22 +1,23 @@
 package install
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
 func TestInstallFirstTime(t *testing.T) {
 	h := newHarness(t)
 	result := h.mustInstall(release{name: "cli", tag: "c1"})
-	if result.Outcome != OutcomeInstalled || result.Tag != "c1" || result.Requested != "c1" ||
+	if result.Outcome != outcomeInstalled || result.Tag != "c1" || result.Requested != "c1" ||
 		result.Target != testTarget || result.Registry != "default" || result.PluginsDir != h.plugins ||
 		string(result.Hook) != `{"ran":"install","tag":"c1"}` {
 		t.Fatalf("%+v", result)
@@ -37,8 +38,8 @@ func TestInstallFirstTime(t *testing.T) {
 		t.Fatalf("%+v", record)
 	}
 	// 組み立ての場所は残らない。
-	if exist(filepath.Join(h.work, "staging", "cli")) || exist(filepath.Join(h.work, "staging", "cli.zip")) ||
-		exist(filepath.Join(h.work, "old", "cli")) {
+	if exists(filepath.Join(h.work, "staging", "cli")) || exists(filepath.Join(h.work, "staging", "cli.zip")) ||
+		exists(filepath.Join(h.work, "old", "cli")) {
 		t.Fatal("left the staging or old folder")
 	}
 }
@@ -89,11 +90,11 @@ func TestInstallUpdatesAndCleansUp(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	result := h.mustInstall(release{name: "cli", tag: "c2"})
-	if result.Outcome != OutcomeInstalled || h.installedVersion("cli") != "c2" {
+	if result.Outcome != outcomeInstalled || h.installedVersion("cli") != "c2" {
 		t.Fatalf("%+v", result)
 	}
 	for _, path := range []string{"staging/cli", "staging/cli.zip", "old/cli"} {
-		if exist(filepath.Join(h.work, filepath.FromSlash(path))) {
+		if exists(filepath.Join(h.work, filepath.FromSlash(path))) {
 			t.Errorf("left %s", path)
 		}
 	}
@@ -115,7 +116,7 @@ func TestInstallSameTagRunsOnlyTheRecordedHook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Outcome != OutcomeUpToDate || string(result.Hook) != `{"ran":"install","tag":"c1"}` {
+	if result.Outcome != outcomeUpToDate || string(result.Hook) != `{"ran":"install","tag":"c1"}` {
 		t.Fatalf("%+v", result)
 	}
 	if h.hit("/cli/c1/vw2026.json") != 1 || h.hit(zip) != 1 {
@@ -133,11 +134,11 @@ func TestInstallLatestFetchesOnlyTheManifest(t *testing.T) {
 	h := newHarness(t)
 	zip := h.publish(release{name: "cli", tag: "c1", latest: true})
 	result, err := h.install("cli", "latest")
-	if err != nil || result.Outcome != OutcomeInstalled || result.Tag != "c1" || result.Requested != "latest" {
+	if err != nil || result.Outcome != outcomeInstalled || result.Tag != "c1" || result.Requested != "latest" {
 		t.Fatalf("%+v %v", result, err)
 	}
 	result, err = h.install("cli", "latest")
-	if err != nil || result.Outcome != OutcomeUpToDate || result.Tag != "c1" {
+	if err != nil || result.Outcome != outcomeUpToDate || result.Tag != "c1" {
 		t.Fatalf("%+v %v", result, err)
 	}
 	if h.hit("/cli/latest/vw2026.json") != 2 || h.hit(zip) != 1 {
@@ -152,7 +153,7 @@ func TestInstallSameTagOtherTargetReinstalls(t *testing.T) {
 	path := filepath.Join(h.plugins, "cli", RecordFile)
 	rewriteRecord(t, path, func(r *Record) { r.Target = "macos-x64" })
 	result, err := h.install("cli", "c1")
-	if err != nil || result.Outcome != OutcomeInstalled {
+	if err != nil || result.Outcome != outcomeInstalled {
 		t.Fatalf("%+v %v", result, err)
 	}
 	if h.hit("/cli/c1/vw2026.json") != 2 {
@@ -168,7 +169,7 @@ func TestInstallSameTagWithoutModuleReinstalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := h.install("cli", "c1")
-	if err != nil || result.Outcome != OutcomeInstalled || !exist(filepath.Join(h.plugins, "cli", "cli.vwlibrary")) {
+	if err != nil || result.Outcome != outcomeInstalled || !exists(filepath.Join(h.plugins, "cli", "cli.vwlibrary")) {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
@@ -197,21 +198,21 @@ func TestInstallCheck(t *testing.T) {
 		}
 		return result
 	}
-	if r := check("latest"); r.Outcome != OutcomeAvailable || r.Tag != "c1" {
+	if r := check("latest"); r.Outcome != outcomeAvailable || r.Tag != "c1" {
 		t.Fatalf("nothing installed: %+v", r)
 	}
-	if exist(filepath.Join(h.plugins, "cli")) || exist(h.work) {
+	if exists(filepath.Join(h.plugins, "cli")) || exists(h.work) {
 		t.Fatal("--check changed something")
 	}
 	h.mustInstall(release{name: "cli", tag: "c1", latest: true})
 	// --check は Vectorworks が動いていても答える。
 	h.holdLock()
 	before := snapshot(t, h.plugins)
-	if r := check("latest"); r.Outcome != OutcomeUpToDate {
+	if r := check("latest"); r.Outcome != outcomeUpToDate {
 		t.Fatalf("%+v", r)
 	}
 	h.publish(release{name: "cli", tag: "c2", latest: true})
-	if r := check("latest"); r.Outcome != OutcomeAvailable || r.Tag != "c2" {
+	if r := check("latest"); r.Outcome != outcomeAvailable || r.Tag != "c2" {
 		t.Fatalf("%+v", r)
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
@@ -229,7 +230,7 @@ func TestInstallWhileRunning(t *testing.T) {
 	before := snapshot(t, h.plugins)
 	for _, tag := range []string{"c1", "c2"} {
 		result, err := h.install("cli", tag)
-		if !errors.Is(err, ErrRunning) || result == nil || result.Outcome != OutcomeRunning {
+		if !errors.Is(err, ErrRunning) || result == nil || result.Outcome != outcomeRunning {
 			t.Fatalf("%s: %+v %v", tag, result, err)
 		}
 	}
@@ -250,11 +251,11 @@ func TestInstallLockTakenWhileDownloading(t *testing.T) {
 	h.onGet(zip, func() { h.holdLock() })
 	before := snapshot(t, h.plugins)
 	result, err := h.install("cli", "c2")
-	if !errors.Is(err, ErrRunning) || result.Outcome != OutcomeRunning {
+	if !errors.Is(err, ErrRunning) || result.Outcome != outcomeRunning {
 		t.Fatalf("%+v %v", result, err)
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
-	if exist(filepath.Join(h.work, "staging", "cli")) || exist(filepath.Join(h.work, "staging", "cli.zip")) {
+	if exists(filepath.Join(h.work, "staging", "cli")) || exists(filepath.Join(h.work, "staging", "cli.zip")) {
 		t.Fatal("left the staging folder")
 	}
 }
@@ -291,10 +292,10 @@ func TestInstallBadZipChangesNothing(t *testing.T) {
 				t.Fatalf("%+v", result)
 			}
 			sameSnapshot(t, before, snapshot(t, h.plugins))
-			if exist(filepath.Join(h.tmp, "escape")) || exist(filepath.Join(h.work, "escape")) {
+			if exists(filepath.Join(h.tmp, "escape")) || exists(filepath.Join(h.work, "escape")) {
 				t.Fatal("wrote outside the folder")
 			}
-			if exist(filepath.Join(h.work, "staging", "demo")) || exist(filepath.Join(h.work, "staging", "demo.zip")) {
+			if exists(filepath.Join(h.work, "staging", "demo")) || exists(filepath.Join(h.work, "staging", "demo.zip")) {
 				t.Fatal("left the staging folder")
 			}
 		})
@@ -333,26 +334,81 @@ func TestInstallRefusesForeignFolders(t *testing.T) {
 	}
 }
 
-// cli 以外は、cli が入っている <Plug-Ins> にだけ入れ、そこからだけ外す（Vectorworks が動いているかを
-// <Plug-Ins>/cli/spool のロックで判定するため）。
+// cli 以外は、cli が入っている <Plug-Ins> にだけ入れ、そこからだけ外す（Vectorworks が
+// 動いているかを <Plug-Ins>/cli/spool のロックで判定するため）。cli の記録の module が
+// 無ければ、Vectorworks が動いていても、install と uninstall はどちらも cli の記録の誤りを
+// 答え（同じ順に確かめる）、<Plug-Ins> も <Work> も変えない。
 func TestOtherPluginNeedsCLI(t *testing.T) {
 	h := newHarness(t)
 	h.publish(release{name: "demo", tag: "d1"})
 	if _, err := h.install("demo", "d1"); err == nil || !strings.Contains(err.Error(), "has no cli") {
 		t.Fatal(err)
 	}
-	if exist(filepath.Join(h.plugins, "demo")) {
+	if exists(filepath.Join(h.plugins, "demo")) {
 		t.Fatal("installed without cli")
 	}
+	for _, running := range []bool{false, true} {
+		t.Run(fmt.Sprintf("running=%v", running), func(t *testing.T) {
+			h := newHarness(t)
+			h.installCLI()
+			h.mustInstall(release{name: "demo", tag: "d1"})
+			os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
+			if running {
+				defer h.holdLock()()
+			}
+			// 1 回ごとに、何も変えていないことを確かめる（片方が残したものを、もう片方が片付けて隠さないように）。
+			for _, c := range []struct {
+				name string
+				run  func() error
+			}{
+				{"install", func() error { _, err := h.install("demo", "d1"); return err }},
+				{"uninstall", func() error { _, err := Uninstall(h.options(), "demo"); return err }},
+			} {
+				plugins, work := snapshot(t, h.plugins), snapshot(t, h.work)
+				if err := c.run(); err == nil || !strings.Contains(err.Error(), "has no cli") {
+					t.Errorf("%s: %v", c.name, err)
+				}
+				sameSnapshot(t, plugins, snapshot(t, h.plugins))
+				sameSnapshot(t, work, snapshot(t, h.work))
+			}
+		})
+	}
+}
+
+// cli の install・uninstall が途中で止まって <Plug-Ins>/cli/ が無いとき、cli 以外の
+// install・uninstall は、Vectorworks を終えて cli の操作を終えるよう添えて断り、何も
+// 変えない。前の版を読み込んだ Vectorworks が <Work>/old/cli/spool のロックを持って
+// いても同じ（checkCLI が先に答える）。
+func TestNoCLIAfterStoppedCLISwap(t *testing.T) {
+	h := newHarness(t)
 	h.installCLI()
 	h.mustInstall(release{name: "demo", tag: "d1"})
-	os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
-	if _, err := Uninstall(h.options(), "demo"); err == nil || !strings.Contains(err.Error(), "has no cli") {
+	old := filepath.Join(h.work, "old")
+	if err := os.MkdirAll(old, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if !exist(filepath.Join(h.plugins, "demo")) {
-		t.Fatal("uninstalled without cli")
+	if err := os.Rename(filepath.Join(h.plugins, "cli"), filepath.Join(old, "cli")); err != nil {
+		t.Fatal(err)
 	}
+	lock := filepath.Join(old, "cli", spool.SpoolDirName)
+	if err := os.MkdirAll(lock, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	defer fakeplugin.HoldLock(t, lock)()
+	plugins, work := snapshot(t, h.plugins), snapshot(t, h.work)
+	noCLI := func(err error) bool {
+		return err != nil && strings.Contains(err.Error(), "has no cli") &&
+			strings.Contains(err.Error(), "quit Vectorworks") &&
+			strings.Contains(err.Error(), "--plugins-dir "+h.plugins)
+	}
+	if _, err := h.install("demo", "d1"); !noCLI(err) {
+		t.Fatalf("install: %v", err)
+	}
+	if _, err := Uninstall(h.options(), "demo"); !noCLI(err) {
+		t.Fatalf("uninstall: %v", err)
+	}
+	sameSnapshot(t, plugins, snapshot(t, h.plugins))
+	sameSnapshot(t, work, snapshot(t, h.work))
 }
 
 // 付け替えの 1 つ目（<Plug-Ins>/<name> を移す）と 2 つ目（組み立てたものを置く）の失敗で元に戻る。
@@ -366,7 +422,7 @@ func TestInstallRenameFailureRestores(t *testing.T) {
 			h.mustInstall(release{name: "cli", tag: "c1"})
 			h.publish(release{name: "cli", tag: "c2"})
 			executable := filepath.Join(h.plugins, "cli", "bin", "vw2026")
-			failRename(t, from(h))
+			failRename(t, from(h), "")
 			before := snapshot(t, h.plugins)
 			o := h.options()
 			o.Executable = executable
@@ -413,7 +469,7 @@ func TestInstallHookFailureRestores(t *testing.T) {
 			if _, err := h.install("cli", "c0"); err == nil {
 				t.Fatal("should fail")
 			}
-			if exist(filepath.Join(h.plugins, "cli")) {
+			if exists(filepath.Join(h.plugins, "cli")) {
 				t.Fatal("left the first install")
 			}
 			h.mustInstall(release{name: "cli", tag: "c1"})
@@ -426,7 +482,7 @@ func TestInstallHookFailureRestores(t *testing.T) {
 				t.Fatal("should fail")
 			}
 			sameSnapshot(t, before, snapshot(t, h.plugins))
-			if exist(filepath.Join(h.work, "old", "cli")) || exist(filepath.Join(h.work, "staging", "cli")) {
+			if exists(filepath.Join(h.work, "old", "cli")) || exists(filepath.Join(h.work, "staging", "cli")) {
 				t.Fatal("left old or staging")
 			}
 		})
@@ -452,31 +508,18 @@ func TestHookOutput(t *testing.T) {
 func TestInstallHookFailureWhileRunningKeepsTheNewVersion(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
-	signal := filepath.Join(h.tmp, "hook-started")
-	await := filepath.Join(h.tmp, "locked")
-	plan := hookPlan{Exit: 1, Signal: signal, Await: await}
-	h.publish(release{name: "cli", tag: "c2", install: &plan})
-	done := make(chan struct{})
-	var release func()
-	go func() {
-		defer close(done)
-		// フックの合図を待つ
-		for !exist(signal) {
-			time.Sleep(10 * time.Millisecond)
-		}
-		release = h.holdLock()
-		os.WriteFile(await, nil, 0o600)
-	}()
+	h.publish(release{name: "cli", tag: "c2", install: h.lockingHook(hookPlan{Exit: 1})})
+	done, unlock := h.lockWhenHookStarts(h.cliSpool())
 	_, err := h.install("cli", "c2")
 	<-done
 	if err == nil || !strings.Contains(err.Error(), "Vectorworks started") {
 		t.Fatal(err)
 	}
 	old := filepath.Join(h.work, "old", "cli")
-	if h.installedVersion("cli") != "c2" || !exist(old) {
+	if h.installedVersion("cli") != "c2" || !exists(old) {
 		t.Fatal("the new version should stay, and the previous one in old")
 	}
-	release()
+	unlock()
 	// Vectorworks を終了しても、install を終えるまで uninstall は old を消さずに断り、同じタグの install を示す。
 	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "install cli@c2") ||
 		!strings.Contains(err.Error(), "registry default") || !strings.Contains(err.Error(), h.plugins) {
@@ -484,13 +527,13 @@ func TestInstallHookFailureWhileRunningKeepsTheNewVersion(t *testing.T) {
 	}
 	// 同じタグで走らせ直すと、フックだけが走り、退避した前の版を片付ける。
 	os.WriteFile(filepath.Join(h.plugins, "cli", "hooks", "install.hook"), []byte(planJSON(t, hookPlan{Stdout: "{}"})), 0o644)
-	if result, err := h.install("cli", "c2"); err != nil || result.Outcome != OutcomeUpToDate {
+	if result, err := h.install("cli", "c2"); err != nil || result.Outcome != outcomeUpToDate {
 		t.Fatalf("%+v %v", result, err)
 	}
-	if exist(old) {
+	if exists(old) {
 		t.Fatal("left the previous version")
 	}
-	if result, err := Uninstall(h.options(), "cli"); err != nil || result.Outcome != OutcomeUninstalled {
+	if result, err := Uninstall(h.options(), "cli"); err != nil || result.Outcome != outcomeUninstalled {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
@@ -501,14 +544,12 @@ func TestInstallSameTagCannotSettleOld(t *testing.T) {
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	old := filepath.Join(h.work, "old", "cli")
 	copyDir(t, filepath.Join(h.plugins, "cli"), old)
-	failRename(t, old)
-	var stderr bytes.Buffer
-	o := h.options()
-	o.Stderr = &stderr
-	if result, err := Install(o, "cli", "c1", false); err != nil || result.Outcome != OutcomeUpToDate {
+	failRename(t, old, "")
+	o, stderr := h.capturing()
+	if result, err := Install(o, "cli", "c1", false); err != nil || result.Outcome != outcomeUpToDate {
 		t.Fatalf("%+v %v", result, err)
 	}
-	if !exist(old) || !strings.Contains(stderr.String(), old) {
+	if !exists(old) || !strings.Contains(stderr.String(), old) {
 		t.Fatalf("should leave old and say so: %s", stderr.String())
 	}
 }
@@ -520,7 +561,7 @@ func TestInstallRemovesUninstallMarker(t *testing.T) {
 	os.MkdirAll(filepath.Dir(marker), 0o700)
 	os.WriteFile(marker, nil, 0o600)
 	h.mustInstall(release{name: "cli", tag: "c1"})
-	if exist(marker) {
+	if exists(marker) {
 		t.Fatal("left the marker")
 	}
 }
@@ -533,7 +574,7 @@ func TestInstallLeftoverOld(t *testing.T) {
 	old := filepath.Join(h.work, "old", "cli")
 	copyDir(t, filepath.Join(h.plugins, "cli"), old)
 	h.mustInstall(release{name: "cli", tag: "c2"})
-	if exist(old) {
+	if exists(old) {
 		t.Fatal("left old")
 	}
 
@@ -541,7 +582,7 @@ func TestInstallLeftoverOld(t *testing.T) {
 	os.WriteFile(filepath.Join(old, RecordFile), []byte("{"), 0o644)
 	h.mustInstall(release{name: "cli", tag: "c3"})
 	kept, _ := filepath.Glob(filepath.Join(h.work, "old", "cli.kept-*"))
-	if exist(old) || len(kept) != 1 || !exist(filepath.Join(kept[0], RecordFile)) {
+	if exists(old) || len(kept) != 1 || !exists(filepath.Join(kept[0], RecordFile)) {
 		t.Fatalf("should move old aside: %v", kept)
 	}
 
@@ -553,7 +594,7 @@ func TestInstallLeftoverOld(t *testing.T) {
 	if _, err := h.install("cli", "c4"); err == nil || !strings.Contains(err.Error(), "only copy") {
 		t.Fatal(err)
 	}
-	if !exist(filepath.Join(old, "version.txt")) || exist(filepath.Join(h.plugins, "cli")) {
+	if !exists(filepath.Join(old, "version.txt")) || exists(filepath.Join(h.plugins, "cli")) {
 		t.Fatal("changed something")
 	}
 	// 印もあれば、止まった uninstall の続きを示す。
@@ -561,7 +602,7 @@ func TestInstallLeftoverOld(t *testing.T) {
 	if _, err := h.install("cli", "c4"); err == nil || !strings.Contains(err.Error(), "run uninstall cli again") {
 		t.Fatal(err)
 	}
-	if !exist(filepath.Join(old, "version.txt")) || exist(filepath.Join(h.plugins, "cli")) {
+	if !exists(filepath.Join(old, "version.txt")) || exists(filepath.Join(h.plugins, "cli")) {
 		t.Fatal("changed something")
 	}
 }
@@ -704,7 +745,7 @@ func TestInstallFromPaths(t *testing.T) {
 	o := h.options()
 	o.Registries = []string{fileURL(registryPath)}
 	result, err := Install(o, "local", "l1", false)
-	if err != nil || result.Outcome != OutcomeInstalled || result.Hook != nil || h.installedVersion("local") != "l1" {
+	if err != nil || result.Outcome != outcomeInstalled || result.Hook != nil || h.installedVersion("local") != "l1" {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
@@ -712,4 +753,13 @@ func TestInstallFromPaths(t *testing.T) {
 func jsonString(s string) string {
 	data, _ := json.Marshal(s)
 	return string(data)
+}
+
+// Default を渡さなければ、CLI に埋め込んだ既定のレジストリを引く。
+func TestLookupUsesTheEmbeddedRegistry(t *testing.T) {
+	o := Options{}
+	entry, source, err := o.lookup("cli")
+	if err != nil || source != registry.DefaultName || !strings.Contains(entry.Manifests[0].Path, "github.com") {
+		t.Fatalf("%v %s %v", entry, source, err)
+	}
 }

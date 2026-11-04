@@ -278,7 +278,12 @@ help。ここには写さない）。
   `<Plug-Ins>/cli/` に正しい記録（`name` が `cli` で、
   `module` が実在する）が無ければ、何も変えずに失敗にします（`uninstall` も同じ）。`cli` の無い `<Plug-Ins>`
   では、Vectorworks が動いていても判定できず、付け替えとフックが走ってしまうためです。ワークグループの
-  フォルダなど、`cli` の無い Plug-Ins へは入れられません（対応しない）。Go が `cli` の名前を使うのは、
+  フォルダなど、`cli` の無い Plug-Ins へは入れられません（対応しない）。
+  `cli` の `install` / `uninstall` が途中で止まって `cli` が無いこともあるので、
+  断るときは、Vectorworks を終えて、その `install` / `uninstall` を初回のスクリプトで
+  走らせ直すよう添えます（既定でない `<Plug-Ins>` なら `--plugins-dir` を付ける。
+  止まった状態は読まず、続け方はその `install cli` / `uninstall cli` が答える）。
+  Go が `cli` の名前を使うのは、
   ロックの場所を決めることと、入った `vw2026` が自分の入った `<Plug-Ins>` を求めること（[前提](#前提)）だけです。
 - **Vectorworks が動いているかはロックで判定します**（[通信規則「生存の判定」](../protocol.md#生存の判定)）。
   ロックを無い以外の理由で調べられなければ（権限・壊れた場所）、動いているかが分からないので、`install` /
@@ -741,10 +746,12 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
   一時フォルダの CLI で外せば、動いている自分を消せずに残すこと（Windows）も、自分をよけることも要りません。
 - 出力の形は `vw2026 help uninstall` が示します（CLI の使い方の真実は help。ここには写さない）。
 
-1. **Vectorworks が動いていれば何もせずに終わる**（`<Plug-Ins>/cli/spool/` と `<Work>/old/cli/spool/` のロックで判定。
-   install と同じ 2 か所・同じ終了コード）。
-   `<name>` が `cli` でなければ、`<Plug-Ins>/cli/` に正しい記録が無いときも何も変えずに失敗にする
-   （[`cli` と同じ `<Plug-Ins>` に入れる](#流れ)）。
+1. `<name>` が `cli` でなければ、`<Plug-Ins>/cli/` に正しい記録が無いときは
+   何も変えずに失敗にする（[`cli` と同じ `<Plug-Ins>` に入れる](#流れ)）。
+   **次に、Vectorworks が動いていれば何もせずに終わる**（`<Plug-Ins>/cli/spool/` と
+   `<Work>/old/cli/spool/` のロックで判定。install と同じ 2 か所・同じ終了コード）。
+   確かめる順は install（[流れ](#流れ)の 1・2）と同じ（`cli` の記録の誤りは、
+   Vectorworks を終えて走らせ直しても通らないので、先に確かめる）。
 2. **安全弁**: `<Plug-Ins>/<name>/` に記録があり、記録の `name` がフォルダ名と一致し、記録の
    `module` がフォルダの中に実在するときだけ進む。フォルダはあるが記録が無い・一致しないなら、
    何も消さずに失敗にする（`vw2026` が入れたものではない）。
@@ -873,7 +880,9 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
   - `uninstall` の順序（フォルダを移せないときにフックを走らせない・フックが失敗したらフォルダを戻す・
     手順 3 のあとで止まったときに、印があれば手順 4 から続け、印が無ければ断る・続きから走った回で
     フックが失敗したら `<Plug-Ins>` へ戻さない）
-  - `cli` 以外を入れる・外すとき、`<Plug-Ins>/cli/` に正しい記録が無ければ何も変えない
+  - `cli` 以外を入れる・外すとき、`<Plug-Ins>/cli/` に正しい記録が無ければ何も変えない（Vectorworks が
+    動いていても、`cli` の記録を先に確かめる。`<Work>/old/cli/spool` のロックが
+    掴まれていても、Vectorworks を終えるよう添えて断る）
   - 付け替えに成功した `install` が、残っていた印 `<Work>/old/<name>.uninstalling` を消す
   - 同じタグでも記録の `module` が無ければ入れ直す・記録の `name` が違う・記録が読めないときに断る
   - 同じタグのとき（記録の `hooks.install` を走らせる・`{tag}` のある規則でターゲットも同じならマニフェストを

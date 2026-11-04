@@ -13,7 +13,10 @@ permissions:
 # 整形と go vet は format.yml・lint.yml が行う（docs/format.md・docs/lint.md）。
 jobs:
   test:
-    name: test (${{ matrix.os }})
+    # ジョブ名に go を付ける。cpp.yml と同じ名前だとチェックの名前が重なり、必須のチェックが
+    # どちらのジョブを指すか区別できないため（fuzz も同じ。build も、build.yml の
+    # ビルドと見分けられるように付ける）。
+    name: go test (${{ matrix.os }})
     strategy:
       fail-fast: false
       # Vectorworks の対応 OS (darwin・windows) でのみテストする。
@@ -46,6 +49,7 @@ jobs:
   # NestingDepth のファジング（cli/internal/spool/fuzz_test.go）。OS に依らない純粋な関数なので
   # ubuntu だけで回す。test の go test は種だけを確かめる。
   fuzz:
+    name: go fuzz
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -66,7 +70,10 @@ jobs:
           name: fuzz-crashers
           path: cli/internal/spool/testdata/fuzz/
 
+  # 配る 3 つのターゲットへ cgo なしでビルドできるかを、SDK を取らずに確かめる。配る実行ファイルは
+  # build.yml が作るので、ここの出力は上げない。
   build:
+    name: go build
     needs: test
     runs-on: ubuntu-latest
     defaults:
@@ -81,15 +88,8 @@ jobs:
       - name: build
         run: |
           set -eu
-          version="$(git describe --always --dirty)"
           for target in darwin/arm64 darwin/amd64 windows/amd64; do
             os="${target%/*}"; arch="${target#*/}"
-            ext=""; [ "$os" = windows ] && ext=".exe"
             CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
-              go build -trimpath -ldflags "-s -w -X main.version=${version}" \
-              -o "../dist/${os}-${arch}/vw2026${ext}" ./cmd/vw2026
+              go build -trimpath -o "$RUNNER_TEMP/vw2026-${os}-${arch}" ./cmd/vw2026
           done
-      - uses: actions/upload-artifact@v7
-        with:
-          name: vw2026
-          path: dist/

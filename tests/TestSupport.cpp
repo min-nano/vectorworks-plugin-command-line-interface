@@ -1,5 +1,7 @@
 #include "TestSupport.h"
 
+#include "core/Protocol.h"
+
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -62,6 +64,16 @@ std::string readFile(const std::filesystem::path &path) {
 std::string utf8(const std::filesystem::path &path) {
 	std::u8string text = path.u8string();
 	return std::string(text.begin(), text.end());
+}
+
+core::Json must(std::string_view text, std::source_location where) {
+	std::optional<core::Json> value = core::Json::parse(text, core::protocol::kMaxNestingDepth);
+	if (!value) {
+		fail(where.file_name(), static_cast<int>(where.line()),
+		     "should parse: " + std::string(text));
+		return core::Json();
+	}
+	return *value;
 }
 
 int runAll(int argc, char **argv) {

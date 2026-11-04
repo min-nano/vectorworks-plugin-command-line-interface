@@ -14,17 +14,9 @@ using VwCli::core::Json;
 using VwCli::core::PingFacts;
 using VwCli::core::ToolContext;
 using VwCli::core::ToolStatus;
+using VwCli::test::must;
 
 namespace {
-
-Json must(std::string_view text) {
-	std::optional<Json> value = Json::parse(text, VwCli::core::protocol::kMaxNestingDepth);
-	if (!value) {
-		VwCli::test::fail(__FILE__, __LINE__, "should parse: " + std::string(text));
-		return Json();
-	}
-	return *value;
-}
 
 // pingText は ping の結果のテキスト。protocol は通信規則の版から組み立てる（版を上げても
 // ping を変えていなければ落ちないように）。rest は pid の後ろ（session 以降）。

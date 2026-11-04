@@ -31,10 +31,10 @@ class Bridge {
 public:
 	explicit Bridge(std::string dir) : dir_(std::move(dir)) {}
 
-	const std::string &dir() const { return dir_; }
 	bool locked() const { return lock_.held(); }
 
-	// prepare は無ければスプールを 0700 で作る（親も無ければ作る）。持ち主と権限は確かめない。
+	// prepare は無ければスプールを作る（親も無ければ作る。POSIX は 0700）。
+	// 持ち主と権限は確かめない。
 	bool prepare(std::string &error);
 
 	// lock は bridge.lock を掴む。掴めたら壊すまで放さない。

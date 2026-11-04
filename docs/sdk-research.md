@@ -5,7 +5,7 @@
 issue を立てて `Findings/` に反映されてから、それを根拠に実装します。待つ間は SDK に依らない
 作業（通信規則・CLI・SDK に依らない共通部）を進めます。
 
-## 0. 拡張機能を 1 つも登録しないプラグインの読み込み
+## 0. 拡張機能を 1 つも登録しないプラグインの読み込み（分かった）
 
 このプラグインはメニューも PIO も登録しません（[構成](plugin/architecture.md#拡張機能を登録しない)）。
 その形でも Vectorworks が読み込み、`plugin_module_main` を呼ぶか（＝OS タイマーを開始できるか）は
@@ -13,21 +13,20 @@ SDK リファレンスに記載がありませんでした。
 
 - **macOS は読み込まれた**（段 2 の実機確認。VW 2026。起動の直後から OS タイマーが刻み、`call ping`
   が応えた。下の「開発元不明のプラグイン」のダイアログで、先に「有効化」が要ることがある）。
-  結果は SDK リファレンスの `Findings/`（Plug-in Modules）へ足す（未反映）。
+  結果は [Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の「拡張機能を 1 つも登録しないモジュールも、有効なら
+  起動時から常駐する」に反映された（[SDK リファレンス #252](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/252)）。
 - **Windows も、留めた版（下記）は読み込まれ常駐した**（段 2 の実機確認。VW 2026 x64・Windows 11
   ARM64 の x64 エミュレーション）。起動の直後から `cli.vlb` がプロセスに居て、`call ping` が応えた。
   拡張機能を登録しない形のままでよい。
-- **Windows の Vectorworks は、閉じたときにときどきアクセス違反（`0xC0000005`）で終わる。** 落ちた
-  スレッドは、すでに外された `libcef.dll` の中を実行していた（`cli.vlb` は関わっていない）。図面を
-  開かずに閉じた回で数えると、`296a797` で 11 回中 3 回、`0683df0` で 5 回中 0 回、プラグインなしで
-  4 回中 0 回だった（図面を開いて閉じた回は、`296a797` の 2 回もなしの 2 回も違反は 0）。起きたのは
-  プラグインありの、しかも `296a797` だけである。`0683df0` と `296a797` の違いは、`Clock.cpp` が
-  タイマーを作れなかったときにやり直すか（やり直すと留めるのが重なる）と、刻印の書き方だけで、
-  タイマーを 1 度で作れた回の動きは同じである。それでも差が出ているので、版の差か偶然か、
-  プラグインが起こりやすくしているかは判断できていない。新しい図面の最初の描画中に
-  `MaxonDocumentBuilder.vlb` の中で落ちたことも 1 回ある。実測と確かめ方は [Windows の実機での実測](plugin/windows-measurements.md)。
-  [SDK リファレンス #257](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/257)
-  で調べる。段 2 は、これを既知の未解決として残したまま進めた（受け付けには影響しない）。
+- **Windows の Vectorworks が閉じたときにアクセス違反（`0xC0000005`）で終わったのは、このプラグインの
+  せいではないと読める（推定）。** 段 2 の実機確認で、すでに外された `libcef.dll` の中で落ちた回があった。
+  [SDK リファレンス #257](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/257) で調べ、留めた常駐プラグインの有無で終わり方に差は無く、
+  何が効いていたかは分かっていない（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の
+  「OS タイマーを持つ常駐プラグイン（留めたモジュール）は、終了時の落ち方を変えない」）。タイマーを止める・
+  留め方を変えるといった作法は要らない。`cli` の入っていない構成でも同じ落ち方が出ており
+  （[#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)）、原因は分かっていない。新しい図面の最初の描画中に `MaxonDocumentBuilder.vlb` の中で
+  落ちたことも、常駐するプラグインの有無で差が無かった（[#270](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/270)。同じページの「新しい図面の最初の描画」）。
+  段 2 の確かめ方は [Windows の実機での確かめ方](plugin/windows-measurements.md)。
 - **Vectorworks は、開発元の分からないプラグインを読み込まないことがある（Windows も macOS も）。**
   起動の途中で「開発元不明のプラグイン」のダイアログが出て `cli` を「無効」と示し、その回は読み込まなかった。
   ダイアログで「有効化」を選ぶと、次の起動から読み込まれた。**ファイルを入れ替えても「有効化」は
@@ -44,10 +43,10 @@ SDK リファレンスに記載がありませんでした。
   [SDK リファレンス #264](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/264) で
   **分かった**（[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の「ダイアログの最中も、プラグインは刻みから図面を扱える」「mac も、共通モードの刻みからなら扱える」）。
   どう扱うかは[構成「拡張機能を登録しない」](plugin/architecture.md#拡張機能を登録しない)。
-- 留めていなかった版で常駐しなかったのは、下の読み込み直しで降ろされたためか、このダイアログで
-  止められていたためかを切り分けていない。
-  [SDK リファレンス #252](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/252)
-  に結果を返す。
+- 留めていなかった版で常駐しなかったのは、このダイアログで止められていた（有効化の前だった）ためと
+  読める（[SDK リファレンス #252](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/252)。[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)の
+  「拡張機能を 1 つも登録しないモジュールも、有効なら起動時から常駐する」）。留めない形が下の読み込み直しの
+  対象になるかは確かめられていないが、このプラグインは留めるので困らない。
 - 同じ確認の途中で、利用者の `Plug-Ins` にプラグインを置くと Vectorworks が起動画面のあと記録を
   残さずに終了することがあった（このプラグインに限らない）。
   [SDK リファレンス #253](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/253) で
@@ -90,10 +89,10 @@ SDK リファレンスに記載がありませんでした。
 - Vectorworks 自身の外部からの受け口（macOS の Apple Events、起動引数でのスクリプト実行など）が
   あるか。
 
-## 3. 開いている図面の一覧と、前面の図面の切り替え（ほぼ分かった）
+## 3. 開いている図面の一覧と、前面の図面の切り替え（分かった）
 
 [設計「決めたこと」](design.md#決めたこと)の「対象の図面」のため。[Findings「Documents」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md) にまとまっています
-（実測はメニューコマンドの中から。VW 2026 / macOS）。
+（実測はメニューコマンドの中と OS タイマーの刻みの中から。VW 2026 / macOS。Windows は [#283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。
 
 | 問い | 答え |
 | --- | --- |
@@ -107,11 +106,20 @@ SDK リファレンスに記載がありませんでした。
   `GetOpenFilesList` の件数や読み戻した値で確かめる。
 - **`CloseDocument()` は保存の確認を出さずに未保存の変更を捨てる。** 道具には使わない
   （[設計「本番で常駐させる前提」](design.md#本番で常駐させる前提安全)）。
+- **OS タイマーの刻みの中から呼べる。** 未保存の判定の調査（[#240](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/240)）と `save`・`close` の調査
+  （[#243](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/243)）で、一覧（`GetOpenFilesList`）・切り替え（`SwitchToOpenFile`）・開く
+  （`OpenDocumentPath`）・保存・「閉じる」を刻みの中から呼んで確かめた（[Findings「未保存の変更ありは読めない」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#未保存の変更ありは読めない)・
+  [「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)）。
 
-残っていること:
-
-- **OS タイマーの刻みの中から**、これらを呼んでよいか（実測はメニューコマンドの中だけ）。
-- Windows での挙動。
+- **Windows も振る舞いは mac と同じ**（[#283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)。[Findings「Documents」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)の
+  「Windows——振る舞いは mac と同じ。違うのはパスの比べ方と、開ける図面は 8 枚まで」）。違うのは次のとおり。
+  使い方は[道具「図面を扱う道具」](plugin/tools.md#図面を扱う道具documentssaveclose)。
+  - 図面のパスは、保存したときに渡した文字列がそのまま残る（区切りだけ `\` に揃う。ドライブ文字・名前の大小・
+    8.3 の短い名前は直らない）。
+  - 「すでに開かれています」の警告は、開いている図面のパスと文字列が完全に一致するときだけ出る。既にあるファイルへは
+    どの形で渡しても保存できず、自分のパスへの上書き保存も文字列が完全に一致するときだけ通る。
+  - 「閉じる」の保存の確認の最中に、呼んだ `SetTimer` の刻み自身が入り直す（mac は入り直さない）。
+  - 開いていられる図面は 8 枚まで（mac は測っていない）。260 文字を超えるパスへは保存できない。
 
 ## 4. 最初の道具が使う SDK 呼び出し
 
@@ -120,13 +128,13 @@ SDK リファレンスに記載がありませんでした。
 
 | 道具 | 呼び出し | リファレンス |
 | --- | --- | --- |
-| `layers` | デザインレイヤの列挙（`GetDrawingHeaderFristMember`＋`NextObject`） | [Layers and Stories「デザインレイヤの並びと並べ替え」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)にある。シートレイヤを含むか・縮尺の読み方は未確認 |
-| `classes` | クラスの一覧 | 無い |
-| `layer_objects` / `object_counts` | レイヤの中のオブジェクトの列挙・種別・名前・クラス・外形 | 種別（`GetObjectTypeN`）・外形（`GetObjectBounds`）は各ページに使い方がある。列挙の順と、グループ・シンボルの中を数えるかは未確認 |
+| `layers` | レイヤの列挙（`FirstMemberObj(GetDrawingHeader())`＋`NextObject`、または `ForEachLayer`） | **分かった**（[#281](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/281)。[Layers and Stories「レイヤを列挙する（デザインとシート・種類・順序・現在・縮尺）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)。Windows）。シートレイヤも同じ列に作った順で並ぶ（オーガナイザはデザインレイヤだけ逆順に見せる）。列の末尾に型 `0` が 1 つ居るので `kLayerNode`（31）で絞る。種類は `ovLayerType`（デザイン `1`・シート `2`・参照で入ったデザインレイヤ `3`。名前は `NNA#<n>_<元の名前>`）。現在のレイヤは `GetCurrentLayer()` とハンドルの `==` で判定できる。縮尺は `GetLayerScaleN` で分母（1/50 なら `50`）、シートレイヤは常に `1`。刻みの中・図面 0 枚でも落ちない（列が空になる）。使い方は[道具「layers」](plugin/tools.md#layers) |
+| `classes` | クラスの一覧（`ForEachClass`） | **分かった**（[#280](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/280)。[Attributes and Classes「クラスの一覧は `ForEachClass` で列挙する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Attributes%20and%20Classes.md)。Windows）。前面の図面のクラスだけを ID の順（作った順）に渡す（オーガナイザは名前の昇順）。`doGuestClasses` が真なら参照先のクラスが `NNA#<n>_<名前>` で後ろに足される（オーガナイザには出ない）。階層名（`-` 区切り）は 1 つのクラスで、親は作られない。刻みの中・図面 0 枚でも落ちない（0 件）。使い方は[道具「classes」](plugin/tools.md#classes) |
+| `layer_objects` / `object_counts` | レイヤの中のオブジェクトの列挙・種別・名前・クラス・外形 | **分かった**（[#282](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/282)。[Layer Objects](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md)。mac・Windows）。`FirstMemberObj` → `NextObject` は作った順で、先頭が最背面。列には終端（型 `0`）と undo の置き石（型 `90`。並べ替え・消去・取り消しで増え、保存しても残ることがある）が混ざるので除く（`ForEachObjectN` は渡さない）。情報パレットの「N 図形」はレイヤの直下の数（グループ・シンボル・PIO・壁は 1 つ）で、オーガナイザに数の列は無い。種別の番号から名前を引く口は SDK に無い（自前の表。PIO は `GetParametricName`）。名前の無い図形の名前は空文字列。クラスは `GetObjectClass` → `ClassIDToName`。外形は縮尺を掛けない mm の外接矩形（文字は紙の上の大きさ×縮尺）。シートレイヤにはビューポート（型 `122`）が居る。刻みの中から辿ってよい。使い方は[道具「layer_objects・object_counts」](plugin/tools.md#layer_objectsobject_counts) |
 | `ping` | `GetCurrentLayer()` で図面が開いているかを判定する | **分かった**（[Timers and Notifications](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 8。使い方は[道具「ping」](plugin/tools.md#ping)） |
-| `save` / `close` / `documents` | 図面の一覧（`GetOpenFilesList`）・指定した図面の保存（`SwitchToOpenFile` → `SaveActiveDocumentPath`。無題の図面を新しいパスへ）・メニュー「閉じる」（`DoMenuName("Close", 0)`） | 一覧・同じパスへの上書き保存・「閉じる」で保存の確認が出ることは [Findings「Documents」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md) にある。**分かった**（[#243](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/243)）。新しいパスへは通る・既存のファイルへは通らず（開いているファイルなら警告のダイアログが出る）・前面は戻せる・保存した直後なら確認なしに閉じる。使い方は[道具](plugin/tools.md#図面を扱う道具documentssaveclose) |
+| `save` / `close` / `documents` | 図面の一覧（`GetOpenFilesList`）・指定した図面の保存（`SwitchToOpenFile` → `SaveActiveDocumentPath`。無題の図面を新しいパスへ）・メニュー「閉じる」（`DoMenuName("Close", 0)`） | 一覧・同じパスへの上書き保存・「閉じる」で保存の確認が出ることは [Findings「Documents」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md) にある。**分かった**（[#243](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/243)）。新しいパスへは通る・既存のファイルへは通らず（開いているファイルなら警告のダイアログが出る）・前面は戻せる・保存した直後なら確認なしに閉じる。Windows も同じ（[#283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)。違うのはパスの比べ方。上記 3）。使い方は[道具](plugin/tools.md#図面を扱う道具documentssaveclose) |
 | `quit`（未保存の判定） | 保存済みの図面の**変更あり**を読む | **分かった: 読めない**（[#240](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/240)。[Findings「未保存の変更ありは読めない」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#未保存の変更ありは読めない)）。`outSaved`・`fIsInMemoryOnly` は「ディスクにあるか」だけを表す。そのため `quit` は図面が 0 枚のときだけ受け付ける設計にした（[道具「quit」](plugin/tools.md#quit)） |
-| `quit` | OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼ぶ | 無い（Documents が「プラグインの読み込み中に呼ぶと落ちる」として Plug-in Modules を指すが、その節は見当たらない）。保存の確認を取り消したときに戻ることも未確認（[#230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)。その 4 で、保存の確認の中から 2 つ目を呼んだときを確かめ、終了の依頼の最中の判定を残すかを決める。Vectorworks のダイアログの最中に呼んだときは [#235](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/235)） |
+| `quit` | OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼ぶ | **分かった**（[#230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・[#235](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/235)。[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9・[Documents「`CloseAllFilesAndQuitVectorworks`（終了）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md)）。刻みから呼べ、図面を閉じ終えてから戻り、終了はその後のイベントループで起きる（mac・Windows）。保存の確認を取り消すと呼び出しは戻り、図面は残る。確認の最中にもう一度呼ぶと確認が 2 つ重なって出る（落ちない）。Windows では呼んだタイマー自身が確認の最中に入り直す（Findings は「終了の呼び出しの最中」を旗で持って見送る作りを勧める。このプラグインでどうするかは段 6 の前に決める）。利用者が開いたモーダルの最中も落ちない。終了の依頼の最中の判定は残し、入れ子の判定にまとめるかを段 6 の前に決める（[設計のレビュー A4](design-review.md#a4-終了の依頼の最中に受け付けが入れ子になりうる)） |
 
 ## 5. 同じプラグインが 2 つあるときの挙動（調べていない。実装を待たせない）
 

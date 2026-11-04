@@ -9,20 +9,8 @@ namespace VwCli::core {
 
 namespace {
 
-bool endsWith(std::string_view text, std::string_view suffix) {
-	return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
-}
-
 // mac のプラグインのバンドル（<name>.vwlibrary）の名前の終わり。
 constexpr std::string_view kBundleSuffix = ".vwlibrary";
-
-bool isSeparator(char c) {
-#ifdef _WIN32
-	return c == '/' || c == '\\';
-#else
-	return c == '/';
-#endif
-}
 
 }
 
@@ -30,7 +18,7 @@ std::optional<std::string> spoolDirOf(const std::string &modulePath) {
 	// 区切りの位置を並べる（先頭から）。
 	std::vector<std::size_t> separators;
 	for (std::size_t at = 0; at < modulePath.size(); ++at) {
-		if (isSeparator(modulePath[at])) {
+		if (files::isSeparator(modulePath[at])) {
 			separators.push_back(at);
 		}
 	}
@@ -49,7 +37,7 @@ std::optional<std::string> spoolDirOf(const std::string &modulePath) {
 	std::size_t folderEnd = separators.back();
 	std::size_t n = separators.size();
 	if (n >= 4 && folderName(n - 2) == "MacOS" && folderName(n - 3) == "Contents" &&
-	    endsWith(folderName(n - 4), kBundleSuffix)) {
+	    folderName(n - 4).ends_with(kBundleSuffix)) {
 		folderEnd = separators[n - 4];
 	}
 	// 根の直下（/cli.vlb など）なら、区切りを残して根を指す。
@@ -77,9 +65,9 @@ void Bridge::sweep() {
 		return;
 	}
 	for (const std::string &name : *names) {
-		bool ours = endsWith(name, protocol::kRequestSuffix) ||
-		            endsWith(name, protocol::kResponseSuffix) ||
-		            endsWith(name, protocol::kWaitSuffix) || endsWith(name, protocol::kTempSuffix);
+		bool ours = name.ends_with(protocol::kRequestSuffix) ||
+		            name.ends_with(protocol::kResponseSuffix) ||
+		            name.ends_with(protocol::kWaitSuffix) || name.ends_with(protocol::kTempSuffix);
 		if (!ours) {
 			continue;
 		}
@@ -94,7 +82,7 @@ std::vector<std::string> Bridge::poll() const {
 	std::vector<std::string> requests;
 	if (std::optional<std::vector<std::string>> names = files::list(dir_)) {
 		for (const std::string &name : *names) {
-			if (!endsWith(name, protocol::kRequestSuffix)) {
+			if (!name.ends_with(protocol::kRequestSuffix)) {
 				continue;
 			}
 			std::string_view id(name.data(), name.size() - protocol::kRequestSuffix.size());

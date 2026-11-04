@@ -17,14 +17,14 @@ import (
 // Version は読めるレジストリの registry_version。
 const Version = 1
 
-// ManifestVersion は読めるマニフェストの manifest_version。
-const ManifestVersion = 1
+// manifestVersion は読めるマニフェストの manifest_version。
+const manifestVersion = 1
 
 // DefaultName は、記録の registry に書く既定のレジストリの名前（docs/registry.md「入れたときの記録」）。
 const DefaultName = "default"
 
-// TagPlaceholder は規則の path の中で、@ の後ろの文字列に置き換わる部分。
-const TagPlaceholder = "{tag}"
+// tagPlaceholder は規則の path の中で、@ の後ろの文字列に置き換わる部分。
+const tagPlaceholder = "{tag}"
 
 // defaultJSON は既定のレジストリ。CLI に埋め込み、必ず先頭に引く（docs/registry.md「レジストリの順」）。
 //
@@ -59,9 +59,6 @@ func ValidName(name string) bool {
 func ValidTag(tag string) bool {
 	return len(tag) <= 128 && tagPattern.MatchString(tag)
 }
-
-// Targets は CLI が知るターゲット。
-var Targets = []string{"macos-arm64", "macos-x64", "windows-x64"}
 
 // Registry はレジストリ 1 つ。
 type Registry struct {
@@ -114,7 +111,7 @@ func Parse(data []byte, remote bool) (*Registry, error) {
 			if !matchPattern.MatchString(rule.Match) {
 				return nil, fmt.Errorf("%s: manifests[%d]: invalid match %q", name, i, rule.Match)
 			}
-			if err := CheckRef(strings.ReplaceAll(rule.Path, TagPlaceholder, "tag"), remote); err != nil {
+			if err := CheckRef(strings.ReplaceAll(rule.Path, tagPlaceholder, "tag"), remote); err != nil {
 				return nil, fmt.Errorf("%s: manifests[%d]: path: %w", name, i, err)
 			}
 			entry.Manifests = append(entry.Manifests, Rule{Match: rule.Match, Path: rule.Path})
@@ -128,7 +125,7 @@ func Parse(data []byte, remote bool) (*Registry, error) {
 // 規則へは進まない（どの場所を使うかが文字列だけで決まり、ネットワークの状態で変わらないため）。
 func (e Entry) Select(requested string) (Rule, bool) {
 	for _, rule := range e.Manifests {
-		if Match(rule.Match, requested) {
+		if match(rule.Match, requested) {
 			return rule, true
 		}
 	}
@@ -137,17 +134,17 @@ func (e Entry) Select(requested string) (Rule, bool) {
 
 // Location はマニフェストの場所（{tag} を置き換えたもの）。
 func (r Rule) Location(requested string) string {
-	return strings.ReplaceAll(r.Path, TagPlaceholder, requested)
+	return strings.ReplaceAll(r.Path, tagPlaceholder, requested)
 }
 
 // ByTag は規則がタグで直接指すか（path に {tag} がある）。そうならマニフェストの tag が
 // 指定と一致することを求める。
 func (r Rule) ByTag() bool {
-	return strings.Contains(r.Path, TagPlaceholder)
+	return strings.Contains(r.Path, tagPlaceholder)
 }
 
 // Match はパターン（* は 0 文字以上に合う）が s 全体に合うか。
-func Match(pattern, s string) bool {
+func match(pattern, s string) bool {
 	parts := strings.Split(pattern, "*")
 	if len(parts) == 1 {
 		return pattern == s
@@ -172,8 +169,8 @@ func IsURL(ref string) bool {
 	return strings.HasPrefix(ref, "https://")
 }
 
-// IsFileURL は参照が file:// の URL か（手元のもの）。
-func IsFileURL(ref string) bool {
+// isFileURL は参照が file:// の URL か（手元のもの）。
+func isFileURL(ref string) bool {
 	return strings.HasPrefix(ref, "file://")
 }
 
@@ -187,7 +184,7 @@ func FilePath(ref string) (string, error) {
 // （localhost は書かないのと同じ）。問い合わせ・断片の付いたもの・相対のものは断る。
 func filePath(ref string, windows bool) (string, error) {
 	switch {
-	case !IsFileURL(ref):
+	case !isFileURL(ref):
 		return "", fmt.Errorf("%q is not a file:// URL", ref)
 	case strings.ContainsAny(ref, " \t\r\n"):
 		// URL は空白を含まない（引数と環境変数の値は空白で区切る）。
@@ -239,7 +236,7 @@ func CheckRef(ref string, remote bool) error {
 		return nil
 	case remote:
 		return fmt.Errorf("%q is not an https:// URL (a remote file can refer only to https://)", ref)
-	case IsFileURL(ref):
+	case isFileURL(ref):
 		_, err := FilePath(ref)
 		return err
 	}
@@ -285,9 +282,9 @@ func ParseManifest(data []byte, remote bool) (*Manifest, error) {
 	if raw.ManifestVersion == nil {
 		return nil, errors.New("not a manifest: manifest_version is missing")
 	}
-	if *raw.ManifestVersion != ManifestVersion {
+	if *raw.ManifestVersion != manifestVersion {
 		return nil, fmt.Errorf("unknown manifest_version %d (this vw2026 reads %d; to update vw2026, run the first-time script)",
-			*raw.ManifestVersion, ManifestVersion)
+			*raw.ManifestVersion, manifestVersion)
 	}
 	if !ValidTag(raw.Tag) {
 		return nil, fmt.Errorf("invalid tag %q", raw.Tag)
@@ -351,15 +348,15 @@ func Script(argv []string) (string, error) {
 	if argv[0] == "powershell" && !strings.EqualFold(filepath.Ext(script), ".ps1") {
 		return "", fmt.Errorf("powershell runs only a .ps1 script, not %q", script)
 	}
-	if err := CheckRelative(script); err != nil {
+	if err := checkRelative(script); err != nil {
 		return "", err
 	}
 	return script, nil
 }
 
-// CheckRelative は、フックが渡すスクリプトの相対パスを確かめる。CheckInside に加えて、- で始まるもの
+// checkRelative は、フックが渡すスクリプトの相対パスを確かめる。CheckInside に加えて、- で始まるもの
 // （インタープリターが指定と読む）も断る。
-func CheckRelative(path string) error {
+func checkRelative(path string) error {
 	if strings.HasPrefix(path, "-") {
 		return fmt.Errorf("%q starts with -", path)
 	}

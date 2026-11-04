@@ -50,17 +50,34 @@ func TestCommandExplicitMustBeAFile(t *testing.T) {
 	}
 }
 
+// Vectorworks の動かない OS では、既定のものを起動しない。
+func TestCommandUnsupportedOS(t *testing.T) {
+	if argv, err := command("plan9", ""); err == nil {
+		t.Fatalf("want an error, got %v", argv)
+	}
+}
+
+// macOS の道は計算機に依らないので、どの OS でも確かめる。
+func TestCommandMac(t *testing.T) {
+	argv, err := command("darwin", "")
+	if err != nil || !reflect.DeepEqual(argv, []string{"/usr/bin/open", "-a", DefaultMacApp}) {
+		t.Fatalf("got %v, %v", argv, err)
+	}
+	// .app は存在を確かめずに open -a へ渡す（open が探す）。
+	app := "/Applications/Vectorworks 2026/Vectorworks 2026.app/"
+	argv, err = command("darwin", app)
+	if err != nil || !reflect.DeepEqual(argv, []string{"/usr/bin/open", "-a", app}) {
+		t.Fatalf("got %v, %v", argv, err)
+	}
+}
+
+// Windows の道は %ProgramFiles% と区切りに依るので、Windows でだけ確かめる。走っている OS の
+// 既定の道を Command で確かめる（macOS は TestCommandMac が command で確かめる）。
 func TestCommandDefault(t *testing.T) {
 	switch runtime.GOOS {
 	case "darwin":
 		argv, err := Command("")
 		if err != nil || !reflect.DeepEqual(argv, []string{"/usr/bin/open", "-a", DefaultMacApp}) {
-			t.Fatalf("got %v, %v", argv, err)
-		}
-		// .app は存在を確かめずに open -a へ渡す（open が探す）。
-		app := "/Applications/Vectorworks 2026/Vectorworks 2026.app/"
-		argv, err = Command(app)
-		if err != nil || !reflect.DeepEqual(argv, []string{"/usr/bin/open", "-a", app}) {
 			t.Fatalf("got %v, %v", argv, err)
 		}
 	case "windows":
