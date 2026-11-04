@@ -22,7 +22,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 | [B3](#b3-vw2026_app-が環境変数の名前の決まりに反する) | `VW2026_APP` が環境変数の名前の決まりに反する | 最初の配布（段 2）の前 | 済（名前は値の通じる範囲で決める、と決まりを改めた。CLAUDE.md「Go」） |
 | [B4](#b4-sdk-の調査の古い参照) | SDK の調査の古い参照 | なし | 済 |
 | [B5](#b5-段-24-では実機の確かめ方が成り立たない) | 段 2〜4 では実機の確かめ方が成り立たない | 段 2 | 済（段の入れ替えで、`install` の無い段は 2 だけになった。[実装の順序「実機の確かめ方」](plugin/plan.md#実機の確かめ方)） |
-| [C1](#c1-読む道具の結果に決まっていない点がある) | 読む道具の結果に決まっていない点がある | 段 5 | `ping` の `current_layer` は済（図面が無ければ `null`。[道具「ping」](plugin/tools.md#ping)）。ほかは未着手 |
+| [C1](#c1-読む道具の結果に決まっていない点がある) | 読む道具の結果に決まっていない点がある | 段 5 | `ping` の `current_layer` は済（図面が無ければ `null`。[道具「ping」](plugin/tools.md#ping)）。使う SDK 呼び出しは確かめられた（[#280](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/280)〜[#283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。ほかは未着手 |
 | [C2](#c2-ほかのプラグインの機能と書く道具の順序が矛盾する) | ほかのプラグインの機能と書く道具の順序が矛盾する | 進め方 3・4 | 未着手（A3 で、`write` の道具は占有の中でだけ呼べることになった） |
 | [C3](#c3-そのほか) | PR のプレリリースの sha・終了の処理中のタイマー | 段 2（sha）・段 6（タイマー） | sha は済（ブランチの head。[ビルドとリリース「リリースの形」](plugin/build-and-release.md#リリースの形)）。タイマーは、刻みから終了を頼む道（mac・Windows）と Windows の利用者が閉じる道は止めなくてよいと分かった（[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・[#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)）。mac の利用者が閉じる道は測っていないので、段 6 の実機確認で見る |
 
@@ -194,6 +194,9 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 
 `classes` が使う SDK 呼び出しは SDK リファレンスに無いので、issue を立てる（立てた: [#280](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/280)。レイヤは [#281](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/281)、オブジェクトの列挙と数え方は [#282](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/282)、Windows の `documents` / `save` / `close` は [#283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）
 （[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)）。
+4 つとも `Findings/` に反映された。上の項目を決める材料（縮尺の値・外形の単位・数え方・種別の名前・図面が無いときの
+振る舞い）は [SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し) にまとめてある。Windows の
+`documents` / `save` / `close` の結果は[道具「図面を扱う道具」](plugin/tools.md#図面を扱う道具documentssaveclose)に反映した。
 
 ### C2. ほかのプラグインの機能と書く道具の順序が矛盾する
 
