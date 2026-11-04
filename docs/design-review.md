@@ -200,22 +200,9 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 - `layers`・`classes` の並び順（SDK の列の順か、オーガナイザの順か）
 - `layer_objects` の `index` の意味と、名前の無い図形の `name`
 
-- **済。** 次のとおり決めた（真実は[道具「読む道具」](plugin/tools.md#読む道具layersclasseslayer_objectsobject_counts)・
-  [「図面を扱う道具」](plugin/tools.md#図面を扱う道具documentssaveclose)）。
-  - `type` は `GetObjectTypeN` の番号（引数も番号）。`type_name` はプラグインの表で引き（SDK に口が無い）、
-    PIO の名前は `pio_name` に出す。
-  - `scale` は縮尺の分母。シートレイヤは SDK の返すとおり `1`。
-  - `bounds` は mm 固定（縮尺を掛けない世界座標）。結果に `unit`（常に `"mm"`）を置き、取り違えを防ぐ。
-  - 数えるのはレイヤの直下の図形で、終端（型 0）と undo の置き石（型 90）を除く（情報パレットの「N 図形」と一致する）。
-    図面全体はシートレイヤを含む。
-  - 図面が開かれていなければ `internal` で失敗し、`detail` の `reason` を `no_document` にする（`documents` は空の一覧）。
-  - 参照で入ってきたレイヤは返し、`referenced` で見分ける（`kind` は `design`）。クラスは参照のものを含めない。
-  - 並びは SDK の列の順（背面→前面。クラスは ID の順）で、画面の並びには並べ替えない。
-  - `index` は型 0 と 90 を除いた並びの位置で、識別子には使えない。名前の無い図形の `name` は空文字列。
-  - Windows の `documents` / `save` / `close`（パスを正規化しないこと・保存先が既にあれば呼ぶ前に `file_exists` で
-    断ること・上書き保存には `GetOpenFilesList` の文字列を渡すこと）は、C1 とは別に[「図面を扱う道具」](plugin/tools.md#図面を扱う道具documentssaveclose)へ書いた。
-  - `save` の `to_is_open`・`file_exists` は `internal` にする（引数の形は正しく、いまの状態のために保存できない失敗。
-    `quit` の `documents_open`・`no_document` と揃える。`invalid_args` は引数を直さなければ通らないものに使う）。
+- **済。** 決めたことは[道具「読む道具」](plugin/tools.md#読む道具layersclasseslayer_objectsobject_counts)と
+  [「図面を扱う道具」](plugin/tools.md#図面を扱う道具documentssaveclose)に書いた（`invalid_args` と `internal` の分け方は
+  [道具](plugin/tools.md#最初に提供する道具)の冒頭。`save` の `to_is_open`・`file_exists` はこのとき `internal` に改めた）。
 
 ### C2. ほかのプラグインの機能と書く道具の順序が矛盾する
 
