@@ -87,11 +87,15 @@ OS タイマー
 - **受け付けの入れ子**は、道具の SDK 呼び出しが中でイベントを回したとき（モーダルダイアログ・進捗の
   `DoYield` など）に、そのループの中で次の刻みが届いて起きます（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4）。
   入れ子の回は要求を解析せずに断ります。外の回がすでに並べていた要求も断り、外の回はそれを取り出せずに
-  飛ばします。いまの道具の呼び出しでイベントを回すものは知られていません。
+  飛ばします。段 5 の `close` は、保存の確認が出ると人が答えるまで戻らず、その間イベントを回します
+  （[道具「図面を扱う道具」](tools.md#図面を扱う道具documentssaveclose)）。`save` も、保存先が別の図面で開いている
+  ファイルなら警告のダイアログでイベントを回しますが、そのときは呼ぶ前に断ります。
 - **終了の依頼の最中の判定は暫定です。** 守る相手は、`quit` を頼んだ当の呼ぶ側の呼び直しだけです
   （`write`・`app` は占有の中でしか呼べないため）。保存の確認の中で 2 つ目の
-  `CloseAllFilesAndQuitVectorworks` を呼んだときに何が起きるかを [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 で確かめ、
-  段 6 の前に、この判定を残すか（残すなら、入れ子の判定にまとめて保存の確認の間はすべて断るか）を決めます。
+  `CloseAllFilesAndQuitVectorworks` を呼ぶと確認が重なって出て、Windows では呼んだタイマー自身が確認の最中に
+  入り直すと分かりました（[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)。[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9）。
+  この判定は Findings が勧める「終了の呼び出しの最中」の旗に当たるので残します。段 6 の前に、入れ子の判定に
+  まとめて保存の確認の間はすべて断るかを決めます（[設計のレビュー A4](../design-review.md#a4-終了の依頼の最中に受け付けが入れ子になりうる)）。
   終了の依頼は `serve` の外（タイマーが `serve` から戻ったあと）で行うので、保存の確認の間の刻みは
   入れ子にならず、いまは読む道具に応えます。
 - **undo の記録が開いているかは見ません。** 刻みの中から記録が開いて見えた実測は、どれもプラグイン

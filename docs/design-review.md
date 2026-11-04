@@ -14,9 +14,9 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 | 項目 | 中身 | 関わる段 | 状態 |
 | --- | --- | --- | --- |
 | [A1](#a1-種類-app-と終了の依頼が同じ意味になっている) | 種類 `app` と終了の依頼が同じ意味になっている | 段 4 の前 | 済（終了の依頼は道具が返す印 `ToolStatus::quit` にし、`app` は占有の中でだけ呼べる種類に限る。段 4 の共通部の変更で実装した。[ブリッジ「道具の表」](plugin/bridge.md#道具の表)） |
-| [A2](#a2-quitping-が使う-sdk-呼び出しが確かめられていない) | `quit`・`ping` が使う SDK 呼び出しが確かめられていない | 段 6（`quit`）の前 | `GetCurrentLayer()` は済（[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)・[道具「ping」](plugin/tools.md#ping)）。`quit` は [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) で調査中 |
+| [A2](#a2-quitping-が使う-sdk-呼び出しが確かめられていない) | `quit`・`ping` が使う SDK 呼び出しが確かめられていない | 段 6（`quit`）の前 | 済（`GetCurrentLayer()` は[道具「ping」](plugin/tools.md#ping)。`CloseAllFilesAndQuitVectorworks` は刻みから呼べ、保存の確認を取り消すと戻る。[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)。[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)） |
 | [A3](#a3-未決-2-が段-2-の作りを変える) | 未決 2 が段 2 の作りを変える | 段 2 の前 | 済（undo の記録が開いているかは見ない。書く道具は自分で記録を開いて閉じ、占有の中でだけ呼べる。受け付けの入れ子は `busy` で断る。[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)） |
-| [A4](#a4-終了の依頼の最中に受け付けが入れ子になりうる) | 終了の依頼の最中に受け付けが入れ子になりうる | 段 6 | 暫定（終了の依頼の最中は `write`・`app` を `busy` で断る。残すかは [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 の結果で段 6 の前に決める） |
+| [A4](#a4-終了の依頼の最中に受け付けが入れ子になりうる) | 終了の依頼の最中に受け付けが入れ子になりうる | 段 6 | 暫定（終了の依頼の最中は `write`・`app` を `busy` で断る。[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 の結果から、判定は残す。段 6 の前に、入れ子の判定にまとめるかを決める） |
 | [B1](#b1-更新の手順の見本が占有を残す) | 更新の手順の見本が占有を残す | 段 6 | 済（失敗の道筋で `session end` を呼ぶ形に直し、見本を `vw2026 --help` へ移した。[インストール「流れ」](plugin/install-and-update.md#流れ)） |
 | [B2](#b2-windows-の-path-の書き換えが既存の項目を壊しうる) | Windows の PATH の書き換えが既存の項目を壊しうる | 段 3b | 済（展開しない値を読み、型を保って書き戻す。`.NET` の `Microsoft.Win32.RegistryKey` で読み書きし、段 3b の `install-windows` ジョブが実物のレジストリで、値が無い・REG_SZ・REG_EXPAND_SZ の場合に型と既存の項目が保たれることを確かめた。[インストール「Windows の `Path` の読み書き」](plugin/install-and-update.md#windows-の-path-の読み書き)） |
 | [B3](#b3-vw2026_app-が環境変数の名前の決まりに反する) | `VW2026_APP` が環境変数の名前の決まりに反する | 最初の配布（段 2）の前 | 済（名前は値の通じる範囲で決める、と決まりを改めた。CLAUDE.md「Go」） |
@@ -24,7 +24,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 | [B5](#b5-段-24-では実機の確かめ方が成り立たない) | 段 2〜4 では実機の確かめ方が成り立たない | 段 2 | 済（段の入れ替えで、`install` の無い段は 2 だけになった。[実装の順序「実機の確かめ方」](plugin/plan.md#実機の確かめ方)） |
 | [C1](#c1-読む道具の結果に決まっていない点がある) | 読む道具の結果に決まっていない点がある | 段 5 | `ping` の `current_layer` は済（図面が無ければ `null`。[道具「ping」](plugin/tools.md#ping)）。ほかは未着手 |
 | [C2](#c2-ほかのプラグインの機能と書く道具の順序が矛盾する) | ほかのプラグインの機能と書く道具の順序が矛盾する | 進め方 3・4 | 未着手（A3 で、`write` の道具は占有の中でだけ呼べることになった） |
-| [C3](#c3-そのほか) | PR のプレリリースの sha・終了の処理中のタイマー | 段 2（sha）・段 6（タイマー） | sha は済（ブランチの head。[ビルドとリリース「リリースの形」](plugin/build-and-release.md#リリースの形)）。タイマーは未着手 |
+| [C3](#c3-そのほか) | PR のプレリリースの sha・終了の処理中のタイマー | 段 2（sha）・段 6（タイマー） | sha は済（ブランチの head。[ビルドとリリース「リリースの形」](plugin/build-and-release.md#リリースの形)）。タイマーは、刻みから終了を頼む道（mac・Windows）と Windows の利用者が閉じる道は止めなくてよいと分かった（[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・[#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)）。mac の利用者が閉じる道は測っていないので、段 6 の実機確認で見る |
 
 ## A. 段 4・6 の前に決めること
 
@@ -45,7 +45,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 
 ### A2. `quit`・`ping` が使う SDK 呼び出しが確かめられていない
 
-- [SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)では、次が未確認である。
+- [SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)では、次が未確認だった（下記の「済」で確かめ終えた）。
   - OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼んでよいか
   - 保存の確認を取り消したときに呼び出しから戻るか
 - [実装の順序](plugin/plan.md)の段 6（`quit`）には「使う SDK 呼び出しが SDK リファレンスで
@@ -55,6 +55,8 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
   同じ issue で確かめる。
 - `ping` が使う `GetCurrentLayer()` は済（[道具「ping」](plugin/tools.md#ping)・
   [構成「受け付けの流れ」](plugin/architecture.md#受け付けの流れ)）。
+- **済。** #230 で、刻みから呼べること（mac・Windows）と、保存の確認を取り消すと呼び出しが戻り図面が残ることが
+  分かった（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9。[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)）。
 
 ### A3. 未決 2 が段 2 の作りを変える
 
@@ -92,11 +94,16 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
   道具には応える）、`Clock` が終了の依頼の前後で印を立てて `Quitting` を渡す。その間は種類
   `write`・`app` を `busy` で断るので、2 つ目の `quit` は重ならない。
 - **`quit` は図面が 0 枚のときだけ受け付ける**（[道具「quit」](plugin/tools.md#quit)）ので、保存の確認が開くのは、確かめてから
-  頼むまでの間に利用者が図面を開いた競合のときだけ。判定を残す理由は小さい。#230 の 4 の結果で残すかを決める。
+  頼むまでの間に利用者が図面を開いた競合のときだけ。
 - 守る相手は `quit` を頼んだ当の呼ぶ側の呼び直しだけ（`write`・`app` は占有の中でしか呼べない）。
-  保存の確認の中で 2 つ目の `CloseAllFilesAndQuitVectorworks` を呼んだときに何が起きるかを
-  [SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 で確かめ、段 6 の前に、判定をやめるか、残すか、
-  入れ子の判定にまとめて保存の確認の間はすべて断るかを決める。
+- **#230 の 4 の結果。** 保存の確認の中から 2 つ目を呼ぶと、確認が 2 つ重なって出る（落ちない。両方取り消すと
+  内側 → 外側の順に戻る）。mac では呼んだタイマー自身は確認の最中に入り直さないが、Windows では入り直し、
+  そこから 2 つ目を呼べてしまう。Findings は「終了の呼び出しの最中」を旗で持って見送る作りを勧めている
+  （Windows では必須。`IsCurrentlyBuildingAnUndoEvent()` は確認の最中も `no` なので判定に使えない。
+  [Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9「保存の確認の最中」）。
+- **暫定は Findings の勧めに合っている**（`Clock` が終了の依頼の前後で立てる印が、勧められている旗に当たる）。
+  Windows では入り直した刻みから 2 つ目を呼べてしまうので、判定をやめる道は採れない。段 6 の前に決めるのは、
+  この判定を入れ子の判定にまとめて、保存の確認の間はすべて断るかどうかだけである。
 
 ## B. 文書の誤りと、文書と実装の食い違い
 
@@ -185,7 +192,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 - 図面が開かれていないときの各道具の応答（`internal` とする想定）。`ping` の `current_layer` は
   `null` に決めた（[道具「ping」](plugin/tools.md#ping)）
 
-`classes` が使う SDK 呼び出しは SDK リファレンスに無いので、issue を立てる
+`classes` が使う SDK 呼び出しは SDK リファレンスに無いので、issue を立てる（立てた: [#280](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/280)。レイヤは [#281](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/281)、オブジェクトの列挙と数え方は [#282](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/282)、Windows の `documents` / `save` / `close` は [#283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）
 （[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)）。
 
 ### C2. ほかのプラグインの機能と書く道具の順序が矛盾する
@@ -210,3 +217,8 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 - **終了の処理中のタイマー。** Vectorworks が終わる途中（図面を閉じたあと、プロセスが終わる
   まで）に刻みが届いたときの扱い（タイマーを止める入口があるか）を、段 6 の実機確認の項目に
   入れる。
+  **調べた範囲では、タイマーを止めなくてよい。** 刻みから終了を頼んだとき、mac では呼び出しが戻った後に刻みが
+  1〜数回届くが、`GetOpenFilesList()`・`GetCurrentLayer()` などは落ちずに返った。Windows では呼び出しの
+  後に刻みは来ない。利用者が閉じる道でも、Windows では `kNotifyBeforeApplicationQuit` の後に刻みは来ない
+  （[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9。[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・[#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)）。
+  **mac の利用者が閉じる道は測っていない**ので、段 6 の実機確認の項目に入れる（[実装の順序](plugin/plan.md)の段 6）。
