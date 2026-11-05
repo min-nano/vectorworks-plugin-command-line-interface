@@ -452,7 +452,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       実装は置きません（出荷しない実装をテストしても、出荷するものについて何も分からないため）。
     - **包みのテスト**は、ほかの無 SDK のテストと同じ `VwCliTests` の中に置きます（別の実行ファイルにしないので、macOS と
       Windows のカバレッジにそのまま入る）。テストのファイル（`tests/PathCompareTests.cpp`）は**どの OS でも**
-      `VwCliTests` のソースに並べ、中身を印のマクロ `VW_HAS_PATH_COMPARE` で囲みます。印は、包みをビルドするときに CMake が
+      `VwCliTests` のソースに並べ、中身を印のマクロ `VWCLI_HAS_PATH_COMPARE` で囲みます。印は、包みをビルドするときに CMake が
       `VwCliCore` に `PUBLIC` で定義し（`VwCliTests` にも届く）、OS で分ける条件は包みの側の 1 か所だけにします。Linux では
       空の翻訳単位になり、skip の分岐は持ちません。**テストのファイルは `__APPLE__` か `_WIN32` なのに印が無ければ `#error` で
       止めます**（包みの側の条件を書き誤ると、テストが黙って抜けて CI が緑のままになるのではなく、コンパイルで落ちる。
