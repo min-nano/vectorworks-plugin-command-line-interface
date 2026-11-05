@@ -343,8 +343,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   - 内部では `GetOpenFilesList` からパスの一致する項目の `fileRef` を引き、`SwitchToOpenFile` →
     `SaveActiveDocumentPath` で保存します。**`to` を省いたときは、`GetOpenFilesList` が返した文字列をそのまま
     保存先に渡します**（Windows では、大文字と小文字だけが違うパスを渡すと自分のファイルが「既にある」として
-    断られ、上書き保存にならない）。**前面の図面とカレントレイヤは、保存の前後で元に戻せます**
-    （戻すのも `SwitchToOpenFile`）。
+    断られ、上書き保存にならない）。**保存のあと、前面の図面とカレントレイヤを保存の前に戻します**
+    （戻すのも `SwitchToOpenFile`。結果の `path` は戻す前に読む。上記）。
 - **パスの一致の判定。** `document` は `documents` が返した文字列と**完全に一致**するものを探します（呼ぶ側は
   `documents` の結果をそのまま渡す）。`to` は新しいパスで、開いている図面の保存先との衝突を**見逃さない側**に倒して
   比べます: 絶対パスを要し（相対パスは `invalid_args`）、区切り文字を揃え、Unicode を正規化（NFC。macOS のファイル名は
