@@ -70,10 +70,17 @@ such as ping) runs for every call.
 
 While Vectorworks is quitting (after "call quit", while it asks whether to save
 the drawings), the plug-in refuses a tool of kind write or app with busy, and
-call exits with 23: the tool did not run. In the rare case that a tool lets
-Vectorworks run its events, the plug-in refuses every other call with busy until
-the tool returns. The reason is on the standard error. Call again later; call
-does not retry by itself.
+call exits with 23: the tool did not run. The reason is on the standard error.
+Call again later; call does not retry by itself.
+
+A tool may take long (saving or closing a large drawing) or wait for the user
+(closing a drawing that Vectorworks asks whether to save). If --timeout runs out
+after the plug-in took the request, call exits with 4 while the tool goes on;
+check what happened with another tool (such as documents), or give a longer
+--timeout. While such a tool runs, the plug-in answers no other call: those calls
+wait and run after it returns, or exit with 3 when their --timeout runs out. On
+Windows, while the tool shows a dialog, the plug-in refuses every other call with
+busy instead, and call exits with 23.
 `
 }
 
