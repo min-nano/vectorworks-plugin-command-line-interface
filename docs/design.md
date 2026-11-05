@@ -70,8 +70,7 @@
   （[インストール](plugin/install-and-update.md#インストールと更新vw2026-install)）。
 - **受け付けは OS タイマーが 1 回ずつ呼びます。** ISDK に周期的に呼ばれる口は無く、OS の
   タイマーからは `gSDK` を読み書きできます（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md)
-  の 1・4）。受け付けの中で非同期の処理の完了を待ちません（待つループを書かない。後から終わる処理は
-  頼むだけにし、見届けるのは呼ぶ側。同期の呼び出しが長くかかる道具は持つ。[通信規則「予約された道具」](protocol.md#予約された道具)）。
+  の 1・4）。受け付けの中で非同期の処理の完了を待ちません（[通信規則「予約された道具」](protocol.md#予約された道具)）。
 - **SDK 呼び出しはメインスレッドからだけ**行います。受け付け用のスレッドは持ちません
   （SDK はメインスレッドからの呼び出ししか想定していない）。
 
