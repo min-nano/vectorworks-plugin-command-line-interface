@@ -22,7 +22,7 @@
 1. 引数の形（知らない引数・型・値の範囲・必須の欠け・`save` の `to` の形）→ `invalid_args`。
 2. 図面が無い → `internal`（`no_document`）。**「図面が無い」は、道具が使うものの有無で決めます。** 前面の図面を読む
    道具（`layers`・`classes`・`layer_objects`・`object_counts`）は `GetCurrentLayer()` が `nullptr` か（`ping` の
-   `document_open` と同じ基準。読む道具は `current` のためにどのみち呼ぶ）、図面を名指す道具（`save`・`close`）は
+   `document_open` と同じ基準。`layers` は `current` のためにどのみち呼ぶ）、図面を名指す道具（`save`・`close`）は
    `GetOpenFilesList` の件数が 0 か（名指す図面を引く一覧と同じもの）で決めます。2 つが一致することを確かめたのは、
    起動の直後と全部閉じた後だけです（[Findings「Timers and Notifications」の 4 の 8](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md)）。件数が 1 以上でも前面の
    図面が無い状態があれば、読む道具は `no_document` で断り、`save`・`close` は名指した図面に働きます（どちらも道具が
@@ -74,7 +74,7 @@
 | `current_layer` | 現在のレイヤの名前。図面が開いていなければ `null` |
 
 図面が 1 枚も開いていないとき、`GetCurrentLayer()` は落ちずに `nullptr` を返し、その判定は
-`GetOpenFilesList()` の件数と常に一致します（起動直後も、全部閉じた後も。mac / Windows。
+`GetOpenFilesList()` の件数と、起動直後も全部閉じた後も一致しました（確かめたのはこの 2 つの状態。mac / Windows。
 [Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 8）。
 図面が無いときは次のように答えます。
 
@@ -92,7 +92,7 @@
 
 **共通の決めごと:**
 
-- **図面が開かれていなければ `internal` で失敗し、`detail` に `{"reason":"no_document"}` を付けます。**
+- **図面が開かれていなければ（`GetCurrentLayer()` が `nullptr` か。[冒頭](#最初に提供する道具)の 2）`internal` で失敗し、`detail` に `{"reason":"no_document"}` を付けます。**
   SDK は図面が無くても落ちずに空の列を返します（[Findings「Layers and Stories」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)の「OS タイマーの刻みの中・図面 0 枚」・
   [Findings「Attributes and Classes」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Attributes%20and%20Classes.md)の「タイマーの刻みから呼べる。図面 0 枚でも落ちない」）が、
   空の結果（`object_counts` の `total:0` など）を「中身の無い図面」と見分けられなくなるので、失敗にします。
