@@ -386,17 +386,25 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       `kCFCompareCaseInsensitive` は Unicode の case folding、`CompareStringOrdinal` の大文字と小文字の無視は OS の表での
       単純な大文字への写し。どの文字で違うかは確かめていない）。同じ `to` が一方の OS でだけ `to_is_open` になりえますが、
       この比べ方は開いている図面との衝突を示すためのもので、ディスクにあるファイルは `file_exists` で断り、警告が出るのは
-      文字列が完全に一致するときだけなので、違いを認めます。
+      文字列が完全に一致するときだけなので、違いを認めます。ただし、開いている図面のファイルがディスクから移されて
+      いると、一方の OS でだけ一致する文字だけが違う `to` は、もう一方の OS では `to_is_open` にも `file_exists` にも
+      当たらずに保存され、見た目の近い図面がもう 1 枚できえます（見逃しうるのはこの場合だけ）。
     - **OS で分けるのは、比べ方の薄い包みだけです。** 保存先の確かめ（`to_is_open` → `file_exists` → `parent_missing` の
       順と `to` の形の確かめ）は比べる関数を引数で受け取り、`src/core` に置いてどの OS でもビルド・テストします（Linux の
       ASan・UBSan と clang-tidy にも掛かる）。手順のテストでは差し替えの比べ方を渡します（手順を確かめるためのもので、
-      出荷する比べ方を確かめるものではない）。
-    - **比べ方の包み**（NFC への正規化と大文字小文字を区別しない比較）は、`FilesPosix.cpp`・`FilesWindows.cpp` と同じく
-      mac 用と Windows 用のファイルに置き、APPLE と WIN32 のときだけビルドします。mac は `VwCliCore` に
+      出荷する比べ方を確かめるものではない）。**プラグインの `save` が本物の比べ方を渡していることは CI では確かめられない**
+      （結び付けは SDK に依る `src/tools` の側）ので、段 5 の実機の確認で、開いている図面と大文字と小文字だけが違う `to` が
+      `to_is_open` になることを見ます。
+    - **比べ方の包み**（NFC への正規化と大文字小文字を区別しない比較）は、`src/core/PathCompare.h` に宣言し、
+      `PathCompareMac.cpp`・`PathCompareWindows.cpp` に分けて置き（`FilesPosix.cpp`・`FilesWindows.cpp` と同じ分け方）、
+      APPLE と WIN32 のときだけビルドします。mac は `VwCliCore` に
       `-framework CoreFoundation` を、Windows は `Normaliz.lib`（`NormalizeString`）をリンクします。Linux 用の代わりの
       実装は置きません（出荷しない実装をテストしても、出荷するものについて何も分からないため）。
-    - **包みのテスト**は別のテストとして `ctest` に登録し、Linux では `SKIP_RETURN_CODE` で skipped として一覧に出します
-      （黙って抜けないように。mac と Windows で条件を書き誤ってテストが消えても、skipped の表示で気付ける）。
+    - **包みのテスト**は、ほかの無 SDK のテストと同じ `VwCliTests` の中に、APPLE と WIN32 のときだけ入れます（別の
+      実行ファイルにしないので、macOS と Windows のカバレッジにそのまま入る）。Linux ではテストごと入らず、skip の分岐も
+      持ちません。**mac と Windows でテストが黙って抜けないよう、CMake は包みをビルドするときに印のマクロを定義し、テストの
+      ファイルは `__APPLE__` か `_WIN32` なのに印が無ければ `#error` で止めます**（ビルドの条件を書き誤ると、CI が緑のまま
+      ではなくコンパイルで落ちる）。
 - **`close`** は対象の図面を閉じます。**保存はしません。** 種類は `app` です。
   対象の図面を `SwitchToOpenFile` で前面にしてから `DoMenuName("Close", 0)` を呼びます（メニューの「閉じる」と
   同じで、前面の図面に効く。`CloseDocument()` は確認なしで変更を捨てるので使いません）。
