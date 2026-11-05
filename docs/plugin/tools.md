@@ -358,10 +358,19 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     指す 2 枚目ができるのと、Windows で NFD の別のファイル（NTFS は区別する）に見た目が同じ図面ができるのを防ぐためです。
   - **NFC への正規化と、大文字と小文字を区別しない比較は OS の呼び出しで行います**（mac は CoreFoundation の
     `CFStringNormalize`・`CFStringCompare`、Windows は `NormalizeString`・`CompareStringOrdinal`）。外部のライブラリは
-    足しません。`src/core` は Linux でもビルドする（`cpp.yml` の fuzz のジョブ）ので、Linux には代わりの実装を置きます:
-    NFC へは直さず、大文字と小文字は ASCII だけを畳んで比べます。プラグインは Linux で動かないので、これは
-    テストを走らせるためだけのもので、NFC と ASCII 以外の大文字・小文字を確かめるテストは mac と Windows のジョブ
-    （`cpp.yml` の test）だけで走らせます。
+    足しません。
+    - **畳み方は OS の呼び出しのとおりで、mac と Windows で一部の文字が違います**（`CFStringCompare` の
+      `kCFCompareCaseInsensitive` は Unicode の case folding、`CompareStringOrdinal` の大文字と小文字の無視は OS の表での
+      単純な大文字への写し。`ß` と `SS`・語末のシグマ・`İ`（U+0130）と `ı`（U+0131）など）。同じ `to` が一方の OS でだけ
+      `to_is_open` になりえますが、この比べ方は開いている図面との衝突を示すためのもので、ディスクにあるファイルは
+      `file_exists` で断り、警告が出るのは文字列が完全に一致するときだけなので、違いを認めます。
+    - **置き場所:** 比べる関数は `src/core` の OS ごとのファイル（mac 用と Windows 用。`FilesPosix.cpp`・`FilesWindows.cpp`
+      と同じ分け方）に置き、**APPLE と WIN32 のときだけビルドします**。mac は `VwCliCore` に `-framework CoreFoundation`
+      を、Windows は `Normaliz.lib`（`NormalizeString`）をリンクします。
+    - **Linux（`cpp.yml` の fuzz のジョブ）では、比べる関数も、それを使う `save` の保存先の確かめも、そのテストも
+      ビルドしません**（代わりの実装は置かない。出荷しない実装をテストしても出荷するものについて何も分からず、
+      ずれても気付けないため）。テストは別のテストとして APPLE と WIN32 のときだけ `ctest` に登録し、Linux では
+      黙って通るのではなく一覧に現れないようにします。fuzz のジョブに要るのは `core/Json` だけです。
 - **`close`** は対象の図面を閉じます。**保存はしません。** 種類は `app` です。
   対象の図面を `SwitchToOpenFile` で前面にしてから `DoMenuName("Close", 0)` を呼びます（メニューの「閉じる」と
   同じで、前面の図面に効く。`CloseDocument()` は確認なしで変更を捨てるので使いません）。
