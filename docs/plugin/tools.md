@@ -18,6 +18,25 @@
   無限大になるためです。
 - `core::Json::asInt64` は綴り（小数部と指数部が無いか）で整数かを決めるので、段 5 で値で決める読み方を足します。
 
+**結果の実数（`scale`・`bounds` の値）の桁は、元の値に戻る最も短いものにし、書き方は Go の `encoding/json`
+に合わせます**（プラグインの綴りを決まった基準に揃え、その基準を見本で C++ と Go の両側から確かめるため）。
+- 桁は `std::to_chars` の精度を指定しない形で求めます。ただし `to_chars` の書き方はそのまま使いません（固定小数点より
+  指数のほうが短ければ指数を選ぶので、`100000` が `1e+05`、`0.0001` が `1e-04` になる）。
+- **0 と、`1e-6 ≤ |x| < 1e21` は固定小数点で書きます**（`0`・`100000`・`1500000`・`0.0001`・`0.000001`・`2366.025`）。整数の値は
+  小数点を付けません（`50.0` は `50`）。上と同じく、呼ぶ側は書き方で整数と実数を区別しません。
+- それ以外は指数で書き、指数は符号を付けて先頭の 0 を付けません（`1e+21`・`1e-7`・`1.5e-7`）。
+- `-0` も Go と同じく `-0` と書きます（読み手には 0 と同じ値。Go と綴りを揃えるため、符号を落とさない）。
+- **実数と綴りの組は見本のファイルに置き**、C++ のテストは書き出しの口と、Go のテストは `json.Marshal` と照らします
+  （段 5 で足す）。Go と同じ綴りであることを、片側のテストに書いた期待だけで決めないためです。これは道具の結果の
+  決まりで通信規則ではないので、見本は通信規則の見本（`protocol/fixtures`。[通信規則の見本](../fixtures.md)）とは
+  分けて `tests/fixtures/` に置きます。
+- **有限でない値（無限大・NaN）は JSON に書けないので、そのフィールドを `null` にします**（`bounds` は 4 つの
+  どれかが有限でなければ `bounds` ごと `null`）。この決まりは道具ごとに書かず、`core` の 1 か所に置きます:
+  `core::Json` の実数の口は「有限でなければ `null` を返す」1 つだけにし、道具の結果の実数はどれもそれで作ります。`bounds` は
+  `GetObjectBounds` の戻り値（真偽）と外形の 4 つの値を受けて `bounds`（または `null`）を返す 1 つの関数で作ります
+  （偽の場合も無 SDK のテストで確かめられるように）。
+- `core::Json` は数を綴りで持ち、実数を書き出す口が無いので、段 5 で足します。
+
 **引数の確かめは次の順に行い、最初に当たったもので返します**（どの `reason` を返すかを決めておくため）。
 1. 引数の形（知らない引数・型・値の範囲・必須の欠け・`save` の `to` の形）→ `invalid_args`。
 2. 図面が無い → `internal`（`no_document`）。**「図面が無い」は、道具が使うものの有無で決めます。** 前面の図面を読む
@@ -114,7 +133,7 @@
 | `name` | レイヤの名前（`GetObjectName`）。参照で入ってきたレイヤは `NNA#1_<元の名前>` |
 | `kind` | `design`（`ovLayerType` が 1 か 3）・`sheet`（2）。それ以外の値（Findings で確かめていない種類）は `null` |
 | `referenced` | 参照で入ってきたデザインレイヤか（`ovLayerType` が 3） |
-| `scale` | 縮尺の分母（`GetLayerScaleN`。1/50 なら `50`、1:1 なら `1`）。**シートレイヤは SDK の返すとおり常に `1`** |
+| `scale` | 縮尺の分母（`GetLayerScaleN`。1/50 なら `50`、1:1 なら `1`）。SDK は `double_gs` で返すので実数として書きます（[Findings「レイヤの縮尺」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md#レイヤの縮尺setlayerscalen-は黙って効かないことがある)。確かめた縮尺はどれも整数で、整数でない縮尺は確かめていない）。**シートレイヤは SDK の返すとおり常に `1`**。有限でなければ `null`（[冒頭](#最初に提供する道具)） |
 | `objects` | レイヤの直下の図形の数（下記「数え方」） |
 | `current` | 現在のレイヤか（`GetCurrentLayer()` とハンドルが一致するか） |
 
@@ -189,8 +208,12 @@
 - **`name`** は `GetObjectName` のままで、名前の無い図形は空文字列（`""`）です（Vectorworks でも空の名前と
   区別が無い）。**`class`** はクラスの名前（`GetObjectClass` → `ClassIDToName`）です。
 - **`bounds`** は `GetObjectBounds` の外形で、**単位は常に mm**です。結果の **`unit`** は常に `"mm"` で、
-  単位の取り違えを防ぐために置きます。値は図面の単位にもレイヤの縮尺にもよらない世界座標です。外形が取れない
-  図形は `null` です。
+  単位の取り違えを防ぐために置きます。値は図面の単位にもレイヤの縮尺にもよらない世界座標の実数です。`GetObjectBounds` が偽を
+  返した図形と、4 つの値のどれかが有限でない図形は `null` です（[冒頭](#最初に提供する道具)）。偽を返すと確かめたのは
+  undo の置き石だけで（[Findings「Layer Objects」の 2](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md#2-列に混ざる図形でないもの)）、置き石は数える図形から除いてあるので、
+  列に残る図形で偽を返すものは確かめていません。返したときに備えて `null` にします。
+  **有限かは、下の最小と最大をとる前に SDK の外形の 4 つの値で確かめます**（`std::min(a, b)` は `b` が NaN だと
+  `a` を返すので、先に最小と最大をとると NaN が落ちて有限の値の `bounds` になる）。
   - **`left ≤ right`・`bottom ≤ top` です。** `left`・`right` は X の小さい側と大きい側、`bottom`・`top` は Y の
     小さい側と大きい側で、プラグインが SDK の外形から最小と最大をとって入れます（画面の座標のように Y が下向きに
     増えるとは読まない）。
@@ -258,13 +281,26 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
 | 道具 | 種類 | 引数 | 結果 |
 | --- | --- | --- | --- |
 | `documents` | read | なし | `{"documents":[{"name","path","untitled","active"}],"count"}` |
-| `save` | app | `document`（必須）・`to`（省略可） | `{"document","path"}`（保存した後の図面のパス） |
+| `save` | app | `document`（必須）・`to`（省略可） | `{"document","path"}`（下記） |
 | `close` | app | `document`（必須） | `{"closed":true}` |
+
+```json
+{"documents":[{"name":"plan.vwx","path":"/Users/me/plan.vwx","untitled":false,"active":true},{"name":"名称未設定 1","path":"/Applications/Vectorworks 2026/名称未設定 1","untitled":true,"active":false}],"count":2}
+{"document":"/Applications/Vectorworks 2026/名称未設定 1","path":"/Users/me/tmp/a.vwx"}
+{"closed":true}
+```
+
+上から `documents`・無題の図面を `to` へ保存した `save`・`close` の結果です。
 
 - **図面が 1 枚も開いていなければ、`save`・`close` は `internal` で失敗し、`detail` に `{"reason":"no_document"}` を
   付けます**（`GetOpenFilesList` の件数で決める。[冒頭](#最初に提供する道具)の 2。`document` を確かめる前に返す）。
   `documents` は失敗にせず、空の一覧を返します。
+- **`documents`** は `GetOpenFilesList` の項目を、その順のまま並べます（並べ替えない）。**`count`** はその数です。
+  順の意味（開いた順・前面からの順など）は確かめていないので、呼ぶ側は順に頼らず `active` と `path` で見分けます。
 - **`name`** は `path` の最後の区切り文字より後ろの部分です（SDK に名前を聞かずにパスから作る）。
+- **`active`** は、前面の図面（読む道具が読む図面）かを表します。`GetOpenFilesList` の `fIsActive` をそのまま
+  載せます（構造体は [Findings「存在する API」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#存在する-apiヘッダ根拠)、実測の `active` は [同「`GetOpenFilesList` と `fileRef`」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#getopenfileslist-と-fileref)）。真がちょうど 1 つかは
+  確かめていません。
 - **`untitled`** は、図面がディスクのファイルに結び付いていないか（`GetOpenFilesList` の `fIsInMemoryOnly`）です。
   一度も保存していない図面のほか、**古い版・読み取り専用・ほかの Vectorworks が使用中のファイルを開いた図面**も
   真です（Vectorworks はこれらを元のファイルに結び付かないコピーとして開く。`OpenDocumentPath` で開いても確認なしに
@@ -301,7 +337,11 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
        失敗しました…」が出て、`GSError` は 0 のままファイルは置き換わり、2 回目からは図面のパスがアプリケーションの
        フォルダへ移ります。Windows はダイアログを出さずに置き換え、元のファイルを `.bak` へ退避します。OS で
        振る舞いが違い、戻り値でも分からないので、どちらの OS でも断ります。
-  - **結果の `path` は、保存のあとに `GetOpenFilesList` から読み直した文字列です**（`to` をそのまま返さない）。
+  - **結果の `document`** は、引数の `document` をそのまま返したもの（保存する前の図面のパス）です。
+  - **結果の `path` は、保存のあとに `GetOpenFilesList` から読み直した文字列です**（`to` をそのまま返さない）。`to` を
+    省いた上書き保存なら `document` と同じ文字列です（一覧の文字列をそのまま保存先に渡し、渡した文字列がそのまま
+    一覧に残る。[Findings「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・
+    [同「すでに開かれています」の比べ方（mac）](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#このファイルはすでに開かれていますの比べ方macwindows-と同じ文字列の完全一致)）。
     Windows では `/` が `\` に揃って残るので、`to` をそのまま `close` の `document` に渡すと一致しません。読み直すのは、
     保存の直後に前面になっている項目です（前面を戻す前に読む。`fileRef` が保存の前後で変わらないかには頼らない）。
   - **`to` の形は、呼ぶ前に確かめて `invalid_args` で断ります。** Vectorworks は形を確かめずにその名前で保存し、
