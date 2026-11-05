@@ -359,18 +359,21 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   - **NFC への正規化と、大文字と小文字を区別しない比較は OS の呼び出しで行います**（mac は CoreFoundation の
     `CFStringNormalize`・`CFStringCompare`、Windows は `NormalizeString`・`CompareStringOrdinal`）。外部のライブラリは
     足しません。
-    - **畳み方は OS の呼び出しのとおりで、mac と Windows で一部の文字が違います**（`CFStringCompare` の
+    - **畳み方は OS の呼び出しのとおりで、mac と Windows で一部の文字が違いえます**（`CFStringCompare` の
       `kCFCompareCaseInsensitive` は Unicode の case folding、`CompareStringOrdinal` の大文字と小文字の無視は OS の表での
-      単純な大文字への写し。`ß` と `SS`・語末のシグマ・`İ`（U+0130）と `ı`（U+0131）など）。同じ `to` が一方の OS でだけ
-      `to_is_open` になりえますが、この比べ方は開いている図面との衝突を示すためのもので、ディスクにあるファイルは
-      `file_exists` で断り、警告が出るのは文字列が完全に一致するときだけなので、違いを認めます。
-    - **置き場所:** 比べる関数は `src/core` の OS ごとのファイル（mac 用と Windows 用。`FilesPosix.cpp`・`FilesWindows.cpp`
-      と同じ分け方）に置き、**APPLE と WIN32 のときだけビルドします**。mac は `VwCliCore` に `-framework CoreFoundation`
-      を、Windows は `Normaliz.lib`（`NormalizeString`）をリンクします。
-    - **Linux（`cpp.yml` の fuzz のジョブ）では、比べる関数も、それを使う `save` の保存先の確かめも、そのテストも
-      ビルドしません**（代わりの実装は置かない。出荷しない実装をテストしても出荷するものについて何も分からず、
-      ずれても気付けないため）。テストは別のテストとして APPLE と WIN32 のときだけ `ctest` に登録し、Linux では
-      黙って通るのではなく一覧に現れないようにします。fuzz のジョブに要るのは `core/Json` だけです。
+      単純な大文字への写し。どの文字で違うかは確かめていない）。同じ `to` が一方の OS でだけ `to_is_open` になりえますが、
+      この比べ方は開いている図面との衝突を示すためのもので、ディスクにあるファイルは `file_exists` で断り、警告が出るのは
+      文字列が完全に一致するときだけなので、違いを認めます。
+    - **OS で分けるのは、比べ方の薄い包みだけです。** 保存先の確かめ（`to_is_open` → `file_exists` → `parent_missing` の
+      順と `to` の形の確かめ）は比べる関数を引数で受け取り、`src/core` に置いてどの OS でもビルド・テストします（Linux の
+      ASan・UBSan と clang-tidy にも掛かる）。手順のテストでは差し替えの比べ方を渡します（手順を確かめるためのもので、
+      出荷する比べ方を確かめるものではない）。
+    - **比べ方の包み**（NFC への正規化と大文字小文字を区別しない比較）は、`FilesPosix.cpp`・`FilesWindows.cpp` と同じく
+      mac 用と Windows 用のファイルに置き、APPLE と WIN32 のときだけビルドします。mac は `VwCliCore` に
+      `-framework CoreFoundation` を、Windows は `Normaliz.lib`（`NormalizeString`）をリンクします。Linux 用の代わりの
+      実装は置きません（出荷しない実装をテストしても、出荷するものについて何も分からないため）。
+    - **包みのテスト**は別のテストとして `ctest` に登録し、Linux では `SKIP_RETURN_CODE` で skipped として一覧に出します
+      （黙って抜けないように。mac と Windows で条件を書き誤ってテストが消えても、skipped の表示で気付ける）。
 - **`close`** は対象の図面を閉じます。**保存はしません。** 種類は `app` です。
   対象の図面を `SwitchToOpenFile` で前面にしてから `DoMenuName("Close", 0)` を呼びます（メニューの「閉じる」と
   同じで、前面の図面に効く。`CloseDocument()` は確認なしで変更を捨てるので使いません）。
