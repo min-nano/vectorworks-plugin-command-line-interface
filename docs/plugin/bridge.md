@@ -9,6 +9,7 @@
 | `src/core/Protocol.h` | 依らない | 通信規則の定数（ファイルの綴り・上限・予約された道具・`code`）と id の検査。`protocol/fixtures/constants.json` と対（[通信規則の見本](../fixtures.md)） |
 | `src/core/Json.{h,cpp}` | 依らない | 小さな JSON（入れ子の深さに上限を設ける。読み方は Go の `encoding/json` に合わせる。[受け付け 1 回](#受け付け-1-回coreserverserve)の 3）。段 5 から、整数の引数を値で読む口と、実数を書き出す口を持つ（決まりは[道具](tools.md#最初に提供する道具)の冒頭） |
 | `src/core/Files.h`・`FilesPosix.cpp`・`FilesWindows.cpp` | 依らない | スプールに使う OS の呼び出し（ロック・待つ印・読み書き・自分のモジュールの場所）。開くファイルは子プロセスに受け継がせない。開いて待たない（通常のファイルだけを読み書きし、リンクはたどらない。POSIX は `O_NONBLOCK`・`O_NOFOLLOW` で開く。Windows は `\\?\` と `FILE_FLAG_OPEN_REPARSE_POINT` で開き（パスは絶対パスに限る）、reparse point（OneDrive などのクラウドのファイル・重複除去を含む）と中身がローカルにないファイルを断る）。書きかけは消してから新しく作る（リンクの先を壊さない。[通信規則「プラグイン側の義務」](../protocol.md#プラグイン側の義務)） |
+| `src/core/PathCompare.h`・`PathCompareMac.cpp`・`PathCompareWindows.cpp`（段 5 から） | 依らない | `save` の `to` を開いている図面のパスと比べる、NFC への正規化と大文字小文字を区別しない比較の OS の呼び出し（mac は CoreFoundation、Windows は `NormalizeString`・`CompareStringOrdinal`）。APPLE と WIN32 のときだけビルドし、保存先の確かめは比べる関数を引数で受ける（[道具「パスの一致の判定」](tools.md#図面を扱う道具documentssaveclose)） |
 | `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つ（`prepare` / `lock` / `sweep` / `poll` / `take` / `waitState` / `reply`）と、スプールの場所（モジュールのパスから求める `spoolDirOf` と、自分のモジュールに当てる `defaultSpoolDir`）。`Bridge` は場所を引数で受ける（テストは一時ディレクトリを渡す） |
 | `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（`core::Server::serve`。下記）と、占有の印（`Server` が発行した 1 つをメモリに持つ）。道具の表と時刻を引数で受けるので無 SDK でテストできる |
 | `src/core/Ping.{h,cpp}` | 依らない | 道具 `ping` の中身のうち SDK に依らない部分（引数の検査と結果の形）。SDK から読む値（現在のレイヤの名前）は引数で受ける |
