@@ -20,7 +20,13 @@
 
 **引数の確かめは次の順に行い、最初に当たったもので返します**（どの `reason` を返すかを決めておくため）。
 1. 引数の形（知らない引数・型・値の範囲・必須の欠け・`save` の `to` の形）→ `invalid_args`。
-2. 図面が無い → `internal`（`no_document`）。
+2. 図面が無い → `internal`（`no_document`）。**「図面が無い」は、道具が使うものの有無で決めます。** 前面の図面を読む
+   道具（`layers`・`classes`・`layer_objects`・`object_counts`）は `GetCurrentLayer()` が `nullptr` か（`ping` の
+   `document_open` と同じ基準。読む道具は `current` のためにどのみち呼ぶ）、図面を名指す道具（`save`・`close`）は
+   `GetOpenFilesList` の件数が 0 か（名指す図面を引く一覧と同じもの）で決めます。2 つが一致することを確かめたのは、
+   起動の直後と全部閉じた後だけです（[Findings「Timers and Notifications」の 4 の 8](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md)）。件数が 1 以上でも前面の
+   図面が無い状態があれば、読む道具は `no_document` で断り、`save`・`close` は名指した図面に働きます（どちらも道具が
+   使うものに合っている）。`documents` は失敗にせず空の一覧を返し、`ping` は失敗せずに `document_open` を偽にします。
 3. 引数が名指すもの（`document`・`layer`）が実在しない → `invalid_args`。
 4. 道具の規則に反する組み合わせ（`save` の `to` と `untitled`）→ `invalid_args`。
 5. 道具ごとの状態（`save` は下記の順）→ `internal`。
@@ -90,9 +96,6 @@
   SDK は図面が無くても落ちずに空の列を返します（[Findings「Layers and Stories」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)の「OS タイマーの刻みの中・図面 0 枚」・
   [Findings「Attributes and Classes」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Attributes%20and%20Classes.md)の「タイマーの刻みから呼べる。図面 0 枚でも落ちない」）が、
   空の結果（`object_counts` の `total:0` など）を「中身の無い図面」と見分けられなくなるので、失敗にします。
-  **図面が無いかは、どの道具も `GetOpenFilesList` の件数が 0 かで決めます**（`save`・`close`・`documents` が読む
-  一覧と同じものに揃える。`GetCurrentLayer()` が `nullptr` かと常に一致することは確かめてある。[`ping`](#ping)）。
-  `ping` だけは、`current_layer` を読むのに使う `GetCurrentLayer()` で決めます。
   `documents` は失敗にせず、空の一覧を返します。`ping` は `current_layer` を `null` にします（[`ping`](#ping)）。
 - **`layer` はレイヤの名前で、`layers` の `name` と完全に一致するものを探します**（参照で入ってきたレイヤは
   `NNA#1_<元の名前>` の形のまま渡す）。一致しなければ `invalid_args` で断ります。図面が無いときは、`layer` を
@@ -259,7 +262,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
 | `close` | app | `document`（必須） | `{"closed":true}` |
 
 - **図面が 1 枚も開いていなければ、`save`・`close` は `internal` で失敗し、`detail` に `{"reason":"no_document"}` を
-  付けます**（[読む道具](#読む道具layersclasseslayer_objectsobject_counts)と同じ。`document` を確かめる前に返す）。
+  付けます**（`GetOpenFilesList` の件数で決める。[冒頭](#最初に提供する道具)の 2。`document` を確かめる前に返す）。
   `documents` は失敗にせず、空の一覧を返します。
 - **`name`** は `path` の最後の区切り文字より後ろの部分です（SDK に名前を聞かずにパスから作る）。
 - **`untitled`** は、図面がディスクのファイルに結び付いていないか（`GetOpenFilesList` の `fIsInMemoryOnly`）です。
