@@ -21,9 +21,10 @@
 **引数の確かめは次の順に行い、最初に当たったもので返します**（どの `reason` を返すかを決めておくため）。
 1. 引数の形（知らない引数・型・値の範囲・必須の欠け・`save` の `to` の形）→ `invalid_args`。
 2. 図面が無い → `internal`（`no_document`）。
-3. 引数が名指すもの（`document`・`layer`）が実在しない → `invalid_args`。
+3. 引数が名指すもの（`document`・`layer`）が実在しない → `invalid_args`。名指す図面が 1 つに決まらない
+   （`document` に一致する図面が 2 枚以上）→ `internal`（`document_ambiguous`）。
 4. 道具の規則に反する組み合わせ（`save` の `to` と `untitled`）→ `invalid_args`。
-5. 道具ごとの状態（`document` に一致する図面が 2 枚以上あれば、まずそれ。`save` はそのあと下記の順）→ `internal`。
+5. 道具ごとの状態（`save` は下記の順）→ `internal`。
 
 **道具が返す失敗の `invalid_args` と `internal` は、次のように分けます**（[通信規則「応答」](../protocol.md#応答idresjson)）。
 
@@ -31,7 +32,8 @@
   （`document` の図面・`layer` のレイヤ）が実在しない、道具の規則に反する組み合わせ（保存済みの図面への `save` の `to`）、
   `save` の `to` の形（拡張子・使えない文字など）。
 - **`internal`** は、引数は正しく、名指すものも実在するが、それ以外の状態のために実行できないとき: 図面が無い
-  （`no_document`）・名指す図面が 1 つに決まらない（`save`・`close` の `document_ambiguous`）・図面が開いている（`quit` の `documents_open`）・保存先が埋まっている（`save` の `to_is_open`・
+  （`no_document`）・名指す図面が 1 つに決まらない（`save`・`close` の `document_ambiguous`）・
+  図面が開いている（`quit` の `documents_open`）・保存先が埋まっている（`save` の `to_is_open`・
   `file_exists`。`to` は新しく作るファイルを名指すので、既にあることは状態に当たる）・保存先の親のフォルダが無い
   （`parent_missing`）・上書きする自分のファイルが無い・書き込めない（`file_missing`・`file_read_only`）・図面が閉じなかった（`close` の
   `not_closed`。保存の確認が取り消されたなど）・SDK の失敗（`save` の `save_failed`）・道具の中の例外。
@@ -265,15 +267,20 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   コピーになる。[Findings「利用者の図面を上書き保存する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#利用者の図面を上書き保存するダイアログが出る場面と保存先の文字列288)）。
   **`untitled` が真の図面の `path` は「アプリケーションのフォルダ＋名前」**で、ファイルとしては存在しません（名前は
   「名称未設定 N」・「<元の名前> コピー 1」・「<元の名前> v2026.vwx」など。N はセッション全体の連番で、開いている間は
-  重ならない）。
-- **`document`** は対象の図面のパスで、`documents` の `path` を渡します。ディスクのファイルに結び付いた図面は、
+  重ならない）。**`untitled` が真の図面は、`path` がほかの図面と重なることがあります**（下記。その図面は `save`・
+  `close` で名指せない）。呼ぶ側は `path` を鍵にして一覧を扱うと項目を取りこぼします。
+- **`document`** は対象の図面のパスで、`documents` の `path` を渡します。ディスクのファイルに結び付いた図面どうしは、
   パスで一意に決まります（同じファイル名を別のフォルダに保存した 2 枚も見分けられる）。開いている図面に一致しなければ
   `invalid_args` で断ります。
-  - **`untitled` が真の図面のパスは、一意とは限りません**（確かめていない）。Vectorworks がアプリケーションのフォルダと
-    名前から作るので、別々のフォルダにある同じ名前の古い版のファイルを開いた 2 枚は、同じ `<アプリ>/<名前> v2026.vwx` に
-    なりえます（「名称未設定 N」の N は重ならない）。**一致する図面が 2 枚以上あれば、どれも保存・閉じずに `internal` で
-    失敗し、`detail` に `{"reason":"document_ambiguous"}` を付けます**（名指すものは実在するので `invalid_args` に
-    しない。[冒頭](#最初に提供する道具)の 5）。黙ってどれか 1 枚に効かせると、呼ぶ側の思っていない図面を閉じうるためです。
+  - **`untitled` が真の図面のパスは、一意とは限りません**（確かめていない。Findings も、無題の図面を指すなら
+    `fileRef` のほうが確かだとしている。[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)）。
+    Vectorworks がアプリケーションのフォルダと名前から作るので、別々のフォルダにある同じ名前の古い版のファイルを開いた
+    2 枚は、同じ `<アプリ>/<名前> v2026.vwx` になりえます（「名称未設定 N」の N は重ならない）。利用者がアプリケーションの
+    フォルダに同じ名前のファイルを保存して開いていれば、`untitled` が偽の図面とも重なりえます。**`untitled` によらず、
+    一致する図面が 2 枚以上あれば、どれも保存・閉じずに `internal` で失敗し、`detail` に `{"reason":"document_ambiguous"}`
+    を付けます**（名指すものは実在するので `invalid_args` にしない。[冒頭](#最初に提供する道具)の 3 で、名指すものの
+    実在の直後、組み合わせの確かめより先に確かめる。組み合わせは名指した図面の `untitled` で決まるので、1 枚に決まって
+    いることが前提のため）。黙ってどれか 1 枚に効かせると、呼ぶ側の思っていない図面を閉じうるためです。
     呼ぶ側は、利用者に一方を閉じてもらうなどして見分けられるようにします。
   - **`path` は正規化しません。** SDK が返した文字列をそのまま返します。Windows では、保存したときに渡された
     文字列がそのまま残り、区切りだけが `\` に揃います（ドライブ文字の大小・名前の大小・8.3 の短い名前は直らない）。
