@@ -252,7 +252,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
 | 道具 | 種類 | 引数 | 結果 |
 | --- | --- | --- | --- |
 | `documents` | read | なし | `{"documents":[{"name","path","untitled","active"}],"count"}` |
-| `save` | app | `document`（必須）・`to`（省略可） | `{"document","path"}`（保存した後の図面のパス） |
+| `save` | app | `document`（必須）・`to`（省略可） | `{"document","path"}`（下記） |
 | `close` | app | `document`（必須） | `{"closed":true}` |
 
 ```json
@@ -267,10 +267,11 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   付けます**（[読む道具](#読む道具layersclasseslayer_objectsobject_counts)と同じ。`document` を確かめる前に返す）。
   `documents` は失敗にせず、空の一覧を返します。
 - **`documents`** は `GetOpenFilesList` の項目を、その順のまま並べます（並べ替えない）。**`count`** はその数です。
+  順の意味（開いた順・前面からの順など）は確かめていないので、呼ぶ側は順に頼らず `active` と `path` で見分けます。
 - **`name`** は `path` の最後の区切り文字より後ろの部分です（SDK に名前を聞かずにパスから作る）。
-- **`active`** は前面の図面（読む道具が読む図面）か（`GetOpenFilesList` の前面の印をそのまま載せる）です。
-- **`save` の結果の `document`** は、引数の `document` をそのまま返したもの（保存する前の図面のパス）で、
-  **`path`** は保存した後の図面のパスです（下記。`to` を省いた上書き保存なら `document` と同じ文字列）。
+- **`active`** は、前面の図面（読む道具が読む図面）かを表します。`GetOpenFilesList` の `fIsActive` をそのまま
+  載せます（構造体は [Findings「存在する API」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#存在するapiヘッダ根拠)、実測の `active` は [同「`GetOpenFilesList` と `fileRef`」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#getopenfileslist-と-fileref)）。真がちょうど 1 つかは
+  確かめていません。
 - **`untitled`** は、図面がディスクのファイルに結び付いていないか（`GetOpenFilesList` の `fIsInMemoryOnly`）です。
   一度も保存していない図面のほか、**古い版・読み取り専用・ほかの Vectorworks が使用中のファイルを開いた図面**も
   真です（Vectorworks はこれらを元のファイルに結び付かないコピーとして開く。`OpenDocumentPath` で開いても確認なしに
@@ -307,7 +308,11 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
        失敗しました…」が出て、`GSError` は 0 のままファイルは置き換わり、2 回目からは図面のパスがアプリケーションの
        フォルダへ移ります。Windows はダイアログを出さずに置き換え、元のファイルを `.bak` へ退避します。OS で
        振る舞いが違い、戻り値でも分からないので、どちらの OS でも断ります。
-  - **結果の `path` は、保存のあとに `GetOpenFilesList` から読み直した文字列です**（`to` をそのまま返さない）。
+  - **結果の `document`** は、引数の `document` をそのまま返したもの（保存する前の図面のパス）です。
+  - **結果の `path` は、保存のあとに `GetOpenFilesList` から読み直した文字列です**（`to` をそのまま返さない）。`to` を
+    省いた上書き保存なら `document` と同じ文字列です（一覧の文字列をそのまま保存先に渡し、渡した文字列がそのまま
+    一覧に残る。[Findings「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・
+    [同「すでに開かれています」の比べ方（mac）](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#このファイルはすでに開かれていますの比べ方macwindows-と同じ文字列の完全一致)）。
     Windows では `/` が `\` に揃って残るので、`to` をそのまま `close` の `document` に渡すと一致しません。読み直すのは、
     保存の直後に前面になっている項目です（前面を戻す前に読む。`fileRef` が保存の前後で変わらないかには頼らない）。
   - **`to` の形は、呼ぶ前に確かめて `invalid_args` で断ります。** Vectorworks は形を確かめずにその名前で保存し、
