@@ -358,7 +358,10 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     指す 2 枚目ができるのと、Windows で NFD の別のファイル（NTFS は区別する）に見た目が同じ図面ができるのを防ぐためです。
   - **NFC への正規化と、大文字と小文字を区別しない比較は OS の呼び出しで行います**（mac は CoreFoundation の
     `CFStringNormalize`・`CFStringCompare`、Windows は `NormalizeString`・`CompareStringOrdinal`）。外部のライブラリは
-    足しません。無 SDK のテストのうち Linux で走るもの（`cpp.yml` の fuzz のジョブ）では、この 2 つは確かめません。
+    足しません。`src/core` は Linux でもビルドする（`cpp.yml` の fuzz のジョブ）ので、Linux には代わりの実装を置きます:
+    NFC へは直さず、大文字と小文字は ASCII だけを畳んで比べます。プラグインは Linux で動かないので、これは
+    テストを走らせるためだけのもので、NFC と ASCII 以外の大文字・小文字を確かめるテストは mac と Windows のジョブ
+    （`cpp.yml` の test）だけで走らせます。
 - **`close`** は対象の図面を閉じます。**保存はしません。** 種類は `app` です。
   対象の図面を `SwitchToOpenFile` で前面にしてから `DoMenuName("Close", 0)` を呼びます（メニューの「閉じる」と
   同じで、前面の図面に効く。`CloseDocument()` は確認なしで変更を捨てるので使いません）。
