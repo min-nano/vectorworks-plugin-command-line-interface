@@ -255,10 +255,22 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
 | `save` | app | `document`（必須）・`to`（省略可） | `{"document","path"}`（保存した後の図面のパス） |
 | `close` | app | `document`（必須） | `{"closed":true}` |
 
+```json
+{"documents":[{"name":"plan.vwx","path":"/Users/me/plan.vwx","untitled":false,"active":true},{"name":"名称未設定 1","path":"/Applications/Vectorworks 2026/名称未設定 1","untitled":true,"active":false}],"count":2}
+{"document":"/Applications/Vectorworks 2026/名称未設定 1","path":"/Users/me/tmp/a.vwx"}
+{"closed":true}
+```
+
+上から `documents`・無題の図面を `to` へ保存した `save`・`close` の結果です。
+
 - **図面が 1 枚も開いていなければ、`save`・`close` は `internal` で失敗し、`detail` に `{"reason":"no_document"}` を
   付けます**（[読む道具](#読む道具layersclasseslayer_objectsobject_counts)と同じ。`document` を確かめる前に返す）。
   `documents` は失敗にせず、空の一覧を返します。
+- **`documents`** は `GetOpenFilesList` の項目を、その順のまま並べます（並べ替えない）。**`count`** はその数です。
 - **`name`** は `path` の最後の区切り文字より後ろの部分です（SDK に名前を聞かずにパスから作る）。
+- **`active`** は前面の図面（読む道具が読む図面）か（`GetOpenFilesList` の前面の印をそのまま載せる）です。
+- **`save` の結果の `document`** は、引数の `document` をそのまま返したもの（保存する前の図面のパス）で、
+  **`path`** は保存した後の図面のパスです（下記。`to` を省いた上書き保存なら `document` と同じ文字列）。
 - **`untitled`** は、図面がディスクのファイルに結び付いていないか（`GetOpenFilesList` の `fIsInMemoryOnly`）です。
   一度も保存していない図面のほか、**古い版・読み取り専用・ほかの Vectorworks が使用中のファイルを開いた図面**も
   真です（Vectorworks はこれらを元のファイルに結び付かないコピーとして開く。`OpenDocumentPath` で開いても確認なしに
