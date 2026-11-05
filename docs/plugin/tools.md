@@ -440,11 +440,13 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       APPLE と WIN32 のときだけビルドします。mac は `VwCliCore` に
       `-framework CoreFoundation` を、Windows は `Normaliz.lib`（`NormalizeString`）をリンクします。Linux 用の代わりの
       実装は置きません（出荷しない実装をテストしても、出荷するものについて何も分からないため）。
-    - **包みのテスト**は、ほかの無 SDK のテストと同じ `VwCliTests` の中に、APPLE と WIN32 のときだけ入れます（別の
-      実行ファイルにしないので、macOS と Windows のカバレッジにそのまま入る）。Linux ではテストごと入らず、skip の分岐も
-      持ちません。**mac と Windows でテストが黙って抜けないよう、CMake は包みをビルドするときに印のマクロを定義し、テストの
-      ファイルは `__APPLE__` か `_WIN32` なのに印が無ければ `#error` で止めます**（ビルドの条件を書き誤ると、CI が緑のまま
-      ではなくコンパイルで落ちる）。
+    - **包みのテスト**は、ほかの無 SDK のテストと同じ `VwCliTests` の中に置きます（別の実行ファイルにしないので、macOS と
+      Windows のカバレッジにそのまま入る）。テストのファイル（`tests/PathCompareTests.cpp`）は**どの OS でも**
+      `VwCliTests` のソースに並べ、中身を印のマクロ `VW_HAS_PATH_COMPARE` で囲みます。印は、包みをビルドするときに CMake が
+      `VwCliCore` に `PUBLIC` で定義し（`VwCliTests` にも届く）、OS で分ける条件は包みの側の 1 か所だけにします。Linux では
+      空の翻訳単位になり、skip の分岐は持ちません。**テストのファイルは `__APPLE__` か `_WIN32` なのに印が無ければ `#error` で
+      止めます**（包みの側の条件を書き誤ると、テストが黙って抜けて CI が緑のままになるのではなく、コンパイルで落ちる。
+      テストのファイルを OS で分けて足すと、そちらの条件の誤りはこの歯止めに届かないので、分けない）。
 - **`close`** は対象の図面を閉じます。**保存はしません。** 種類は `app` です。
   対象の図面を `SwitchToOpenFile` で前面にしてから `DoMenuName("Close", 0)` を呼びます（メニューの「閉じる」と
   同じで、前面の図面に効く。`CloseDocument()` は確認なしで変更を捨てるので使いません）。
