@@ -165,5 +165,6 @@ Claude Code セッションから `vw2026` を呼び、結果の JSON を読み�
 - **段 4**: 段 3a・3b より先にマージしたので、段 2 と同じ手順で確かめました（スプールの場所も段 2 と同じ）。
 - **段 5 以降**: `vw2026 install cli@<その PR のタグ>`（`dev-<slug>-<PR 番号>-<短い sha>`）で入れます
   （Vectorworks を終了してから。段 6 のあとは `quit` で終了させてもよい）。戻すときは
-  `vw2026 install cli@latest`（main の最新）。種類 `app` の道具（段 5 の `save`・`close`）は、`session start` の印を
-  `--session` に付けて呼び、最後に `session end` します（印が無いと `no_session` で断られる）。
+  `vw2026 install cli@latest`（main の最新）。種類 `write`・`app` の道具（段 5 の `save`・`close` など）は、`session start` の
+  印を `--session` に付けて呼び、最後に `session end` します（印が無いと終了コード 23 で断られる。占有の前後なら
+  `no_session`、占有している間なら `occupied`）。
