@@ -263,6 +263,10 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   一度も保存していない図面のほか、**古い版・読み取り専用・ほかの Vectorworks が使用中のファイルを開いた図面**も
   真です（Vectorworks はこれらを元のファイルに結び付かないコピーとして開く。`OpenDocumentPath` で開いても確認なしに
   コピーになる。[Findings「利用者の図面を上書き保存する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#利用者の図面を上書き保存するダイアログが出る場面と保存先の文字列288)）。
+  **3 つとも確かめたのは mac で、Windows は読み取り専用だけです。** Windows の古い版・使用中のファイルは
+  [SDK リファレンス #291](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/291) で調べていて、
+  段 5 の実装はその結果を待ちます（`untitled` にならなければ、`to` を省いた上書き保存が元のファイルへ向かい、
+  ダイアログが出ても前もって断れない）。
   **`untitled` が真の図面の `path` は「アプリケーションのフォルダ＋名前」**で、ファイルとしては存在しません（名前は
   「名称未設定 N」・「<元の名前> コピー 1」・「<元の名前> v2026.vwx」など。N はセッション全体の連番で、開いている間は
   重ならない）。
