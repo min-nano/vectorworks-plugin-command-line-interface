@@ -383,35 +383,38 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       - **Windows** の 2 の読み取り専用: `GetFileAttributesW` の `FILE_ATTRIBUTE_READONLY` を見ます。
       - **Windows** の 2 の ACL: `GetFileSecurityW`（所有者・グループ・DACL）で読んだセキュリティ記述子と、`OpenProcessToken`
         → `DuplicateToken(SecurityImpersonation)` で作った偽装トークンで、`MapGenericMask`（ファイルの `GENERIC_MAPPING`）を
-        掛けた `FILE_GENERIC_WRITE` を `AccessCheck` に聞きます。
+        掛けた `FILE_GENERIC_WRITE` を `AccessCheck` に聞きます。`FILE_GENERIC_WRITE` には拡張属性・属性の書き込みと
+        `READ_CONTROL` も含まれ、それらだけを拒む ACL でも断ることになりますが、**見逃さない側に倒すために、あえて
+        まとめて聞きます**（#293 が測ったのも `FILE_GENERIC_WRITE`）。
       - **Windows** の 3: 親のフォルダを `CreateFileW(FILE_ADD_FILE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS)` で開いてみます（ファイルは作らない。共有をすべて許すのは、ほかの
-        プロセスがフォルダを開いていても共有違反にしないため）。
+        OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS)` で開いてみるのに加えて、2 と同じ手順で親のフォルダに
+        `AccessCheck(FILE_ADD_FILE)` を聞き、どちらかが拒めば断ります（ファイルは作らない。共有をすべて許すのは、ほかの
+        プロセスがフォルダを開いていても共有違反にしないため。`AccessCheck` も聞くのは、`SeBackupPrivilege`・
+        `SeRestorePrivilege` が有効なプロセスでは `FILE_FLAG_BACKUP_SEMANTICS` が DACL を素通りし、開けてしまうため。
+        どちらも #293 のプローブが測った呼び方）。
       - **ファイルを `CreateFileW(GENERIC_WRITE)` で開いて確かめてはいけません**（Vectorworks が開いている図面のファイルを
         握っているので、書ける場面でも失敗する）。`_waccess` は ACL を見ないので使いません。
-    - **図面のパスは、`GetOpenFilesList` の文字列と、リンクを解決したパスの両方で確かめます。** シンボリックリンクを指す
-      図面を Vectorworks がどこへ保存するか（リンクの先か、リンクを通常のファイルで置き換えるか）は確かめていない
-      （Findings に無い）ので、どちらでもダイアログで止まらないように、2 と 3 を両方のパスに聞き、どちらかで断られれば
-      断ります。解決したパスは mac は `realpath`、Windows はファイルを `CreateFileW`（アクセスなし・共有をすべて許す）で
-      開いて `GetFinalPathNameByHandleW` で得ます。リンクでなければ同じパスなので、聞くのは 1 回です。
-      `\\?\` は付けません（#294 のとおり `.` が残った図面のパスがあり、`\\?\` を付けると段が畳まれずに失敗する。
-      `GetFinalPathNameByHandleW` が返す `\\?\` 付きのパスはそのまま使う）。スプールの開き方（リンクをたどらない・reparse
-      point を断る）は使いません（OneDrive などの下の図面を、書けるのに断ることになるため）。
+    - **図面のパスは `GetOpenFilesList` の文字列をそのまま使います**（2 はそのパスのファイル、3 はその文字列から最後の段を
+      落としたフォルダ）。`\\?\` は付けません（#294 のとおり `.` が残った図面のパスがあり、`\\?\` を付けると段が
+      畳まれずに失敗する）。スプールの開き方（リンクをたどらない・reparse point を断る）は使いません（OneDrive などの下の
+      図面を、書けるのに断ることになるため）。
     - **答えから `reason` への写し方**（OS で同じ状態が同じ `reason` になるように）:
 
       | 答え | mac（`errno`） | Windows（エラーの番号） | `reason` |
       | --- | --- | --- | --- |
-      | 書き込みを拒まれた（**判定そのものの呼び出し**——mac の `access(W_OK)`、Windows の `GetFileAttributesW` の属性・`AccessCheck` の答え・親のフォルダの `CreateFileW(FILE_ADD_FILE)`——が拒否を返した） | `EACCES`・`EPERM`・`EROFS` | 5（拒否）・読み取り専用の属性・`AccessCheck` が拒む | 2 は `file_read_only`、3 は `parent_read_only` |
+      | 書き込みを拒まれた（**判定そのものの呼び出し**——mac の `access(W_OK)`、Windows の `GetFileAttributesW` の属性・`AccessCheck` の答え・親のフォルダの `CreateFileW(FILE_ADD_FILE)` と `AccessCheck(FILE_ADD_FILE)` の答え——が拒否を返した） | `EACCES`・`EPERM`・`EROFS` | 5（拒否）・読み取り専用の属性・`AccessCheck` が拒む | 2 は `file_read_only`、3 は `parent_read_only` |
       | ファイルかフォルダが無い（1 の確かめのあとに消えた・ドライブが外れた・親がファイルになった） | `ENOENT`・`ENOTDIR` | 2（`ERROR_FILE_NOT_FOUND`）・3（`ERROR_PATH_NOT_FOUND`）・15（`ERROR_INVALID_DRIVE`）・21（`ERROR_NOT_READY`）・53（`ERROR_BAD_NETPATH`）・64（`ERROR_NETNAME_DELETED`）・267（`ERROR_DIRECTORY`） | `file_missing`（2 でも 3 でも） |
-      | 確かめられない（そのほかの失敗。長すぎる・ネットワークの失敗など。**判定の準備の呼び出し**——`realpath`・`GetFinalPathNameByHandleW` とそのための `CreateFileW`・`GetFileSecurityW`・`OpenProcessToken`・`DuplicateToken`——の失敗は、拒否（`EACCES`・5）でもここ。`READ_CONTROL` が無くて ACL を読めないときなど） | そのほかの `errno` | そのほかの番号 | `write_check_failed`（分からないまま呼ぶとダイアログで止まるか、拒否の ACE を消しうるので断る。直し方は権限ではないので、拒まれた場合と分ける） |
+      | 確かめられない（そのほかの失敗。長すぎる・ネットワークの失敗など。1 の確かめを含む。**判定の準備の呼び出し**——`GetFileSecurityW`・`OpenProcessToken`・`DuplicateToken`——の失敗は、拒否（5）でもここ。`READ_CONTROL` が無くて ACL を読めないときなど） | そのほかの `errno` | そのほかの番号 | `write_check_failed`（分からないまま呼ぶとダイアログで止まるか、拒否の ACE を消しうるので断る。直し方は権限ではないので、拒まれた場合と分ける） |
 
       分類は番号だけでなく、どの呼び出しが返したかで決めます（同じ 5 でも、判定の呼び出しなら拒否、準備の呼び出しなら
       確かめられない）。#293 で確かめたのは「拒否」と「通る」の答えだけで、ほかの答えの分け方は確かめていません。
-    - **確かめていない場面**: ファイルの削除を拒む ACE（`DELETE` の拒否）と、mac の sticky ビットの付いたフォルダの中の、
-      ほかの利用者のファイルです。置き換えには削除か名前の変更が要るので、2 と 3 を通ってもダイアログが出るかもしれ
-      ませんが、#293 では測っておらず、この判定では見ていません。**OS の呼び出しが
-      失敗したときだけ、`detail` にその番号を載せます**（mac は `errno`、Windows は `win32_error`。番号の意味が OS で違うので
-      鍵を分ける）。読み取り専用の属性や `AccessCheck` の「拒む」のように、呼び出しが成功して拒否が分かった場合は載せません。
+      **`detail` に OS のエラーの番号を載せるのは `write_check_failed` だけです**（mac は `errno`、Windows は `win32_error`。
+      番号の意味が OS で違うので鍵を分ける）。拒否と「無い」は `reason` だけで直し方が決まるので載せず、OS と確かめで
+      `detail` の形がそろいます。
+    - **リンクを指す図面・削除を拒む ACL・sticky ビットのフォルダは、[SDK リファレンス #298](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/298) で調べています。**
+      Vectorworks はファイルを置き換えるので、これらの場面では 2 と 3 を通ってもダイアログで止まるかもしれません
+      （リンクを指す図面は、リンクの先へ保存するか、リンクを置き換えるかが分からないので、どのフォルダを見ればよいかが
+      決まらない）。**段 5 の `save` の実装はその結果を待ちます。**
     - この判定は OS の呼び出しなので、`src/core` の `FilesPosix.cpp`・`FilesWindows.cpp` に置きます。
   - **結果の `document`** は、引数の `document` をそのまま返したもの（保存する前の図面のパス）です。
   - **結果の `path` は、保存のあとに `GetOpenFilesList` から読み直した文字列です**（`to` をそのまま返さない）。`to` を
@@ -457,8 +460,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     `reason` を決めます。テストでは分類を差し替えて、確かめの順と分類から `reason` への写し方を確かめます。OS の答え
     （`errno`・Win32 のエラーの番号）を分類にする表は `FilesPosix.cpp`・`FilesWindows.cpp` の純粋な関数に置き、
     `VwCliTests` でその OS のときにテストします。**本物の呼び出しも、mac と Windows の `VwCliTests` でテストします**
-    （mac は `chmod a-w`・`chflags uchg`・`chmod +a "everyone deny write"`・リンク、Windows は `attrib +r`・`icacls` の拒否・
-    リンク。mac の CI は root でなく走る。Windows の `Everyone` への拒否は管理者にも効く）。Linux では本物の呼び出しのテストを入れません（root で
+    （mac は `chmod a-w`・`chflags uchg`・`chmod +a "everyone deny write"`、Windows は `attrib +r`・`icacls` の拒否。mac の CI は root でなく走る。Windows の `Everyone` への拒否は管理者にも効く）。Linux では本物の呼び出しのテストを入れません（root で
     走らせると `chmod a-w` が効かず、出荷しない OS のため）。段 5 の実機の確認でも見ます。
   - **`SaveActiveDocumentPath` が 0 以外を返したら、`internal` で失敗し、`detail` に
     `{"reason":"save_failed","gs_error":<値>}` を付けます。** `GSError` は SDK のエラーの番号（`Uint32`）で、値ごとの
