@@ -417,8 +417,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       末尾が落ちて別のファイルの答えが返るため）。段全体が `.` か `..` のもの（#294 のとおり図面のパスに残りうる）は除きます。 親のフォルダの文字列（`…\x..`）を OS に聞くと、末尾が落ちて別の
       フォルダ（`…\x`）の答えが返るので、3 が当たりません（`x..` にだけファイルを足せないと、3 は「許す」と答えるのに
       保存はダイアログで止まる。[Findings「途中の段の末尾が `.` か空白の保存先」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#途中の段の末尾が--か空白の保存先windows299)。#299）。段の末尾は字面で見ます。
-      こうしたパスの図面は、利用者がそのパスで開いたときと、`to` の形の確かめ（[`to` の形](#図面を扱う道具documentssaveclose)。#299 の結果で同じ形を
-      断る）より前に保存したときにだけできます。
+      こうしたパスの図面は、利用者がそのパスで開いたときと、`to` の形の確かめで同じ形を断るより前に保存したときにだけできます（`to` の形の一覧に、#299 の結果で
+      同じ形を断る項目を足すのは [#91](https://github.com/min-nano/vectorworks-plugin-command-line-interface/pull/91)。この PR だけでは `to` の側の規則はまだ無い）。
     - **答えから `reason` への写し方**（OS で同じ状態が同じ `reason` になるように）:
 
       | 答え | mac（`errno`） | Windows（エラーの番号） | `reason` |
@@ -430,8 +430,13 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       | 確かめられない（そのほかの失敗。長すぎる・ネットワークの失敗など。1 の確かめを含む。**判定の準備の呼び出し**——`GetFileSecurityW`・`OpenProcessToken`・`DuplicateToken`——の失敗は、拒否（5）でもここ。`READ_CONTROL` が無くて ACL を読めないときなど） | そのほかの `errno` | そのほかの番号 | `write_check_failed`（分からないまま呼ぶとダイアログで止まるか、拒否の ACE を消しうるので断る。直し方は権限ではないので、拒まれた場合と分ける） |
 
       分類は番号だけでなく、どの呼び出しが返したかで決めます（同じ 5 でも、判定の呼び出しなら拒否、準備の呼び出しなら
-      確かめられない）。#293 で確かめたのは「拒否」と「通る」の答えだけで、ほかの答えの分け方は確かめていません。
-      **`detail` に OS のエラーの番号を載せるのは `write_check_failed` だけです**（mac は `errno`、Windows は `win32_error`。
+      確かめられない）。**属性や持ち主を読む呼び出し（Windows の `GetFileAttributesW`、mac の sticky の確かめの `stat`）は、
+      読めたときの値が判定で、呼び出しそのものの失敗は準備の失敗です**——読み取り専用の属性が立っていれば `file_read_only`、
+      `FILE_ATTRIBUTE_REPARSE_POINT` なら `file_is_link`、sticky で持ち主がほかの利用者なら `parent_read_only`。呼び出しが
+      失敗したときは「無い」の番号（`ENOENT`・2・3 など）なら `file_missing`、拒否（`EACCES`・5）を含むそれ以外は
+      `write_check_failed` です。#293 で確かめたのは「拒否」と「通る」の答えだけで、ほかの答えの分け方は確かめていません。
+      **`detail` に OS のエラーの番号を載せるのは、OS の呼び出しが失敗した `write_check_failed` だけです**（OS を呼ばずに返す
+      `write_check_failed`——Windows の途中の段の末尾が `.` か空白の図面のパス——には番号の鍵を置かない）（mac は `errno`、Windows は `win32_error`。
       番号の意味が OS で違うので鍵を分ける）。拒否と「無い」は `reason` だけで直し方が決まるので載せず、OS と確かめで
       `detail` の形がそろいます。
     - この判定は OS の呼び出しなので、`src/core` の `FilesPosix.cpp`・`FilesWindows.cpp` に置きます。
