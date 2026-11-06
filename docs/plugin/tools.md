@@ -324,7 +324,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   ファイルを作れず、2 つ目の Vectorworks を起動できなかった）。`untitled` は `fIsInMemoryOnly` をそのまま返すので、
   プラグインはこれらの場面でも Vectorworks の答えに従います。古い版のファイルが Windows で `untitled` にならなければ、
   `to` を省いた `save` は元のファイルへ上書き保存します（ダイアログが出るかは分からない）。**利用者の古い版のファイルが
-  2026 の形式で置き換わり、元の版の Vectorworks で開けなくなります**（mac では変換して開いた図面は別名
+  いまの版の形式で置き換わり、元の版の Vectorworks で開けなくなります**【推定】（`SaveActiveDocumentPath` はいまの版の形式で
+  書き出す。[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)。mac では変換して開いた図面は別名
   「<元の名前> v2026.vwx」のコピーになるので起きない）。段 5 の実機の確認で、mac で作った古い版のファイルを Windows で
   開いて `untitled` を見ます。**偽なら段 5 をそのまま進めず、扱いを決め直します**（SDK リファレンスで調べてから。
   利用者の図面を壊さないため。[設計「本番で常駐させる前提」](../design.md#本番で常駐させる前提安全)）。
