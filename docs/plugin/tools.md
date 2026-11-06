@@ -70,7 +70,7 @@
   （`no_document`）・名指す図面が 1 つに決まらない（`save`・`close` の `document_ambiguous`）・
   図面が開いている（`quit` の `documents_open`）・保存先が埋まっている（`save` の `to_is_open`・
   `file_exists`。`to` は新しく作るファイルを名指すので、既にあることは状態に当たる）・保存先の親のフォルダが無い
-  （`parent_missing`）・上書きする自分のファイルが無い・書き込めない・親のフォルダに足せない（`file_missing`・`file_read_only`・`parent_read_only`・`write_check_failed`）・図面が閉じなかった（`close` の
+  （`parent_missing`）・上書きする自分のファイルが無い・書き込めない・親のフォルダに足せない（`file_missing`・`file_read_only`・`parent_read_only`・`file_is_link`・`write_check_failed`）・図面が閉じなかった（`close` の
   `not_closed`。保存の確認が取り消されたなど）・SDK の失敗（`save` の `save_failed`）・道具の中の例外。
 
 呼ぶ側が理由で分岐するときは、`code` ではなく `detail` の `reason` を見ます（`reason` を返す失敗だけ）。
@@ -377,23 +377,39 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     （#293）で決めました。どの場面でダイアログが出るか・出ないかと、出たときの `GSError` はそちらにあります。
     **方針は OS によらず同じで、ダイアログが出る場面を漏らさず、ダイアログが出なくても利用者が書き込みを拒んだ
     ファイル（読み取り専用・ロック・書き込みを拒む ACL）は断ります**（黙って置き換えると、属性や拒否の ACE が消えるため）。
-    - **使う呼び出しは、#293 のプローブが測ったものと同じにします。**
-      - **mac**: 2 はファイルに、3 は親のフォルダに `access(W_OK)` を聞きます（読み取り専用・Finder のロック・ACL・
-        モードのどれも反映する）。
+    - **使う呼び出しは、#293・#298 のプローブが測ったものと同じにします。**
+      - **mac** の 2: ファイルに `access(W_OK)` を聞きます（読み取り専用・Finder のロック・ACL・モードのどれも反映する）。
+      - **mac** の 3: 親のフォルダに `access(W_OK)` を聞きます。加えて、親のフォルダとファイルを `stat` し、**親が sticky
+        （`S_ISVTX`）で、親の `st_uid` もファイルの `st_uid` も `geteuid()` と違えば断ります**（`access` は 0 なのに、ほかの
+        利用者のファイルを置き換えられずダイアログで止まる。[Findings「`save` への帰結（sticky）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#cli-の-save-への帰結stickymac298)。#298。root では
+        測っていないが、Vectorworks を root で動かす前提は無い）。
       - **Windows** の 2 の読み取り専用: `GetFileAttributesW` の `FILE_ATTRIBUTE_READONLY` を見ます。
       - **Windows** の 2 の ACL: `GetFileSecurityW`（所有者・グループ・DACL）で読んだセキュリティ記述子と、`OpenProcessToken`
         → `DuplicateToken(SecurityImpersonation)` で作った偽装トークンで、`MapGenericMask`（ファイルの `GENERIC_MAPPING`）を
         掛けた `FILE_GENERIC_WRITE` を `AccessCheck` に聞きます。`FILE_GENERIC_WRITE` には拡張属性・属性の書き込みと
         `READ_CONTROL` も含まれ、それらだけを拒む ACL でも断ることになりますが、**見逃さない側に倒すために、あえて
         まとめて聞きます**（#293 が測ったのも `FILE_GENERIC_WRITE`）。
+      - **Windows** の 2 の削除: ファイルを `CreateFileW(DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)` で
+        開いてみて、5 なら断ります（32 は「消せるが Vectorworks が握っている」なので通す）。この答えはファイルの `DELETE` と
+        親の `FILE_DELETE_CHILD` を合わせたもので、両方が拒まれたときだけダイアログが出るのと一致します（`AccessCheck(DELETE)`
+        だけでは、ダイアログの出ない場面まで断る。[Findings「`save` への帰結（リンク・削除の拒否。Windows）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#cli-の-save-への帰結リンク削除の拒否windows298)。#298）。
       - **Windows** の 3: 親のフォルダを `CreateFileW(FILE_ADD_FILE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS)` で開いてみるのに加えて、2 と同じ手順で親のフォルダに
-        `AccessCheck(FILE_ADD_FILE)` を聞き、どちらかが拒めば断ります（ファイルは作らない。共有をすべて許すのは、ほかの
-        プロセスがフォルダを開いていても共有違反にしないため。`AccessCheck` も聞くのは、`SeBackupPrivilege`・
-        `SeRestorePrivilege` が有効なプロセスでは `FILE_FLAG_BACKUP_SEMANTICS` が DACL を素通りし、開けてしまうため。
-        どちらも #293 のプローブが測った呼び方）。
+        OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS)` で開いてみます（ファイルは作らない。共有をすべて許すのは、ほかの
+        プロセスがフォルダを開いていても共有違反にしないため）。**`AccessCheck(FILE_ADD_FILE)` は使いません**（親の
+        フォルダがジャンクションのとき、リンクそのものの ACL を見て、先のフォルダに足せない場面を見逃す。#298）。
+        `SeBackupPrivilege`・`SeRestorePrivilege` が有効なプロセスでは `FILE_FLAG_BACKUP_SEMANTICS` が DACL を素通りしうる
+        ことは確かめておらず、Vectorworks をその特権で動かす前提は置きません。
       - **ファイルを `CreateFileW(GENERIC_WRITE)` で開いて確かめてはいけません**（Vectorworks が開いている図面のファイルを
         握っているので、書ける場面でも失敗する）。`_waccess` は ACL を見ないので使いません。
+    - **リンクを指す図面**（#298）:
+      - **Windows**: 図面のファイルが `FILE_ATTRIBUTE_REPARSE_POINT`（`GetFileAttributesW`。リンクを追わない）なら、
+        上書き保存を `file_is_link` で断ります。Vectorworks はリンクを通常のファイルで黙って置き換え、リンクの先の図面は
+        古いまま残るためです（ダイアログも `GSError` も出ない）。ファイルのリンクは `OpenDocumentPath` で開けないので、
+        この図面ができるのは実体の無いリンクへ保存したときだけです。
+      - **mac**: ファイルのリンクは開いた時点で 1 段解決され、図面のパスはリンクの先になるので、追加の扱いは要りません
+        （[Findings「`save` への帰結（リンク。mac）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#cli-の-save-への帰結リンクmac298)）。
+      - **親のフォルダがリンク・ジャンクション**のときは、どちらの OS も図面のパスは文字列のまま残り、ファイルは先の
+        フォルダで置き換わります。3 は図面のパスの文字列から切り出したフォルダに聞き、OS がリンクを追うので当たります。
     - **図面のパスは `GetOpenFilesList` の文字列をそのまま使います**（2 はそのパスのファイル、3 はその文字列から最後の段を
       落としたフォルダ）。`\\?\` は付けません（#294 のとおり `.` が残った図面のパスがあり、`\\?\` を付けると段が
       畳まれずに失敗する）。スプールの開き方（リンクをたどらない・reparse point を断る）は使いません（OneDrive などの下の
@@ -407,7 +423,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
 
       | 答え | mac（`errno`） | Windows（エラーの番号） | `reason` |
       | --- | --- | --- | --- |
-      | 書き込みを拒まれた（**判定そのものの呼び出し**——mac の `access(W_OK)`、Windows の `GetFileAttributesW` の属性・`AccessCheck` の答え・親のフォルダの `CreateFileW(FILE_ADD_FILE)` と `AccessCheck(FILE_ADD_FILE)` の答え——が拒否を返した） | `EACCES`・`EPERM`・`EROFS` | 5（拒否）・読み取り専用の属性・`AccessCheck` が拒む | 2 は `file_read_only`、3 は `parent_read_only` |
+      | 書き込みを拒まれた（**判定そのものの呼び出し**——mac の `access(W_OK)`、mac の sticky の持ち主の比べ合わせ、Windows の `GetFileAttributesW` の属性・`AccessCheck` の答え・ファイルの `CreateFileW(DELETE)`・親のフォルダの `CreateFileW(FILE_ADD_FILE)`——が拒否を返した） | `EACCES`・`EPERM`・`EROFS`・sticky のほかの利用者のファイル | 5（拒否）・読み取り専用の属性・`AccessCheck` が拒む | 2（削除を含む）は `file_read_only`、3（sticky を含む）は `parent_read_only` |
       | ファイルかフォルダが無い（1 の確かめのあとに消えた・ドライブが外れた・親がファイルになった） | `ENOENT`・`ENOTDIR` | 2（`ERROR_FILE_NOT_FOUND`）・3（`ERROR_PATH_NOT_FOUND`）・15（`ERROR_INVALID_DRIVE`）・21（`ERROR_NOT_READY`）・53（`ERROR_BAD_NETPATH`）・64（`ERROR_NETNAME_DELETED`）・267（`ERROR_DIRECTORY`） | `file_missing`（2 でも 3 でも） |
       | 確かめられない（そのほかの失敗。長すぎる・ネットワークの失敗など。1 の確かめを含む。**判定の準備の呼び出し**——`GetFileSecurityW`・`OpenProcessToken`・`DuplicateToken`——の失敗は、拒否（5）でもここ。`READ_CONTROL` が無くて ACL を読めないときなど） | そのほかの `errno` | そのほかの番号 | `write_check_failed`（分からないまま呼ぶとダイアログで止まるか、拒否の ACE を消しうるので断る。直し方は権限ではないので、拒まれた場合と分ける） |
 
@@ -416,10 +432,6 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       **`detail` に OS のエラーの番号を載せるのは `write_check_failed` だけです**（mac は `errno`、Windows は `win32_error`。
       番号の意味が OS で違うので鍵を分ける）。拒否と「無い」は `reason` だけで直し方が決まるので載せず、OS と確かめで
       `detail` の形がそろいます。
-    - **リンクを指す図面・削除を拒む ACL・sticky ビットのフォルダは、[SDK リファレンス #298](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/298) で調べています。**
-      Vectorworks はファイルを置き換えるので、これらの場面では 2 と 3 を通ってもダイアログで止まるかもしれません
-      （リンクを指す図面は、リンクの先へ保存するか、リンクを置き換えるかが分からないので、どのフォルダを見ればよいかが
-      決まらない）。**段 5 の `save` の実装はその結果を待ちます。**
     - この判定は OS の呼び出しなので、`src/core` の `FilesPosix.cpp`・`FilesWindows.cpp` に置きます。
   - **結果の `document`** は、引数の `document` をそのまま返したもの（保存する前の図面のパス）です。
   - **結果の `path` は、保存のあとに `GetOpenFilesList` から読み直した文字列です**（`to` をそのまま返さない）。`to` を
@@ -442,7 +454,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   - **`to` の親のフォルダが無ければ（ファイルであれば）、`internal` で断ります（`parent_missing`）。** SDK もダイアログを
     出さずに断り（50331649）、フォルダは作りませんが、理由を分かりやすくするために先に確かめます。
   - **`save` の状態の確かめ（`internal`）は、`to` を渡したときは `to_is_open` → `file_exists` → `parent_missing` の順、
-    省いたときは `file_missing` → `file_read_only` → `parent_read_only` の順に（どの確かめでも、確かめられなければ `write_check_failed`）行います**（[冒頭](#最初に提供する道具)の 5）。開いている図面と
+    省いたときは `file_missing` → `file_is_link`（Windows）→ `file_read_only` → `parent_read_only` の順に（どの確かめでも、確かめられなければ `write_check_failed`）行います**（[冒頭](#最初に提供する道具)の 5）。開いている図面と
     一致する `to` は、そのフォルダが消されていても `to_is_open` を返します。
   - **`to` に既にあるファイルを渡しても保存できません**（SDK が `GSError` 50331649 を返し、何も起きない。
     mac・Windows とも、どの形で渡しても）。図面自身のパスへの上書き保存（`to` を省く。上記）はこれに当たらず、
@@ -452,14 +464,18 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     1. `to` が開いている図面のパスと一致する（比べ方は下記「パスの一致の判定」）。保存先が開いている図面だと
        示すため（`to_is_open`）、先に確かめます。
     2. `to` がディスクにある（ファイルシステムに聞く）。大文字と小文字・8.3 の短い名前・区切り文字の違いは
-       ファイルシステムが吸収するので、文字列の比べ方に依らずに防げます。
+       ファイルシステムが吸収するので、文字列の比べ方に依らずに防げます。**リンクは追わずに聞きます**（mac は `lstat`、
+       Windows は `GetFileAttributesW`）。`to` がシンボリックリンクなら、先に実体が無くても `file_exists` で断ります。追って
+       聞くと、実体の無いリンクを「無い」と答えて保存が通り、mac では保存先が渡した文字列と違うフォルダになり（2 段なら
+       中間のリンクが通常のファイルに置き換わる）、Windows ではリンクのまま図面のパスに残って次の上書きで置き換わります。
+       自分の図面を指すリンクは、開いている図面との比較もすり抜けます（[Findings「`save` への帰結（リンク。mac）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#cli-の-save-への帰結リンクmac298)。#298）。
 
     上書きしたければ、呼ぶ側が先にファイルを消します。**呼ぶ側が機械的に見分けられるよう、失敗の `detail` に
     `reason` を付けます:** `to_is_open`（保存先が開いている図面）・`file_exists`（保存先が既にある）。どちらも
     `internal` です（`invalid_args` と `internal` の分け方は[冒頭](#最初に提供する道具)）。
     確かめてから保存するまでの間にファイルができた場合は、SDK のエラーを `internal` で返します
     （開いている図面でなければダイアログは出ない）。Windows で 260 文字を超える保存先も、SDK が断るので `internal` に
-    なります。これらの `reason`（`parent_missing`・`file_missing`・`file_read_only`・`parent_read_only`・`write_check_failed` を含む）を保存を呼ぶ前に返すことは、段 5 で無 SDK のテストで確かめます
+    なります。これらの `reason`（`parent_missing`・`file_missing`・`file_read_only`・`parent_read_only`・`file_is_link`・`write_check_failed` を含む）を保存を呼ぶ前に返すことは、段 5 で無 SDK のテストで確かめます
     （[実装の順序](plan.md)の段 5）。**書き込めるかの問い合わせは、比べ方と同じく関数として受け取ります。** その関数は OS の
     答えを「拒まれた・無い・確かめられない」の分類と、失敗した呼び出しの番号にして返し、`src/core` の手順は分類から
     `reason` を決めます。テストでは分類を差し替えて、確かめの順と分類から `reason` への写し方を確かめます。OS の答え
@@ -484,7 +500,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     上記「結果の `path`」）。`SwitchToOpenFile` で前の図面へ戻すと、その図面のカレントレイヤも元どおりになります
     （[Findings「指定した図面を保存する・閉じる」の手順](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#手順getopenfileslist-で引きswitchtoopenfile-で前へ出し前面を戻す)）。
     `invalid_args` と、保存を呼ぶ前に返す `internal`（`no_document`・`to_is_open`・`file_exists`・
-    `parent_missing`・`file_missing`・`file_read_only`・`parent_read_only`・`write_check_failed`）は、前面を切り替える前に断るので、前面は動きません。
+    `parent_missing`・`file_missing`・`file_read_only`・`parent_read_only`・`file_is_link`・`write_check_failed`）は、前面を切り替える前に断るので、前面は動きません。
 - **パスの一致の判定。** `document` は `documents` が返した文字列と**完全に一致**するものを探します（呼ぶ側は
   `documents` の結果をそのまま渡す）。`to` は新しいパスで、開いている図面の保存先との衝突を**見逃さない側**に倒して
   比べます: 絶対パスを要し（相対パスは `invalid_args`）、区切り文字を揃え、Unicode を正規化（NFC。macOS のファイル名は
