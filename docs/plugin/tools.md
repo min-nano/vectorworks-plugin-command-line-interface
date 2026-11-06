@@ -365,18 +365,31 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     （#293）で決めました。どの場面でダイアログが出るか・出ないかと、出たときの `GSError` はそちらにあります。
     **方針は OS によらず同じで、ダイアログが出る場面を漏らさず、ダイアログが出なくても利用者が書き込みを拒んだ
     ファイル（読み取り専用・ロック・書き込みを拒む ACL）は断ります**（黙って置き換えると、属性や拒否の ACE が消えるため）。
-    - **mac**: 2 はファイルに、3 は親のフォルダに `access(W_OK)` を聞き、-1 なら断ります（読み取り専用・Finder の
-      ロック・ACL・モードのどれも反映する）。
-    - **Windows**: 2 はファイルの `FILE_ATTRIBUTE_READONLY`（`GetFileAttributesW`）と、ファイルへの
-      `AccessCheck(FILE_GENERIC_WRITE)` で断ります。3 は親のフォルダを `CreateFileW(FILE_ADD_FILE,
-      FILE_FLAG_BACKUP_SEMANTICS)` で開いてみて断ります（ファイルは作らない）。**ファイルを `CreateFileW(GENERIC_WRITE)`
-      で開いて確かめてはいけません**（Vectorworks が開いている図面のファイルを握っているので、書ける場面でも失敗する）。
-      `_waccess` は ACL を見ないので使いません。
-    - **問い合わせが失敗したら（拒否以外の理由でも）断ります。** 属性を読めない（`INVALID_FILE_ATTRIBUTES`。1 の
-      確かめのあとにファイルが消えた・ドライブが外れた）ときは `file_missing`、`AccessCheck` が拒否以外で失敗した
-      ときは `file_read_only`、親のフォルダを開くのが拒否（5）以外で失敗した（パスが見つからない・長すぎる・
-      ネットワークの失敗など）ときは `parent_read_only` です。分からないまま呼ぶと、ダイアログで止まりうるためです。
-      `detail` に OS のエラーの番号（`os_error`）を載せます。
+    - **mac**: 2 はファイルに、3 は親のフォルダに `access(W_OK)` を聞きます（読み取り専用・Finder のロック・ACL・
+      モードのどれも反映する）。
+    - **Windows**:
+      - 2 の読み取り専用: ファイルを `CreateFileW(FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE |
+        FILE_SHARE_DELETE)` で開き、`GetFileInformationByHandle` の `FILE_ATTRIBUTE_READONLY` を見ます
+        （`GetFileAttributesW` はリンクの先ではなくリンク自身の属性を返すので使わない）。
+      - 2 の ACL: `GetFileSecurityW`（所有者・グループ・DACL）で読んだセキュリティ記述子と、`OpenProcessToken` →
+        `DuplicateToken(SecurityImpersonation)` で作った偽装トークンで、`MapGenericMask`（ファイルの `GENERIC_MAPPING`）を
+        掛けた `FILE_GENERIC_WRITE` を `AccessCheck` に聞きます。
+      - 3: 親のフォルダを `CreateFileW(FILE_ADD_FILE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        FILE_FLAG_BACKUP_SEMANTICS)` で開いてみます（ファイルは作らない。共有をすべて許すのは、ほかのプロセスがフォルダを
+        開いていても共有違反にしないため）。
+      - **ファイルを `CreateFileW(GENERIC_WRITE)` で開いて確かめてはいけません**（Vectorworks が開いている図面のファイルを
+        握っているので、書ける場面でも失敗する）。`_waccess` は ACL を見ないので使いません。
+    - **答えから `reason` への写し方**（OS で同じ状態が同じ `reason` になるように）:
+
+      | 答え | mac（`errno`） | Windows（エラーの番号） | `reason` |
+      | --- | --- | --- | --- |
+      | 書き込みを拒まれた | `EACCES`・`EPERM`・`EROFS` | 5（拒否）・読み取り専用の属性・`AccessCheck` が拒む | 2 は `file_read_only`、3 は `parent_read_only` |
+      | ファイルかフォルダが無い（1 の確かめのあとに消えた・ドライブが外れた） | `ENOENT`・`ENOTDIR` | 2（`ERROR_FILE_NOT_FOUND`）・3（`ERROR_PATH_NOT_FOUND`） | `file_missing`（2 でも 3 でも） |
+      | 2 の ACL を確かめられない（`GetFileSecurityW` などの失敗。`READ_CONTROL` が無い ACL など） | — | 失敗した呼び出しの番号 | **断らない**（ファイルの ACL ではダイアログが出ず、利用者の意図を汲むための確かめなので、分からなければ進む） |
+      | そのほかの失敗（長すぎる・ネットワークの失敗など） | そのほかの `errno` | そのほかの番号 | 2 は `file_read_only`、3 は `parent_read_only`（分からないまま呼ぶとダイアログで止まりうるので断る） |
+
+      #293 で確かめたのは「拒否」と「通る」の答えだけで、ほかの答えの分け方は確かめていません。`detail` に OS の
+      エラーの番号（`os_error`）を載せます。
     - **図面のパスは `GetOpenFilesList` の文字列をそのまま使います。** 2 はそのパスのファイルに、3 はその文字列から最後の段を
       落としたフォルダに聞きます（OS の問い合わせはリンクを解決するが、プラグインはリンクを先に解決しない）。`\\?\` は
       付けません（#294 のとおり `.` が残った図面のパスがあり、`\\?\` を付けると段が畳まれずに失敗する）。スプールの
@@ -425,7 +438,10 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     確かめてから保存するまでの間にファイルができた場合は、SDK のエラーを `internal` で返します
     （開いている図面でなければダイアログは出ない）。Windows で 260 文字を超える保存先も、SDK が断るので `internal` に
     なります。これらの `reason`（`parent_missing`・`file_missing`・`file_read_only`・`parent_read_only` を含む）を保存を呼ぶ前に返すことは、段 5 で無 SDK のテストで確かめます
-    （[実装の順序](plan.md)の段 5）。
+    （[実装の順序](plan.md)の段 5）。**書き込めるかの問い合わせは、比べ方と同じく関数として受け取り**、テストでは答えを
+    差し替えて確かめの順と、上の表の写し方（OS の答えから `reason` へ）を確かめます。本物の OS の呼び出しは無 SDK の
+    テストでは確かめません（`chmod a-w` は root では効かず、Windows の ACL は MSVC のジョブでしか走らないため）。段 5 の
+    実機の確認で確かめます。
   - **`SaveActiveDocumentPath` が 0 以外を返したら、`internal` で失敗し、`detail` に
     `{"reason":"save_failed","gs_error":<値>}` を付けます。** `GSError` は SDK のエラーの番号（`Uint32`）で、値ごとの
     意味は SDK に書かれていません（実測で出たのは 50331649＝`0x03000001` だけで、保存先が既にあるときも長すぎるときも
