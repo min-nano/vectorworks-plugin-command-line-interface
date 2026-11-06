@@ -426,11 +426,13 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     - 制御文字（U+0000〜U+001F）を含む（mac も Windows も）。SDK がどう振る舞うかは確かめていないので、確かめずに断ります。
       Windows の予約された名前（`CON.vwx` など）は、SDK がふつうに保存したので断りません
       （[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)。`CON` 以外は確かめていない）。
-  - **ネットワークの場所（ネットワークのドライブ・共有）の図面と保存先で、届かないサーバーを相手にしたとき何が起きるかは
-    確かめていません**（#294 が測ったのは同じ計算機の管理共有 `\\localhost\C$` だけで、別の計算機の共有は測っていない。
-    [Findings「保存先のパスの形」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#保存先のパスの形unc相対-と-294)）。`save` の状態の確かめ（`to` を渡したときの `file_exists`・`parent_missing`、
-    省いたときの上書き保存の前の確かめ）と保存そのものはメインスレッドで行うので、止まりうると見込みます【推定】。
-段 5 では扱わず、[SDK の調査](../sdk-research.md)に確かめていないものとして載せます。
+  - **ネットワークの場所（ネットワークのドライブ・共有）の図面と保存先では、サーバーが届かないと Vectorworks が止まります。**
+    `save` の状態の確かめ（`to` を渡したときの `file_exists`・`parent_missing`、省いたときの上書き保存の前の確かめ）と保存
+    そのものはメインスレッドで行うので、サーバーが止まっている・ネットワークが切れているときは、OS が失敗を返すまで
+    待ち、その間は画面の操作にも CLI のほかの要求にも応えません。段 5 では扱わず、この振る舞いを認めます。
+    **SDK リファレンスでは調べません**（OS の呼び出しがネットワークを待つことは SDK の挙動ではなく、止まるのは明らかなので、
+    利用者の判断で CLAUDE.md の 7 の例外とした。#294 が測ったのは同じ計算機の共有 `\\localhost\C$` だけ。[Findings「保存先の
+    パスの形」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#保存先のパスの形unc相対-と-294)）。
   - **`to` の親のフォルダが無ければ（ファイルであれば）、`internal` で断ります（`parent_missing`）。** SDK もダイアログを
     出さずに断り（50331649）、フォルダは作りませんが、理由を分かりやすくするために先に確かめます。
   - **`save` の状態の確かめ（`internal`）は、`to` を渡したときは `to_is_open` → `file_exists` → `parent_missing` の順、
