@@ -317,11 +317,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   一度も保存していない図面のほか、**古い版・読み取り専用・ほかの Vectorworks が使用中のファイルを開いた図面**も
   真です（Vectorworks はこれらを元のファイルに結び付かないコピーとして開く。`OpenDocumentPath` で開いても確認なしに
   コピーになる。[Findings「利用者の図面を上書き保存する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#利用者の図面を上書き保存するダイアログが出る場面と保存先の文字列288)）。
-  **Windows で確かめたのは読み取り専用と使用中のファイルで、どちらも mac と同じく `untitled` が真です**（使用中は、
-  別のプロセスがファイルを書き込みで握った状態で代わりに測った。`OpenDocumentPath` は確認なしにコピーで開き、戻り値は
-  `true`。[Findings「Windows——ほかの Vectorworks が開くファイル」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windowsほかの-vectorworks-が開くファイルと測れなかった残り291)。#291）。
-  **Windows の古い版のファイルと、2 つ目の Vectorworks が開いているファイルは測れていません**（調べた環境では古い版の
-  ファイルを作れず、2 つ目の Vectorworks を起動できなかった）。`untitled` は `fIsInMemoryOnly` をそのまま返すので、
+  **Windows で確かめたのは読み取り専用と使用中のファイルで、どちらも mac と同じく `untitled` が真です**（[Findings「Windows——ほかの Vectorworks が開くファイル」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windowsほかの-vectorworks-が開くファイルと測れなかった残り291)。#291）。
+  **Windows の古い版のファイルと、2 つ目の Vectorworks が開いているファイルは測れていません**（同じ節）。`untitled` は `fIsInMemoryOnly` をそのまま返すので、
   プラグインはこれらの場面でも Vectorworks の答えに従います。古い版のファイルが Windows で `untitled` にならなければ、
   `to` を省いた `save` は元のファイルへ上書き保存します（ダイアログが出るかは分からない）。**利用者の古い版のファイルが
   いまの版の形式で置き換わり、元の版の Vectorworks で開けなくなります**【推定】（`SaveActiveDocumentPath` はいまの版の形式で
@@ -378,7 +375,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     **方針は OS によらず同じで、ダイアログが出る場面を漏らさず、ダイアログが出なくても利用者が書き込みを拒んだ
     ファイル（読み取り専用・ロック・書き込みを拒む ACL）は断ります**（黙って置き換えると、属性や拒否の ACE が消えるため）。
     - **使う呼び出しは、#293・#298 のプローブが測ったものと同じにします。**
-      - **mac** の 2: ファイルに `access(W_OK)` を聞きます（読み取り専用・Finder のロック・ACL・モードのどれも反映する）。
+      - **mac** の 2: ファイルに `faccessat(AT_FDCWD, <パス>, W_OK, AT_EACCESS)`（以下 `access(W_OK)` と書く。実効 UID で聞き、下の sticky の `geteuid()` とそろえる）を聞きます（読み取り専用・Finder のロック・ACL・モードのどれも反映する）。
       - **mac** の 3: 親のフォルダに `access(W_OK)` を聞きます。加えて、親のフォルダとファイルを `stat` し、**親が sticky
         （`S_ISVTX`）で、親の `st_uid` もファイルの `st_uid` も `geteuid()` と違えば断ります**（`access` は 0 なのに、ほかの
         利用者のファイルを置き換えられずダイアログで止まる。[Findings「`save` への帰結（sticky）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#cli-の-save-への帰結stickymac298)。#298。root では
@@ -411,18 +408,23 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       - **親のフォルダがリンク・ジャンクション**のときは、どちらの OS も図面のパスは文字列のまま残り、ファイルは先の
         フォルダで置き換わります。3 は図面のパスの文字列から切り出したフォルダに聞き、OS がリンクを追うので当たります。
     - **図面のパスは `GetOpenFilesList` の文字列をそのまま使います**（2 はそのパスのファイル、3 はその文字列から最後の段を
-      落としたフォルダ）。`\\?\` は付けません（#294 のとおり `.` が残った図面のパスがあり、`\\?\` を付けると段が
+      落としたフォルダ。ドライブやファイルシステムの直下の図面では区切りを残す——`C:\a.vwx` の親は `C:\`、`/a.vwx` の親は `/`。
+      `C:` はドライブ C のカレントディレクトリ、空の文字列は `ENOENT` になるため）。`\\?\` は付けません（#294 のとおり `.` が残った図面のパスがあり、`\\?\` を付けると段が
       畳まれずに失敗する）。スプールの開き方（リンクをたどらない・reparse point を断る）は使いません（OneDrive などの下の
       図面を、書けるのに断ることになるため）。
     - **Windows で、図面のパスの途中の段の末尾が `.` か空白のとき（`…\x..\a.vwx`・`…\x \a.vwx`・`…\x.\a.vwx`）は、
-      確かめずに `write_check_failed` で断ります。** 親のフォルダの文字列（`…\x..`）を OS に聞くと、末尾が落ちて別の
+      確かめずに `write_check_failed` で断ります**（**上書き保存の前の確かめの先頭**で、1 より前に見る。1 で OS に聞くと
+      末尾が落ちて別のファイルの答えが返るため）。段全体が `.` か `..` のもの（#294 のとおり図面のパスに残りうる）は除きます。 親のフォルダの文字列（`…\x..`）を OS に聞くと、末尾が落ちて別の
       フォルダ（`…\x`）の答えが返るので、3 が当たりません（`x..` にだけファイルを足せないと、3 は「許す」と答えるのに
       保存はダイアログで止まる。[Findings「途中の段の末尾が `.` か空白の保存先」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#途中の段の末尾が--か空白の保存先windows299)。#299）。段の末尾は字面で見ます。
-      こうしたパスの図面は、利用者がそのパスで開いたときにだけできます（`save` の `to` は同じ形を断る）。
+      こうしたパスの図面は、利用者がそのパスで開いたときと、`to` の形の確かめ（[`to` の形](#図面を扱う道具documentssaveclose)。#299 の結果で同じ形を
+      断る）より前に保存したときにだけできます。
     - **答えから `reason` への写し方**（OS で同じ状態が同じ `reason` になるように）:
 
       | 答え | mac（`errno`） | Windows（エラーの番号） | `reason` |
       | --- | --- | --- | --- |
+      | 通る（判定そのものの呼び出しが許した。Windows のファイルの `CreateFileW(DELETE)` の 32——消せるが Vectorworks が握っている——もここ） | 0 | 0・ファイルの `CreateFileW(DELETE)` の 32 | 次の確かめへ |
+      | リンクだった（Windows。図面のファイルの `GetFileAttributesW` に `FILE_ATTRIBUTE_REPARSE_POINT`） | — | — | `file_is_link`（この呼び出しが失敗したときは下の 2 行で分ける） |
       | 書き込みを拒まれた（**判定そのものの呼び出し**——mac の `access(W_OK)`、mac の sticky の持ち主の比べ合わせ、Windows の `GetFileAttributesW` の属性・`AccessCheck` の答え・ファイルの `CreateFileW(DELETE)`・親のフォルダの `CreateFileW(FILE_ADD_FILE)`——が拒否を返した） | `EACCES`・`EPERM`・`EROFS`・sticky のほかの利用者のファイル | 5（拒否）・読み取り専用の属性・`AccessCheck` が拒む | 2（削除を含む）は `file_read_only`、3（sticky を含む）は `parent_read_only` |
       | ファイルかフォルダが無い（1 の確かめのあとに消えた・ドライブが外れた・親がファイルになった） | `ENOENT`・`ENOTDIR` | 2（`ERROR_FILE_NOT_FOUND`）・3（`ERROR_PATH_NOT_FOUND`）・15（`ERROR_INVALID_DRIVE`）・21（`ERROR_NOT_READY`）・53（`ERROR_BAD_NETPATH`）・64（`ERROR_NETNAME_DELETED`）・267（`ERROR_DIRECTORY`） | `file_missing`（2 でも 3 でも） |
       | 確かめられない（そのほかの失敗。長すぎる・ネットワークの失敗など。1 の確かめを含む。**判定の準備の呼び出し**——`GetFileSecurityW`・`OpenProcessToken`・`DuplicateToken`——の失敗は、拒否（5）でもここ。`READ_CONTROL` が無くて ACL を読めないときなど） | そのほかの `errno` | そのほかの番号 | `write_check_failed`（分からないまま呼ぶとダイアログで止まるか、拒否の ACE を消しうるので断る。直し方は権限ではないので、拒まれた場合と分ける） |
@@ -454,7 +456,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   - **`to` の親のフォルダが無ければ（ファイルであれば）、`internal` で断ります（`parent_missing`）。** SDK もダイアログを
     出さずに断り（50331649）、フォルダは作りませんが、理由を分かりやすくするために先に確かめます。
   - **`save` の状態の確かめ（`internal`）は、`to` を渡したときは `to_is_open` → `file_exists` → `parent_missing` の順、
-    省いたときは `file_missing` → `file_is_link`（Windows）→ `file_read_only` → `parent_read_only` の順に（どの確かめでも、確かめられなければ `write_check_failed`）行います**（[冒頭](#最初に提供する道具)の 5）。開いている図面と
+    省いたときは（Windows の途中の段の末尾が `.` か空白の図面のパスなら `write_check_failed`）→ `file_missing` → `file_is_link`（Windows）→ `file_read_only` → `parent_read_only` の順に（どの確かめでも、確かめられなければ `write_check_failed`）行います**（[冒頭](#最初に提供する道具)の 5）。開いている図面と
     一致する `to` は、そのフォルダが消されていても `to_is_open` を返します。
   - **`to` に既にあるファイルを渡しても保存できません**（SDK が `GSError` 50331649 を返し、何も起きない。
     mac・Windows とも、どの形で渡しても）。図面自身のパスへの上書き保存（`to` を省く。上記）はこれに当たらず、
