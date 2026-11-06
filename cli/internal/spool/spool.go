@@ -86,8 +86,8 @@ const (
 	CodeInternal = "internal"
 	// 待つ印（<id>.wait）が無いので実行しなかった
 	CodeNoWait = "no_wait"
-	// Vectorworks かプラグインが処理中（終了の依頼の最中・ほかの要求を処理している最中）なので
-	// 実行しなかった
+	// Vectorworks かプラグインが処理中（終了の依頼の最中・道具の中のダイアログで受け付けが入れ子に
+	// なった）なので実行しなかった。処理中でも刻みが来ない間は busy も返らない
 	CodeBusy = "busy"
 	// ほかの呼ぶ側が占有しているので実行しなかった
 	CodeOccupied = "occupied"
@@ -123,8 +123,8 @@ var ErrMalformedResponse = errors.New("malformed response")
 var ErrNoResponse = errors.New("the bridge took the request but no response came")
 
 // takenGrace は、待つのをやめたときに要求をプラグインが受け取っていたら、応答を待つ猶予。
-// 応答は受け付けの同じ回の中で書かれ、受け付け 1 回の中で数秒を超える道具は持たない
-// （docs/protocol.md「応答」）。テストが縮める。
+// 待つのをやめる直前に受け取られた要求の応答を拾うためのもので、道具がこれより長くかかれば
+// ErrNoResponse（実行されたかもしれない）で終わる（docs/protocol.md「待つのをやめる」）。テストが縮める。
 var takenGrace = 5 * time.Second
 
 // Bridge はスプール 1 つと、その状態。
