@@ -365,6 +365,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     1. 自分のファイルがディスクに無い（`file_missing`）。Finder などで移した・消した、ドライブが外れた。mac は
        「指定したファイルが見つかりません…」、Windows はドライブが外れたときに「ディスクの空き容量がありません。」が
        出ます（Windows は開いている間ファイルを握っているので、移す・消すはふつうの操作では起きない）。
+       **リンクを追わない呼び出しで聞きます**（mac は `lstat`、Windows は `GetFileAttributesW`）。追うと、実体の無いリンクを
+       指す図面が `file_missing` になり、下の `file_is_link` に届かないためです。
     2. 自分のファイルに書き込めない（`file_read_only`）。
     3. 親のフォルダにファイルを足せない（`parent_read_only`）。**Vectorworks は上書き保存でファイルをその場で書き換えず、
        親のフォルダに新しいファイルを作って置き換える**ので、ファイル自身が書けても、ここで止まります。呼ぶ側が直し方
@@ -378,6 +380,9 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     delete"`）で上書き保存が何をするかは確かめていません（mac で測ったのはリンクと sticky ビットのフォルダ）。
     - **使う呼び出しは、#293・#298 のプローブが測ったものと同じにします。**
       - **mac** の 2: ファイルに `faccessat(AT_FDCWD, <パス>, W_OK, AT_EACCESS)`（以下 `access(W_OK)` と書く。実効 UID で聞き、下の sticky の `geteuid()` とそろえる）を聞きます（読み取り専用・Finder のロック・ACL・モードのどれも反映する）。
+      - **mac** の 2 が `EACCES` のときは、親のフォルダに `faccessat(..., X_OK, AT_EACCESS)` も聞き、拒まれれば 2 ではなく
+        `parent_read_only` にします（ファイルへの問い合わせは、親のフォルダを探せない（実行の権限が無い）ときも `EACCES` を
+        返し、直すのはフォルダの権限のため）。
       - **mac** の 3: 親のフォルダに `access(W_OK)` を聞きます。加えて、親のフォルダとファイルを `stat` し、**親が sticky
         （`S_ISVTX`）で、親の `st_uid` もファイルの `st_uid` も `geteuid()` と違えば断ります**（`access` は 0 なのに、ほかの
         利用者のファイルを置き換えられずダイアログで止まる。[Findings「`save` への帰結（sticky）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#cli-の-save-への帰結stickymac298)。#298。root では
@@ -387,7 +392,10 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
         → `DuplicateToken(SecurityImpersonation)` で作った偽装トークンで、`MapGenericMask`（ファイルの `GENERIC_MAPPING`）を
         掛けた `FILE_GENERIC_WRITE` を `AccessCheck` に聞きます。`FILE_GENERIC_WRITE` には拡張属性・属性の書き込みと
         `READ_CONTROL` も含まれ、それらだけを拒む ACL でも断ることになりますが、**見逃さない側に倒すために、あえて
-        まとめて聞きます**（#293 が測ったのも `FILE_GENERIC_WRITE`）。
+        まとめて聞きます**（#293 が測ったのも `FILE_GENERIC_WRITE`）。**この確かめはローカルのドライブ（`GetDriveTypeW` が
+        `DRIVE_FIXED` か `DRIVE_REMOVABLE`）の図面にだけ掛けます。** ネットワークの共有のセキュリティ記述子はサーバーの SID を
+        持ち、手元のトークンで `AccessCheck` しても、サーバーが実際に許すかと合わないためです（ファイルの ACL では
+        ダイアログが出ないので、見ないことにしても止まりはしない）。
       - **Windows** の 2 の削除: ファイルを `CreateFileW(DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)` で
         開いてみて、5 なら断ります（32 は「消せるが Vectorworks が握っている」なので通す）。この答えはファイルの `DELETE` と
         親の `FILE_DELETE_CHILD` を合わせたもので、両方が拒まれたときだけダイアログが出るのと一致します（`AccessCheck(DELETE)`
@@ -401,8 +409,11 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       - **ファイルを `CreateFileW(GENERIC_WRITE)` で開いて確かめてはいけません**（Vectorworks が開いている図面のファイルを
         握っているので、書ける場面でも失敗する）。`_waccess` は ACL を見ないので使いません。
     - **リンクを指す図面**（#298）:
-      - **Windows**: 図面のファイルが `FILE_ATTRIBUTE_REPARSE_POINT`（`GetFileAttributesW`。リンクを追わない）なら、
-        上書き保存を `file_is_link` で断ります。Vectorworks はリンクを通常のファイルで黙って置き換え、リンクの先の図面は
+      - **Windows**: 図面のファイルがシンボリックリンクかジャンクションなら、上書き保存を `file_is_link` で断ります。
+        `GetFileAttributesW`（リンクを追わない）に `FILE_ATTRIBUTE_REPARSE_POINT` があるときだけ、`FindFirstFileW` の
+        `dwReserved0` で reparse のタグを読み、`IO_REPARSE_TAG_SYMLINK` か `IO_REPARSE_TAG_MOUNT_POINT` なら断ります。
+        OneDrive などのクラウドのファイル（`IO_REPARSE_TAG_CLOUD_*`）や重複除去のファイル（`IO_REPARSE_TAG_DEDUP`）も
+        reparse point ですが、通常のファイルとして通します（書けるのに断ることになるため）。Vectorworks はリンクを通常のファイルで黙って置き換え、リンクの先の図面は
         古いまま残るためです（ダイアログも `GSError` も出ない）。ファイルのリンクは `OpenDocumentPath` で開けないので、
         この図面ができるのは実体の無いリンクへ保存したときだけです。
       - **mac**: ファイルのリンクは開いた時点で 1 段解決され、図面のパスはリンクの先になるので、追加の扱いは要りません
@@ -410,29 +421,29 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       - **親のフォルダがリンク・ジャンクション**のときは、どちらの OS も図面のパスは文字列のまま残り、ファイルは先の
         フォルダで置き換わります。3 は図面のパスの文字列から切り出したフォルダに聞き、OS がリンクを追うので当たります。
     - **図面のパスは `GetOpenFilesList` の文字列をそのまま使います**（2 はそのパスのファイル、3 はその文字列から最後の段を
-      落としたフォルダ。ドライブやファイルシステムの直下の図面では区切りを残す——`C:\a.vwx` の親は `C:\`、`/a.vwx` の親は `/`、UNC の共有の直下の `\\server\share\a.vwx` の親は `\\server\share\`（末尾の区切りの
-      無い共有のルートは開けず、53 などが返る）。
-      `C:` はドライブ C のカレントディレクトリ、空の文字列は `ENOENT` になるため）。`\\?\` は付けません（#294 のとおり `.` が残った図面のパスがあり、`\\?\` を付けると段が
+      落としたフォルダ。ドライブやファイルシステムの直下の図面では区切りを残す——`C:\a.vwx` の親は `C:\`（`C:` はドライブ C の
+      カレントディレクトリになる）、`/a.vwx` の親は `/`（空の文字列は `ENOENT` になる）、UNC の共有の直下の
+      `\\server\share\a.vwx` の親は `\\server\share\`（末尾の区切りの無い共有のルートは開けず、53 などが返る））。`\\?\` は付けません（#294 のとおり `.` が残った図面のパスがあり、`\\?\` を付けると段が
       畳まれずに失敗する）。スプールの開き方（リンクをたどらない・reparse point を断る）は使いません（OneDrive などの下の
       図面を、書けるのに断ることになるため）。
-    - **Windows で、図面のパスが 260 文字（`MAX_PATH`）以上のときは、確かめずに `write_check_failed` で断ります**（上書き保存の
+    - **Windows で、図面のパスが UTF-16 で 260 単位（`MAX_PATH`。終端の NUL を含む数なので、使えるのは 259 単位まで）以上の
+      ときは、確かめずに `write_check_failed` で断ります**（上書き保存の
       前の確かめの先頭）。`\\?\` を付けないので、OS への問い合わせが 3（`ERROR_PATH_NOT_FOUND`）や 206 を返し、ファイルが
-      あるのに `file_missing` と読み違えるためです（Vectorworks も 260 文字を超えるパスへは保存しない。#294）。
+      あるのに `file_missing` と読み違えるためです（Vectorworks も `MAX_PATH` を超えるパスへは保存しない。#294）。
     - **Windows で、図面のパスの途中の段の末尾が `.` か空白のとき（`…\x..\a.vwx`・`…\x \a.vwx`・`…\x.\a.vwx`）は、
       確かめずに `write_check_failed` で断ります**（**上書き保存の前の確かめの先頭**で、1 より前に見る。1 で OS に聞くと
-      末尾が落ちて別のファイルの答えが返るため）。段全体が `.` か `..` のもの（#294 のとおり図面のパスに残りうる）は除きます。 親のフォルダの文字列（`…\x..`）を OS に聞くと、末尾が落ちて別の
+      末尾が落ちて別のファイルの答えが返るため）。段全体が `.` か `..` のもの（#294 のとおり図面のパスに残りうる）は除きます。親のフォルダの文字列（`…\x..`）を OS に聞くと、末尾が落ちて別の
       フォルダ（`…\x`）の答えが返るので、3 が当たりません（`x..` にだけファイルを足せないと、3 は「許す」と答えるのに
       保存はダイアログで止まる。[Findings「途中の段の末尾が `.` か空白の保存先」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#途中の段の末尾が--か空白の保存先windows299)。#299）。段の末尾は字面で見ます。
-      こうしたパスの図面は、利用者がそのパスで開いたときと、`to` の形の確かめで同じ形を断るより前に保存したときにだけできます（`to` の形の一覧に、#299 の結果で
-      同じ形を断る項目を足すのは [#91](https://github.com/min-nano/vectorworks-plugin-command-line-interface/pull/91)。この PR だけでは `to` の側の規則はまだ無い）。
+      こうしたパスの図面は、利用者がそのパスで開いたときなどにできます。
     - **答えから `reason` への写し方**（OS で同じ状態が同じ `reason` になるように）:
 
       | 答え | mac（`errno`） | Windows（エラーの番号） | `reason` |
       | --- | --- | --- | --- |
       | 通る（判定そのものの呼び出しが許した。Windows のファイルの `CreateFileW(DELETE)` の 32——消せるが Vectorworks が握っている——もここ） | 0 | 0・ファイルの `CreateFileW(DELETE)` の 32 | 次の確かめへ |
       | リンクだった（Windows。図面のファイルの `GetFileAttributesW` に `FILE_ATTRIBUTE_REPARSE_POINT`） | — | — | `file_is_link`（この呼び出しが失敗したときは下の 2 行で分ける） |
-      | 書き込みを拒まれた（**判定そのものの呼び出し**——mac の `access(W_OK)`、mac の sticky の持ち主の比べ合わせ、Windows の `GetFileAttributesW` の属性・`AccessCheck` の答え・ファイルの `CreateFileW(DELETE)`・親のフォルダの `CreateFileW(FILE_ADD_FILE)`——が拒否を返した） | `EACCES`・`EPERM`・`EROFS`・sticky のほかの利用者のファイル | 5（拒否）・読み取り専用の属性・`AccessCheck` が拒む | 2（削除を含む）は `file_read_only`、3（sticky を含む）は `parent_read_only` |
-      | ファイルかフォルダが無い（1 の確かめのあとに消えた・ドライブが外れた・親がファイルになった） | `ENOENT`・`ENOTDIR` | 2（`ERROR_FILE_NOT_FOUND`）・3（`ERROR_PATH_NOT_FOUND`）・15（`ERROR_INVALID_DRIVE`）・21（`ERROR_NOT_READY`）・53（`ERROR_BAD_NETPATH`）・64（`ERROR_NETNAME_DELETED`）・267（`ERROR_DIRECTORY`） | `file_missing`（2 でも 3 でも） |
+      | 書き込みを拒まれた（**判定そのものの呼び出し**——mac の `access(W_OK)`、mac の sticky の持ち主の比べ合わせ、Windows の `GetFileAttributesW` の属性・`AccessCheck` の答え・ファイルの `CreateFileW(DELETE)`・親のフォルダの `CreateFileW(FILE_ADD_FILE)`——が拒否を返した） | `EACCES`・`EPERM`・`EROFS`・sticky のほかの利用者のファイル | 5（拒否）・19（`ERROR_WRITE_PROTECT`。mac の `EROFS` と同じ）・読み取り専用の属性・`AccessCheck` が拒む | 2（削除を含む）は `file_read_only`、3（sticky を含む）は `parent_read_only` |
+      | ファイルかフォルダが無い（1 の確かめのあとに消えた・ドライブが外れた・親がファイルになった） | `ENOENT`・`ENOTDIR` | 2（`ERROR_FILE_NOT_FOUND`）・3（`ERROR_PATH_NOT_FOUND`）・15（`ERROR_INVALID_DRIVE`）・21（`ERROR_NOT_READY`）・267（`ERROR_DIRECTORY`）。ネットワークの失敗（53 `ERROR_BAD_NETPATH`・64 `ERROR_NETNAME_DELETED` など）は「無い」と言えないので、下の「確かめられない」 | `file_missing`（2 でも 3 でも） |
       | 確かめられない（そのほかの失敗。長すぎる・ネットワークの失敗など。1 の確かめを含む。**判定の準備の呼び出し**——`GetFileSecurityW`・`OpenProcessToken`・`DuplicateToken`——の失敗は、拒否（5）でもここ。`READ_CONTROL` が無くて ACL を読めないときなど） | そのほかの `errno` | そのほかの番号 | `write_check_failed`（分からないまま呼ぶとダイアログで止まるか、拒否の ACE を消しうるので断る。直し方は権限ではないので、拒まれた場合と分ける） |
 
       分類は番号だけでなく、どの呼び出しが返したかで決めます（同じ 5 でも、判定の呼び出しなら拒否、準備の呼び出しなら
