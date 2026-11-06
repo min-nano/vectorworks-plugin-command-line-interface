@@ -317,10 +317,14 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   一度も保存していない図面のほか、**古い版・読み取り専用・ほかの Vectorworks が使用中のファイルを開いた図面**も
   真です（Vectorworks はこれらを元のファイルに結び付かないコピーとして開く。`OpenDocumentPath` で開いても確認なしに
   コピーになる。[Findings「利用者の図面を上書き保存する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#利用者の図面を上書き保存するダイアログが出る場面と保存先の文字列288)）。
-  **3 つとも確かめたのは mac で、Windows は読み取り専用だけです。** Windows の古い版・使用中のファイルは
-  [SDK リファレンス #291](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/291) で調べていて、
-  段 5 の実装はその結果を待ちます（`untitled` にならなければ、`to` を省いた上書き保存が元のファイルへ向かい、
-  ダイアログが出ても前もって断れない）。
+  **Windows で確かめたのは読み取り専用と使用中のファイルで、どちらも mac と同じく `untitled` が真です**（使用中は、
+  別のプロセスがファイルを書き込みで握った状態で代わりに測った。`OpenDocumentPath` は確認なしにコピーで開き、戻り値は
+  `true`。[Findings「Windows——ほかの Vectorworks が開くファイル」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windowsほかの-vectorworks-が開くファイルと測れなかった残り291)。#291）。
+  **Windows の古い版のファイルと、2 つ目の Vectorworks が開いているファイルは測れていません**（調べた環境では古い版の
+  ファイルを作れず、2 つ目の Vectorworks を起動できなかった）。`untitled` は `fIsInMemoryOnly` をそのまま返すので、
+  プラグインはこれらの場面でも Vectorworks の答えに従います。古い版のファイルが Windows で `untitled` にならなければ、
+  `to` を省いた `save` は元のファイルへ上書き保存します（ダイアログが出るかは分からない）。段 5 の実機の確認で、
+  Windows で古い版のファイルを開ける環境があれば `untitled` を見ます。
   **`untitled` が真の図面の `path` は「アプリケーションのフォルダ＋名前」**で、ファイルとしては存在しません（名前は
   「名称未設定 N」・「<元の名前> コピー 1」・「<元の名前> v2026.vwx」など。N はセッション全体の連番で、開いている間は
   重ならない）。**`untitled` が真の図面は、`path` がほかの図面と重なることがあります**（下記。その図面は `save`・
