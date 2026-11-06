@@ -70,7 +70,7 @@
   （`no_document`）・名指す図面が 1 つに決まらない（`save`・`close` の `document_ambiguous`）・
   図面が開いている（`quit` の `documents_open`）・保存先が埋まっている（`save` の `to_is_open`・
   `file_exists`。`to` は新しく作るファイルを名指すので、既にあることは状態に当たる）・保存先の親のフォルダが無い
-  （`parent_missing`）・上書きする自分のファイルが無い・書き込めない（`file_missing`・`file_read_only`）・図面が閉じなかった（`close` の
+  （`parent_missing`）・上書きする自分のファイルが無い・書き込めない・親のフォルダに足せない（`file_missing`・`file_read_only`・`parent_read_only`）・図面が閉じなかった（`close` の
   `not_closed`。保存の確認が取り消されたなど）・SDK の失敗（`save` の `save_failed`）・道具の中の例外。
 
 呼ぶ側が理由で分岐するときは、`code` ではなく `detail` の `reason` を見ます（`reason` を返す失敗だけ）。
@@ -351,30 +351,37 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     （上書き保存の先はアプリケーションのフォルダ）、保存してから閉じる使い方（`quit` の前など）に要るためです。
     **この危険を認めたうえで許す、と決めます**（`close` の「undo イベントの外で足された図形」と同じ扱い）。呼ぶ側は、
     利用者が開いている図面に `to` を渡したら、その図面を閉じるまでを 1 続きの操作にします。
-  - **上書き保存（`to` を省く）の前に、次を確かめて `internal` で断ります。** どちらも、そのまま呼ぶと警告の
-    ダイアログが出て、人が OK を押すまで戻らない場面です（mac。#288）。
+  - **上書き保存（`to` を省く）の前に、次を確かめて `internal` で断ります。** どれも、そのまま呼ぶと警告の
+    ダイアログが出て人が OK を押すまで戻らないか、利用者のファイルを黙って置き換える場面です（#288・#293）。
     1. 自分のファイルがディスクに無い（`file_missing`）。Finder などで移した・消した、ドライブが外れた。mac は
        「指定したファイルが見つかりません…」、Windows はドライブが外れたときに「ディスクの空き容量がありません。」が
        出ます（Windows は開いている間ファイルを握っているので、移す・消すはふつうの操作では起きない）。
-    2. 自分のファイルに書き込めない（`file_read_only`）。**Vectorworks は上書き保存でファイルをその場で書き換えず、
-       親のフォルダに新しいファイルを作って置き換える**ので、ファイル自身に加えて親のフォルダも見ます
-       （[Findings「上書き保存の前に『書き込めない』と判定する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#上書き保存の前に書き込めないと判定する293)。#293）。
-       - **mac**: ファイルと親のフォルダの両方に `access(W_OK)` を聞き、どちらかが -1 なら断ります。読み取り専用
-         （`chmod a-w`）・Finder のロック・親のフォルダに書き込めない（モード・ACL・ロック）のどれもダイアログが出る
-         場面で、`access` はどれも -1 を返すので漏れません。ファイルの書き込みを拒む ACL だけはダイアログが出ずに
-         ファイルが置き換わります（拒否の ACE ごと消える）が、利用者が拒んだファイルを黙って置き換えないよう、これも
-         断ります。
-       - **Windows**: 親のフォルダを `CreateFileW(FILE_ADD_FILE, FILE_FLAG_BACKUP_SEMANTICS)` で開いてみて、アクセス
-         拒否（5）なら断ります（ファイルは作らない）。ダイアログが出るのは親のフォルダにファイルを足せないときだけで、
-         この答えがそれと一致します。あわせて、ファイルの `FILE_ATTRIBUTE_READONLY`（`GetFileAttributesW`）も断ります。
-         読み取り専用のファイルは 1 回目はダイアログを出さずに置き換わり（元のファイルは `.bak` へ退避）、属性が消える
-         うえ、続く保存で警告が出ることがあるためです。ファイルの書き込みを拒む ACL は断りません（ダイアログは出ない）。
-         **ファイルを `CreateFileW(GENERIC_WRITE)` で開いて確かめてはいけません**（開いている図面のファイルは
-         Vectorworks が握っているので、書ける場面でも共有違反の 32 になる）。`_waccess` も ACL を見ないので使いません。
+    2. 自分のファイルに書き込めない（`file_read_only`）。
+    3. 親のフォルダにファイルを足せない（`parent_read_only`）。**Vectorworks は上書き保存でファイルをその場で書き換えず、
+       親のフォルダに新しいファイルを作って置き換える**ので、ファイル自身が書けても、ここで止まります。呼ぶ側が直し方
+       （ファイルの属性か、フォルダの権限か）を決められるよう、2 と `reason` を分けます。
 
-       どちらの OS も、書き込めないまま呼ぶとダイアログ（親のフォルダなら 2 枚）が出て、`GSError` は 0 のままなので、
-       呼んだあとの戻り値では失敗が分かりません。OS で振る舞いが違うので、どちらの OS でも
-       呼ぶ前に断ります。この判定は OS の呼び出しなので、`src/core` の `FilesPosix.cpp`・`FilesWindows.cpp` に置きます。
+    2 と 3 をどの OS の呼び出しで判定するかは、[Findings「上書き保存の前に『書き込めない』と判定する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#上書き保存の前に書き込めないと判定する293)
+    （#293）で決めました。どの場面でダイアログが出るか・出ないかと、出たときの `GSError` はそちらにあります。
+    **方針は OS によらず同じで、ダイアログが出る場面を漏らさず、ダイアログが出なくても利用者が書き込みを拒んだ
+    ファイル（読み取り専用・ロック・書き込みを拒む ACL）は断ります**（黙って置き換えると、属性や拒否の ACE が消えるため）。
+    - **mac**: 2 はファイルに、3 は親のフォルダに `access(W_OK)` を聞き、-1 なら断ります（読み取り専用・Finder の
+      ロック・ACL・モードのどれも反映する）。
+    - **Windows**: 2 はファイルの `FILE_ATTRIBUTE_READONLY`（`GetFileAttributesW`）と、ファイルへの
+      `AccessCheck(FILE_GENERIC_WRITE)` で断ります。3 は親のフォルダを `CreateFileW(FILE_ADD_FILE,
+      FILE_FLAG_BACKUP_SEMANTICS)` で開いてみて断ります（ファイルは作らない）。**ファイルを `CreateFileW(GENERIC_WRITE)`
+      で開いて確かめてはいけません**（Vectorworks が開いている図面のファイルを握っているので、書ける場面でも失敗する）。
+      `_waccess` は ACL を見ないので使いません。
+    - **問い合わせが失敗したら（拒否以外の理由でも）断ります。** 属性を読めない（`INVALID_FILE_ATTRIBUTES`。1 の
+      確かめのあとにファイルが消えた・ドライブが外れた）ときは `file_missing`、`AccessCheck` が拒否以外で失敗した
+      ときは `file_read_only`、親のフォルダを開くのが拒否（5）以外で失敗した（パスが見つからない・長すぎる・
+      ネットワークの失敗など）ときは `parent_read_only` です。分からないまま呼ぶと、ダイアログで止まりうるためです。
+      `detail` に OS のエラーの番号（`os_error`）を載せます。
+    - **リンクはたどります**（Vectorworks はリンクの先へ保存するので、判定もリンクの先で行う）。図面のパスは
+      `GetOpenFilesList` の文字列をそのまま使い、`\\?\` を付けません（#294 のとおり `.` が残った図面のパスがあり、
+      `\\?\` を付けると段が畳まれずに失敗する）。スプールの開き方（リンクをたどらない・reparse point を断る・
+      `\\?\` を付ける）は使いません（OneDrive などの下の図面を、書けるのに断ることになるため）。
+    - この判定は OS の呼び出しなので、`src/core` の `FilesPosix.cpp`・`FilesWindows.cpp` に置きます。
   - **結果の `document`** は、引数の `document` をそのまま返したもの（保存する前の図面のパス）です。
   - **結果の `path` は、保存のあとに `GetOpenFilesList` から読み直した文字列です**（`to` をそのまま返さない）。`to` を
     省いた上書き保存なら `document` と同じ文字列です（一覧の文字列をそのまま保存先に渡し、渡した文字列がそのまま
@@ -396,7 +403,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   - **`to` の親のフォルダが無ければ（ファイルであれば）、`internal` で断ります（`parent_missing`）。** SDK もダイアログを
     出さずに断り（50331649）、フォルダは作りませんが、理由を分かりやすくするために先に確かめます。
   - **`save` の状態の確かめ（`internal`）は、`to` を渡したときは `to_is_open` → `file_exists` → `parent_missing` の順、
-    省いたときは `file_missing` → `file_read_only` の順に行います**（[冒頭](#最初に提供する道具)の 5）。開いている図面と
+    省いたときは `file_missing` → `file_read_only` → `parent_read_only` の順に行います**（[冒頭](#最初に提供する道具)の 5）。開いている図面と
     一致する `to` は、そのフォルダが消されていても `to_is_open` を返します。
   - **`to` に既にあるファイルを渡しても保存できません**（SDK が `GSError` 50331649 を返し、何も起きない。
     mac・Windows とも、どの形で渡しても）。図面自身のパスへの上書き保存（`to` を省く。上記）はこれに当たらず、
@@ -413,7 +420,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     `internal` です（`invalid_args` と `internal` の分け方は[冒頭](#最初に提供する道具)）。
     確かめてから保存するまでの間にファイルができた場合は、SDK のエラーを `internal` で返します
     （開いている図面でなければダイアログは出ない）。Windows で 260 文字を超える保存先も、SDK が断るので `internal` に
-    なります。これらの `reason`（`parent_missing`・`file_missing`・`file_read_only` を含む）を保存を呼ぶ前に返すことは、段 5 で無 SDK のテストで確かめます
+    なります。これらの `reason`（`parent_missing`・`file_missing`・`file_read_only`・`parent_read_only` を含む）を保存を呼ぶ前に返すことは、段 5 で無 SDK のテストで確かめます
     （[実装の順序](plan.md)の段 5）。
   - **`SaveActiveDocumentPath` が 0 以外を返したら、`internal` で失敗し、`detail` に
     `{"reason":"save_failed","gs_error":<値>}` を付けます。** `GSError` は SDK のエラーの番号（`Uint32`）で、値ごとの
@@ -432,7 +439,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     上記「結果の `path`」）。`SwitchToOpenFile` で前の図面へ戻すと、その図面のカレントレイヤも元どおりになります
     （[Findings「指定した図面を保存する・閉じる」の手順](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#手順getopenfileslist-で引きswitchtoopenfile-で前へ出し前面を戻す)）。
     `invalid_args` と、保存を呼ぶ前に返す `internal`（`no_document`・`to_is_open`・`file_exists`・
-    `parent_missing`・`file_missing`・`file_read_only`）は、前面を切り替える前に断るので、前面は動きません。
+    `parent_missing`・`file_missing`・`file_read_only`・`parent_read_only`）は、前面を切り替える前に断るので、前面は動きません。
 - **パスの一致の判定。** `document` は `documents` が返した文字列と**完全に一致**するものを探します（呼ぶ側は
   `documents` の結果をそのまま渡す）。`to` は新しいパスで、開いている図面の保存先との衝突を**見逃さない側**に倒して
   比べます: 絶対パスを要し（相対パスは `invalid_args`）、区切り文字を揃え、Unicode を正規化（NFC。macOS のファイル名は
