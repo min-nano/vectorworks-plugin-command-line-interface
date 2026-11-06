@@ -419,7 +419,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     - 拡張子が `.vwx` でない（大文字と小文字は区別しない）。Vectorworks は拡張子を足さず、`.txt`・`.dwg` でも中身は
       Vectorworks の形式のまま、その名前で保存します。末尾が `.` の名前もここで断ります（Windows は点を落とした
       ファイルを作り、図面のパスと食い違う）。
-    - Windows では、ドライブ名の後に `< > : " | ? *` を含む（`GSError` が 0 のまま `%3F` などに化けた名前で
+    - Windows では、先頭（ドライブ名の `X:`、UNC の `\\`）の後のどの段にも——UNC のサーバーと共有の段を含めて——`< > : " | ? *` を含む（`GSError` が 0 のまま `%3F` などに化けた名前で
       保存される）。
     - 制御文字（U+0000〜U+001F）を含む（mac も Windows も）。SDK がどう振る舞うかは確かめていないので、確かめずに断ります。
       Windows の予約された名前（`CON.vwx` など）は、SDK がふつうに保存したので断りません
@@ -428,8 +428,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     確かめていません**（#294 が測ったのは同じ計算機の管理共有 `\\localhost\C$` だけで、別の計算機の共有は測っていない。
     [Findings「保存先のパスの形」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#保存先のパスの形unc相対-と-294)）。`save` の状態の確かめ（`to` を渡したときの `file_exists`・`parent_missing`、
     省いたときの上書き保存の前の確かめ）と保存そのものはメインスレッドで行うので、止まりうると見込みます【推定】。
-    スプールはネットワークのファイルを断っています（`FilesWindows.cpp` の `kNotLocal`）が、`save` は利用者の図面を相手に
-    するので同じ手は使えません。段 5 では扱わず、[SDK の調査](../sdk-research.md)に確かめていないものとして載せます。
+段 5 では扱わず、[SDK の調査](../sdk-research.md)に確かめていないものとして載せます。
   - **`to` の親のフォルダが無ければ（ファイルであれば）、`internal` で断ります（`parent_missing`）。** SDK もダイアログを
     出さずに断り（50331649）、フォルダは作りませんが、理由を分かりやすくするために先に確かめます。
   - **`save` の状態の確かめ（`internal`）は、`to` を渡したときは `to_is_open` → `file_exists` → `parent_missing` の順、
