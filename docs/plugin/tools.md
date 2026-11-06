@@ -389,11 +389,15 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
 
       | 答え | mac（`errno`） | Windows（エラーの番号） | `reason` |
       | --- | --- | --- | --- |
-      | 書き込みを拒まれた | `EACCES`・`EPERM`・`EROFS` | 5（拒否）・読み取り専用の属性・`AccessCheck` が拒む | 2 は `file_read_only`、3 は `parent_read_only` |
+      | 書き込みを拒まれた（**判定そのものの呼び出し**——mac の `access(W_OK)`、Windows の `GetFileAttributesW` の属性・`AccessCheck` の答え・親のフォルダの `CreateFileW(FILE_ADD_FILE)`——が拒否を返した） | `EACCES`・`EPERM`・`EROFS` | 5（拒否）・読み取り専用の属性・`AccessCheck` が拒む | 2 は `file_read_only`、3 は `parent_read_only` |
       | ファイルかフォルダが無い（1 の確かめのあとに消えた・ドライブが外れた・親がファイルになった） | `ENOENT`・`ENOTDIR` | 2（`ERROR_FILE_NOT_FOUND`）・3（`ERROR_PATH_NOT_FOUND`）・15（`ERROR_INVALID_DRIVE`）・21（`ERROR_NOT_READY`）・53（`ERROR_BAD_NETPATH`）・64（`ERROR_NETNAME_DELETED`）・267（`ERROR_DIRECTORY`） | `file_missing`（2 でも 3 でも） |
-      | 確かめられない（そのほかの失敗。長すぎる・ネットワークの失敗・`READ_CONTROL` が無くて ACL を読めないなど） | そのほかの `errno` | そのほかの番号 | `write_check_failed`（分からないまま呼ぶとダイアログで止まるか、拒否の ACE を消しうるので断る。直し方は権限ではないので、拒まれた場合と分ける） |
+      | 確かめられない（そのほかの失敗。長すぎる・ネットワークの失敗など。**判定の準備の呼び出し**——`realpath`・`GetFinalPathNameByHandleW` とそのための `CreateFileW`・`GetFileSecurityW`・`OpenProcessToken`・`DuplicateToken`——の失敗は、拒否（`EACCES`・5）でもここ。`READ_CONTROL` が無くて ACL を読めないときなど） | そのほかの `errno` | そのほかの番号 | `write_check_failed`（分からないまま呼ぶとダイアログで止まるか、拒否の ACE を消しうるので断る。直し方は権限ではないので、拒まれた場合と分ける） |
 
-      #293 で確かめたのは「拒否」と「通る」の答えだけで、ほかの答えの分け方は確かめていません。**OS の呼び出しが
+      分類は番号だけでなく、どの呼び出しが返したかで決めます（同じ 5 でも、判定の呼び出しなら拒否、準備の呼び出しなら
+      確かめられない）。#293 で確かめたのは「拒否」と「通る」の答えだけで、ほかの答えの分け方は確かめていません。
+    - **確かめていない場面**: ファイルの削除を拒む ACE（`DELETE` の拒否）と、mac の sticky ビットの付いたフォルダの中の、
+      ほかの利用者のファイルです。置き換えには削除か名前の変更が要るので、2 と 3 を通ってもダイアログが出るかもしれ
+      ませんが、#293 では測っておらず、この判定では見ていません。**OS の呼び出しが
       失敗したときだけ、`detail` にその番号を載せます**（mac は `errno`、Windows は `win32_error`。番号の意味が OS で違うので
       鍵を分ける）。読み取り専用の属性や `AccessCheck` の「拒む」のように、呼び出しが成功して拒否が分かった場合は載せません。
     - この判定は OS の呼び出しなので、`src/core` の `FilesPosix.cpp`・`FilesWindows.cpp` に置きます。
