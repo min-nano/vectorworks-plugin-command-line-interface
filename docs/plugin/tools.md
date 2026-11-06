@@ -384,7 +384,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       | 答え | mac（`errno`） | Windows（エラーの番号） | `reason` |
       | --- | --- | --- | --- |
       | 書き込みを拒まれた | `EACCES`・`EPERM`・`EROFS` | 5（拒否）・読み取り専用の属性・`AccessCheck` が拒む | 2 は `file_read_only`、3 は `parent_read_only` |
-      | ファイルかフォルダが無い（1 の確かめのあとに消えた・ドライブが外れた） | `ENOENT`・`ENOTDIR` | 2（`ERROR_FILE_NOT_FOUND`）・3（`ERROR_PATH_NOT_FOUND`） | `file_missing`（2 でも 3 でも） |
+      | ファイルかフォルダが無い（1 の確かめのあとに消えた・ドライブが外れた・親がファイルになった） | `ENOENT`・`ENOTDIR` | 2（`ERROR_FILE_NOT_FOUND`）・3（`ERROR_PATH_NOT_FOUND`）・15（`ERROR_INVALID_DRIVE`）・21（`ERROR_NOT_READY`）・53（`ERROR_BAD_NETPATH`）・64（`ERROR_NETNAME_DELETED`）・267（`ERROR_DIRECTORY`） | `file_missing`（2 でも 3 でも） |
       | 2 の ACL を確かめられない（`GetFileSecurityW` などの失敗。`READ_CONTROL` が無い ACL など） | — | 失敗した呼び出しの番号 | **断らない**（ファイルの ACL ではダイアログが出ず、利用者の意図を汲むための確かめなので、分からなければ進む） |
       | そのほかの失敗（長すぎる・ネットワークの失敗など） | そのほかの `errno` | そのほかの番号 | 2 は `file_read_only`、3 は `parent_read_only`（分からないまま呼ぶとダイアログで止まりうるので断る） |
 
@@ -438,8 +438,11 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     確かめてから保存するまでの間にファイルができた場合は、SDK のエラーを `internal` で返します
     （開いている図面でなければダイアログは出ない）。Windows で 260 文字を超える保存先も、SDK が断るので `internal` に
     なります。これらの `reason`（`parent_missing`・`file_missing`・`file_read_only`・`parent_read_only` を含む）を保存を呼ぶ前に返すことは、段 5 で無 SDK のテストで確かめます
-    （[実装の順序](plan.md)の段 5）。**書き込めるかの問い合わせは、比べ方と同じく関数として受け取り**、テストでは答えを
-    差し替えて確かめの順と、上の表の写し方（OS の答えから `reason` へ）を確かめます。本物の OS の呼び出しは無 SDK の
+    （[実装の順序](plan.md)の段 5）。**書き込めるかの問い合わせは、比べ方と同じく関数として受け取ります。** その関数は OS の
+    答えを「拒まれた・無い・そのほか」（2 の ACL は「確かめられない」も）の分類にして返し、`src/core` の手順は分類から
+    `reason` を決めます。テストでは分類を差し替えて、確かめの順と分類から `reason` への写し方を確かめます。OS の答え
+    （`errno`・Win32 のエラーの番号）を分類にする表は `FilesPosix.cpp`・`FilesWindows.cpp` の純粋な関数に置き、
+    `VwCliTests` でその OS のときだけテストします（POSIX の表は Linux と mac、Win32 の表は Windows の CI で走る）。本物の OS の呼び出しは無 SDK の
     テストでは確かめません（`chmod a-w` は root では効かず、Windows の ACL は MSVC のジョブでしか走らないため）。段 5 の
     実機の確認で確かめます。
   - **`SaveActiveDocumentPath` が 0 以外を返したら、`internal` で失敗し、`detail` に
