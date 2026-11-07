@@ -58,17 +58,17 @@
    使うものに合っている）。`documents` は失敗にせず空の一覧を返し、`ping` は失敗せずに `document_open` を偽にします。
 3. 引数が名指すもの（`document`・`layer`）が実在しない → `invalid_args`。名指す図面が 1 つに決まらない
    （`document` に一致する図面が 2 枚以上）→ `internal`（`document_ambiguous`）。
-4. 道具の規則に反する組み合わせ（`save` が名指す図面の `untitled`）→ `invalid_args`。
+4. 名指した図面の状態（`save` の図面が保存済み）→ `internal`（`document_saved`）。
 5. 道具ごとの状態（`save` は下記の順）→ `internal`。
 
 **道具が返す失敗の `invalid_args` と `internal` は、次のように分けます**（[通信規則「応答」](../protocol.md#応答idresjson)）。
 
 - **`invalid_args`** は、引数そのものが誤っているとき: 知らない引数・型や値の誤り・必須の欠け、引数が名指すもの
-  （`document` の図面・`layer` のレイヤ）が実在しない、道具の規則に反する組み合わせ（保存済みの図面への `save`）、
+  （`document` の図面・`layer` のレイヤ）が実在しない、
   `save` の `to` の形（拡張子・使えない文字など）。
 - **`internal`** は、引数は正しく、名指すものも実在するが、それ以外の状態のために実行できないとき: 図面が無い
   （`no_document`）・名指す図面が 1 つに決まらない（`save`・`close` の `document_ambiguous`）・
-  図面が開いている（`quit` の `documents_open`）・保存先が埋まっている（`save` の `to_is_open`・
+  図面が開いている（`quit` の `documents_open`）・`save` の図面が保存済み（`document_saved`。上書き保存を提供しないため）・保存先が埋まっている（`save` の `to_is_open`・
   `file_exists`。`to` は新しく作るファイルを名指すので、既にあることは状態に当たる）・保存先の親のフォルダが無い
   （`parent_missing`）・図面が閉じなかった（`close` の
   `not_closed`。保存の確認が取り消されたなど）・SDK の失敗（`save` の `save_failed`）・道具の中の例外。
@@ -261,12 +261,13 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
   | `documents[].untitled` | ディスクのファイルに結び付いていない図面か（`documents` の `untitled` と同じ） |
 - **図面が 0 枚なら、保存の確認は出ません。** 応答を書いてから、受け付けの外で
   `gSDK->CloseAllFilesAndQuitVectorworks(true, false)` を頼みます（[構成「受け付けの流れ」](architecture.md#受け付けの流れ)）。
-  第 1 引数は常に真です（`quit` は図面を保存するか捨てるかを決めない。決めるのは呼ぶ側で、`save`・`close` などで先に片付ける。変更を捨てて閉じる手段はまだ無い。`close` は変更があれば保存の確認を出すだけで、確認の「保存しない」を押すダイアログのコマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。確かめてから頼むまでの間に利用者が
+  第 1 引数は常に真です（`quit` は図面を保存するか捨てるかを決めない。決めるのは呼ぶ側で、`save`（`untitled` が真の図面だけ）・`close` などで先に片付ける。変更を捨てて閉じる手段はまだ無い。`close` は変更があれば保存の確認を出すだけで、確認の「保存しない」を押すダイアログのコマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。確かめてから頼むまでの間に利用者が
   図面を開くと、保存の確認が出うる競合が残りますが、`quit` は占有の中でだけ呼べ、呼ぶ側が図面を閉じた直後に
   呼ぶ使い方なので、通常は起きません。
 - **図面を保存して閉じるのは呼ぶ側です。** 保存するか捨てるかも呼ぶ側が決めます（`quit` に保存する・捨てる指定は持たず、
-  CLI にも足さない。[設計](../design.md#cli-はプリミティブに保つ)）。保存（`save`）してから閉じる（`close`）
-  と、[下記の道具](#図面を扱う道具documentssaveclose)で保存確認なしに閉じられます。
+  CLI にも足さない。[設計](../design.md#cli-はプリミティブに保つ)）。`untitled` が真の図面は、保存（`save`）してから閉じる（`close`）
+  と、[下記の道具](#図面を扱う道具documentssaveclose)で保存確認なしに閉じられます。保存済みの図面に変更があれば、`close` は
+  保存の確認を出し、呼ぶ側がダイアログのコマンドで押します（[SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める。それまでは人が押す）。
 - **占有の中でだけ呼べます**（[通信規則「占有」](../protocol.md#占有セッション)。占有していなければ
   `no_session`、ほかが占有していれば `occupied` で断られる）。Vectorworks が終われば占有も消えます。
 - **終了の依頼の最中は断られます**（`busy`。[通信規則「Vectorworks が処理中」](../protocol.md#vectorworks-が処理中)）。
@@ -280,11 +281,12 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 
 ## 図面を扱う道具（`documents`・`save`・`close`）
 
-`quit` の前に図面を保存して閉じるための道具です（[実装の順序](plan.md)の段 5）。使う SDK 呼び出しは SDK
+`quit` の前に図面を片付ける（無題の図面を保存する・図面を閉じる）ための道具です（[実装の順序](plan.md)の段 5）。使う SDK 呼び出しは SDK
 リファレンスで確かめてあります（[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)。
 VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比べ方。[同「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・[SDK リファレンス #283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。**変更を捨てて閉じるのは、`close` で出た保存の確認の「保存しない」を、呼ぶ側が
 ダイアログのコマンドで押す形にします**（`close` そのものは捨てない。ダイアログのコマンドは未実装で、
-[SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。保存は呼ぶ側の責任で、保存してから閉じれば保存の確認は出ません。必要のない図面は、一時フォルダなどへ
+[SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。保存は呼ぶ側の責任で、`untitled` が真の図面は保存してから閉じれば保存の確認は出ません（`save` は保存済みの図面を
+保存しない。変更のある保存済みの図面の `close` は保存の確認を出す）。必要のない図面は、一時フォルダなどへ
 保存してから閉じ、ファイルは利用者が自分で消します（利用者の環境設定によっては、保存するたびに保存先の隣の
 `VW Backup/` に図面と同じ大きさのコピーもできます。大きな図面を繰り返し保存する使い方ではディスクを食います）。
 
@@ -342,7 +344,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     フォルダに同じ名前のファイルを保存して開いていれば、`untitled` が偽の図面とも重なりえます。**`untitled` によらず、
     一致する図面が 2 枚以上あれば、どれも保存・閉じずに `internal` で失敗し、`detail` に `{"reason":"document_ambiguous"}`
     を付けます**（名指すものは実在するので `invalid_args` にしない。[冒頭](#最初に提供する道具)の 3 で、名指すものの
-    実在の直後、組み合わせの確かめより先に確かめる。組み合わせは名指した図面の `untitled` で決まるので、1 枚に決まって
+    実在の直後、保存済みかの確かめより先に確かめる。保存済みかは名指した図面の `untitled` で決まるので、1 枚に決まって
     いることが前提のため）。黙ってどれか 1 枚に効かせると、呼ぶ側の思っていない図面を閉じうるためです。
     呼ぶ側は、利用者に一方を閉じてもらうなどして見分けられるようにします。
   - **`path` は正規化しません。** SDK が返した文字列をそのまま返します。Windows では、保存したときに渡された
@@ -351,7 +353,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
 - **`save`** は、`untitled` が真の図面を、`to` の新しいパスへ保存します。種類は `app` です（図面の中身は変えず、
   ファイルに書く。[ブリッジ「道具の表」](bridge.md#道具の表)）。`to` は必須です（省くと `invalid_args`）。
   - **上書き保存（図面自身のパスへの保存）は提供しません。** 保存済みの図面（`untitled` が偽）を名指すと、`to` の
-    有無によらず `invalid_args` で断ります。上書き保存は、自分のファイルが移された・消された、開いた後で読み取り専用に
+    有無によらず `internal` で断り、`detail` に `{"reason":"document_saved"}` を付けます（引数は正しく、図面の状態のために
+    実行できないので `internal`。[冒頭](#最初に提供する道具)の 4）。上書き保存は、自分のファイルが移された・消された、開いた後で読み取り専用に
     なったなどの場面で警告のダイアログを出し、人が押すまで戻りません
     （[Findings「利用者の図面を上書き保存する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#利用者の図面を上書き保存するダイアログが出る場面と保存先の文字列288)。#288）。
     前もって確かめて断るには、OS ごとに書き込めるかを判定する手順が要り（読み取り専用の属性・ロック・ACL・リンク・
@@ -359,9 +362,12 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     利用者が Vectorworks で保存するか、呼ぶ側が `close` の保存の確認をダイアログのコマンドで押して保存します
     （コマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。
     要るようになれば、`to` を省いたときの上書き保存を足せます（いまの呼び方は変わらない）。
-  - **保存済みの図面へ `to` を渡す別名保存も、同じ `invalid_args` で断ります。** 別名保存は図面のパスを保存先へ移す
+  - **保存済みの図面へ `to` を渡す別名保存も、同じ `document_saved` で断ります。** 別名保存は図面のパスを保存先へ移す
     （「名前を付けて保存」と同じ）ので、利用者の図面に許すと、利用者があとで ⌘S を押したときに一時フォルダの
     ファイルへ保存されてしまうためです。
+  - **呼ぶ側が `save` で保存した図面も、保存したあとは保存済みになるので、2 回目の `save` は `document_saved` で断られます。**
+    `save` は図面ごとに 1 回だけで、呼ぶ側は図面を書き終えてから保存します。保存のあとで足した変更は、`close` の保存の
+    確認で保存します（ダイアログのコマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める。それまでは人が押す）。
   - **`untitled` が真の図面の `path` はアプリケーションのフォルダを指す**ので、`to`（一時フォルダなど）を要します。
     そのまま保存するとそこへ黙ってファイルができるためです
     （[Findings「利用者の図面を上書き保存する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#利用者の図面を上書き保存するダイアログが出る場面と保存先の文字列288)）。
@@ -414,7 +420,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     意味は SDK に書かれていません（実測で出たのは 50331649＝`0x03000001` だけで、保存先が既にあるときも長すぎるときも
     同じ値）。そのため理由を値で分けず、値をそのまま載せます。
   - **保存そのものは取り消されません。** ただし、**図面に PIO を初めて足したあとの最初の保存**は、取り消しの履歴に
-    空の段を 1 つ積みます（別名保存も上書き保存も、mac も Windows も同じ。利用者がそのあと取り消しを押すと、1 回目は
+    空の段を 1 つ積みます（Vectorworks の振る舞いで、別名保存も上書き保存も、mac も Windows も同じ。上書き保存は `close` の
+    保存の確認で保存したときに当たる。利用者がそのあと取り消しを押すと、1 回目は
     何も戻らず、2 回目から戻る。履歴は消えない）。それ以外の `save` は積みません。Vectorworks の振る舞いで、プラグインからは
     避けられません（[Findings「Undo」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md)の
     「保存はいつも段を積むわけではない」。#288）。
