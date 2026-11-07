@@ -138,7 +138,11 @@ OS タイマーの刻みの中からも呼べ、相手が居なければ `false`
 - **図面に書き込む道具は undo の手順に必ず従う**（[SDK リファレンス「Undo」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md)）。
   書く道具は自分で undo の記録を開き、戻る前に必ず閉じる（要求 1 件で undo 1 つ。
   [ブリッジ「道具の表」](plugin/bridge.md#道具の表)）。
-- **利用者の図面を保存せずに閉じる・消す道具は持たない。**
+- **利用者が開いた図面とダイアログも、呼ぶ側が指定すれば操作の対象にする。** 保存せずに閉じることも、
+  Vectorworks のダイアログのどのボタンを押すことも、呼ぶ側が明示したときだけ行い、プラグインと CLI が勝手には
+  行わない（上の「頼まれたときにしか動かない」）。CLI から利用者の Vectorworks を操作するには、利用者の操作と
+  区別せずに扱えるのが分かりやすいため。ダイアログを読む・押す CLI のコマンドは、[SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302)の
+  結果で決める（未実装）。
 - **受け付けを止める手段は持たない**（止めたければアンインストールする）。代わりに、
   受け付けの入れ子と終了の依頼の最中は、要求を `busy` で断る
   （[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)）。

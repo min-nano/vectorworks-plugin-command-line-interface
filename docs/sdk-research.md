@@ -168,3 +168,17 @@ Windows も macOS も同じ）。
   合っている。
 
 段 3a の実機確認でも、スプールが既にある状態での起動を確かめます（[実装の順序](plugin/plan.md)の段 3a）。
+
+## 7. Vectorworks のダイアログを別のプロセスから読み、ボタンを押す（調べている）
+
+呼び出し（`save`・`close` など）が出したダイアログを、呼ぶ側が CLI のコマンドで読んで押せるようにします
+（許可があれば自動で進め、無ければ人の操作を待つ。[設計「本番で常駐させる前提」](design.md#本番で常駐させる前提安全)）。
+[SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) で
+**調べている**。
+
+- 別のプロセス（CLI）から、Vectorworks のダイアログを見つけ、題・本文・ボタンを読み、ボタンを押せるか
+  （Windows の `#32770` と `BM_CLICK`、mac の AX と `AXPress`）。
+- 権限の効き方（mac のアクセシビリティの許可と `AXIsProcessTrusted()`、Windows の昇格の組み合わせ）。
+- 呼び出しの最中に出たダイアログと、利用者が開いたダイアログを見分けられるか。
+
+CLI のコマンド（例 `vw2026 dialog list` / `vw2026 dialog press`）は、この結果で決めます。
