@@ -261,7 +261,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
   | `documents[].untitled` | ディスクのファイルに結び付いていない図面か（`documents` の `untitled` と同じ） |
 - **図面が 0 枚なら、保存の確認は出ません。** 応答を書いてから、受け付けの外で
   `gSDK->CloseAllFilesAndQuitVectorworks(true, false)` を頼みます（[構成「受け付けの流れ」](architecture.md#受け付けの流れ)）。
-  第 1 引数は常に真です（`quit` は図面を保存するか捨てるかを決めない。決めるのは呼ぶ側で、`save`・`close` などで先に片付ける）。確かめてから頼むまでの間に利用者が
+  第 1 引数は常に真です（`quit` は図面を保存するか捨てるかを決めない。決めるのは呼ぶ側で、`save`・`close` などで先に片付ける。変更を捨てて閉じる手段はまだ無い。`close` は変更があれば保存の確認を出すだけで、確認の「保存しない」を押すダイアログのコマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。確かめてから頼むまでの間に利用者が
   図面を開くと、保存の確認が出うる競合が残りますが、`quit` は占有の中でだけ呼べ、呼ぶ側が図面を閉じた直後に
   呼ぶ使い方なので、通常は起きません。
 - **図面を保存して閉じるのは呼ぶ側です。** 保存するか捨てるかも呼ぶ側が決めます（`quit` に保存する・捨てる指定は持たず、
@@ -282,8 +282,9 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 
 `quit` の前に図面を保存して閉じるための道具です（[実装の順序](plan.md)の段 5）。使う SDK 呼び出しは SDK
 リファレンスで確かめてあります（[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)。
-VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比べ方。[同「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・[SDK リファレンス #283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。**変更を捨てて閉じる道具は持ちません**（人の変更を黙って捨てる手段を
-作らない）。保存は呼ぶ側の責任で、保存してから閉じれば保存の確認は出ません。必要のない図面は、一時フォルダなどへ
+VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比べ方。[同「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・[SDK リファレンス #283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。**変更を捨てて閉じるのは、`close` で出た保存の確認の「保存しない」を、呼ぶ側が
+ダイアログのコマンドで押す形にします**（`close` そのものは捨てない。ダイアログのコマンドは未実装で、
+[SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。保存は呼ぶ側の責任で、保存してから閉じれば保存の確認は出ません。必要のない図面は、一時フォルダなどへ
 保存してから閉じ、ファイルは利用者が自分で消します（利用者の環境設定によっては、保存するたびに保存先の隣の
 `VW Backup/` に図面と同じ大きさのコピーもできます。大きな図面を繰り返し保存する使い方ではディスクを食います）。
 
@@ -505,7 +506,9 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     戻します（前面を閉じたときは戻せない）。
 - **undo イベントの外で足された図形は「変更あり」にならず、`close` で確認なしに黙って捨てられます。**
   VW の仕様で、プラグインからは検出も防止もできません（「確認が出ないから変更は無い」とは読めない）。
-  **この危険を認めたうえで `close` を持つ、と決めます。** このプラグインの図面に書く道具は undo の記録の中で書くので起きません。
+  **この危険を認めたうえで `close` を持つ、と決めます。** 捨てることを呼ぶ側が意図するなら、確認の「保存しない」を
+  呼ぶ側が押す（上記）ので、`close` が確認なしに捨てるのは、Vectorworks が変更を検出できないこの場合だけです。
+  このプラグインの図面に書く道具は undo の記録の中で書くので起きません。
   ほかのプラグインやスクリプトが記録の外で書いた変更は、呼ぶ側が `close` の前に `save` します。
 - 図面を開く道具は[設計「決めたこと」](../design.md#決めたこと)の「対象の図面」にあります（未実装）。
   `OpenDocumentPath` で開いた図面は、`save` してから `close` します。開いたあとは Vectorworks の最初の描画が刻みを
