@@ -71,7 +71,7 @@
   図面が開いている（`quit` の `documents_open`）・`save` の図面が保存済み（`document_saved`。上書き保存を提供しないため）・保存先が埋まっている（`save` の `to_is_open`・
   `file_exists`。`to` は新しく作るファイルを名指すので、既にあることは状態に当たる）・保存先の親のフォルダが無い
   （`parent_missing`）・図面が閉じなかった（`close` の
-  `not_closed`。保存の確認が取り消されたなど）・SDK の失敗（`save` の `save_failed`）・道具の中の例外。
+  `not_closed`）・SDK の失敗（`save` の `save_failed`）・道具の中の例外。
 
 呼ぶ側が理由で分岐するときは、`code` ではなく `detail` の `reason` を見ます（`reason` を返す失敗だけ）。
 
@@ -261,13 +261,12 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
   | `documents[].untitled` | ディスクのファイルに結び付いていない図面か（`documents` の `untitled` と同じ） |
 - **図面が 0 枚なら、保存の確認は出ません。** 応答を書いてから、受け付けの外で
   `gSDK->CloseAllFilesAndQuitVectorworks(true, false)` を頼みます（[構成「受け付けの流れ」](architecture.md#受け付けの流れ)）。
-  第 1 引数は常に真です（`quit` は図面を保存するか捨てるかを決めない。決めるのは呼ぶ側で、`save`（`untitled` が真の図面だけ）・`close` などで先に片付ける。変更を捨てて閉じる手段はまだ無い。`close` は変更があれば保存の確認を出すだけで、確認の「保存しない」を押すダイアログのコマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。確かめてから頼むまでの間に利用者が
+  第 1 引数は常に真です（`quit` は図面を保存するか捨てるかを決めない。決めるのは呼ぶ側で、`save`（`untitled` が真の図面だけ）・`close`（変更を捨てる）で先に片付ける）。確かめてから頼むまでの間に利用者が
   図面を開くと、保存の確認が出うる競合が残りますが、`quit` は占有の中でだけ呼べ、呼ぶ側が図面を閉じた直後に
   呼ぶ使い方なので、通常は起きません。
 - **図面を保存して閉じるのは呼ぶ側です。** 保存するか捨てるかも呼ぶ側が決めます（`quit` に保存する・捨てる指定は持たず、
-  CLI にも足さない。[設計](../design.md#cli-はプリミティブに保つ)）。`untitled` が真の図面は、保存（`save`）してから閉じる（`close`）
-  と、[下記の道具](#図面を扱う道具documentssaveclose)で保存確認なしに閉じられます。保存済みの図面に変更があれば、`close` は
-  保存の確認を出し、呼ぶ側がダイアログのコマンドで押します（[SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める。それまでは人が押す）。
+  CLI にも足さない。[設計](../design.md#cli-はプリミティブに保つ)）。残したい無題の図面は保存（`save`）してから、
+  どの図面も[下記の `close`](#図面を扱う道具documentssaveclose)で閉じます。`close` は保存の確認を出さず、未保存の変更を捨てます。
 - **占有の中でだけ呼べます**（[通信規則「占有」](../protocol.md#占有セッション)。占有していなければ
   `no_session`、ほかが占有していれば `occupied` で断られる）。Vectorworks が終われば占有も消えます。
 - **終了の依頼の最中は断られます**（`busy`。[通信規則「Vectorworks が処理中」](../protocol.md#vectorworks-が処理中)）。
@@ -283,10 +282,8 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 
 `quit` の前に図面を片付ける（無題の図面を保存する・図面を閉じる）ための道具です（[実装の順序](plan.md)の段 5）。使う SDK 呼び出しは SDK
 リファレンスで確かめてあります（[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)。
-VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比べ方。[同「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・[SDK リファレンス #283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。**変更を捨てて閉じるのは、`close` で出た保存の確認の「保存しない」を、呼ぶ側が
-ダイアログのコマンドで押す形にします**（`close` そのものは捨てない。ダイアログのコマンドは未実装で、
-[SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。保存は呼ぶ側の責任で、`untitled` が真の図面は保存してから閉じれば保存の確認は出ません（`save` は保存済みの図面を
-保存しない。変更のある保存済みの図面の `close` は保存の確認を出す）。必要のない図面は、一時フォルダなどへ
+VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比べ方。[同「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・[SDK リファレンス #283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。**`close` は保存の確認を出さずに閉じ、未保存の変更を捨てます**（利用者の判断。下記）。保存は呼ぶ側の責任で、
+残したい無題の図面は、`save` してから `close` します（`save` は保存済みの図面を保存しない）。必要のない図面は、一時フォルダなどへ
 保存してから閉じ、ファイルは利用者が自分で消します（利用者の環境設定によっては、保存するたびに保存先の隣の
 `VW Backup/` に図面と同じ大きさのコピーもできます。大きな図面を繰り返し保存する使い方ではディスクを食います）。
 
@@ -327,8 +324,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   ファイルを作れず、2 つ目の Vectorworks を起動できなかった）。`untitled` は `fIsInMemoryOnly` をそのまま返すので、
   プラグインはこれらの場面でも Vectorworks の答えに従います。古い版のファイルが Windows で `untitled` にならなくても、
   `save` は上書き保存をしない（下記）ので、`save` が利用者の古い版のファイルを置き換えることはありません（その図面は
-  `save` で保存できない）。`close` の保存の確認で呼ぶ側が保存を選べば置き換わりますが、それは呼ぶ側の判断です
-  （ダイアログを読んで押すのは呼ぶ側。[設計「本番で常駐させる前提」](../design.md#本番で常駐させる前提安全)）。
+  `save` で保存できない）。`close` も保存せずに閉じるので、置き換わりません。
   段 5 の実機の確認で、mac で作った古い版のファイルを Windows で開いて `untitled` を見ます。
   **`untitled` が真の図面の `path` は「アプリケーションのフォルダ＋名前」**で、ファイルとしては存在しません（名前は
   「名称未設定 N」・「<元の名前> コピー 1」・「<元の名前> v2026.vwx」など。N はセッション全体の連番で、開いている間は
@@ -359,15 +355,13 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     （[Findings「利用者の図面を上書き保存する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#利用者の図面を上書き保存するダイアログが出る場面と保存先の文字列288)。#288）。
     前もって確かめて断るには、OS ごとに書き込めるかを判定する手順が要り（読み取り専用の属性・ロック・ACL・リンク・
     ネットワークの失敗）、それでも確かめきれない場面が残るので、提供しないことで避けます。保存済みの図面の変更は、
-    利用者が Vectorworks で保存するか、呼ぶ側が `close` の保存の確認をダイアログのコマンドで押して保存します
-    （コマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。
+    利用者が Vectorworks で保存します（`close` は変更を捨てる）。
     要るようになれば、`to` を省いたときの上書き保存を足せます（いまの呼び方は変わらない）。
   - **保存済みの図面へ `to` を渡す別名保存も、同じ `document_saved` で断ります。** 別名保存は図面のパスを保存先へ移す
     （「名前を付けて保存」と同じ）ので、利用者の図面に許すと、利用者があとで ⌘S を押したときに一時フォルダの
     ファイルへ保存されてしまうためです。
   - **呼ぶ側が `save` で保存した図面も、保存したあとは保存済みになるので、2 回目の `save` は `document_saved` で断られます。**
-    `save` は図面ごとに 1 回だけで、呼ぶ側は図面を書き終えてから保存します。保存のあとで足した変更は、`close` の保存の
-    確認で保存します（ダイアログのコマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める。それまでは人が押す）。
+    `save` は図面ごとに 1 回だけで、呼ぶ側は図面を書き終えてから保存します。保存のあとで足した変更は、`close` で捨てられます。
   - **`untitled` が真の図面の `path` はアプリケーションのフォルダを指す**ので、`to`（一時フォルダなど）を要します。
     そのまま保存するとそこへ黙ってファイルができるためです
     （[Findings「利用者の図面を上書き保存する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#利用者の図面を上書き保存するダイアログが出る場面と保存先の文字列288)）。
@@ -420,8 +414,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     意味は SDK に書かれていません（実測で出たのは 50331649＝`0x03000001` だけで、保存先が既にあるときも長すぎるときも
     同じ値）。そのため理由を値で分けず、値をそのまま載せます。
   - **保存そのものは取り消されません。** ただし、**図面に PIO を初めて足したあとの最初の保存**は、取り消しの履歴に
-    空の段を 1 つ積みます（Vectorworks の振る舞いで、別名保存も上書き保存も、mac も Windows も同じ。上書き保存は `close` の
-    保存の確認で保存したときに当たる。利用者がそのあと取り消しを押すと、1 回目は
+    空の段を 1 つ積みます（Vectorworks の振る舞いで、別名保存も上書き保存も、mac も Windows も同じ。利用者がそのあと取り消しを押すと、1 回目は
     何も戻らず、2 回目から戻る。履歴は消えない）。それ以外の `save` は積みません。Vectorworks の振る舞いで、プラグインからは
     避けられません（[Findings「Undo」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md)の
     「保存はいつも段を積むわけではない」。#288）。
@@ -471,32 +464,26 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       空の翻訳単位になり、skip の分岐は持ちません。**テストのファイルは `__APPLE__` か `_WIN32` なのに印が無ければ `#error` で
       止めます**（包みの側の条件を書き誤ると、テストが黙って抜けて CI が緑のままになるのではなく、コンパイルで落ちる。
       テストのファイルを OS で分けて足すと、そちらの条件の誤りはこの歯止めに届かないので、分けない）。
-- **`close`** は対象の図面を閉じます。**保存はしません。** 種類は `app` です。
-  対象の図面を `SwitchToOpenFile` で前面にしてから `DoMenuName("Close", 0)` を呼びます（メニューの「閉じる」と
-  同じで、前面の図面に効く。`CloseDocument()` は確認なしで変更を捨てるので使いません）。
-  - **保存した直後の図面は、確認なしに閉じます。** 確認が出るのは、一度も保存していない無題の図面（無変更でも）、
-    `OpenDocumentPath` で開いただけの図面（何もしなくても。開いた時点で「変更あり」になる。同じパスへ
-    `save` してから閉じれば出ない）、`MarkCurrentDocChanged()` した図面です。古い版・読み取り専用・使用中のファイルを開いたコピーで確認が出るかは
-    確かめていません（段 5 の実機確認で見る。出ても出なくても、閉じたかは下の一覧で決まる）。
-  - **確認が出ると、人が答えるまで呼び出しから戻りません。** その間の受け付けは OS で違います
-    （[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9・
-    [Findings「Documents」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)）。
-    - **Windows** では、`close` を呼んだタイマー自身が確認の最中に入り直します。その受け付けは入れ子になるので、
-      要求をすべて `busy` で断ります（[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
-    - **mac** では、タイマーは入り直しません（`CFRunLoopTimer` は自分の処理の最中に同じタイマーを呼ばない）。
-      このプラグインのタイマーは 1 本なので、確認の間は何も応えません（`ping` も）。要求はスプールに残り、
-      呼ぶ側は待つ上限を過ぎて終わります（[通信規則「生存の判定」](../protocol.md#生存の判定)）。
-  - **戻り値（常に 0）では成否が分かりません。** 呼び出しの後に `GetOpenFilesList` を読み、対象の図面が
-    残っていれば `internal` で失敗し、`detail` に `{"reason":"not_closed"}` を付けます。残ったのが確認の取り消しの
-    ためかは SDK から読めないので（実測で残ったのは取り消したときだけ）、理由の綴りは「閉じなかった」にします。
-    確認で人が「保存しない」を選べば図面は閉じ、成功になります。
+- **`close`** は対象の図面を閉じます。**保存はせず、未保存の変更は確認なしに捨てます。** 種類は `app` です。
+  対象の図面を `SwitchToOpenFile` で前面にしてから `CloseDocument()` を呼びます（前面の図面に効く。
+  [Findings「`CloseDocument()` は `false` を返しながら閉じている」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#closedocument-は-false-を返しながら閉じている未保存の変更も黙って捨てる)）。
+  - **保存の確認は出しません**（利用者の判断）。メニューの「閉じる」（`DoMenuName("Close", 0)`）は確認を出し、人が
+    答えるまで戻らないうえ、何も変えていない図面でも出る場面があるので使いません。`close` を呼ぶことを、呼ぶ側が
+    変更を捨てると指定したものとみなします（CLAUDE.md の 5）。**利用者が開いている図面を名指すと、その図面の未保存の
+    変更も黙って消えます。** 保存済みの図面に未保存の変更があるかは SDK から前もって読めないので、プラグインは
+    確かめません。呼ぶ側は `documents` の `path` をそのまま渡し、残したい変更は先に利用者に保存してもらいます。
+  - **Windows で確認が出ないこと、コピーで開いた図面・大きな図面での振る舞いは [SDK リファレンス #305](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/305) で確かめます**
+    （mac の無題の図面・保存済みの図面は確かめてある）。段 5 はその結果を待ちます。
+  - **戻り値（成功しても `false`）では成否が分かりません。** 呼び出しの後に `GetOpenFilesList` を読み、対象の図面が
+    残っていれば `internal` で失敗し、`detail` に `{"reason":"not_closed"}` を付けます。
   - **`close` も `save` も、呼び出しの中で終わってから戻ります**（大きな図面でも。戻った直後の `GetOpenFilesList` は
     最終の状態で、保存したファイルも書き終わっている。[Findings「大きな図面でも、呼び出しの中で終わる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#大きな図面でも呼び出しの中で終わる290macwindows-は下の節実務の図面は測っていない)・
     [SDK リファレンス #290](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/290)）。そのため、戻った直後の一覧で成否を決めます。
     - **最中は何も応えません**（`busy` も返せない）。ダイアログが出ない限りタイマーは入り直さないので、mac でも
       Windows でも受け付けの入れ子は起きず、要求はスプールに残ります。
-    - **時間は図形の数に比例して延び、描画したあとの図面を閉じると数倍かかります。** Windows では、描画前の図面を
-      閉じて保存の確認が出るまでに、呼ぶ側の既定の待つ上限（`vw2026 call` の `--timeout`）を超えた回があります（所要は
+    - **時間は図形の数に比例して延び、描画したあとの図面を閉じると数倍かかります**（メニューの「閉じる」で測った値。
+      `CloseDocument()` は #305 で測る）。Windows では、描画前の図面を閉じて保存の確認が出るまでに、呼ぶ側の既定の待つ上限
+      （`vw2026 call` の `--timeout`）を超えた回があります（所要は
       [Findings](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#大きな図面でも呼び出しの中で終わる290macwindows-は下の節実務の図面は測っていない)）。実務の図面（参照・レンダリングしたビューポートなど）は測っていないので、長くかかる前提で
       使います。
     - **呼ぶ側の待つ上限を過ぎても、プラグインは処理を続けて図面を閉じ・保存します。** 呼ぶ側は待ちきれずに終わる
@@ -505,14 +492,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       読みません。
   - 閉じたあとに前面になるのは別の図面です。`close` の前の前面の図面が残っていれば、`SwitchToOpenFile` で
     戻します（前面を閉じたときは戻せない）。
-- **undo イベントの外で足された図形は「変更あり」にならず、`close` で確認なしに黙って捨てられます。**
-  VW の仕様で、プラグインからは検出も防止もできません（「確認が出ないから変更は無い」とは読めない）。
-  **この危険を認めたうえで `close` を持つ、と決めます。** 捨てることを呼ぶ側が意図するなら、確認の「保存しない」を
-  呼ぶ側が押す（上記）ので、`close` が確認なしに捨てるのは、Vectorworks が変更を検出できないこの場合だけです。
-  このプラグインの図面に書く道具は undo の記録の中で書くので起きません。
-  ほかのプラグインやスクリプトが記録の外で書いた変更は、呼ぶ側が `close` の前に `save` します。
 - 図面を開く道具は[設計「決めたこと」](../design.md#決めたこと)の「対象の図面」にあります（未実装）。
-  `OpenDocumentPath` で開いた図面は、`save` してから `close` します。開いたあとは Vectorworks の最初の描画が刻みを
+  `OpenDocumentPath` で開いた図面は保存済みなので `save` できず、`close` は変更を捨てます。開いたあとは Vectorworks の最初の描画が刻みを
   止め、次の要求が長く待たされます（上限は無い。[#290](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/290)）。開く道具を足すときは、
   呼ぶ側の待つ上限を過ぎることを前提にします。
 

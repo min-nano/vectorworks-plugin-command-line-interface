@@ -87,8 +87,8 @@ OS タイマー
 - **受け付けの入れ子**は、道具の SDK 呼び出しが中でイベントを回したとき（モーダルダイアログ・進捗の
   `DoYield` など）に、そのループの中で次の刻みが届いて起きます（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4）。
   入れ子の回は要求を解析せずに断ります。外の回がすでに並べていた要求も断り、外の回はそれを取り出せずに
-  飛ばします。段 5 の `close` は、保存の確認が出ると人が答えるまで戻らず、その間イベントを回します
-  （[道具「図面を扱う道具」](tools.md#図面を扱う道具documentssaveclose)）。`save` も、保存先が別の図面で開いている
+  飛ばします。段 5 の `close` は保存の確認を出さないので回しません
+  （[道具「図面を扱う道具」](tools.md#図面を扱う道具documentssaveclose)）。`save` は、保存先が別の図面で開いている
   ファイルなら警告のダイアログでイベントを回しますが、そのときは呼ぶ前に断ります。
 - **このプラグインのタイマーは 1 本なので、受け付けの入れ子が起きるのは Windows だけです。** Windows はダイアログの
   メッセージループが `WM_TIMER` を配り、呼んだタイマー自身が入り直します。mac の `CFRunLoopTimer` は自分の処理の
