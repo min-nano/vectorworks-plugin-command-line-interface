@@ -429,12 +429,14 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     そのものはメインスレッドで行うので、サーバーが止まっている・ネットワークが切れているときは、OS が失敗を返すまで
     待ち、その間は画面の操作にも CLI のほかの要求にも応えません。段 5 では扱わず、この振る舞いを認めます。
     - **待ったあとの失敗は「無い」と分けます。** 「無い」に数えるのは、mac は `ENOENT`・`ENOTDIR`、Windows は
-      2 `ERROR_FILE_NOT_FOUND`・3 `ERROR_PATH_NOT_FOUND`・267 `ERROR_DIRECTORY`（途中の段がファイル）だけです。
+      2 `ERROR_FILE_NOT_FOUND`・3 `ERROR_PATH_NOT_FOUND`・67 `ERROR_BAD_NET_NAME`（サーバーに共有が無い）・
+      267 `ERROR_DIRECTORY`（途中の段がファイル）だけです。
       `to` の確かめで OS の呼び出しがそれ以外の理由（ネットワークの失敗など。Windows の 53 `ERROR_BAD_NETPATH`・
       64 `ERROR_NETNAME_DELETED` など）で失敗したときは、`file_exists`・`parent_missing` ではなく `internal`（`to_check_failed`）で断り、`detail` に OS の
       エラーの番号（mac は `errno`、Windows は `win32_error`）を載せます。呼ぶ側がファイルやフォルダが消えたと読み違え
-      ないためです。`to` を省いた上書き保存の前の確かめも同じ集合で分け、「無い」以外の失敗は `file_missing` と
-      せずに、確かめられなかったことを示す `reason`（[#90](https://github.com/min-nano/vectorworks-plugin-command-line-interface/pull/90) の `write_check_failed`）で断ります。
+      ないためです。ネットワークの場所そのものが外れているとき（mac の `/Volumes` の下のマウントが外れた、割り当てた
+      ドライブ文字が無い）は、OS がパスの無いときと同じ番号（`ENOENT`・3）を返すので見分けられず、「無い」になります。
+      `to` を省いた上書き保存の前の確かめの失敗の分け方は、その確かめとともに別に決めます（段 5 の前の点検の B-7）。
     - **保存そのものの途中でつながりが切れたとき**に Vectorworks がエラーのダイアログを出すかは、確かめていません。
       出たときは、ほかのダイアログと同じく、呼ぶ側がダイアログのコマンドで読んで押します（[設計「本番で常駐させる
       前提」](../design.md#本番で常駐させる前提安全)。コマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。
