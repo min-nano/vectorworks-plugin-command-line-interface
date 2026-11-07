@@ -377,7 +377,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     省いた上書き保存なら `document` と同じ文字列です（一覧の文字列をそのまま保存先に渡し、渡した文字列がそのまま
     一覧に残る。[Findings「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・
     [同「すでに開かれています」の比べ方（mac）](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#このファイルはすでに開かれていますの比べ方macwindows-と同じ文字列の完全一致)）。
-    Windows では `/` が `\` に揃って残るので、`to` をそのまま `close` の `document` に渡すと一致しません。読み直すのは、
+    読み直すのは、
     保存の直後に前面になっている項目です（前面を戻す前に読む。`fileRef` が保存の前後で変わらないかには頼らない）。
   - **`to` の形は、呼ぶ前に確かめて `invalid_args` で断ります。** Vectorworks は形を確かめずにその名前で保存し、
     成功と見分けが付かないものがあるためです（#288）。
@@ -393,8 +393,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       `X:\`（ドライブ文字・`:`・`\`。ドライブ文字は ASCII の `A`〜`Z`・`a`〜`z` で、ロケールに依る判定をしない）で始まる
       ものと、UNC（`\\<サーバー>\<共有>\…`）です。** UNC はサーバー・共有・その下の 1 段以上（ファイル名）を要します
       （`\\<サーバー>\<共有>\<名前>.vwx` が最小。`\\server\a.vwx` と `\\server\share` は断る）。Vectorworks は UNC へ
-      保存でき、渡した文字列がそのまま図面のパスになります（#294 が測ったのは昇格した Vectorworks から管理共有
-      `\\localhost\C$` へだけで、昇格していない Vectorworks から通常の共有へ保存できるかは段 5 の実機の確認で見る。[Findings「保存先のパスの形」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#保存先のパスの形unc相対-と-294)。#294）。
+      保存でき、渡した文字列がそのまま図面のパスになります（通常の共有へ保存できるかは段 5 の実機の確認で見る。[Findings「保存先のパスの形」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#保存先のパスの形unc相対-と-294)。#294）。
       Windows のほかの形——`\\?\`（保存されない）・`\\.\`（図面のパスにデバイスの名前空間が残る）・ドライブ相対の
       `C:a.vwx`・ルート相対の `\a.vwx`（保存されない）——は断ります（どれもダイアログは出ない。#294）。形ごとの判定は
       持たず、`\\?\` と `\\.\` はサーバーの名前の段が下の「使えない文字」（`?`）と「`.` の段」の確かめで、ドライブ相対と
@@ -406,13 +405,13 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       `\\\server\share\a.vwx` も断る）。Vectorworks はこれらを字面で処理し（`..` と `//` を畳み、`.` を残す）、`x/./../a.vwx` は渡したパスと
       別のフォルダへ黙って保存されます。`.` の段を含むパスは図面のパスに残って、開いている図面との比較から外れます。
       `//` は同じフォルダへ畳まれますが、渡した文字列と図面のパスが食い違い、比べ方が単純でなくなるので、同じく断ります
-      （#294。Windows の途中の `\\` は測っていない）。
+      （#294）。
       **プラグインは正規化して渡さず、断ります。** これは Findings の勧め（[「CLI の `save` への帰結（パスの形）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#cli-の-save-への帰結パスの形294):
       `to` は字面で正規化してから渡す）と違う決めです。字面で畳むとシンボリックリンクを段に含むパスで OS の解決とずれるので、
       正規化は呼ぶ側（自分の OS でパスを解決できる）に任せます。
     - Windows では、途中の段（フォルダの名前）の末尾が `.` か空白のもの（`C:\x.\a.vwx`・`C:\x..\a.vwx`・`C:\x \a.vwx`）を含む。
       Vectorworks は文字列を直さず OS に渡すので、`x.\` は Win32 の正規化で `x\` に入るのに図面のパスは `x.\…` のまま残り、
-      `.` の段と同じく開いている図面との比較から外れます。UNC の段にも同じ確かめを掛けます。`x..\`・`x \` は実在する別のフォルダを指しうるうえ、親のフォルダの
+      `.` の段と同じく開いている図面との比較から外れます。UNC では共有とその下の段に掛け、サーバーの名前の段には掛けません（末尾に `.` の付いた完全修飾のホスト名 `\\fs.example.\share\a.vwx` を断らないため。サーバーの名前の段にも `.`・`..`・空の段の確かめは掛かる）。`x..\`・`x \` は実在する別のフォルダを指しうるうえ、親のフォルダの
       確かめ（上書き保存の前の確かめ）が別のフォルダを見て、ダイアログを断れません
       （[Findings「途中の段の末尾が `.` か空白の保存先」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#途中の段の末尾が--か空白の保存先windows299)。#299）。**正規化して渡さず、断ります。**
       `GetFullPathNameW` では見分けられない（`x..\`・`x \` を変えない）ので、段の末尾の文字を字面で見ます。`.`・`..` の段は
@@ -429,16 +428,18 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     `save` の状態の確かめ（`to` を渡したときの `file_exists`・`parent_missing`、省いたときの上書き保存の前の確かめ）と保存
     そのものはメインスレッドで行うので、サーバーが止まっている・ネットワークが切れているときは、OS が失敗を返すまで
     待ち、その間は画面の操作にも CLI のほかの要求にも応えません。段 5 では扱わず、この振る舞いを認めます。
-    - **待ったあとの失敗は「無い」と分けます。** `to` の確かめで OS の呼び出しが「無い」以外の理由（ネットワークの
-      失敗など。Windows の 53 `ERROR_BAD_NETPATH`・64 `ERROR_NETNAME_DELETED` など、mac の `ENOENT`・`ENOTDIR` 以外）で
-      失敗したときは、`file_exists`・`parent_missing` ではなく `internal`（`to_check_failed`）で断り、`detail` に OS の
+    - **待ったあとの失敗は「無い」と分けます。** 「無い」に数えるのは、mac は `ENOENT`・`ENOTDIR`、Windows は
+      2 `ERROR_FILE_NOT_FOUND`・3 `ERROR_PATH_NOT_FOUND`・267 `ERROR_DIRECTORY`（途中の段がファイル）だけです。
+      `to` の確かめで OS の呼び出しがそれ以外の理由（ネットワークの失敗など。Windows の 53 `ERROR_BAD_NETPATH`・
+      64 `ERROR_NETNAME_DELETED` など）で失敗したときは、`file_exists`・`parent_missing` ではなく `internal`（`to_check_failed`）で断り、`detail` に OS の
       エラーの番号（mac は `errno`、Windows は `win32_error`）を載せます。呼ぶ側がファイルやフォルダが消えたと読み違え
-      ないためです。
+      ないためです。`to` を省いた上書き保存の前の確かめも同じ集合で分け、「無い」以外の失敗は `file_missing` と
+      せずに、確かめられなかったことを示す `reason`（[#90](https://github.com/min-nano/vectorworks-plugin-command-line-interface/pull/90) の `write_check_failed`）で断ります。
     - **保存そのものの途中でつながりが切れたとき**に Vectorworks がエラーのダイアログを出すかは、確かめていません。
       出たときは、ほかのダイアログと同じく、呼ぶ側がダイアログのコマンドで読んで押します（[設計「本番で常駐させる
       前提」](../design.md#本番で常駐させる前提安全)。コマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。
     **止まることは SDK リファレンスでは調べません**（OS の呼び出しがネットワークを待つことは SDK の挙動ではなく、止まるのは
-    明らかなので、利用者の判断で CLAUDE.md の 7 の例外とした。例外は [SDK の調査](../sdk-research.md)にも書く。#294 が測ったのは同じ計算機の共有 `\\localhost\C$` だけ。[Findings「保存先の
+    明らかなので、利用者の判断で CLAUDE.md の 7 の例外とした。例外は [SDK の調査](../sdk-research.md)にも書く。[Findings「保存先の
     パスの形」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#保存先のパスの形unc相対-と-294)）。
   - **`to` の親のフォルダが無ければ（ファイルであれば）、`internal` で断ります（`parent_missing`）。** SDK もダイアログを
     出さずに断り（50331649）、フォルダは作りませんが、理由を分かりやすくするために先に確かめます。
