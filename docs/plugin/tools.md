@@ -431,8 +431,10 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       267 `ERROR_DIRECTORY`（途中の段がファイル）だけです。
       `to` の確かめで OS の呼び出しがそれ以外の理由（ネットワークの失敗など。Windows の 53 `ERROR_BAD_NETPATH`・
       64 `ERROR_NETNAME_DELETED` など）で失敗したときは、`file_exists`・`parent_missing` ではなく `internal`（`to_check_failed`）で断り、`detail` に OS の
-      エラーの番号を整数で載せます（mac は `{"reason":"to_check_failed","errno":<値>}`、Windows は
-      `{"reason":"to_check_failed","win32_error":<値>}`。どちらも鍵はこの 1 つだけで、必ず付ける）。呼ぶ側がファイルやフォルダが消えたと読み違え
+      エラーの番号を整数で載せます（mac は `{"reason":"to_check_failed","check":<段>,"errno":<値>}`、Windows は
+      `{"reason":"to_check_failed","check":<段>,"win32_error":<値>}`。`check` は失敗した確かめで、`"file_exists"`
+      （`to` そのもの）か `"parent_missing"`（親のフォルダ）。番号の鍵は OS の呼び出しの種類に合わせて OS ごとに分け、
+      どちらか 1 つを必ず付ける）。呼ぶ側がファイルやフォルダが消えたと読み違え
       ないためです。ネットワークの場所そのものが外れているとき（mac の `/Volumes` の下のマウントが外れた、割り当てた
       ドライブ文字が無い）は、OS がパスの無いときと同じ番号（`ENOENT`・3）を返すので見分けられず、「無い」になります。
     - **保存そのものの途中でつながりが切れたとき**に Vectorworks がエラーのダイアログを出すかは、確かめていません。
