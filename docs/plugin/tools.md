@@ -58,19 +58,19 @@
    使うものに合っている）。`documents` は失敗にせず空の一覧を返し、`ping` は失敗せずに `document_open` を偽にします。
 3. 引数が名指すもの（`document`・`layer`）が実在しない → `invalid_args`。名指す図面が 1 つに決まらない
    （`document` に一致する図面が 2 枚以上）→ `internal`（`document_ambiguous`）。
-4. 道具の規則に反する組み合わせ（`save` の `to` と `untitled`）→ `invalid_args`。
+4. 道具の規則に反する組み合わせ（`save` が名指す図面の `untitled`）→ `invalid_args`。
 5. 道具ごとの状態（`save` は下記の順）→ `internal`。
 
 **道具が返す失敗の `invalid_args` と `internal` は、次のように分けます**（[通信規則「応答」](../protocol.md#応答idresjson)）。
 
 - **`invalid_args`** は、引数そのものが誤っているとき: 知らない引数・型や値の誤り・必須の欠け、引数が名指すもの
-  （`document` の図面・`layer` のレイヤ）が実在しない、道具の規則に反する組み合わせ（保存済みの図面への `save` の `to`）、
+  （`document` の図面・`layer` のレイヤ）が実在しない、道具の規則に反する組み合わせ（保存済みの図面への `save`）、
   `save` の `to` の形（拡張子・使えない文字など）。
 - **`internal`** は、引数は正しく、名指すものも実在するが、それ以外の状態のために実行できないとき: 図面が無い
   （`no_document`）・名指す図面が 1 つに決まらない（`save`・`close` の `document_ambiguous`）・
   図面が開いている（`quit` の `documents_open`）・保存先が埋まっている（`save` の `to_is_open`・
   `file_exists`。`to` は新しく作るファイルを名指すので、既にあることは状態に当たる）・保存先の親のフォルダが無い
-  （`parent_missing`）・上書きする自分のファイルが無い・書き込めない（`file_missing`・`file_read_only`）・図面が閉じなかった（`close` の
+  （`parent_missing`）・図面が閉じなかった（`close` の
   `not_closed`。保存の確認が取り消されたなど）・SDK の失敗（`save` の `save_failed`）・道具の中の例外。
 
 呼ぶ側が理由で分岐するときは、`code` ではなく `detail` の `reason` を見ます（`reason` を返す失敗だけ）。
@@ -84,7 +84,7 @@
 | `layer_objects` | read | `layer`（必須）・`limit`（既定 50）・`offset`（既定 0）・`type`（種別の番号。省略＝すべての種別） | `{"layer","unit":"mm","objects":[{"index","type","type_name","pio_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}`（同上） |
 | `object_counts` | read | `layer`（省略＝図面全体） | `{"layer"?,"types":[{"type","type_name","count"}],"total"}`（種別番号の昇順。同上） |
 | `documents` | read | なし | [図面を扱う道具](#図面を扱う道具documentssaveclose) |
-| `save` | app | `document`（必須）・`to`（省略可） | 同上 |
+| `save` | app | `document`（必須）・`to`（必須） | 同上 |
 | `close` | app | `document`（必須） | 同上 |
 | `quit` | app | なし | `{"quitting":true}`。図面が開いていれば `internal` で失敗し、`detail` に一覧（下記） |
 
@@ -294,7 +294,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
 | 道具 | 種類 | 引数 | 結果 |
 | --- | --- | --- | --- |
 | `documents` | read | なし | `{"documents":[{"name","path","untitled","active"}],"count"}` |
-| `save` | app | `document`（必須）・`to`（省略可） | `{"document","path"}`（下記） |
+| `save` | app | `document`（必須）・`to`（必須） | `{"document","path"}`（下記） |
 | `close` | app | `document`（必須） | `{"closed":true}` |
 
 ```json
@@ -323,13 +323,11 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   `true`。[Findings「Windows——ほかの Vectorworks が開くファイル」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windowsほかの-vectorworks-が開くファイルと測れなかった残り291)。#291）。
   **Windows の古い版のファイルと、2 つ目の Vectorworks が開いているファイルは測れていません**（調べた環境では古い版の
   ファイルを作れず、2 つ目の Vectorworks を起動できなかった）。`untitled` は `fIsInMemoryOnly` をそのまま返すので、
-  プラグインはこれらの場面でも Vectorworks の答えに従います。古い版のファイルが Windows で `untitled` にならなければ、
-  `to` を省いた `save` は元のファイルへ上書き保存します（ダイアログが出るかは分からない）。**利用者の古い版のファイルが
-  いまの版の形式で置き換わり、元の版の Vectorworks で開けなくなります**【推定】（`SaveActiveDocumentPath` はいまの版の形式で
-  書き出す。[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)。mac では変換して開いた図面は別名
-  「<元の名前> v2026.vwx」のコピーになるので起きない）。段 5 の実機の確認で、mac で作った古い版のファイルを Windows で
-  開いて `untitled` を見ます。**偽なら段 5 をそのまま進めず、扱いを決め直します**（SDK リファレンスで調べてから。
-  利用者の図面を壊さないため。[設計「本番で常駐させる前提」](../design.md#本番で常駐させる前提安全)）。
+  プラグインはこれらの場面でも Vectorworks の答えに従います。古い版のファイルが Windows で `untitled` にならなくても、
+  `save` は上書き保存をしない（下記）ので、`save` が利用者の古い版のファイルを置き換えることはありません（その図面は
+  `save` で保存できない）。`close` の保存の確認で呼ぶ側が保存を選べば置き換わりますが、それは呼ぶ側の判断です
+  （ダイアログを読んで押すのは呼ぶ側。[設計「本番で常駐させる前提」](../design.md#本番で常駐させる前提安全)）。
+  段 5 の実機の確認で、mac で作った古い版のファイルを Windows で開いて `untitled` を見ます。
   **`untitled` が真の図面の `path` は「アプリケーションのフォルダ＋名前」**で、ファイルとしては存在しません（名前は
   「名称未設定 N」・「<元の名前> コピー 1」・「<元の名前> v2026.vwx」など。N はセッション全体の連番で、開いている間は
   重ならない）。**`untitled` が真の図面は、`path` がほかの図面と重なることがあります**（下記。その図面は `save`・
@@ -350,32 +348,32 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   - **`path` は正規化しません。** SDK が返した文字列をそのまま返します。Windows では、保存したときに渡された
     文字列がそのまま残り、区切りだけが `\` に揃います（ドライブ文字の大小・名前の大小・8.3 の短い名前は直らない）。
     同じファイルでも、保存したときの渡し方しだいで別の文字列になります。
-- **`save`** は対象の図面を保存します。種類は `app` です（図面の中身は変えず、ファイルに書く。
-  [ブリッジ「道具の表」](bridge.md#道具の表)）。`to` を省くと、その図面自身のパスへ上書き保存します。
-  - **`untitled` が真の図面は `to` を要します**（一時フォルダなどを指定する。省くと `invalid_args`）。その図面の
-    `path` はアプリケーションのフォルダを指すので、そのまま保存するとそこへ黙ってファイルができるためです
+- **`save`** は、`untitled` が真の図面を、`to` の新しいパスへ保存します。種類は `app` です（図面の中身は変えず、
+  ファイルに書く。[ブリッジ「道具の表」](bridge.md#道具の表)）。`to` は必須です（省くと `invalid_args`）。
+  - **上書き保存（図面自身のパスへの保存）は提供しません。** 保存済みの図面（`untitled` が偽）を名指すと、`to` の
+    有無によらず `invalid_args` で断ります。上書き保存は、自分のファイルが移された・消された、開いた後で読み取り専用に
+    なったなどの場面で警告のダイアログを出し、人が押すまで戻りません
+    （[Findings「利用者の図面を上書き保存する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#利用者の図面を上書き保存するダイアログが出る場面と保存先の文字列288)。#288）。
+    前もって確かめて断るには、OS ごとに書き込めるかを判定する手順が要り（読み取り専用の属性・ロック・ACL・リンク・
+    ネットワークの失敗）、それでも確かめきれない場面が残るので、提供しないことで避けます。保存済みの図面の変更は、
+    利用者が Vectorworks で保存するか、呼ぶ側が `close` の保存の確認をダイアログのコマンドで押して保存します
+    （コマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。
+    要るようになれば、`to` を省いたときの上書き保存を足せます（いまの呼び方は変わらない）。
+  - **保存済みの図面へ `to` を渡す別名保存も、同じ `invalid_args` で断ります。** 別名保存は図面のパスを保存先へ移す
+    （「名前を付けて保存」と同じ）ので、利用者の図面に許すと、利用者があとで ⌘S を押したときに一時フォルダの
+    ファイルへ保存されてしまうためです。
+  - **`untitled` が真の図面の `path` はアプリケーションのフォルダを指す**ので、`to`（一時フォルダなど）を要します。
+    そのまま保存するとそこへ黙ってファイルができるためです
     （[Findings「利用者の図面を上書き保存する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#利用者の図面を上書き保存するダイアログが出る場面と保存先の文字列288)）。
-  - **`to` を渡せるのは `untitled` が真の図面だけです。** 保存済みの図面に `to` を渡すと `invalid_args` で断ります。
-    別名保存は図面のパスを保存先へ移す（「名前を付けて保存」と同じ）ので、利用者の図面に許すと、利用者が
-    あとで ⌘S を押したときに一時フォルダのファイルへ保存されてしまうためです。
-    **`untitled` が真の図面にも同じことは起きます**（`to` へ保存したあとは、利用者の ⌘S がダイアログを出さずに `to` の
-    ファイルへ保存する）。古い版・読み取り専用・使用中のファイルを開いたコピーは見た目が利用者のファイルそのものなので、
-    利用者が気付きにくくなります。それでも `to` を許すのは、`untitled` が真の図面にはほかに保存する手段が無く
-    （上書き保存の先はアプリケーションのフォルダ）、保存してから閉じる使い方（`quit` の前など）に要るためです。
-    **この危険を認めたうえで許す、と決めます**（`close` の「undo イベントの外で足された図形」と同じ扱い）。呼ぶ側は、
-    利用者が開いている図面に `to` を渡したら、その図面を閉じるまでを 1 続きの操作にします。
-  - **上書き保存（`to` を省く）の前に、次を確かめて `internal` で断ります。** どちらも、そのまま呼ぶと警告の
-    ダイアログが出て、人が OK を押すまで戻らない場面です（mac。#288）。
-    1. 自分のファイルがディスクに無い（`file_missing`）。Finder などで移した・消した、ドライブが外れた。mac は
-       「指定したファイルが見つかりません…」、Windows はドライブが外れたときに「ディスクの空き容量がありません。」が
-       出ます（Windows は開いている間ファイルを握っているので、移す・消すはふつうの操作では起きない）。
-    2. 自分のファイルに書き込めない（`file_read_only`）。開いた後で読み取り専用にした。mac は「ファイルの保存に
-       失敗しました…」が出て、`GSError` は 0 のままファイルは置き換わり、2 回目からは図面のパスがアプリケーションの
-       フォルダへ移ります。Windows はダイアログを出さずに置き換え、元のファイルを `.bak` へ退避します。OS で
-       振る舞いが違い、戻り値でも分からないので、どちらの OS でも断ります。
+    **`to` へ保存したあとは、利用者の ⌘S がダイアログを出さずに `to` のファイルへ保存します。** 古い版・読み取り専用・
+    使用中のファイルを開いたコピーは見た目が利用者のファイルそのものなので、利用者が気付きにくくなります。それでも
+    許すのは、`untitled` が真の図面にはほかに保存する手段が無く、保存してから閉じる使い方（`quit` の前など）に要る
+    ためです。**この危険を認めたうえで許す、と決めます**（`close` の「undo イベントの外で足された図形」と同じ扱い）。
+    呼ぶ側は、利用者が開いている図面に `to` を渡したら、その図面を閉じるまでを 1 続きの操作にします。
+  - **新しいパスへの保存で、親のフォルダはあるが書き込めないときにダイアログが出るかは確かめていません**
+    （[SDK リファレンス #304](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/304) で調べる。段 5 はその結果を待つ）。
   - **結果の `document`** は、引数の `document` をそのまま返したもの（保存する前の図面のパス）です。
-  - **結果の `path` は、保存のあとに `GetOpenFilesList` から読み直した文字列です**（`to` をそのまま返さない）。`to` を
-    省いた上書き保存なら `document` と同じ文字列です（一覧の文字列をそのまま保存先に渡し、渡した文字列がそのまま
+  - **結果の `path` は、保存のあとに `GetOpenFilesList` から読み直した文字列です**（`to` をそのまま返さない。渡した文字列がそのまま
     一覧に残る。[Findings「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・
     [同「すでに開かれています」の比べ方（mac）](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#このファイルはすでに開かれていますの比べ方macwindows-と同じ文字列の完全一致)）。
     Windows では `/` が `\` に揃って残るので、`to` をそのまま `close` の `document` に渡すと一致しません。読み直すのは、
@@ -393,12 +391,10 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       （[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)。`CON` 以外は確かめていない）。
   - **`to` の親のフォルダが無ければ（ファイルであれば）、`internal` で断ります（`parent_missing`）。** SDK もダイアログを
     出さずに断り（50331649）、フォルダは作りませんが、理由を分かりやすくするために先に確かめます。
-  - **`save` の状態の確かめ（`internal`）は、`to` を渡したときは `to_is_open` → `file_exists` → `parent_missing` の順、
-    省いたときは `file_missing` → `file_read_only` の順に行います**（[冒頭](#最初に提供する道具)の 5）。開いている図面と
+  - **`save` の状態の確かめ（`internal`）は、`to_is_open` → `file_exists` → `parent_missing` の順に行います**（[冒頭](#最初に提供する道具)の 5）。開いている図面と
     一致する `to` は、そのフォルダが消されていても `to_is_open` を返します。
   - **`to` に既にあるファイルを渡しても保存できません**（SDK が `GSError` 50331649 を返し、何も起きない。
-    mac・Windows とも、どの形で渡しても）。図面自身のパスへの上書き保存（`to` を省く。上記）はこれに当たらず、
-    次の確かめは `to` を渡したときだけ行います。**保存先が別の図面で開いているファイルなら、SDK が警告のダイアログを
+    mac・Windows とも、どの形で渡しても）。**保存先が別の図面で開いているファイルなら、SDK が警告のダイアログを
     出して人が OK を押すまで戻りません**（mac も Windows も、開いている図面のパスと文字列が完全に一致するときだけ出る）。
     そこで、呼ぶ前に次の順に確かめて `internal` で断ります。
     1. `to` が開いている図面のパスと一致する（比べ方は下記「パスの一致の判定」）。保存先が開いている図面だと
@@ -411,7 +407,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     `internal` です（`invalid_args` と `internal` の分け方は[冒頭](#最初に提供する道具)）。
     確かめてから保存するまでの間にファイルができた場合は、SDK のエラーを `internal` で返します
     （開いている図面でなければダイアログは出ない）。Windows で 260 文字を超える保存先も、SDK が断るので `internal` に
-    なります。これらの `reason`（`parent_missing`・`file_missing`・`file_read_only` を含む）を保存を呼ぶ前に返すことは、段 5 で無 SDK のテストで確かめます
+    なります。これらの `reason`（`parent_missing` を含む）を保存を呼ぶ前に返すことは、段 5 で無 SDK のテストで確かめます
     （[実装の順序](plan.md)の段 5）。
   - **`SaveActiveDocumentPath` が 0 以外を返したら、`internal` で失敗し、`detail` に
     `{"reason":"save_failed","gs_error":<値>}` を付けます。** `GSError` は SDK のエラーの番号（`Uint32`）で、値ごとの
@@ -423,14 +419,12 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     避けられません（[Findings「Undo」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md)の
     「保存はいつも段を積むわけではない」。#288）。
   - 内部では `GetOpenFilesList` からパスの一致する項目の `fileRef` を引き、`SwitchToOpenFile` →
-    `SaveActiveDocumentPath` で保存します。**`to` を省いたときは、`GetOpenFilesList` が返した文字列をそのまま
-    保存先に渡します**（Windows では、大文字と小文字だけが違うパスを渡すと自分のファイルが「既にある」として
-    断られ、上書き保存にならない）。**保存を呼んだあとは、成否によらず（`save_failed` でも）、前面の図面とカレントレイヤを保存の前に戻します**
+    `SaveActiveDocumentPath` で保存します。**保存を呼んだあとは、成否によらず（`save_failed` でも）、前面の図面とカレントレイヤを保存の前に戻します**
     （戻すのも `SwitchToOpenFile`。対象がもともと前面の図面なら切り替えないので戻さない。結果の `path` は戻す前に読む。
     上記「結果の `path`」）。`SwitchToOpenFile` で前の図面へ戻すと、その図面のカレントレイヤも元どおりになります
     （[Findings「指定した図面を保存する・閉じる」の手順](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#手順getopenfileslist-で引きswitchtoopenfile-で前へ出し前面を戻す)）。
     `invalid_args` と、保存を呼ぶ前に返す `internal`（`no_document`・`to_is_open`・`file_exists`・
-    `parent_missing`・`file_missing`・`file_read_only`）は、前面を切り替える前に断るので、前面は動きません。
+    `parent_missing`）は、前面を切り替える前に断るので、前面は動きません。
 - **パスの一致の判定。** `document` は `documents` が返した文字列と**完全に一致**するものを探します（呼ぶ側は
   `documents` の結果をそのまま渡す）。`to` は新しいパスで、開いている図面の保存先との衝突を**見逃さない側**に倒して
   比べます: 絶対パスを要し（相対パスは `invalid_args`）、区切り文字を揃え、Unicode を正規化（NFC。macOS のファイル名は
