@@ -70,7 +70,7 @@
   （`no_document`）・名指す図面が 1 つに決まらない（`save`・`close` の `document_ambiguous`）・
   図面が開いている（`quit` の `documents_open`）・保存先が埋まっている（`save` の `to_is_open`・
   `file_exists`。`to` は新しく作るファイルを名指すので、既にあることは状態に当たる）・保存先の親のフォルダが無い
-  （`parent_missing`）・上書きする自分のファイルが無い・書き込めない（`file_missing`・`file_read_only`）・図面が閉じなかった（`close` の
+  （`parent_missing`）・保存先を確かめられない（`to_check_failed`）・上書きする自分のファイルが無い・書き込めない（`file_missing`・`file_read_only`）・図面が閉じなかった（`close` の
   `not_closed`。保存の確認が取り消されたなど）・SDK の失敗（`save` の `save_failed`）・道具の中の例外。
 
 呼ぶ側が理由で分岐するときは、`code` ではなく `detail` の `reason` を見ます（`reason` を返す失敗だけ）。
@@ -378,22 +378,78 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     省いた上書き保存なら `document` と同じ文字列です（一覧の文字列をそのまま保存先に渡し、渡した文字列がそのまま
     一覧に残る。[Findings「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・
     [同「すでに開かれています」の比べ方（mac）](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#このファイルはすでに開かれていますの比べ方macwindows-と同じ文字列の完全一致)）。
-    Windows では `/` が `\` に揃って残るので、`to` をそのまま `close` の `document` に渡すと一致しません。読み直すのは、
-    保存の直後に前面になっている項目です（前面を戻す前に読む。`fileRef` が保存の前後で変わらないかには頼らない）。
+    読み直すのは、保存の直後に前面になっている項目です（前面を戻す前に読む。`fileRef` が保存の前後で変わらないかには頼らない）。
   - **`to` の形は、呼ぶ前に確かめて `invalid_args` で断ります。** Vectorworks は形を確かめずにその名前で保存し、
     成功と見分けが付かないものがあるためです（#288）。
-    - 絶対パスでない・区切りで終わる（フォルダを指す）。
+    確かめは `src/core` に置き、**mac の規則と Windows の規則を別々の関数にして、どちらもどの OS でもビルドします。**
+    中身は文字列の処理だけで OS の呼び出しを使わないので、OS で分ける必要がありません。**プラグインがどちらを使うかは
+    `_WIN32` で選び、選ぶのはこの 1 か所だけです**（出荷するプラグインは OS ごとのビルドなので、各 OS のプラグインの
+    規則はビルドで決まる）。テストは、どの OS の CI でも両方の関数を名指しして呼びます。そのため Windows の規則にも、
+    ASan・UBSan（macOS のテストのジョブと ubuntu の fuzz のジョブ）と clang-tidy（ubuntu）が掛かります。
+    比べ方は、下の「パスの一致の判定」のとおり引数で受け取ります。
+    - **Windows では `/` を含む `to` を断ります**（直して渡さない）。Vectorworks に `/` 区切りのまま渡すと、`%5C` を含む
+      名前のファイルが親のフォルダに黙ってでき、`GSError` は 0 のままです（#288）。呼ぶ側が `\` 区切りで渡します。
+      プラグインはパスを書き換えないので、渡した文字列のとおりに保存されます。
+    - 絶対パスでない・区切りで終わる（フォルダを指す）。**受ける絶対パスは、mac は `/` から始まるもの、Windows は
+      `X:\`（ドライブ文字・`:`・`\`。ドライブ文字は ASCII の `A`〜`Z`・`a`〜`z` で、ロケールに依る判定をしない）で始まる
+      ものと、UNC（`\\<サーバー>\<共有>\…`）です。** UNC はサーバー・共有・その下の 1 段以上（ファイル名）を要します
+      （`\\<サーバー>\<共有>\<名前>.vwx` が最小。`\\server\a.vwx` と `\\server\share` は断る）。Vectorworks は UNC へ
+      保存でき、渡した文字列がそのまま図面のパスになります（通常の共有へ保存できるかは段 5 の実機の確認で見る。[Findings「保存先のパスの形」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#保存先のパスの形unc相対-と-294)。#294）。
+      Windows のほかの形——`\\?\`（保存されない）・`\\.\`（図面のパスにデバイスの名前空間が残る）・ドライブ相対の
+      `C:a.vwx`・ルート相対の `\a.vwx`（保存されない）——は断ります（どれもダイアログは出ない。#294）。形ごとの判定は
+      持たず、`\\?\` と `\\.\` はサーバーの名前の段が下の「使えない文字」（`?`）と「`.` の段」の確かめで、ドライブ相対と
+      ルート相対は「`X:\` でも `\\` でも始まらない」で断られます。
+      UNC の綴りと別の綴りで同じファイルを指す場合の比較は、下の「パスの一致の判定」に書きます。
+    - `.`・`..` の段、空の段を含む（mac も Windows も）。空の段は、区切りが 2 つ以上続くところで、先頭も含めて断ります
+      （mac の `//a.vwx`・`/x//a.vwx`、Windows の `C:\x\\a.vwx`。Windows の UNC の先頭の `\\` はちょうど 2 つだけを除き、3 つ目からは空の段として断る——
+      `\\\server\share\a.vwx` も断る）。Vectorworks はこれらを字面で処理し（`..` と `//` を畳み、`.` を残す）、`x/./../a.vwx` は渡したパスと
+      別のフォルダへ黙って保存されます。`.` の段を含むパスは図面のパスに残って、開いている図面との比較から外れます。
+      `//` は同じフォルダへ畳まれますが、渡した文字列と図面のパスが食い違い、比べ方が単純でなくなるので、同じく断ります
+      （#294）。
+      **プラグインは正規化して渡さず、断ります。** これは Findings の勧め（[「CLI の `save` への帰結（パスの形）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#cli-の-save-への帰結パスの形294):
+      `to` は字面で正規化してから渡す）と違う決めです。字面で畳むとシンボリックリンクを段に含むパスで OS の解決とずれるので、
+      正規化は呼ぶ側（自分の OS でパスを解決できる）に任せます。
+    - Windows では、途中の段（フォルダの名前）の末尾が `.` か空白のもの（`C:\x.\a.vwx`・`C:\x..\a.vwx`・`C:\x \a.vwx`）を含む。
+      Vectorworks は文字列を直さず OS に渡すので、`x.\` は Win32 の正規化で `x\` に入るのに図面のパスは `x.\…` のまま残り、
+      `.` の段と同じく開いている図面との比較から外れます。UNC では共有とその下の段に掛けます。サーバーの名前の段は、末尾の `.` を 1 つだけ許し（`\\fs..\…` は断る。末尾に `.` の付いた完全修飾のホスト名 `\\fs.example.\share\a.vwx` を断らないため）、末尾の空白は断ります（サーバーの名前の段にも `.`・`..`・空の段の確かめは掛かる）。`x..\`・`x \` は実在する別のフォルダを指しえます
+      （[Findings「途中の段の末尾が `.` か空白の保存先」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#途中の段の末尾が--か空白の保存先windows299)。#299）。**正規化して渡さず、断ります。**
+      `GetFullPathNameW` では見分けられない（`x..\`・`x \` を変えない）ので、段の末尾の文字を字面で見ます。`.`・`..` の段は
+      上の確かめで断られるので、ここの対象はそれ以外の段です。ファイル名の末尾は下の拡張子の確かめで断られます。
     - 拡張子が `.vwx` でない（大文字と小文字は区別しない）。Vectorworks は拡張子を足さず、`.txt`・`.dwg` でも中身は
       Vectorworks の形式のまま、その名前で保存します。末尾が `.` の名前もここで断ります（Windows は点を落とした
       ファイルを作り、図面のパスと食い違う）。
-    - Windows では、ドライブ名の後に `< > : " | ? *` を含む（`GSError` が 0 のまま `%3F` などに化けた名前で
-      保存される）。`/` は呼ぶ前に `\` に直して渡します（直さないと `%5C` を含む名前で親のフォルダに保存される）。
+    - Windows では、先頭（ドライブ名の `X:`、UNC の `\\`）の後のどの段にも——UNC のサーバーと共有の段を含めて——`< > : " | ? *` を含む（`GSError` が 0 のまま `%3F` などに化けた名前で
+      保存される）。
+    - Windows では、260 文字（UTF-16 の単位）以上の `to`。SDK はこれを保存できず、ファイルシステムの確かめも長いパスでは
+      「無い」と読み違えうる（3 が返ると、親のフォルダがあっても `parent_missing` になる）ので、確かめの前に断ります
+      （[Findings「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)）。
     - 制御文字（U+0000〜U+001F）を含む（mac も Windows も）。SDK がどう振る舞うかは確かめていないので、確かめずに断ります。
       Windows の予約された名前（`CON.vwx` など）は、SDK がふつうに保存したので断りません
       （[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)。`CON` 以外は確かめていない）。
+  - **ネットワークの場所（ネットワークのドライブ・共有）の保存先では、サーバーが届かないと Vectorworks が止まります。**
+    `save` の状態の確かめ（`file_exists`・`parent_missing`）と保存
+    そのものはメインスレッドで行うので、サーバーが止まっている・ネットワークが切れているときは、OS が失敗を返すまで
+    待ち、その間は画面の操作にも CLI のほかの要求にも応えません。段 5 では扱わず、この振る舞いを認めます。
+    - **待ったあとの失敗は「無い」と分けます。** 「無い」に数えるのは、mac は `ENOENT`・`ENOTDIR`、Windows は
+      2 `ERROR_FILE_NOT_FOUND`・3 `ERROR_PATH_NOT_FOUND`・67 `ERROR_BAD_NET_NAME`（サーバーに共有が無い）・
+      267 `ERROR_DIRECTORY`（途中の段がファイル）だけです。
+      `to` の確かめで OS の呼び出しがそれ以外の理由（ネットワークの失敗など。Windows の 53 `ERROR_BAD_NETPATH`・
+      64 `ERROR_NETNAME_DELETED` など）で失敗したときは、`file_exists`・`parent_missing` ではなく `internal`（`to_check_failed`）で断り、`detail` に OS の
+      エラーの番号を整数で載せます（mac は `{"reason":"to_check_failed","check":<段>,"errno":<値>}`、Windows は
+      `{"reason":"to_check_failed","check":<段>,"win32_error":<値>}`。`check` は失敗した確かめで、`"file_exists"`
+      （`to` そのもの）か `"parent_missing"`（親のフォルダ）。番号の鍵は OS の呼び出しの種類に合わせて OS ごとに分け、
+      どちらか 1 つを必ず付ける）。呼ぶ側がファイルやフォルダが消えたと読み違え
+      ないためです。ネットワークの場所そのものが外れているとき（mac の `/Volumes` の下のマウントが外れた、割り当てた
+      ドライブ文字が無い）は、OS がパスの無いときと同じ番号（`ENOENT`・3）を返すので見分けられず、「無い」になります。
+    - **保存そのものの途中でつながりが切れたとき**に Vectorworks がエラーのダイアログを出すかは、確かめていません。
+      出たときは、ほかのダイアログと同じく、呼ぶ側がダイアログのコマンドで読んで押します（[設計「本番で常駐させる
+      前提」](../design.md#本番で常駐させる前提安全)。コマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。
+    **止まることは SDK リファレンスでは調べません**（OS の呼び出しがネットワークを待つことは SDK の挙動ではなく、止まるのは
+    明らかなので、利用者の判断で CLAUDE.md の 7 の例外とした。例外は [SDK の調査](../sdk-research.md)にも書く。[Findings「保存先の
+    パスの形」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#保存先のパスの形unc相対-と-294)）。
   - **`to` の親のフォルダが無ければ（ファイルであれば）、`internal` で断ります（`parent_missing`）。** SDK もダイアログを
     出さずに断り（50331649）、フォルダは作りませんが、理由を分かりやすくするために先に確かめます。
-  - **`save` の状態の確かめ（`internal`）は、`to` を渡したときは `to_is_open` → `file_exists` → `parent_missing` の順、
+  - **`save` の状態の確かめ（`internal`）は、`to` を渡したときは `to_is_open` → `file_exists` → `parent_missing` の順（OS の呼び出しが「無い」以外の理由で失敗すれば、その段で `to_check_failed`）、
     省いたときは `file_missing` → `file_read_only` の順に行います**（[冒頭](#最初に提供する道具)の 5）。開いている図面と
     一致する `to` は、そのフォルダが消されていても `to_is_open` を返します。
   - **`to` に既にあるファイルを渡しても保存できません**（SDK が `GSError` 50331649 を返し、何も起きない。
@@ -403,15 +459,14 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     そこで、呼ぶ前に次の順に確かめて `internal` で断ります。
     1. `to` が開いている図面のパスと一致する（比べ方は下記「パスの一致の判定」）。保存先が開いている図面だと
        示すため（`to_is_open`）、先に確かめます。
-    2. `to` がディスクにある（ファイルシステムに聞く）。大文字と小文字・8.3 の短い名前・区切り文字の違いは
+    2. `to` がディスクにある（ファイルシステムに聞く）。大文字と小文字・8.3 の短い名前の違いは
        ファイルシステムが吸収するので、文字列の比べ方に依らずに防げます。
 
     上書きしたければ、呼ぶ側が先にファイルを消します。**呼ぶ側が機械的に見分けられるよう、失敗の `detail` に
     `reason` を付けます:** `to_is_open`（保存先が開いている図面）・`file_exists`（保存先が既にある）。どちらも
     `internal` です（`invalid_args` と `internal` の分け方は[冒頭](#最初に提供する道具)）。
     確かめてから保存するまでの間にファイルができた場合は、SDK のエラーを `internal` で返します
-    （開いている図面でなければダイアログは出ない）。Windows で 260 文字を超える保存先も、SDK が断るので `internal` に
-    なります。これらの `reason`（`parent_missing`・`file_missing`・`file_read_only` を含む）を保存を呼ぶ前に返すことは、段 5 で無 SDK のテストで確かめます
+    （開いている図面でなければダイアログは出ない）。これらの `reason`（`parent_missing`・`to_check_failed`・`file_missing`・`file_read_only` を含む）を保存を呼ぶ前に返すことは、段 5 で無 SDK のテストで確かめます
     （[実装の順序](plan.md)の段 5）。
   - **`SaveActiveDocumentPath` が 0 以外を返したら、`internal` で失敗し、`detail` に
     `{"reason":"save_failed","gs_error":<値>}` を付けます。** `GSError` は SDK のエラーの番号（`Uint32`）で、値ごとの
@@ -430,10 +485,10 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     上記「結果の `path`」）。`SwitchToOpenFile` で前の図面へ戻すと、その図面のカレントレイヤも元どおりになります
     （[Findings「指定した図面を保存する・閉じる」の手順](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#手順getopenfileslist-で引きswitchtoopenfile-で前へ出し前面を戻す)）。
     `invalid_args` と、保存を呼ぶ前に返す `internal`（`no_document`・`to_is_open`・`file_exists`・
-    `parent_missing`・`file_missing`・`file_read_only`）は、前面を切り替える前に断るので、前面は動きません。
+    `parent_missing`・`to_check_failed`・`file_missing`・`file_read_only`）は、前面を切り替える前に断るので、前面は動きません。
 - **パスの一致の判定。** `document` は `documents` が返した文字列と**完全に一致**するものを探します（呼ぶ側は
   `documents` の結果をそのまま渡す）。`to` は新しいパスで、開いている図面の保存先との衝突を**見逃さない側**に倒して
-  比べます: 絶対パスを要し（相対パスは `invalid_args`）、区切り文字を揃え、Unicode を正規化（NFC。macOS のファイル名は
+  比べます: 絶対パスを要し（相対パスは `invalid_args`）、Unicode を正規化（NFC。macOS のファイル名は
   NFD で返ることがある）し、**大文字と小文字を区別せず**に比べます。大文字と小文字だけが違う別のファイルも断る
   ことになりますが、警告のダイアログが出るより安全です（ダイアログが出るのは文字列が完全に一致するときだけなので、
   緩く比べて断れば必ずその手前で止まる）。ディスクにあるファイルはこの比べ方によらず 2 つ目の確かめで断るので、
@@ -451,10 +506,17 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       この比べ方は開いている図面との衝突を示すためのもので、ディスクにあるファイルは `file_exists` で断り、警告が出るのは
       文字列が完全に一致するときだけなので、違いを認めます。ただし、開いている図面のファイルがディスクから移されて
       いると、一方の OS でだけ一致する文字だけが違う `to` は、もう一方の OS では `to_is_open` にも `file_exists` にも
-      当たらずに保存され、見た目の近い図面がもう 1 枚できえます（見逃しうるのはこの場合だけ）。
-    - **OS で分けるのは、比べ方の薄い包みだけです。** 保存先の確かめ（`to_is_open` → `file_exists` → `parent_missing` の
-      順と `to` の形の確かめ）は比べる関数を引数で受け取り、`src/core` に置いてどの OS でもビルド・テストします（Linux の
-      ASan・UBSan と clang-tidy にも掛かる）。手順のテストでは差し替えの比べ方を渡します（手順を確かめるためのもので、
+      当たらずに保存され、見た目の近い図面がもう 1 枚できえます。同じファイルを別の綴りで指す場合も、同じく見逃し
+      えます。例えば、UNC から開いた図面とその共有に割り当てたドライブ文字の `to`、UNC のサーバーの名前の末尾の `.` の有無（`\\fs.\…` と `\\fs\…`）、8.3 の短い名前と長い名前、`subst` の
+      ドライブ、ジャンクション・シンボリックリンクを通る綴り、mac の `/var` と `/private/var` です（どれも、開いている
+      図面のファイルがディスクから移されているときだけ。ファイルがあれば `file_exists` で断られる）。
+    - **OS で分けてビルドするのは、比べ方の薄い包みと、ファイルシステムに聞く関数の包み（mac は `stat`、Windows は
+      `GetFileAttributesW` を呼び、OS のエラーの番号を「無い」とそれ以外に分ける表を持つ）の 2 つです。** `to` の形の規則は、両方の OS の分をどの OS でもビルドし、
+      `_WIN32` で選ぶのはプラグインが使う規則の 1 か所だけです（上の「`to` の形」）。
+      保存先の確かめの手順（`to_is_open` → `file_exists` → `parent_missing` の順）は比べる関数と、ファイルシステムに
+      聞く関数（「ある」「無い」「確かめられない（OS のエラーの番号）」を返す）を引数で受け取り、
+      `src/core` に置いてどの OS でもビルド・テストします。手順のテストでは差し替えの比べ方と、53 などの失敗を返す
+      差し替えの聞く関数を渡します（手順を確かめるためのもので、
       出荷する比べ方を確かめるものではない）。**プラグインの `save` が本物の比べ方を渡していることは CI では確かめられない**
       （結び付けは SDK に依る `src/tools` の側）ので、段 5 の実機の確認で、開いている図面と大文字と小文字だけが違う `to` が
       `to_is_open` になることを見ます。
