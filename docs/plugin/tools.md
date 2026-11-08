@@ -421,7 +421,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     - Windows では、先頭（ドライブ名の `X:`、UNC の `\\`）の後のどの段にも——UNC のサーバーと共有の段を含めて——`< > : " | ? *` を含む（`GSError` が 0 のまま `%3F` などに化けた名前で
       保存される）。
     - Windows では、260 文字（UTF-16 の単位）以上の `to`（`MAX_PATH` の 260 は終端を含むので、使えるのは 259 まで。
-      Findings が測ったのは 260 を超えるもので、ちょうど 260 は測っていないが、`MAX_PATH` に合わせて断る）。SDK はこれを保存できず、ファイルシステムの確かめも長いパスでは
+      Findings が測ったのは 260 を超えるもので、ちょうど 260 も `MAX_PATH` から通らない）。SDK はこれを保存できず、ファイルシステムの確かめも長いパスでは
       「無い」と読み違えうる（3 が返ると、親のフォルダがあっても `parent_missing` になる）ので、確かめの前に断ります
       （[Findings「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)）。
     - mac では、255 バイト（UTF-8）を超える段か、全体が 1024 バイト（`PATH_MAX`）以上の `to`。ファイルシステムの確かめが
