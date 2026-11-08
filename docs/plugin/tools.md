@@ -420,9 +420,12 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       ファイルを作り、図面のパスと食い違う）。
     - Windows では、先頭（ドライブ名の `X:`、UNC の `\\`）の後のどの段にも——UNC のサーバーと共有の段を含めて——`< > : " | ? *` を含む（`GSError` が 0 のまま `%3F` などに化けた名前で
       保存される）。
-    - Windows では、260 文字（UTF-16 の単位）以上の `to`。SDK はこれを保存できず、ファイルシステムの確かめも長いパスでは
+    - Windows では、260 文字（UTF-16 の単位）以上の `to`（`MAX_PATH` の 260 は終端を含むので、使えるのは 259 まで。
+      Findings が測ったのは 260 を超えるもので、ちょうど 260 は測っていないが、`MAX_PATH` に合わせて断る）。SDK はこれを保存できず、ファイルシステムの確かめも長いパスでは
       「無い」と読み違えうる（3 が返ると、親のフォルダがあっても `parent_missing` になる）ので、確かめの前に断ります
       （[Findings「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)）。
+    - mac では、255 バイト（UTF-8）を超える段か、全体が 1024 バイト（`PATH_MAX`）以上の `to`。ファイルシステムの確かめが
+      `ENAMETOOLONG` で失敗し、`to_check_failed`（状態の失敗）に見えてしまうので、引数の誤りとして確かめの前に断ります。
     - 制御文字（U+0000〜U+001F）を含む（mac も Windows も）。SDK がどう振る舞うかは確かめていないので、確かめずに断ります。
       Windows の予約された名前（`CON.vwx` など）は、SDK がふつうに保存したので断りません
       （[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)。`CON` 以外は確かめていない）。
@@ -441,6 +444,11 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       どちらか 1 つを必ず付ける）。呼ぶ側がファイルやフォルダが消えたと読み違え
       ないためです。ネットワークの場所そのものが外れているとき（mac の `/Volumes` の下のマウントが外れた、割り当てた
       ドライブ文字が無い）は、OS がパスの無いときと同じ番号（`ENOENT`・3）を返すので見分けられず、「無い」になります。
+      逆に、UNC のサーバーの名前が存在しない（綴りの誤り・名前の解決の失敗）ときも、Windows は届かないときと同じ 53 を
+      返すので、`parent_missing` ではなく `to_check_failed` になります（名前の解決を待ってから返る）。
+      **この「無い」の表は OS の振る舞いで、SDK リファレンスに根拠の節はありません。** 段 5 で、mac と Windows の `VwCliTests`
+      が本物の呼び出しで確かめます（ファイルが無い・親のフォルダが無い・途中の段がファイル・共有が無い。途中の段が
+      ファイルのとき Windows が 3 と 267 のどちらを返すかもここで決まる）。表に無い番号が「無い」の場面で返れば、表に足します。
     - **保存そのものの途中でつながりが切れたとき**に Vectorworks がエラーのダイアログを出すかは、確かめていません。
       出たときは、ほかのダイアログと同じく、呼ぶ側がダイアログのコマンドで読んで押します（[設計「本番で常駐させる
       前提」](../design.md#本番で常駐させる前提安全)。コマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。
@@ -448,7 +456,9 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     明らかなので、利用者の判断で CLAUDE.md の 7 の例外とした。例外は [SDK の調査](../sdk-research.md)にも書く。[Findings「保存先の
     パスの形」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#保存先のパスの形unc相対-と-294)）。
   - **`to` の親のフォルダが無ければ（ファイルであれば）、`internal` で断ります（`parent_missing`）。** SDK もダイアログを
-    出さずに断り（50331649）、フォルダは作りませんが、理由を分かりやすくするために先に確かめます。
+    出さずに断り（50331649）、フォルダは作りませんが、理由を分かりやすくするために先に確かめます。親のフォルダは、
+    `to` の最後の区切りまでで作ります。ルートの直下の `to` では、区切りを含めたルートの形にします（`C:\a.vwx` は `C:\`、
+    `/a.vwx` は `/`、`\\server\share\a.vwx` は `\\server\share\`。`C:` はドライブ相対、空の文字列は「無い」になるため）。
   - **`save` の状態の確かめ（`internal`）は、`to` を渡したときは `to_is_open` → `file_exists` → `parent_missing` の順（OS の呼び出しが「無い」以外の理由で失敗すれば、その段で `to_check_failed`）、
     省いたときは `file_missing` → `file_read_only` の順に行います**（[冒頭](#最初に提供する道具)の 5）。開いている図面と
     一致する `to` は、そのフォルダが消されていても `to_is_open` を返します。
