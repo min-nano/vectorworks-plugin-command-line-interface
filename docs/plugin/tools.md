@@ -453,8 +453,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       出たときは、ほかのダイアログと同じく、呼ぶ側がダイアログのコマンドで読んで押します（[設計「本番で常駐させる
       前提」](../design.md#本番で常駐させる前提安全)。コマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。
     **止まることは SDK リファレンスでは調べません**（OS の呼び出しがネットワークを待つことは SDK の挙動ではなく、止まるのは
-    明らかなので、利用者の判断で CLAUDE.md の 7 の例外とした。例外は [SDK の調査](../sdk-research.md)にも書く。[Findings「保存先の
-    パスの形」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#保存先のパスの形unc相対-と-294)）。
+    明らかなので、利用者の判断で CLAUDE.md の 7 の例外とした。例外は [SDK の調査](../sdk-research.md)にも書く。SDK リファレンスに根拠の節は無い。
+    保存の途中で切れたときのダイアログも同じ例外で、出ればダイアログのコマンドで扱うので、出るかどうかで実装は変わらない）。
   - **`to` の親のフォルダが無ければ（ファイルであれば）、`internal` で断ります（`parent_missing`）。** SDK もダイアログを
     出さずに断り（50331649）、フォルダは作りませんが、理由を分かりやすくするために先に確かめます。親のフォルダは、
     `to` の最後の区切りまでで作ります。ルートの直下の `to` では、区切りを含めたルートの形にします（`C:\a.vwx` は `C:\`、
