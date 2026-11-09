@@ -435,8 +435,10 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       Windows の予約された名前（`CON.vwx` など）は、SDK がふつうに保存したので断りません
       （[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)。`CON` 以外は確かめていない）。
       保存の前の「既にあるか」の確かめは、Windows では `\\?\`（UNC は `\\?\UNC\`）を付けて聞く（スプールと同じ
-      `src/core/FilesWindows.cpp` の `extended()` を通す。`extended()` は無名の名前空間にあるので、この確かめも同じファイルに置き、
-      `\\?\` を付ける処理を書き写さない。`extended()` が空の文字列を返すのは受け付けない形のときだけで、それは形の確かめで先に
+      `extended()` を通す。`extended()` はいま `src/core/FilesWindows.cpp` の無名の名前空間にあるので、段 5 で `src/core` の
+      内部用のヘッダー `WindowsPath.h`（実装は `WindowsPath.cpp`。WIN32 のときだけビルドする）へ移し、スプール（`FilesWindows.cpp`）と
+      保存先の確かめ（`SaveTargetWindows.cpp`。下の「OS で分けてビルドするのは」）の両方から使う。処理は 1 つのまま、
+      `\\?\` を付ける処理を書き写さず、道具の確かめとその表・テストをスプールのコードに混ぜない。`extended()` が空の文字列を返すのは受け付けない形のときだけで、それは形の確かめで先に
       断っているので起きない）ので、どの版の Windows でもこれらを装置ではなくファイルの名前として
       聞きます（`MAX_PATH` で失敗することもない）。`\\?\` は `.`・`..`・段の末尾の `.` と空白を解きませんが、どれも形の確かめで
       先に断っているので、聞く先は Vectorworks が保存する先と同じです。ただし、予約された名前を拡張子付きでも装置として
@@ -544,7 +546,9 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       ドライブ、ジャンクション・シンボリックリンクを通る綴り、mac の `/var` と `/private/var` です（どれも、開いている
       図面のファイルがディスクから移されているときだけ。ファイルがあれば `file_exists` で断られる）。
     - **OS で分けてビルドするのは、比べ方の薄い包みと、ファイルシステムに聞く関数の包み（mac は `to` に `lstat`・親のフォルダに `stat`、
-      Windows は `extended()` を通したパスで `to` に `GetFileAttributesW`・親のフォルダに `CreateFileW` と `GetFileInformationByHandle` を呼び、OS のエラーの番号を「無い」とそれ以外に分ける表を持つ）の 2 つです。** `to` の形の規則は、両方の OS の分をどの OS でもビルドし、
+      Windows は `extended()` を通したパスで `to` に `GetFileAttributesW`・親のフォルダに `CreateFileW` と `GetFileInformationByHandle` を呼び、OS のエラーの番号を「無い」とそれ以外に分ける表を持つ）の 2 つです。** 聞く関数の包みは `src/core/SaveTarget.h` に宣言し、
+      `SaveTargetPosix.cpp`・`SaveTargetWindows.cpp` に分けて置きます（`FilesPosix.cpp`・`FilesWindows.cpp` と同じ分け方で、
+      スプールのファイルとは別にする。Windows の `\\?\` を付ける処理はスプールと共有の `WindowsPath.h` から使う）。`to` の形の規則は、両方の OS の分をどの OS でもビルドし、
       `_WIN32` で選ぶのはプラグインが使う規則の 1 か所だけです（上の「`to` の形」）。
       保存先の確かめの手順（`to_is_open` → `file_exists` → `parent_missing` の順）は比べる関数と、ファイルシステムに
       聞く関数（「ファイルがある」「フォルダがある」「無い」「確かめられない（OS のエラーの番号）」を返す。親のフォルダがファイルの
