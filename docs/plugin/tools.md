@@ -435,7 +435,9 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       Windows の予約された名前（`CON.vwx` など）は、SDK がふつうに保存したので断りません
       （[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)。`CON` 以外は確かめていない）。
       保存の前の「既にあるか」の確かめは、Windows では `\\?\`（UNC は `\\?\UNC\`）を付けて聞く（スプールと同じ
-      `src/core/FilesWindows.cpp` の `extended()` を通す）ので、どの版の Windows でもこれらを装置ではなくファイルの名前として
+      `src/core/FilesWindows.cpp` の `extended()` を通す。`extended()` は無名の名前空間にあるので、この確かめも同じファイルに置き、
+      `\\?\` を付ける処理を書き写さない。`extended()` が空の文字列を返すのは受け付けない形のときだけで、それは形の確かめで先に
+      断っているので起きない）ので、どの版の Windows でもこれらを装置ではなくファイルの名前として
       聞きます（`MAX_PATH` で失敗することもない）。`\\?\` は `.`・`..`・段の末尾の `.` と空白を解きませんが、どれも形の確かめで
       先に断っているので、聞く先は Vectorworks が保存する先と同じです。ただし、予約された名前を拡張子付きでも装置として
       扱う古い Windows（Windows 10 まで）では、`\\?\` を付けて聞いた確かめは「無い」で通るのに、Vectorworks は装置へ書いて
