@@ -343,13 +343,18 @@ TEST(ObjectCountsCountsOneLayer) {
 }
 
 TEST(TypeNameFollowsTheTable) {
-	const std::pair<std::int16_t, const char *> table[] = {
+	struct Row {
+		std::int16_t type;
+		const char *name;
+	};
+	const Row table[] = {
 	    {2, "line"},     {3, "box"},    {4, "oval"},      {5, "polygon"},     {6, "arc"},
 	    {10, "text"},    {11, "group"}, {15, "symbol"},   {17, "locus"},      {21, "polyline"},
 	    {24, "extrude"}, {68, "wall"},  {84, "csg_tree"}, {86, "parametric"}, {122, "viewport"},
 	};
-	for (const auto &[type, name] : table) {
-		CHECK_EQ(std::string(VwCli::core::typeName(type).value_or("<none>")), std::string(name));
+	for (const Row &row : table) {
+		CHECK_EQ(std::string(VwCli::core::typeName(row.type).value_or("<none>")),
+		         std::string(row.name));
 	}
 	for (std::int16_t type : std::initializer_list<std::int16_t>{0, 1, 16, 31, 90, 127, -128}) {
 		CHECK(!VwCli::core::typeName(type));
