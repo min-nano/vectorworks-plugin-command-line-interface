@@ -445,6 +445,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     OS が失敗を返すまでの待ちは、呼ぶ側の既定の待つ上限（`vw2026 call` の 30 秒）を超えうるので、そのときは `call` が
     「実行されたかもしれない」（終了コード 4）で終わり、下の `to_check_failed` を読めません。ネットワークの場所へ保存する
     ときは長い `--timeout` を付け、終了コード 4 で終わったら、Vectorworks が応えるようになってから `documents` で確かめます。
+    UNC のサーバーの名前を綴り誤ったときも、名前の解決を待ってから 53 が返るので同じ扱いになり、終了コード 4 か
+    `to_check_failed` で終わります（サーバーが止まっているときと見分けられない）。
     - **待ったあとの失敗は「無い」と分けます。** 「無い」に数えるのは、mac は `ENOENT`・`ENOTDIR`、Windows は
       2 `ERROR_FILE_NOT_FOUND`・3 `ERROR_PATH_NOT_FOUND`・67 `ERROR_BAD_NET_NAME`（サーバーに共有が無い）・
       267 `ERROR_DIRECTORY`（途中の段がファイル）だけです。
@@ -454,12 +456,15 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       `"to"`（`to` そのもの）か `"parent"`（親のフォルダ）。`os_error` は mac では `errno`、Windows では `GetLastError()` の値で、
       鍵は OS によらず同じ。どれも必ず付ける）。`to` はリンクをたどらずに聞く（mac の `lstat`。Windows の `GetFileAttributesW` もリパースポイントを
       たどらない）ので、壊れたシンボリックリンクがある `to` も `file_exists` になります（OS で揃う）。親のフォルダはリンクをたどって
-      聞く（mac の `stat`。Windows は `FILE_FLAG_BACKUP_SEMANTICS` を付けた `CreateFileW` で開いて `GetFileInformationByHandle`）ので、
+      聞く（mac の `stat`。Windows は `FILE_FLAG_BACKUP_SEMANTICS` を付けた `CreateFileW` で開いて `GetFileInformationByHandle`。開くときは
+      望むアクセスを 0、共有を `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE` にし、ほかのプロセスが開いている親で
+      32・5 を返さないようにする）ので、
       先の無いシンボリックリンクやジャンクションの親は、OS によらず `parent_missing` になります。呼ぶ側がファイルやフォルダが消えたと読み違え
       ないためです。ネットワークの場所そのものが外れているとき（mac の `/Volumes` の下のマウントが外れた、割り当てた
       ドライブ文字が無い）は、OS がパスの無いときと同じ番号（`ENOENT`・3）を返すので見分けられず、「無い」になります。ただし mac で、外れたあとも
       `/Volumes` の下にマウント先の空のフォルダが残っていると、その直下の `to`（`/Volumes/share/a.vwx`）は親のフォルダが
-      あると見えて、起動ディスクの上のそのフォルダへ保存されます（プラグインからはマウントが外れたことを見分けない）。
+      あると見えて、起動ディスクの上のそのフォルダへ保存されます（プラグインからはマウントが外れたことを見分けない）。強制的に外したあとにしか起きないまれな場面なので、`VW Backup` の
+      警告と同じく、前もって確かめずに認めます。結果は成功で返るので、呼ぶ側からも見分けられません。
       逆に、UNC のサーバーの名前が存在しない（綴りの誤り・名前の解決の失敗）ときも、Windows は届かないときと同じ 53 を
       返すので、`parent_missing` ではなく `to_check_failed` になります（名前の解決を待ってから返る）。
       **この「無い」の表は OS の振る舞いで、SDK リファレンスに根拠の節はありません。** 段 5 で、mac と Windows の `VwCliTests`
