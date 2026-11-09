@@ -163,7 +163,8 @@
   なります。
   - これは `ISDK::CreateReference`（レイヤを選ばない参照）の実測に基づきます。オーガナイザでレイヤを選んで参照した
     レイヤは、mac の実機の確認で、名前に `NNA#1_` が付かず `referenced` が偽で、`objects` に参照の中身の数が入りました。
-    この振る舞いは SDK リファレンスで調べてから、実装か文書を直します（[SDK の調査 8](../sdk-research.md#8-オーガナイザのファイル参照でレイヤを選んで参照したレイヤ調べる)）。
+    この振る舞いは [SDK リファレンス #310](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/310) で調べてから、実装か文書を直します
+    （[SDK の調査 8](../sdk-research.md#8-オーガナイザのファイル参照でレイヤを選んで参照したレイヤ調べている)）。
 
 ### `classes`
 

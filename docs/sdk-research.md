@@ -187,15 +187,16 @@ Vectorworks のダイアログ（呼び出しが出したものも、利用者�
 
 CLI のコマンド（例 `vw2026 dialog list` / `vw2026 dialog press`）は、この結果で決めます。
 
-## 8. オーガナイザの「ファイル参照」でレイヤを選んで参照したレイヤ（調べる）
+## 8. オーガナイザの「ファイル参照」でレイヤを選んで参照したレイヤ（調べている）
 
 `layers` の `referenced`・`objects`・名前は、`ISDK::CreateReference`（レイヤを選ばない参照）の実測
 （[Findings「Layers and Stories」の「参照で入ってきたレイヤ」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)）を根拠に決めました。
 段 5 の実機の確認（mac）で、オーガナイザの「ファイル参照」→「新規」で参照レイヤを選んで参照すると、オーガナイザでは
 斜体（参照）で並ぶのに、`layers` は名前に `NNA#1_` が付かず、`referenced` が偽で、`objects` に参照の中身の数を返しました
 （参照される図面と同じ名前のレイヤを持つ図面では、Vectorworks が「同じ名前があるため参照できません」で断った）。
-画面のふつうの参照は `CreateReference` と別の振る舞いに見えるので、SDK リファレンスで調べてから、`layers` の
-実装か[道具「`layers`」](plugin/tools.md#layers)の文書を直します。
+画面のふつうの参照は `CreateReference` と別の振る舞いに見えるので、
+[SDK リファレンス #310](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/310) で**調べている**。
+結果で `layers` の実装か[道具「`layers`」](plugin/tools.md#layers)の文書を直します（段 5 の PR に反映する）。
 
 - レイヤを選んで参照したレイヤの `ovLayerType`・`IsObjectFromReferencedFile`・名前と、直下の列に見える図形。
 - 参照で入ったレイヤを、自分のレイヤと見分ける口（オーガナイザが斜体にする根拠）。
