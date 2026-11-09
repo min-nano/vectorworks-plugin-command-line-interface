@@ -90,7 +90,9 @@ OS タイマー
   飛ばします。段 5 の `close` は保存の確認を出さないので回しません（mac も Windows も、どの図面でも。
   [SDK リファレンス #305](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/305)）
   （[道具「図面を扱う道具」](tools.md#図面を扱う道具documentssaveclose)）。`save` は、保存先が別の図面で開いている
-  ファイルなら警告のダイアログでイベントを回しますが、そのときは呼ぶ前に断ります。
+  ファイルなら警告のダイアログでイベントを回しますが、そのときは呼ぶ前に断ります。ただし、保存先のフォルダに
+  `VW Backup` を作れないときの警告は前もって断らないので、`save` もイベントを回しえます（Windows では受け付けが入れ子になる。
+  [道具「`save`」](tools.md#図面を扱う道具documentssaveclose)）。
 - **このプラグインのタイマーは 1 本なので、受け付けの入れ子が起きるのは Windows だけです。** Windows はダイアログの
   メッセージループが `WM_TIMER` を配り、呼んだタイマー自身が入り直します。mac の `CFRunLoopTimer` は自分の処理の
   最中に同じタイマーを呼ばないので、道具の中のダイアログの間は刻まず、要求は応えられずにスプールに残ります
