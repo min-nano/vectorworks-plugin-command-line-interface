@@ -433,8 +433,11 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     - mac では、255 バイト（UTF-8）を超える段か、全体が 1024 バイト（`PATH_MAX`）以上の `to`。ファイルシステムの確かめが
       `ENAMETOOLONG` で失敗し、`to_check_failed`（状態の失敗）に見えてしまうので、引数の誤りとして確かめの前に断ります。
     - 制御文字（U+0000〜U+001F）を含む（mac も Windows も）。SDK がどう振る舞うかは確かめていないので、確かめずに断ります。
-      Windows の予約された名前（`CON.vwx` など）は、SDK がふつうに保存したので断りません
-      （[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)。`CON` 以外は確かめていない）。
+    - Windows では、どれかの段の名前が予約された名前（`CON`・`PRN`・`AUX`・`NUL`・`COM1`〜`COM9`・`LPT1`〜`LPT9`。大文字と小文字を
+      区別せず、拡張子が付いていても）のもの。SDK は `CON.vwx` をふつうに保存しました
+      （[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)）が、
+      保存の前の「既にあるか」の確かめ（`GetFileAttributesW`）は、Windows の版によってこれらを装置として見つけ、`file_exists` や
+      `to_check_failed` を返しうるので、確かめの前に断ります。
   - **ネットワークの場所（ネットワークのドライブ・共有）の保存先では、サーバーが届かないと Vectorworks が止まります。**
     `save` の状態の確かめ（`file_exists`・`parent_missing`）と保存
     そのものはメインスレッドで行うので、サーバーが止まっている・ネットワークが切れているときは、OS が失敗を返すまで
