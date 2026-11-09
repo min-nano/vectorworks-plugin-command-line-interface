@@ -73,7 +73,8 @@ the drawings), the plug-in refuses a tool of kind write or app with busy, and
 call exits with 23: the tool did not run.
 
 A tool may take long (saving or closing a large drawing) or wait for the user
-(a tool that shows a dialog, such as one of another plug-in). If --timeout runs out
+(a tool that shows a dialog, such as save to a folder where Vectorworks cannot
+make its backup folder). If --timeout runs out
 after the plug-in took the request, call exits with 4 while the tool goes on;
 check what happened with another tool (such as documents) rather than calling
 it again. To wait longer, give a longer --timeout when you call such a tool.
