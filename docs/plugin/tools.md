@@ -363,8 +363,14 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     `to_is_open`）。古いファイルは残り、プラグインも CLI も消しません（CLAUDE.md の 9）。
   - **`untitled` が真の図面の `path` はアプリケーションのフォルダを指し、ファイルとしては存在しません**
     （[Findings「利用者の図面を上書き保存する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#利用者の図面を上書き保存するダイアログが出る場面と保存先の文字列288)）。そのまま保存先に使えないので、ほかの図面と同じく `to` を要します。
-  - **新しいパスへの保存で、親のフォルダはあるが書き込めないときにダイアログが出るかは確かめていません**
-    （[SDK リファレンス #304](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/304) で調べる。段 5 はその結果を待つ）。
+  - **保存先のフォルダにファイルを足せないときは、Vectorworks がダイアログを出さずに断ります**（`save_failed`。書き込みの拒否・
+    読み取り専用のボリュームや共有。mac も Windows も。[Findings「新しいパスへの保存で、親のフォルダに書き込めないとき」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#新しいパスへの保存で親のフォルダに書き込めないとき304)。#304）。プラグインは前もって確かめません。
+  - **ファイルは足せるが、保存先のフォルダに Vectorworks のバックアップのフォルダ（`VW Backup`）を作れないときは、保存は通るのに
+    OK だけの警告（「バックアップフォルダを作成することができませんでした」）が出て、押すまで戻りません**（保存のたびに出る。
+    サブフォルダの作成だけが拒まれている、同じ名前のファイルがある、など）。**プラグインは前もって確かめず、この警告を認めます**
+    （利用者の判断）。バックアップを作るか・どこへ作るかは利用者が環境設定（自動保存）で変えられるので、プラグインが
+    判断すると設定と食い違うためです。通常の保存先では起きません。出たときは、呼ぶ側がダイアログのコマンドで OK を押します
+    （[SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める。それまでは人が押す）。警告が出ても `GSError` は 0 で、保存は成功として返ります。
   - **結果の `document`** は、引数の `document` をそのまま返したもの（保存する前の図面のパス）です。
   - **結果の `path` は、保存のあとに `GetOpenFilesList` から読み直した文字列です**（`to` をそのまま返さない。渡した文字列がそのまま
     一覧に残る。[Findings「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・
