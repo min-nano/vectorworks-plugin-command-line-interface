@@ -435,8 +435,10 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     - 制御文字（U+0000〜U+001F）を含む（mac も Windows も）。SDK がどう振る舞うかは確かめていないので、確かめずに断ります。
       Windows の予約された名前（`CON.vwx` など）は、SDK がふつうに保存したので断りません
       （[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)。`CON` 以外は確かめていない）。
-      古い Windows はこれらを拡張子が付いていても装置として扱い、保存の前の「既にあるか」の確かめが `file_exists` や
-      `to_check_failed` を返しえますが、Vectorworks 2026 は古い Windows に対応していないので、扱いません（利用者の判断）。
+      保存の前の「既にあるか」の確かめは、Windows では `\\?\`（UNC は `\\?\UNC\`）を付けて聞く（スプールと同じ
+      `src/core/FilesWindows.cpp` の `extended()` を通す）ので、どの版の Windows でもこれらを装置ではなくファイルの名前として
+      聞きます（`MAX_PATH` で失敗することもない）。`\\?\` は `.`・`..`・段の末尾の `.` と空白を解きませんが、どれも形の確かめで
+      先に断っているので、聞く先は Vectorworks が保存する先と同じです。
   - **ネットワークの場所（ネットワークのドライブ・共有）の保存先では、サーバーが届かないと Vectorworks が止まります。**
     `save` の状態の確かめ（`file_exists`・`parent_missing`）と保存
     そのものはメインスレッドで行うので、サーバーが止まっている・ネットワークが切れているときは、OS が失敗を返すまで
@@ -538,7 +540,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       ドライブ、ジャンクション・シンボリックリンクを通る綴り、mac の `/var` と `/private/var` です（どれも、開いている
       図面のファイルがディスクから移されているときだけ。ファイルがあれば `file_exists` で断られる）。
     - **OS で分けてビルドするのは、比べ方の薄い包みと、ファイルシステムに聞く関数の包み（mac は `to` に `lstat`・親のフォルダに `stat`、
-      Windows は `to` に `GetFileAttributesW`・親のフォルダに `CreateFileW` と `GetFileInformationByHandle` を呼び、OS のエラーの番号を「無い」とそれ以外に分ける表を持つ）の 2 つです。** `to` の形の規則は、両方の OS の分をどの OS でもビルドし、
+      Windows は `extended()` を通したパスで `to` に `GetFileAttributesW`・親のフォルダに `CreateFileW` と `GetFileInformationByHandle` を呼び、OS のエラーの番号を「無い」とそれ以外に分ける表を持つ）の 2 つです。** `to` の形の規則は、両方の OS の分をどの OS でもビルドし、
       `_WIN32` で選ぶのはプラグインが使う規則の 1 か所だけです（上の「`to` の形」）。
       保存先の確かめの手順（`to_is_open` → `file_exists` → `parent_missing` の順）は比べる関数と、ファイルシステムに
       聞く関数（「ファイルがある」「フォルダがある」「無い」「確かめられない（OS のエラーの番号）」を返す。親のフォルダがファイルの
