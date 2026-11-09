@@ -3,6 +3,7 @@
 #include "core/Args.h"
 #include "core/Files.h"
 
+#include <algorithm>
 #include <optional>
 
 namespace VwCli::core {
@@ -91,14 +92,11 @@ bool bringForward(Documents &docs, const Target &target, ToolStatus &status) {
 
 // restoreFront は前面を名指す前の図面へ戻す（まだ開いていれば）。戻せなくても失敗にしない。
 void restoreFront(Documents &docs, const Target &target, const std::vector<OpenDocument> &after) {
-	if (!target.hasFront) {
-		return;
-	}
-	for (const OpenDocument &open : after) {
-		if (open.ref == target.front) {
-			(void)docs.switchTo(target.front);
-			return;
-		}
+	bool stillOpen = std::any_of(after.begin(), after.end(), [&](const OpenDocument &open) {
+		return open.ref == target.front;
+	});
+	if (target.hasFront && stillOpen) {
+		(void)docs.switchTo(target.front);
 	}
 }
 

@@ -42,6 +42,8 @@ public:
 	bool switchFails = false;
 	// 閉じても残る（not_closed を真似る）。
 	bool closeKeeps = false;
+	// 閉じると、この ref の図面も一覧から消える（前面へ戻せない場合を真似る）。
+	std::int32_t closeAlsoDrops = -1;
 	// 保存のあと、前面の図面の項目を一覧から消す（読み直せない場合を真似る）。
 	bool saveLosesFront = false;
 
@@ -86,6 +88,8 @@ public:
 				break;
 			}
 		}
+		std::erase_if(
+		    open, [this](const OpenDocument &document) { return document.ref == closeAlsoDrops; });
 		// 閉じたあとに前面になるのは最後に開いた図面（ここでは一覧の末尾）。
 		if (!open.empty()) {
 			open.back().active = true;
@@ -483,6 +487,27 @@ TEST(CloseClosesTheFrontDocument) {
 	CHECK(status.code == ErrorCode::None);
 	CHECK(docs.calls == calls({"list", "close", "list"}));
 	CHECK_EQ(docs.open.size(), std::size_t{2});
+}
+
+// 前の前面がもう開いていなければ、戻さない。
+TEST(CloseDoesNotRestoreAFrontThatIsGone) {
+	FakeDocuments docs = sample();
+	docs.closeAlsoDrops = 11;
+	ToolStatus status;
+	VwCli::core::close(must(R"({"document":"/Users/me/old/plan.vwx"})"), docs, status);
+	CHECK(status.code == ErrorCode::None);
+	CHECK(docs.calls == calls({"list", "switch 33", "close", "list"}));
+}
+
+TEST(CloseFailsWhenItCannotSwitch) {
+	FakeDocuments docs = sample();
+	docs.switchFails = true;
+	ToolStatus status;
+	VwCli::core::close(must(R"({"document":"/Users/me/old/plan.vwx"})"), docs, status);
+	CHECK(status.code == ErrorCode::Internal);
+	CHECK(status.detail.isNull());
+	CHECK(docs.calls == calls({"list", "switch 33"}));
+	CHECK_EQ(docs.open.size(), std::size_t{3});
 }
 
 TEST(CloseReportsADocumentThatStaysOpen) {

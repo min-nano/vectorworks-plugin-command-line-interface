@@ -29,9 +29,6 @@ void Reader::invalid(std::string message) {
 }
 
 void Reader::onlyKnown(std::initializer_list<std::string_view> known) {
-	if (!ok()) {
-		return;
-	}
 	for (const Json::Member &member : args_.members()) {
 		if (std::find(known.begin(), known.end(), member.first) == known.end()) {
 			invalid("知らない引数 " + member.first);

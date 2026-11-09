@@ -33,6 +33,29 @@ TEST(PathCompareIgnoresCase) {
 	CHECK(equivalent("", ""));
 }
 
+// NFC で長くなる文字（U+0958 は U+0915 U+093C になる）も正規化して比べる（Windows は足りない
+// 領域を広げてやり直す）。
+TEST(PathCompareNormalizesCharactersThatGrow) {
+	CHECK(equivalent("/x/\xE0\xA5\x98.vwx", "/x/\xE0\xA4\x95\xE0\xA4\xBC.vwx"));
+	CHECK(equivalent(std::string("/x/") + std::string(40, 'a') + "\xE0\xA5\x98\xE0\xA5\x98.vwx",
+	                 std::string("/x/") + std::string(40, 'A') +
+	                     "\xE0\xA4\x95\xE0\xA4\xBC\xE0\xA4\x95\xE0\xA4\xBC.vwx"));
+}
+
+// 正しくない UTF-8（プラグインには届かない）は、mac は完全に一致するかで決め、Windows は U+FFFD に
+// して比べる。
+TEST(PathCompareHandlesInvalidUtf8) {
+	CHECK(equivalent("/x/\xFF.vwx", "/x/\xFF.vwx"));
+	CHECK(!equivalent("/x/\xFF.vwx", "/x/a.vwx"));
+	CHECK(!equivalent("/x/a.vwx", "/x/\xFF.vwx"));
+#ifdef __APPLE__
+	CHECK(!equivalent("/x/\xFF.vwx", "/x/\xFE.vwx"));
+	CHECK(!equivalent("/X/\xFF.vwx", "/x/\xFF.vwx"));
+#else
+	CHECK(equivalent("/x/\xFF.vwx", "/X/\xFE.vwx"));
+#endif
+}
+
 TEST(PathCompareSeparatesDifferentPaths) {
 	CHECK(!equivalent("/Users/me/plan.vwx", "/Users/me/plan2.vwx"));
 	CHECK(!equivalent("/Users/me/plan.vwx", "/Users/me/old/plan.vwx"));

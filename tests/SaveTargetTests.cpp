@@ -12,6 +12,8 @@
 #include <vector>
 
 #ifdef _WIN32
+#include "core/WindowsPath.h"
+
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -103,6 +105,8 @@ TEST(MacToRejectsBadForms) {
 	         std::string("/x/a.dwg"),
 	         std::string("/x/a.vwx."),
 	         std::string("/x/a.vw"),
+	         std::string("/x/vwx"),
+	         std::string("/x/a"),
 	         std::string("/x/a\tb.vwx"),
 	         std::string("/x/a\nb.vwx"),
 	         std::string("/x/a\x1f.vwx"),
@@ -174,6 +178,7 @@ TEST(WindowsToRejectsBadForms) {
 	         std::string("\\\\server\\share.\\a.vwx"),
 	         // 拡張子と末尾の . か空白。
 	         std::string("C:\\x\\a.txt"),
+	         std::string("C:\\x\\a"),
 	         std::string("C:\\x\\a.vwx."),
 	         std::string("C:\\x\\a.vwx "),
 	         // 使えない文字（UNC のサーバーと共有の段も）。
@@ -437,7 +442,42 @@ TEST(ProbesDoNotFollowTheTargetButFollowTheParent) {
 	CHECK_EQ(reasonOf(parentStatus), std::string("parent_missing"));
 }
 
+// 「無い」の表に無い失敗は Failed（番号を残す）。名前が長すぎる段で起こす。
+TEST(ProbesReportOtherFailures) {
+	TempDir dir;
+	std::string tooLong = utf8(dir.path() / std::string(300, 'a'));
+	Probe target = save_target::probeTo(tooLong);
+	Probe parent = save_target::probeParent(tooLong);
 #ifdef _WIN32
+	// Windows の番号は確かめていないので、ある・フォルダとは読まないことだけを見る。
+	CHECK(target.entry != Entry::File && target.entry != Entry::Directory);
+	CHECK(parent.entry != Entry::File && parent.entry != Entry::Directory);
+#else
+	CHECK(target.entry == Entry::Failed);
+	CHECK_EQ(target.osError, std::int64_t{ENAMETOOLONG});
+	CHECK(parent.entry == Entry::Failed);
+	CHECK_EQ(parent.osError, std::int64_t{ENAMETOOLONG});
+#endif
+}
+
+#ifdef _WIN32
+// extended
+// は受け付けない形（相対・ドライブ相対・ルート相対・\\.\）を空にする。空の文字列の変換も空。
+TEST(WindowsPathRefusesFormsItDoesNotOpen) {
+	namespace windows_path = VwCli::core::windows_path;
+	CHECK(windows_path::widen("").empty());
+	CHECK(windows_path::narrow(L"").empty());
+	CHECK(windows_path::extended("").empty());
+	CHECK(windows_path::extended("a.vwx").empty());
+	CHECK(windows_path::extended("C:a.vwx").empty());
+	CHECK(windows_path::extended("\\a.vwx").empty());
+	CHECK(windows_path::extended("\\\\.\\C:\\a.vwx").empty());
+	CHECK(windows_path::extended("C:/x/a.vwx") == L"\\\\?\\C:\\x\\a.vwx");
+	CHECK(windows_path::extended("\\\\s\\h\\a.vwx") == L"\\\\?\\UNC\\s\\h\\a.vwx");
+	CHECK(windows_path::extended("\\\\?\\C:\\a.vwx") == L"\\\\?\\C:\\a.vwx");
+	CHECK(windows_path::narrow(windows_path::widen("図面.vwx")) == "図面.vwx");
+}
+
 // CON.vwx は装置ではなくファイルの名前として聞く（\\?\ を付けるので「無い」）。
 TEST(ProbesAskReservedNamesAsFiles) {
 	TempDir dir;
