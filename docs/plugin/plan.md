@@ -104,6 +104,24 @@
   オブジェクトでない（`internal` で応える）道具も、終了を頼まない。失敗の終了コードを受け取った呼ぶ側が、
   終了していく Vectorworks に向かって動かないようにするため（[ブリッジ「受け付け 1 回」](bridge.md#受け付け-1-回coreserverserve)）。
 
+段 5 で決めたこと（真実は各ページ）:
+
+- **道具の表の行（名前・説明・`inputSchema`・種類）は `src/core` の `ToolSpec` の定数に置く。** `src/tools/ToolTable.cpp`
+  は `core::toolOf` で SDK に依る中身と組み合わせるだけにし、`save`・`close` の種類が `app` であることと
+  `inputSchema` が JSON として読めることを無 SDK のテストで確かめる（[ブリッジ「分け方」](bridge.md#分け方)）。
+- **SDK から読む値と SDK の呼び出しは、道具ごとの口（`core::Drawing`・`core::Documents`）で受ける。** 読む道具の
+  数え方・絞り込みと、`save`・`close` の確かめの順・前面を戻す手順を `src/core` に置き、偽の口でテストする。
+  `layer_objects` は絞ったあとの頁の図形だけを読む（名前・クラス・外形を全部の図形について読まない）。
+- **引数の値の `null` は型の違いとして断る**（省略と見なさない。[道具](tools.md#最初に提供する道具)の冒頭）。
+- **実数の桁は指数の形の `to_chars` から取る。** 形を指定しない `to_chars` は、libstdc++ で大きな整数の値を正確な
+  値の固定小数点で書いた（`999999999999999868928`）ので、見本の `999999999999999900000` に合わなかった
+  （[道具](tools.md#最初に提供する道具)の冒頭）。
+- **道具の結果の見本の Go のテストは `cli/internal/toolfixtures` に置く**（テストだけのパッケージ。通信規則の見本を
+  読む `cli/internal/spool` とは分ける）。
+- **`SwitchToOpenFile` が偽を返したときと、保存のあとの一覧に前面の項目が無いときは、`reason` を付けずに
+  `internal` で失敗する**（確かめていない場面。[道具「図面を扱う道具」](tools.md#図面を扱う道具documentssaveclose)）。
+  保存を呼ぶ口が投げたときも、前面を戻してから `internal` で応える。
+
 その先（順序は未定）:
 
 - **他のプラグインの機能を名前で呼ぶ**（`CallPluginLibrary`。形は[未決 3](open-questions.md#3-ほかのプラグインの機能の呼び出しの形)）。

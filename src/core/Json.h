@@ -10,7 +10,9 @@
 //   - 文字列の中の不正な UTF-8 と、対にならないサロゲートの \u エスケープは U+FFFD に置き換える。
 //     書き出す文字列も同じにするので、応答は常に UTF-8 になる。
 //   - オブジェクトの同じキーは、後のものを使う。
-//   - 数は綴りのまま持つ（丸めず、書き出しも同じ綴り）。
+//   - 数は綴りのまま持つ（丸めず、書き出しも同じ綴り）。整数の引数は綴りではなく値で読み
+//     （integerValue）、道具の結果の実数は Go の encoding/json と同じ綴りで作る（real）。決まりは
+//     docs/plugin/tools.md「最初に提供する道具」の冒頭。
 
 #include <cstdint>
 #include <optional>
@@ -21,6 +23,26 @@
 #include <vector>
 
 namespace VwCli::core {
+
+// 整数の引数が受ける最大の値（int32 の最大）。道具ごとに範囲を決めていなくても、整数の引数は
+// 0 以上この値以下に限る（docs/plugin/tools.md「最初に提供する道具」の冒頭）。
+inline constexpr std::int64_t kMaxIntegerArg = 2147483647;
+
+// IntegerCheck は数を整数の引数として読んだ結果。
+enum class IntegerCheck {
+	// 0 以上 kMaxIntegerArg 以下の整数
+	Integer,
+	// 小数部がある（範囲の外でもあるときもこちら）
+	Fraction,
+	// 整数だが、負か kMaxIntegerArg を超える
+	OutOfRange,
+};
+
+struct IntegerValue {
+	IntegerCheck check = IntegerCheck::OutOfRange;
+	// check が Integer のときだけ意味を持つ。
+	std::int64_t value = 0;
+};
 
 class Json {
 public:
@@ -35,6 +57,10 @@ public:
 
 	static Json boolean(bool value);
 	static Json integer(std::int64_t value);
+	// real は実数を、元の値に戻る最も短い桁で、Go の encoding/json と同じ書き方にした数にする
+	// （0 と 1e-6 ≤ |x| < 1e21 は固定小数点、それ以外は符号付きで先頭の 0 の無い指数。-0 は -0）。
+	// 有限でなければ null を返す（JSON に書けないため。道具の結果の実数はどれもこれで作る）。
+	static Json real(double value);
 	static Json string(std::string value);
 	static Json array(Array items = {});
 	static Json object(Object members = {});
@@ -59,6 +85,10 @@ public:
 	const std::string &numberText() const;
 	// 数が整数の綴り（小数部と指数部が無い）で、std::int64_t に収まるときだけ値を返す。
 	std::optional<std::int64_t> asInt64() const;
+	// integerValue は数の値を、書かれた 10 進のとおりに正確に読む（浮動小数点数に直さない）。
+	// 値が整数なら書き方によらず受ける（2・2.0・2e0・-0・0e99999999）。指数は飽和させて数えるので、
+	// 長い指数でも溢れず、長く掛からない。
+	IntegerValue integerValue() const;
 	const Array &items() const;
 	const Object &members() const;
 
