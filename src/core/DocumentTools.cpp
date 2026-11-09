@@ -68,7 +68,7 @@ Target findTarget(const std::vector<OpenDocument> &list, const std::string &docu
 	if (matches > 1) {
 		args::failWithReason(status, kDocumentAmbiguous,
 		                     "パスが " + document + " の図面が " + std::to_string(matches) +
-		                         " 枚あるので、どれも" + (tool == "save" ? "保存" : "閉じ") +
+		                         " 枚あるので、どれも" + (tool == "save" ? "保存し" : "閉じ") +
 		                         "ませんでした");
 		return target;
 	}

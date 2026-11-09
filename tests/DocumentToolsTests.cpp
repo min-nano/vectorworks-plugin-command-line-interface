@@ -378,6 +378,8 @@ TEST(SaveAndCloseRefuseAnAmbiguousDocument) {
 	                   docs, closeStatus);
 	CHECK_EQ(closeStatus.detail, must(R"({"reason":"document_ambiguous"})"));
 	CHECK(docs.calls == calls({"list", "list"}));
+	CHECK(status.message.find("どれも保存しませんでした") != std::string::npos);
+	CHECK(closeStatus.message.find("どれも閉じませんでした") != std::string::npos);
 	CHECK(fs.asked.empty());
 }
 
