@@ -439,6 +439,9 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     `save` の状態の確かめ（`file_exists`・`parent_missing`）と保存
     そのものはメインスレッドで行うので、サーバーが止まっている・ネットワークが切れているときは、OS が失敗を返すまで
     待ち、その間は画面の操作にも CLI のほかの要求にも応えません。段 5 では扱わず、この振る舞いを認めます。
+    OS が失敗を返すまでの待ちは、呼ぶ側の既定の待つ上限（`vw2026 call` の 30 秒）を超えうるので、そのときは `call` が
+    「実行されたかもしれない」（終了コード 4）で終わり、下の `to_check_failed` を読めません。ネットワークの場所へ保存する
+    ときは長い `--timeout` を付け、終了コード 4 で終わったら、Vectorworks が応えるようになってから `documents` で確かめます。
     - **待ったあとの失敗は「無い」と分けます。** 「無い」に数えるのは、mac は `ENOENT`・`ENOTDIR`、Windows は
       2 `ERROR_FILE_NOT_FOUND`・3 `ERROR_PATH_NOT_FOUND`・67 `ERROR_BAD_NET_NAME`（サーバーに共有が無い）・
       267 `ERROR_DIRECTORY`（途中の段がファイル）だけです。
@@ -447,7 +450,9 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       エラーの番号を整数で載せます（`{"reason":"to_check_failed","check":<段>,"os_error":<値>}`。`check` は失敗した確かめで、
       `"to"`（`to` そのもの）か `"parent"`（親のフォルダ）。`os_error` は mac では `errno`、Windows では `GetLastError()` の値で、
       鍵は OS によらず同じ。どれも必ず付ける）。`to` はリンクをたどらずに聞く（mac の `lstat`。Windows の `GetFileAttributesW` もリパースポイントを
-      たどらない）ので、壊れたシンボリックリンクがある `to` も `file_exists` になります（OS で揃う）。呼ぶ側がファイルやフォルダが消えたと読み違え
+      たどらない）ので、壊れたシンボリックリンクがある `to` も `file_exists` になります（OS で揃う）。親のフォルダはリンクをたどって
+      聞く（mac の `stat`。Windows は `FILE_FLAG_BACKUP_SEMANTICS` を付けた `CreateFileW` で開いて `GetFileInformationByHandle`）ので、
+      先の無いシンボリックリンクやジャンクションの親は、OS によらず `parent_missing` になります。呼ぶ側がファイルやフォルダが消えたと読み違え
       ないためです。ネットワークの場所そのものが外れているとき（mac の `/Volumes` の下のマウントが外れた、割り当てた
       ドライブ文字が無い）は、OS がパスの無いときと同じ番号（`ENOENT`・3）を返すので見分けられず、「無い」になります。
       逆に、UNC のサーバーの名前が存在しない（綴りの誤り・名前の解決の失敗）ときも、Windows は届かないときと同じ 53 を
@@ -524,7 +529,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       ドライブ、ジャンクション・シンボリックリンクを通る綴り、mac の `/var` と `/private/var` です（どれも、開いている
       図面のファイルがディスクから移されているときだけ。ファイルがあれば `file_exists` で断られる）。
     - **OS で分けてビルドするのは、比べ方の薄い包みと、ファイルシステムに聞く関数の包み（mac は `to` に `lstat`・親のフォルダに `stat`、
-      Windows は `GetFileAttributesW` を呼び、OS のエラーの番号を「無い」とそれ以外に分ける表を持つ）の 2 つです。** `to` の形の規則は、両方の OS の分をどの OS でもビルドし、
+      Windows は `to` に `GetFileAttributesW`・親のフォルダに `CreateFileW` と `GetFileInformationByHandle` を呼び、OS のエラーの番号を「無い」とそれ以外に分ける表を持つ）の 2 つです。** `to` の形の規則は、両方の OS の分をどの OS でもビルドし、
       `_WIN32` で選ぶのはプラグインが使う規則の 1 か所だけです（上の「`to` の形」）。
       保存先の確かめの手順（`to_is_open` → `file_exists` → `parent_missing` の順）は比べる関数と、ファイルシステムに
       聞く関数（「ファイルがある」「フォルダがある」「無い」「確かめられない（OS のエラーの番号）」を返す。親のフォルダがファイルの
