@@ -465,8 +465,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     変更を捨てると指定したものとみなします（CLAUDE.md の 5）。**利用者が開いている図面を名指すと、その図面の未保存の
     変更も黙って消えます。** 保存済みの図面に未保存の変更があるかは SDK から前もって読めないので、プラグインは
     確かめません。呼ぶ側は `documents` の `path` をそのまま渡し、残したい変更は先に利用者に保存してもらいます。
-  - **Windows で確認が出ないこと、コピーで開いた図面・大きな図面での振る舞いは [SDK リファレンス #305](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/305) で確かめます**
-    （mac の無題の図面・保存済みの図面は確かめてある）。段 5 はその結果を待ちます。
+  - **mac でも Windows でも、どの図面でも確認は出ません**（無題・保存済み・`OpenDocumentPath` で開いただけ・古い版や
+    読み取り専用・使用中のファイルを開いたコピー・大きな図面。[Findings「Windows と、「閉じる」で確認が出る図面」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows-と閉じるで確認が出る図面305mac-も)。#305）。
   - **戻り値（成功しても `false`）では成否が分かりません。** 呼び出しの後に `GetOpenFilesList` を読み、対象の図面が
     残っていれば `internal` で失敗し、`detail` に `{"reason":"not_closed"}` を付けます。
   - **`close` も `save` も、呼び出しの中で終わってから戻ります**（大きな図面でも。戻った直後の `GetOpenFilesList` は
@@ -474,17 +474,14 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     [SDK リファレンス #290](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/290)）。そのため、戻った直後の一覧で成否を決めます。
     - **最中は何も応えません**（`busy` も返せない）。ダイアログが出ない限りタイマーは入り直さないので、mac でも
       Windows でも受け付けの入れ子は起きず、要求はスプールに残ります。
-    - **時間は図形の数に比例して延び、描画したあとの図面を閉じると数倍かかります**（メニューの「閉じる」で測った値。
-      `CloseDocument()` は #305 で測る）。Windows では、描画前の図面を閉じて保存の確認が出るまでに、呼ぶ側の既定の待つ上限
-      （`vw2026 call` の `--timeout`）を超えた回があります（所要は
-      [Findings](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#大きな図面でも呼び出しの中で終わる290macwindows-は下の節実務の図面は測っていない)）。実務の図面（参照・レンダリングしたビューポートなど）は測っていないので、長くかかる前提で
-      使います。
+    - **描画したあとの大きな図面は、閉じるのに秒の単位でかかります**（描画の前は 1 秒に満たない。所要は [Findings「Windows と、「閉じる」で確認が出る図面」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows-と閉じるで確認が出る図面305mac-も)）。
+      実務の図面（参照・レンダリングしたビューポートなど）は測っていないので、長くかかる前提で使います。
     - **呼ぶ側の待つ上限を過ぎても、プラグインは処理を続けて図面を閉じ・保存します。** 呼ぶ側は待ちきれずに終わる
       （失敗とは限らない）ので、`documents` で確かめます。
     - **Windows では呼び出しが数秒を超えると、Vectorworks が「応答なし」と表示されます。** 図面は壊れていないので、失敗と
       読みません。
-  - 閉じたあとに前面になるのは別の図面です。`close` の前の前面の図面が残っていれば、`SwitchToOpenFile` で
-    戻します（前面を閉じたときは戻せない）。
+  - 閉じたあとに前面になるのは、最後に開いた図面です（mac も Windows も）。`close` の前の前面の図面が残っていれば、
+    その `fileRef` へ `SwitchToOpenFile` で戻します（カレントレイヤも戻る。前面を閉じたときは戻せない。[Findings「Windows と、「閉じる」で確認が出る図面」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows-と閉じるで確認が出る図面305mac-も)）。
 - 図面を開く道具は[設計「決めたこと」](../design.md#決めたこと)の「対象の図面」にあります（未実装）。
   `OpenDocumentPath` で開いた図面は、残すなら `save` で新しいパスへ保存してから `close` します（`close` は変更を捨てる）。開いたあとは Vectorworks の最初の描画が刻みを
   止め、次の要求が長く待たされます（上限は無い。[#290](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/290)）。開く道具を足すときは、
