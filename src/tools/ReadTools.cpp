@@ -41,12 +41,18 @@ public:
 			TXString name;
 			gSDK->GetObjectName(layer, name);
 			facts.name = utf8(name);
-			// ovLayerType は Sint16 で受け取れる（デザイン 1・シート 2・参照で入ったデザイン 3）。
+			// ovLayerType は Sint16 で受け取れる（デザイン 1・シート
+			// 2・リソースの参照で入ったデザイン 3）。
 			TVariableBlock value;
 			Sint16 type = 0;
 			if (gSDK->GetObjectVariable(layer, ovLayerType, value) && value.GetSint16(type)) {
 				facts.layerType = type;
 			}
+			// 参照由来かは IsObjectFromReferencedFile で見る。ovLayerType の 3
+			// はリソースの参照でしか 立たず、レイヤの参照で入ったレイヤは 1
+			// で自分のレイヤと見分けられない（Findings「Layers and
+			// Stories」の「参照で入ってきたレイヤ」。SDK リファレンス #310）。
+			facts.referenced = gSDK->IsObjectFromReferencedFile(layer) != 0;
 			double_gs scale = 1;
 			gSDK->GetLayerScaleN(layer, scale);
 			facts.scale = scale;

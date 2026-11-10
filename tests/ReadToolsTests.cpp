@@ -61,22 +61,25 @@ public:
 
 // layer はレイヤ 1 枚。type が負なら ovLayerType を読めなかったとする。
 LayerFacts layer(std::string name, int type, double scale, std::vector<std::int16_t> members,
-                 bool current = false) {
+                 bool current = false, bool referenced = false) {
 	std::optional<std::int16_t> layerType;
 	if (type >= 0) {
 		layerType = static_cast<std::int16_t>(type);
 	}
-	return LayerFacts{std::move(name), layerType, scale, current, std::move(members)};
+	return LayerFacts{std::move(name), layerType, referenced, scale, current, std::move(members)};
 }
 
-// sample は見本の図面: デザイン（1:1。置き石と終端を含む）・シート・参照で入ったレイヤ・種類の
-// 分からないレイヤ。
+// sample は見本の図面（Findings「Layers and Stories」の列の並び）: レイヤの参照で入ったレイヤ
+// （列の先頭。元の名前・ovLayerType 1・中身が直下に見える）・デザイン（1:1。置き石と終端を含む）・
+// シート・リソースの参照で入ったレイヤ（NNA#1_・ovLayerType 3・直下は終端だけ）・種類の分からない
+// レイヤ。
 FakeDrawing sample() {
 	FakeDrawing drawing;
 	drawing.layerList = {
+	    layer("RF", 1, 100, {3, 2, 0}, false, true),
 	    layer("1F", 1, 1, {2, 90, 3, 86, 2, 11, 0}, true),
 	    layer("S-1", 2, 1, {122, 0}),
-	    layer("NNA#1_2F", 3, 50, {0}),
+	    layer("NNA#1_2F", 3, 50, {0}, false, true),
 	    layer("X", 7, 100, {10, 0}),
 	};
 	drawing.classList = {"一般", "寸法", "壁-外"};
@@ -111,10 +114,11 @@ TEST(LayersListsEveryLayerInListOrder) {
 	CHECK_EQ(
 	    result.dump(),
 	    R"({"layers":[)"
+	    R"({"name":"RF","kind":"design","referenced":true,"scale":100,"objects":2,"current":false},)"
 	    R"({"name":"1F","kind":"design","referenced":false,"scale":1,"objects":5,"current":true},)"
 	    R"({"name":"S-1","kind":"sheet","referenced":false,"scale":1,"objects":1,"current":false},)"
 	    R"({"name":"NNA#1_2F","kind":"design","referenced":true,"scale":50,"objects":0,"current":false},)"
-	    R"({"name":"X","kind":null,"referenced":false,"scale":100,"objects":1,"current":false}],"count":4})");
+	    R"({"name":"X","kind":null,"referenced":false,"scale":100,"objects":1,"current":false}],"count":5})");
 }
 
 // include_sheets が偽ならシートだけを除く（kind が null のものは除かない）。
@@ -123,7 +127,7 @@ TEST(LayersCanLeaveOutSheets) {
 	ToolStatus status;
 	Json result = call(VwCli::core::layers, R"({"include_sheets":false})", drawing, status);
 	REQUIRE(status.code == ErrorCode::None);
-	CHECK_EQ(*result.find("count"), Json::integer(3));
+	CHECK_EQ(*result.find("count"), Json::integer(4));
 	for (const Json &item : result.find("layers")->items()) {
 		CHECK(!(*item.find("kind") == Json::string("sheet")));
 	}
@@ -203,7 +207,7 @@ TEST(LayerObjectsListsTheObjectsUnderTheLayer) {
 	const auto &objects = result.find("objects")->items();
 	REQUIRE(objects.size() == 5);
 	CHECK_EQ(objects[0],
-	         must(R"({"index":0,"type":2,"type_name":"line","pio_name":null,"name":"o0-0",)"
+	         must(R"({"index":0,"type":2,"type_name":"line","pio_name":null,"name":"o1-0",)"
 	              R"("class":"一般","bounds":{"left":0,"right":10,"top":20,"bottom":0}})"));
 	CHECK_EQ(*objects[2].find("type_name"), Json::string("parametric"));
 	CHECK_EQ(*objects[2].find("pio_name"), Json::string("Door"));
@@ -211,8 +215,22 @@ TEST(LayerObjectsListsTheObjectsUnderTheLayer) {
 	CHECK_EQ(*objects[4].find("type_name"), Json::string("group"));
 	// 読んだのは置き石（列の 1 番目）と終端を除いた位置だけ。
 	std::vector<std::pair<std::size_t, std::size_t>> expected = {
-	    {0, 0}, {0, 2}, {0, 3}, {0, 4}, {0, 5}};
+	    {1, 0}, {1, 2}, {1, 3}, {1, 4}, {1, 5}};
 	CHECK(drawing.read == expected);
+}
+
+// レイヤの参照で入ったレイヤは、参照元の図形が直下に見えるので、そのまま返す（情報パレットも
+// 「N 図形」に数える。Findings「Layers and Stories」の「参照で入ってきたレイヤ」）。
+TEST(LayerObjectsListsTheContentsOfAReferencedLayer) {
+	FakeDrawing drawing = sample();
+	ToolStatus status;
+	Json result = call(VwCli::core::layerObjects, R"({"layer":"RF"})", drawing, status);
+	REQUIRE(status.code == ErrorCode::None);
+	CHECK_EQ(*result.find("total"), Json::integer(2));
+	const auto &objects = result.find("objects")->items();
+	REQUIRE(objects.size() == 2);
+	CHECK_EQ(*objects[0].find("type_name"), Json::string("box"));
+	CHECK_EQ(*objects[1].find("type_name"), Json::string("line"));
 }
 
 TEST(LayerObjectsFiltersByTypeBeforePaging) {
@@ -226,7 +244,7 @@ TEST(LayerObjectsFiltersByTypeBeforePaging) {
 	const auto &objects = result.find("objects")->items();
 	REQUIRE(objects.size() == 1);
 	CHECK_EQ(*objects[0].find("index"), Json::integer(1));
-	CHECK_EQ(*objects[0].find("name"), Json::string("o0-4"));
+	CHECK_EQ(*objects[0].find("name"), Json::string("o1-4"));
 }
 
 TEST(LayerObjectsPagesWithLimitAndOffset) {
@@ -304,12 +322,12 @@ TEST(ObjectCountsCountsTheWholeDrawingByType) {
 	ToolStatus status;
 	Json result = call(VwCli::core::objectCounts, "{}", drawing, status);
 	CHECK(status.code == ErrorCode::None);
-	CHECK_EQ(result.dump(), R"({"types":[{"type":2,"type_name":"line","count":2},)"
-	                        R"({"type":3,"type_name":"box","count":1},)"
+	CHECK_EQ(result.dump(), R"({"types":[{"type":2,"type_name":"line","count":3},)"
+	                        R"({"type":3,"type_name":"box","count":2},)"
 	                        R"({"type":10,"type_name":"text","count":1},)"
 	                        R"({"type":11,"type_name":"group","count":1},)"
 	                        R"({"type":86,"type_name":"parametric","count":1},)"
-	                        R"({"type":122,"type_name":"viewport","count":1}],"total":7})");
+	                        R"({"type":122,"type_name":"viewport","count":1}],"total":9})");
 }
 
 // 図面全体は layers のすべてのレイヤの objects の和。

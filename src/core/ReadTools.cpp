@@ -149,7 +149,7 @@ Json layers(const Json &args, Drawing &drawing, ToolStatus &status) {
 		list.push(
 		    Json::object({{"name", Json::string(layer.name)},
 			              {"kind", std::move(kind)},
-			              {"referenced", Json::boolean(layer.layerType == kGuestLayerDesign)},
+			              {"referenced", Json::boolean(layer.referenced)},
 			              {"scale", Json::real(layer.scale)},
 			              {"objects", Json::integer(static_cast<std::int64_t>(countOf(layer)))},
 			              {"current", Json::boolean(layer.current)}}));

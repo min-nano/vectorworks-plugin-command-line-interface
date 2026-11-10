@@ -132,8 +132,8 @@
   [Findings「Attributes and Classes」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Attributes%20and%20Classes.md)の「タイマーの刻みから呼べる。図面 0 枚でも落ちない」）が、
   空の結果（`object_counts` の `total:0` など）を「中身の無い図面」と見分けられなくなるので、失敗にします。
   `documents` は失敗にせず、空の一覧を返します。`ping` は `current_layer` を `null` にします（[`ping`](#ping)）。
-- **`layer` はレイヤの名前で、`layers` の `name` と完全に一致するものを探します**（参照で入ってきたレイヤは
-  `NNA#1_<元の名前>` の形のまま渡す）。一致しなければ `invalid_args` で断ります。図面が無いときは、`layer` を
+- **`layer` はレイヤの名前で、`layers` の `name` と完全に一致するものを探します**（リソースの参照で入ってきた
+  レイヤは `NNA#<n>_<元の名前>` の形のまま渡す）。一致しなければ `invalid_args` で断ります。図面が無いときは、`layer` を
   確かめる前に `no_document` で失敗します。
 - **並び順は SDK の列の順で、背面→前面です**（`layers` も `layer_objects` も同じ向き）。画面の並びに
   合わせて並べ替えることはしません（呼ぶ側が並べ替える）。
@@ -146,9 +146,9 @@
 
 | フィールド | 値 |
 | --- | --- |
-| `name` | レイヤの名前（`GetObjectName`）。参照で入ってきたレイヤは `NNA#1_<元の名前>` |
+| `name` | レイヤの名前（`GetObjectName`）。リソースの参照で入ってきたレイヤは `NNA#<n>_<元の名前>`、レイヤの参照で入ってきたレイヤは元の名前のまま（下記） |
 | `kind` | `design`（`ovLayerType` が 1 か 3）・`sheet`（2）。それ以外の値（Findings で確かめていない種類）は `null` |
-| `referenced` | 参照で入ってきたデザインレイヤか（`ovLayerType` が 3） |
+| `referenced` | 参照で入ってきたレイヤか（`IsObjectFromReferencedFile(layer)`。参照の方法によらず真。下記） |
 | `scale` | 縮尺の分母（`GetLayerScaleN`。1/50 なら `50`、1:1 なら `1`）。SDK は `double_gs` で返すので実数として書きます（[Findings「レイヤの縮尺」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md#レイヤの縮尺setlayerscalen-は黙って効かないことがある)。確かめた縮尺はどれも整数で、整数でない縮尺は確かめていない）。**シートレイヤは SDK の返すとおり常に `1`**。有限でなければ `null`（[冒頭](#最初に提供する道具)） |
 | `objects` | レイヤの直下の図形の数（下記「数え方」） |
 | `current` | 現在のレイヤか（`GetCurrentLayer()` とハンドルが一致するか） |
@@ -159,12 +159,28 @@
 - `include_sheets` が偽なら、`kind` が `sheet` のものを除きます（`kind` が `null` のものは除かない）。
 - **`kind` が `null` のレイヤも除かずに返し**、`objects` も数えます。`object_counts` の図面全体の和と食い違わない
   ようにするためです。
-- **参照で入ってきたレイヤも返します**（`referenced` が真）。その直下には図形が見えないので、`objects` は 0 に
-  なります。
-  - これは `ISDK::CreateReference`（レイヤを選ばない参照）の実測に基づきます。オーガナイザでレイヤを選んで参照した
-    レイヤは、mac の実機の確認で、名前に `NNA#1_` が付かず `referenced` が偽で、`objects` に参照の中身の数が入りました。
-    この振る舞いは [SDK リファレンス #310](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/310) で調べてから、実装か文書を直します
-    （[SDK の調査 8](../sdk-research.md#8-オーガナイザのファイル参照でレイヤを選んで参照したレイヤ調べている)）。
+- **参照で入ってきたレイヤも返します**（`referenced` が真）。別の図面を参照すると、参照元のデザインレイヤが同じ列に
+  型 31 のまま入り、**参照の方法で 2 通りの姿になります**（mac と Windows で同じ。[Findings「Layers and Stories」の
+  「参照で入ってきたレイヤ」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md#参照で入ってきたレイヤ参照の方法で-2-通りの姿になる見分けは-isobjectfromreferencedfilelayer)。
+  [SDK リファレンス #310](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/310)）。
+
+  | | リソースの参照（`CreateReference`・オーガナイザの既定） | レイヤの参照（オーガナイザで「レイヤを参照」にして、参照レイヤを選ぶ） |
+  | --- | --- | --- |
+  | `name` | `NNA#<n>_<元の名前>` | 元の名前のまま |
+  | `kind` | `design`（`ovLayerType` が 3） | `design`（`ovLayerType` が 1） |
+  | `referenced` | 真 | 真 |
+  | `objects` | 0（直下に図形が見えない） | 参照元の図形の数（直下に見える） |
+  | 列の位置 | 自分のレイヤの後 | 列の先頭（自分のレイヤより前） |
+  | `scale` | 参照元の縮尺 | 参照元の縮尺 |
+
+  - **参照由来かは `IsObjectFromReferencedFile(layer)` で決めます。** `ovLayerType` の 3 はリソースの参照でしか立たず、
+    レイヤの参照で入ったレイヤは 1 で、自分のレイヤと見分けられないためです。
+  - **レイヤの参照で入った図形も数えます**（`objects`・`layer_objects`・`object_counts`）。情報パレットも「すべてを選択」で
+    これを「N 図形 - ロック状態」と数え（下記「数え方」と同じ数）、図形は参照元の型・クラス・外形のまま見えるためです。
+    参照の中身を除きたい呼ぶ側は、`referenced` が真のレイヤを除きます（参照で入ったレイヤの直下の図形は、どれも参照元の
+    ものです。図形ごとの印は返しません）。`object_counts` の図面全体も、これらを含んだ和です。
+  - 参照を解除するとき「参照レイヤ: ファイルに残す」を選ぶと、レイヤと図形は自分のものになり、`referenced` は偽に
+    変わります。
 
 ### `classes`
 

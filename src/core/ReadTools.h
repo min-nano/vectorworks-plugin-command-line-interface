@@ -28,17 +28,23 @@ inline constexpr std::int16_t kTermNode = 0;
 inline constexpr std::int16_t kUndoPlaceholderNode = 90;
 inline constexpr std::int16_t kParametricNode = 86;
 
-// ovLayerType の値（MiniCadCallBacks.h の ELayerType。Findings「Layers and Stories」）。
+// ovLayerType の値（MiniCadCallBacks.h の ELayerType。Findings「Layers and Stories」）。3
+// はリソースの 参照で入ったデザインレイヤだけで、レイヤの参照で入ったものは 1（参照由来かは
+// referenced で見る）。
 inline constexpr std::int16_t kLayerDesign = 1;
 inline constexpr std::int16_t kLayerSheet = 2;
 inline constexpr std::int16_t kGuestLayerDesign = 3;
 
 // LayerFacts は SDK から読むレイヤ 1 枚（GetDrawingHeader の列のうち型が kLayerNode のもの）。
 struct LayerFacts {
-	// GetObjectName。参照で入ったレイヤは NNA#1_<元の名前>。
+	// GetObjectName。リソースの参照で入ったレイヤは
+	// NNA#<n>_<元の名前>、レイヤの参照で入ったレイヤは 元の名前のまま。
 	std::string name;
 	// ovLayerType。GetObjectVariable が偽なら空。
 	std::optional<std::int16_t> layerType;
+	// IsObjectFromReferencedFile(layer)。参照で入ったレイヤなら、参照の方法によらず真（Findings
+	// 「Layers and Stories」の「参照で入ってきたレイヤ」。SDK リファレンス #310）。
+	bool referenced = false;
 	// GetLayerScaleN（分母）。
 	double scale = 1;
 	// GetCurrentLayer() とハンドルが一致するか。
