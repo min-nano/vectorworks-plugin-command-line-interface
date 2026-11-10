@@ -305,6 +305,17 @@ TEST(LayerObjectsRejectsBadArguments) {
 }
 
 // 名前は完全に一致するものだけ（参照で入ったレイヤは接頭辞ごと渡す）。
+// 範囲と型の誤りの文言（「以下」のあとに空白を入れない）。
+TEST(LayerObjectsDescribesTheRange) {
+	FakeDrawing drawing = sample();
+	ToolStatus range;
+	call(VwCli::core::layerObjects, R"({"layer":"1F","offset":1e400})", drawing, range);
+	CHECK(range.message.find("offset は 0 以上 2147483647 以下です（1e400）") != std::string::npos);
+	ToolStatus type;
+	call(VwCli::core::layerObjects, R"({"layer":"1F","limit":"2"})", drawing, type);
+	CHECK(type.message.find("limit は 1 以上 1000 以下の整数です") != std::string::npos);
+}
+
 TEST(LayerObjectsRejectsALayerThatDoesNotExist) {
 	for (const char *name : {"2F", "1f", "1F ", ""}) {
 		FakeDrawing drawing = sample();

@@ -57,7 +57,7 @@ std::optional<std::int64_t> Reader::integer(std::string_view key, std::int64_t m
 	}
 	std::string range = std::to_string(min) + " 以上 " + std::to_string(max) + " 以下";
 	if (!value->isNumber()) {
-		invalid(std::string(key) + " は " + range + " の整数です");
+		invalid(std::string(key) + " は " + range + "の整数です");
 		return std::nullopt;
 	}
 	IntegerValue read = value->integerValue();
@@ -66,7 +66,7 @@ std::optional<std::int64_t> Reader::integer(std::string_view key, std::int64_t m
 		return std::nullopt;
 	}
 	if (read.check == IntegerCheck::OutOfRange || read.value < min || read.value > max) {
-		invalid(std::string(key) + " は " + range + " です（" + value->numberText() + "）");
+		invalid(std::string(key) + " は " + range + "です（" + value->numberText() + "）");
 		return std::nullopt;
 	}
 	return read.value;
