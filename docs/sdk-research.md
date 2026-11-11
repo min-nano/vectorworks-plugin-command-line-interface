@@ -129,7 +129,7 @@ SDK リファレンスに記載がありませんでした。
 
 | 道具 | 呼び出し | リファレンス |
 | --- | --- | --- |
-| `layers` | レイヤの列挙（`FirstMemberObj(GetDrawingHeader())`＋`NextObject`、または `ForEachLayer`） | **分かった**（[#281](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/281)。[Layers and Stories「レイヤを列挙する（デザインとシート・種類・順序・現在・縮尺）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)。Windows）。シートレイヤも同じ列に作った順で並ぶ（オーガナイザはデザインレイヤだけ逆順に見せる）。列の末尾に型 `0` が 1 つ居るので `kLayerNode`（31）で絞る。種類は `ovLayerType`（デザイン `1`・シート `2`・参照で入ったデザインレイヤ `3`。名前は `NNA#<n>_<元の名前>`）。現在のレイヤは `GetCurrentLayer()` とハンドルの `==` で判定できる。縮尺は `GetLayerScaleN` で分母（1/50 なら `50`）、シートレイヤは常に `1`。刻みの中・図面 0 枚でも落ちない（列が空になる）。使い方は[道具「layers」](plugin/tools.md#layers) |
+| `layers` | レイヤの列挙（`FirstMemberObj(GetDrawingHeader())`＋`NextObject`、または `ForEachLayer`） | **分かった**（[#281](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/281)。[Layers and Stories「レイヤを列挙する（デザインとシート・種類・順序・現在・縮尺）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)。Windows）。シートレイヤも同じ列に作った順で並ぶ（オーガナイザはデザインレイヤだけ逆順に見せる）。列の末尾に型 `0` が 1 つ居るので `kLayerNode`（31）で絞る。種類は `ovLayerType`（デザイン `1`・シート `2`・リソースの参照で入ったデザインレイヤ `3`。名前は `NNA#<n>_<元の名前>`）。参照由来かは `IsObjectFromReferencedFile(layer)` で見る（レイヤの参照で入ったレイヤは `ovLayerType` が `1` で名前も元のまま。[#310](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/310)。下記 8）。現在のレイヤは `GetCurrentLayer()` とハンドルの `==` で判定できる。縮尺は `GetLayerScaleN` で分母（1/50 なら `50`）、シートレイヤは常に `1`。刻みの中・図面 0 枚でも落ちない（列が空になる）。使い方は[道具「layers」](plugin/tools.md#layers) |
 | `classes` | クラスの一覧（`ForEachClass`） | **分かった**（[#280](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/280)。[Attributes and Classes「クラスの一覧は `ForEachClass` で列挙する」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Attributes%20and%20Classes.md)。Windows）。前面の図面のクラスだけを ID の順（作った順）に渡す（オーガナイザは名前の昇順）。`doGuestClasses` が真なら参照先のクラスが `NNA#<n>_<名前>` で後ろに足される（オーガナイザには出ない）。階層名（`-` 区切り）は 1 つのクラスで、親は作られない。刻みの中・図面 0 枚でも落ちない（0 件）。使い方は[道具「classes」](plugin/tools.md#classes) |
 | `layer_objects` / `object_counts` | レイヤの中のオブジェクトの列挙・種別・名前・クラス・外形 | **分かった**（[#282](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/282)。[Layer Objects](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md)。mac・Windows）。`FirstMemberObj` → `NextObject` は作った順で、先頭が最背面。列には終端（型 `0`）と undo の置き石（型 `90`。並べ替え・消去・取り消しで増え、保存しても残ることがある）が混ざるので除く（`ForEachObjectN` は渡さない）。情報パレットの「N 図形」はレイヤの直下の数（グループ・シンボル・PIO・壁は 1 つ）で、オーガナイザに数の列は無い。種別の番号から名前を引く口は SDK に無い（自前の表。PIO は `GetParametricName`）。名前の無い図形の名前は空文字列。クラスは `GetObjectClass` → `ClassIDToName`。外形は縮尺を掛けない mm の外接矩形（文字は紙の上の大きさ×縮尺）。シートレイヤにはビューポート（型 `122`）が居る。刻みの中から辿ってよい。使い方は[道具「layer_objects・object_counts」](plugin/tools.md#layer_objectsobject_counts) |
 | `ping` | `GetCurrentLayer()` で図面が開いているかを判定する | **分かった**（[Timers and Notifications](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 8。使い方は[道具「ping」](plugin/tools.md#ping)） |
@@ -186,3 +186,18 @@ Vectorworks のダイアログ（呼び出しが出したものも、利用者�
   見分けたい場面のため）。
 
 CLI のコマンド（例 `vw2026 dialog list` / `vw2026 dialog press`）は、この結果で決めます。
+
+## 8. オーガナイザの「ファイル参照」でレイヤを選んで参照したレイヤ（分かった）
+
+`layers` の `referenced`・`objects`・名前は、はじめ `ISDK::CreateReference`（レイヤを選ばない参照）の実測だけを根拠に
+決めていました。段 5 の実機の確認（mac）で、オーガナイザでレイヤを選んで参照したレイヤが、名前に `NNA#1_` が付かず、
+`referenced` が偽で、`objects` に参照の中身の数を返したので、
+[SDK リファレンス #310](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/310) で調べました。
+**分かった**: 参照で入るレイヤは参照の方法で 2 通りの姿になります（mac と Windows で同じ）。
+
+- **リソースの参照**（`CreateReference`・オーガナイザの既定）: 名前は `NNA#<n>_<元の名前>`・`ovLayerType` は 3・直下は空。
+- **レイヤの参照**（オーガナイザで「レイヤを参照」にして参照レイヤを選ぶ。旧来の方法）: 名前は元のまま・`ovLayerType` は 1・
+  参照元の図形が直下に見え、情報パレットもそれを数える。列の先頭に入る。
+- **どちらも `IsObjectFromReferencedFile(layer)` が真**（中身の図形も真）。`layers` の `referenced` はこれで決めるように
+  直しました（[道具「`layers`」](plugin/tools.md#layers)）。
+- 根拠は [Findings「Layers and Stories」の「参照で入ってきたレイヤ」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md#参照で入ってきたレイヤ参照の方法で-2-通りの姿になる見分けは-isobjectfromreferencedfilelayer)。

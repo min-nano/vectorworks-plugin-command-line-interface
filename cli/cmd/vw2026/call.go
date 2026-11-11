@@ -102,7 +102,9 @@ func (c *callCmd) run(e *env) int {
 			text = string(data)
 		}
 		// 中身は道具ごとに解釈しない（プラグイン側の仕事）。オブジェクトであることだけを確かめる。
-		var probe map[string]any
+		// 値は RawMessage のまま受け、数に直さない（float64 に収まらない 1e400 のような正しい JSON も
+		// プラグインへ渡し、プラグインが引数の誤りとして断る）。
+		var probe map[string]json.RawMessage
 		if json.Unmarshal([]byte(text), &probe) != nil || probe == nil {
 			fmt.Fprint(e.stderr, "vw2026: args must be a JSON object\n")
 			return exitUsage

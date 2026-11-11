@@ -1,5 +1,7 @@
 #include "core/Files.h"
 
+#include "core/WindowsPath.h"
+
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -14,62 +16,10 @@ namespace VwCli::core::files {
 
 namespace {
 
-std::wstring widen(std::string_view text) {
-	if (text.empty()) {
-		return {};
-	}
-	int size = static_cast<int>(text.size());
-	int length = ::MultiByteToWideChar(CP_UTF8, 0, text.data(), size, nullptr, 0);
-	std::wstring wide(static_cast<std::size_t>(length), L'\0');
-	::MultiByteToWideChar(CP_UTF8, 0, text.data(), size, wide.data(), length);
-	return wide;
-}
-
-std::string narrow(std::wstring_view wide) {
-	if (wide.empty()) {
-		return {};
-	}
-	int size = static_cast<int>(wide.size());
-	int length = ::WideCharToMultiByte(CP_UTF8, 0, wide.data(), size, nullptr, 0, nullptr, nullptr);
-	std::string text(static_cast<std::size_t>(length), '\0');
-	::WideCharToMultiByte(CP_UTF8, 0, wide.data(), size, text.data(), length, nullptr, nullptr);
-	return text;
-}
-
-// extended が付ける頭。ドライブからの絶対パスには \\?\ を、
-// UNC（\\server\…）には \\?\UNC\ を付ける。
-// makeDirectories は、この長さからルートの終わりを求める。
-constexpr std::wstring_view kExtendedPrefix = L"\\\\?\\";
-constexpr std::wstring_view kExtendedUncPrefix = L"\\\\?\\UNC\\";
-
-// extended はパスを \\?\ を付けた UTF-16 にする（スプールのファイルはすべてこれで開く）。
-//
-// 付けないと、CON・NUL・AUX・COM1 などの名前は（Windows 10 までは拡張子があっても）ファイルでは
-// なくデバイスを指す。id の綴りはそうした名前を除かないので、\\?\ を付けて作られた NUL.req.json
-// を読むつもりで、NUL デバイスを開くことになる。付けると名前を解釈せずにそのまま使う。
-//
-// \\?\ のパスは / を区切りとして読まず、. と .. も解かないので、/ を区切りに直す。スプールの場所は
-// GetModuleFileNameW の返すモジュールの絶対パスから求め、. と .. を含まない。受け付けるのは
-// ドライブからの絶対パス（C:\…）・UNC（\\server\…）・\\?\ 付きのパスだけで、それ以外（ルート
-// 相対・ドライブ相対・\\.\ のデバイス名前空間）は空を返して開かせない（予約された名前を
-// デバイスとして開かないため）。
-std::wstring extended(std::string_view path) {
-	std::wstring wide = widen(path);
-	std::replace(wide.begin(), wide.end(), L'/', L'\\');
-	if (wide.starts_with(kExtendedPrefix)) {
-		return wide;
-	}
-	if (wide.starts_with(L"\\\\.\\")) {
-		return {};
-	}
-	if (wide.size() >= 3 && wide[1] == L':' && wide[2] == L'\\') {
-		return std::wstring(kExtendedPrefix) + wide;
-	}
-	if (wide.starts_with(L"\\\\")) {
-		return std::wstring(kExtendedUncPrefix) + wide.substr(2);
-	}
-	return {};
-}
+using windows_path::extended;
+using windows_path::kExtendedPrefix;
+using windows_path::kExtendedUncPrefix;
+using windows_path::narrow;
 
 std::string describe(const char *what, const std::string &path, DWORD error) {
 	return std::string(what) + " " + path + ": error " + std::to_string(error);

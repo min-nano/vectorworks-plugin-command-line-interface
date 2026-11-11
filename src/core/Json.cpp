@@ -1,6 +1,8 @@
 #include "core/Json.h"
 
+#include <algorithm>
 #include <charconv>
+#include <cmath>
 #include <system_error>
 #include <type_traits>
 #include <unordered_map>
@@ -122,6 +124,14 @@ void dumpString(std::string &out, std::string_view text) {
 }
 
 bool isDigit(char c) { return c >= '0' && c <= '9'; }
+
+// 整数の引数の指数を飽和させる境（±2^31）。要求は 1 MiB までなので、仮数の桁の位置は ±2^20 程度に
+// 収まり、指数がこれを超えれば仮数が 0 でない限り答えは決まる。int64 の端で飽和させないのは、
+// そのあとで仮数の桁の位置を足すと溢れるため（docs/plugin/tools.md「最初に提供する道具」の冒頭）。
+constexpr std::int64_t kExponentLimit = 2147483648;
+
+// kMaxIntegerArg の桁の位置（2147483647 は 10 桁なので、最上位は 10^9 の位）。
+constexpr std::int64_t kMaxIntegerPlace = 9;
 
 }
 
@@ -463,6 +473,89 @@ Json Json::integer(std::int64_t value) {
 	return Json(Value(Number{std::string(buffer, end)}));
 }
 
+Json Json::real(double value) {
+	if (!std::isfinite(value)) {
+		return Json();
+	}
+	// 桁は精度を指定しない
+	// to_chars（元の値に戻る最も短いもの）の指数の形から取る。書き方（固定小数点
+	// か指数か・指数の綴り）は Go に合わせて組み立て直す。指数の形を選ぶのは、形を指定しない
+	// to_chars は短いほうを選び（100000 が 1e+05 になる）、固定小数点は大きな値を最も短い桁では
+	// なく正確な値で書く実装がある（999999999999999900000 が 999999999999999868928 になる）ため。
+	char buffer[64];
+	auto [end, ec] =
+	    std::to_chars(buffer, buffer + sizeof buffer, value, std::chars_format::scientific);
+	(void)ec;
+	std::string_view shortest(buffer, static_cast<std::size_t>(end - buffer));
+	bool negative = shortest.starts_with('-');
+	// 仮数の数字・小数点の前の桁数・指数に分ける（d.ddde±XX）。
+	std::string digits;
+	std::int64_t point = 0;
+	std::int64_t exponent = 0;
+	bool afterPoint = false;
+	std::size_t at = negative ? 1 : 0;
+	for (; at < shortest.size() && shortest[at] != 'e'; ++at) {
+		if (shortest[at] == '.') {
+			afterPoint = true;
+			continue;
+		}
+		digits += shortest[at];
+		if (!afterPoint) {
+			++point;
+		}
+	}
+	if (at < shortest.size()) {
+		++at;
+		bool negativeExponent = shortest[at] == '-';
+		if (shortest[at] == '-' || shortest[at] == '+') {
+			++at;
+		}
+		for (; at < shortest.size(); ++at) {
+			exponent = exponent * 10 + (shortest[at] - '0');
+		}
+		if (negativeExponent) {
+			exponent = -exponent;
+		}
+	}
+	std::string out = negative ? "-" : "";
+	std::size_t lead = digits.find_first_not_of('0');
+	if (lead == std::string::npos) {
+		// 0 と -0（Go と同じく符号を残す）。
+		out += '0';
+		return Json(Value(Number{std::move(out)}));
+	}
+	digits.erase(0, lead);
+	point -= static_cast<std::int64_t>(lead);
+	digits.erase(digits.find_last_not_of('0') + 1);
+	// 値は 0.<digits> × 10^decimalPoint、指数で書くときの指数は decimalPoint - 1。
+	const std::int64_t decimalPoint = point + exponent;
+	const std::int64_t scientific = decimalPoint - 1;
+	const auto length = static_cast<std::int64_t>(digits.size());
+	if (scientific >= -6 && scientific < 21) {
+		if (decimalPoint <= 0) {
+			out += "0.";
+			out.append(static_cast<std::size_t>(-decimalPoint), '0');
+			out += digits;
+		} else if (decimalPoint >= length) {
+			out += digits;
+			out.append(static_cast<std::size_t>(decimalPoint - length), '0');
+		} else {
+			out.append(digits, 0, static_cast<std::size_t>(decimalPoint));
+			out += '.';
+			out.append(digits, static_cast<std::size_t>(decimalPoint));
+		}
+	} else {
+		out += digits[0];
+		if (digits.size() > 1) {
+			out += '.';
+			out.append(digits, 1);
+		}
+		out += scientific < 0 ? "e-" : "e+";
+		out += std::to_string(scientific < 0 ? -scientific : scientific);
+	}
+	return Json(Value(Number{std::move(out)}));
+}
+
 Json Json::string(std::string value) { return Json(Value(std::move(value))); }
 
 Json Json::array(Array items) { return Json(Value(std::move(items))); }
@@ -509,6 +602,85 @@ std::optional<std::int64_t> Json::asInt64() const {
 		return std::nullopt;
 	}
 	return value;
+}
+
+IntegerValue Json::integerValue() const {
+	std::string_view text = numberText();
+	std::size_t at = 0;
+	bool negative = text.starts_with('-');
+	if (negative) {
+		++at;
+	}
+	std::size_t integerStart = at;
+	while (at < text.size() && isDigit(text[at])) {
+		++at;
+	}
+	std::string_view integerPart = text.substr(integerStart, at - integerStart);
+	std::string_view fractionPart;
+	if (at < text.size() && text[at] == '.') {
+		std::size_t fractionStart = ++at;
+		while (at < text.size() && isDigit(text[at])) {
+			++at;
+		}
+		fractionPart = text.substr(fractionStart, at - fractionStart);
+	}
+	std::int64_t exponent = 0;
+	if (at < text.size() && (text[at] == 'e' || text[at] == 'E')) {
+		++at;
+		bool negativeExponent = false;
+		if (at < text.size() && (text[at] == '+' || text[at] == '-')) {
+			negativeExponent = text[at] == '-';
+			++at;
+		}
+		// 先頭の 0 は値を変えないので、そのまま数えてよい（0 のあいだは 0 のまま）。
+		for (; at < text.size(); ++at) {
+			exponent = std::min(exponent * 10 + (text[at] - '0'), kExponentLimit);
+		}
+		if (negativeExponent) {
+			exponent = -exponent;
+		}
+	}
+
+	// 仮数の数字を整数部と小数部をつないだ列として見る。i 番目の数字の位は
+	// （整数部の桁数 - 1 - i）+ 指数。
+	const auto integerDigits = static_cast<std::int64_t>(integerPart.size());
+	const std::size_t count = integerPart.size() + fractionPart.size();
+	auto digitAt = [&](std::size_t i) {
+		return i < integerPart.size() ? integerPart[i] : fractionPart[i - integerPart.size()];
+	};
+	auto placeOf = [&](std::size_t i) {
+		return integerDigits - 1 - static_cast<std::int64_t>(i) + exponent;
+	};
+	std::size_t first = 0;
+	while (first < count && digitAt(first) == '0') {
+		++first;
+	}
+	if (first == count) {
+		// 値は 0（-0・0e99999999 も）。
+		return {IntegerCheck::Integer, 0};
+	}
+	std::size_t last = count - 1;
+	while (digitAt(last) == '0') {
+		--last;
+	}
+	if (placeOf(last) < 0) {
+		return {IntegerCheck::Fraction, 0};
+	}
+	if (negative || placeOf(first) > kMaxIntegerPlace) {
+		return {IntegerCheck::OutOfRange, 0};
+	}
+	// ここでは数字は高々 10 桁で、最下位の位も 9 以下なので、int64 に収まる。
+	std::int64_t value = 0;
+	for (std::size_t i = first; i <= last; ++i) {
+		value = value * 10 + (digitAt(i) - '0');
+	}
+	for (std::int64_t place = placeOf(last); place > 0; --place) {
+		value *= 10;
+	}
+	if (value > kMaxIntegerArg) {
+		return {IntegerCheck::OutOfRange, 0};
+	}
+	return {IntegerCheck::Integer, value};
 }
 
 const Json::Array &Json::items() const { return std::get<Array>(value_); }

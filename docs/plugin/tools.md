@@ -26,7 +26,9 @@
     向きは小数部がある）。飽和させる境を `int64` の端（`INT64_MAX`・`INT64_MIN`）にしないのは、そのあとで仮数の桁の
     位置を足すと符号付き整数が溢れる（未定義の動作）ためです。`1e999999999999999999` は範囲の外、`1e-999999999999999999` は小数部があるとして、
     どちらも溢れたり長く掛かったりせずに `invalid_args` で断ります。
-- `core::Json::asInt64` は綴り（小数部と指数部が無いか）で整数かを決めるので、段 5 で値で決める読み方を足します。
+- `core::Json::asInt64` は綴り（小数部と指数部が無いか）で整数かを決めるので、整数の引数は値で決める読み方の
+  `core::Json::integerValue` で読みます（道具の引数の読み方は `src/core/Args.h` の 1 か所）。
+- 引数の値の `null` は省略と見なさず、型の違いとして断ります（省くときはキーごと省く）。
 
 **結果の実数（`scale`・`bounds` の値）の桁は、元の値に戻る最も短いものにし、書き方は Go の `encoding/json`
 に合わせます**（プラグインの綴りを決まった基準に揃え、その基準を見本で C++ と Go の両側から確かめるため）。
@@ -36,8 +38,8 @@
   小数点を付けません（`50.0` は `50`）。上と同じく、呼ぶ側は書き方で整数と実数を区別しません。
 - それ以外は指数で書き、指数は符号を付けて先頭の 0 を付けません（`1e+21`・`1e-7`・`1.5e-7`）。
 - `-0` も Go と同じく `-0` と書きます（読み手には 0 と同じ値。Go と綴りを揃えるため、符号を落とさない）。
-- **実数と綴りの組は見本のファイルに置き**、C++ のテストは書き出しの口と、Go のテストは `json.Marshal` と照らします
-  （段 5 で足す）。Go と同じ綴りであることを、片側のテストに書いた期待だけで決めないためです。これは道具の結果の
+- **実数と綴りの組は見本のファイル（`tests/fixtures/reals.json`）に置き**、C++ のテスト（`tests/NumberTests.cpp`）は
+  書き出しの口と、Go のテスト（`cli/internal/toolfixtures`）は `json.Marshal` と照らします。Go と同じ綴りであることを、片側のテストに書いた期待だけで決めないためです。これは道具の結果の
   決まりで通信規則ではないので、見本は通信規則の見本（`protocol/fixtures`。[通信規則の見本](../fixtures.md)）とは
   分けて `tests/fixtures/` に置きます。
 - **有限でない値（無限大・NaN）は JSON に書けないので、そのフィールドを `null` にします**（`bounds` は 4 つの
@@ -45,7 +47,10 @@
   `core::Json` の実数の口は「有限でなければ `null` を返す」1 つだけにし、道具の結果の実数はどれもそれで作ります。`bounds` は
   `GetObjectBounds` の戻り値（真偽）と外形の 4 つの値を受けて `bounds`（または `null`）を返す 1 つの関数で作ります
   （偽の場合も無 SDK のテストで確かめられるように）。
-- `core::Json` は数を綴りで持ち、実数を書き出す口が無いので、段 5 で足します。
+- `core::Json` は数を綴りで持つので、実数は書き出す口の `core::Json::real` で作ります。桁は指数の形の
+  `to_chars`（`std::chars_format::scientific`。精度は指定しない）から取ります。形を指定しない `to_chars` も固定小数点の
+  `to_chars` も、大きな整数の値を最も短い桁ではなく正確な値で書く実装がある（libstdc++ は
+  `999999999999999900000` を `999999999999999868928` と書く）ためです。
 
 **引数の確かめは次の順に行い、最初に当たったもので返します**（どの `reason` を返すかを決めておくため）。
 1. 引数の形（知らない引数・型・値の範囲・必須の欠け・`save` の `to` の形）→ `invalid_args`。
@@ -56,8 +61,9 @@
    起動の直後と全部閉じた後だけです（[Findings「Timers and Notifications」の 4 の 8](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md)）。件数が 1 以上でも前面の
    図面が無い状態があれば、読む道具は `no_document` で断り、`save`・`close` は名指した図面に働きます（どちらも道具が
    使うものに合っている）。`documents` は失敗にせず空の一覧を返し、`ping` は失敗せずに `document_open` を偽にします。
-3. 引数が名指すもの（`document`・`layer`）が実在しない → `invalid_args`。名指す図面が 1 つに決まらない
-   （`document` に一致する図面が 2 枚以上）→ `internal`（`document_ambiguous`）。
+3. 引数が名指すもの（`document`・`layer`）が実在しない → `invalid_args`。名指すものが 1 つに決まらない
+   （`document` に一致する図面が 2 枚以上 → `internal`（`document_ambiguous`）、`layer` に一致するレイヤが 2 枚以上 →
+   `internal`（`layer_ambiguous`））。
 4. 道具ごとの状態（`save` は下記の順）→ `internal`。
 
 **道具が返す失敗の `invalid_args` と `internal` は、次のように分けます**（[通信規則「応答」](../protocol.md#応答idresjson)）。
@@ -66,7 +72,8 @@
   （`document` の図面・`layer` のレイヤ）が実在しない、
   `save` の `to` の形（拡張子・使えない文字など）。
 - **`internal`** は、引数は正しく、名指すものも実在するが、それ以外の状態のために実行できないとき: 図面が無い
-  （`no_document`）・名指す図面が 1 つに決まらない（`save`・`close` の `document_ambiguous`）・
+  （`no_document`）・名指すものが 1 つに決まらない（`save`・`close` の `document_ambiguous`、`layer_objects`・
+  `object_counts` の `layer_ambiguous`）・
   図面が開いている（`quit` の `documents_open`）・保存先が埋まっている（`save` の `to_is_open`・
   `file_exists`。`to` は新しく作るファイルを名指すので、既にあることは状態に当たる）・保存先の親のフォルダが無い
   （`parent_missing`）・保存先を確かめられない（`to_check_failed`）・図面が閉じなかった（`close` の
@@ -127,8 +134,12 @@
   [Findings「Attributes and Classes」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Attributes%20and%20Classes.md)の「タイマーの刻みから呼べる。図面 0 枚でも落ちない」）が、
   空の結果（`object_counts` の `total:0` など）を「中身の無い図面」と見分けられなくなるので、失敗にします。
   `documents` は失敗にせず、空の一覧を返します。`ping` は `current_layer` を `null` にします（[`ping`](#ping)）。
-- **`layer` はレイヤの名前で、`layers` の `name` と完全に一致するものを探します**（参照で入ってきたレイヤは
-  `NNA#1_<元の名前>` の形のまま渡す）。一致しなければ `invalid_args` で断ります。図面が無いときは、`layer` を
+- **`layer` はレイヤの名前で、`layers` の `name` と完全に一致するものを探します**（リソースの参照で入ってきた
+  レイヤは `NNA#<n>_<元の名前>` の形のまま渡す）。一致しなければ `invalid_args` で断ります。一致するレイヤが 2 枚以上
+  あれば、どれも読まずに `internal` で失敗し、`detail` に `{"reason":"layer_ambiguous"}` を付けます（Vectorworks は
+  同じ名前のレイヤを参照で入れることも断る（[Findings「Layers and Stories」の「参照で入ってきたレイヤ」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md#参照で入ってきたレイヤ参照の方法で-2-通りの姿になる見分けは-isobjectfromreferencedfilelayer)）ので
+  ふつうは起きないが、確かめていない経路で同じ名前が 2 枚になっても、黙ってどちらかを読まない。`document_ambiguous` と同じ扱い）。
+  `layer` を渡したときは、名前でそのレイヤを探し、その直下だけを辿ります（頁ごとに図面全体を辿らない）。図面が無いときは、`layer` を
   確かめる前に `no_document` で失敗します。
 - **並び順は SDK の列の順で、背面→前面です**（`layers` も `layer_objects` も同じ向き）。画面の並びに
   合わせて並べ替えることはしません（呼ぶ側が並べ替える）。
@@ -141,9 +152,9 @@
 
 | フィールド | 値 |
 | --- | --- |
-| `name` | レイヤの名前（`GetObjectName`）。参照で入ってきたレイヤは `NNA#1_<元の名前>` |
+| `name` | レイヤの名前（`GetObjectName`）。リソースの参照で入ってきたレイヤは `NNA#<n>_<元の名前>`、レイヤの参照で入ってきたレイヤは元の名前のまま（下記） |
 | `kind` | `design`（`ovLayerType` が 1 か 3）・`sheet`（2）。それ以外の値（Findings で確かめていない種類）は `null` |
-| `referenced` | 参照で入ってきたデザインレイヤか（`ovLayerType` が 3） |
+| `referenced` | 参照で入ってきたレイヤか（`IsObjectFromReferencedFile(layer)`。参照の方法によらず真。下記） |
 | `scale` | 縮尺の分母（`GetLayerScaleN`。1/50 なら `50`、1:1 なら `1`）。SDK は `double_gs` で返すので実数として書きます（[Findings「レイヤの縮尺」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md#レイヤの縮尺setlayerscalen-は黙って効かないことがある)。確かめた縮尺はどれも整数で、整数でない縮尺は確かめていない）。**シートレイヤは SDK の返すとおり常に `1`**。有限でなければ `null`（[冒頭](#最初に提供する道具)） |
 | `objects` | レイヤの直下の図形の数（下記「数え方」） |
 | `current` | 現在のレイヤか（`GetCurrentLayer()` とハンドルが一致するか） |
@@ -154,8 +165,28 @@
 - `include_sheets` が偽なら、`kind` が `sheet` のものを除きます（`kind` が `null` のものは除かない）。
 - **`kind` が `null` のレイヤも除かずに返し**、`objects` も数えます。`object_counts` の図面全体の和と食い違わない
   ようにするためです。
-- **参照で入ってきたレイヤも返します**（`referenced` が真）。その直下には図形が見えないので、`objects` は 0 に
-  なります。
+- **参照で入ってきたレイヤも返します**（`referenced` が真）。別の図面を参照すると、参照元のデザインレイヤが同じ列に
+  型 31 のまま入り、**参照の方法で 2 通りの姿になります**（mac と Windows で同じ。[Findings「Layers and Stories」の
+  「参照で入ってきたレイヤ」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md#参照で入ってきたレイヤ参照の方法で-2-通りの姿になる見分けは-isobjectfromreferencedfilelayer)。
+  [SDK リファレンス #310](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/310)）。
+
+  | | リソースの参照（`CreateReference`・オーガナイザの既定） | レイヤの参照（オーガナイザで「レイヤを参照」にして、参照レイヤを選ぶ） |
+  | --- | --- | --- |
+  | `name` | `NNA#<n>_<元の名前>` | 元の名前のまま |
+  | `kind` | `design`（`ovLayerType` が 3） | `design`（`ovLayerType` が 1） |
+  | `referenced` | 真 | 真 |
+  | `objects` | 0（直下に図形が見えない） | 参照元の図形の数（直下に見える） |
+  | 列の位置 | 自分のレイヤの後 | 列の先頭（自分のレイヤより前） |
+  | `scale` | 参照元の縮尺 | 参照元の縮尺 |
+
+  - **参照由来かは `IsObjectFromReferencedFile(layer)` で決めます。** `ovLayerType` の 3 はリソースの参照でしか立たず、
+    レイヤの参照で入ったレイヤは 1 で、自分のレイヤと見分けられないためです。
+  - **レイヤの参照で入った図形も数えます**（`objects`・`layer_objects`・`object_counts`）。情報パレットも「すべてを選択」で
+    これを「N 図形 - ロック状態」と数え（下記「数え方」と同じ数）、図形は参照元の型・クラス・外形のまま見えるためです。
+    参照の中身を除きたい呼ぶ側は、`referenced` が真のレイヤを除きます（参照で入ったレイヤの直下の図形は、どれも参照元の
+    ものです。図形ごとの印は返しません）。`object_counts` の図面全体も、これらを含んだ和です。
+  - 参照を解除するとき「参照レイヤ: ファイルに残す」を選ぶと、レイヤと図形は自分のものになり、`referenced` は偽に
+    変わります。
 
 ### `classes`
 
@@ -330,7 +361,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   `close` で名指せない）。呼ぶ側は `path` を鍵にして一覧を扱うと項目を取りこぼします。
 - **`document`** は対象の図面のパスで、`documents` の `path` を渡します。ディスクのファイルに結び付いた図面どうしは、
   パスで一意に決まります（同じファイル名を別のフォルダに保存した 2 枚も見分けられる）。開いている図面に一致しなければ
-  `invalid_args` で断ります。
+  `invalid_args` で断ります。パスを読めなかった図面（`documents` の `path` が空）は名指せず、空の `document` は
+  `invalid_args` で断ります（空の文字列でその図面を閉じない）。
   - **`untitled` が真の図面のパスは、一意とは限りません**（確かめていない。Findings も、無題の図面を指すなら
     `fileRef` のほうが確かだとしている。[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)）。
     Vectorworks がアプリケーションのフォルダと名前から作るので、別々のフォルダにある同じ名前の古い版のファイルを開いた
@@ -435,8 +467,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       Windows の予約された名前（`CON.vwx` など）は、SDK がふつうに保存したので断りません
       （[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)。`CON` 以外は確かめていない）。
       保存の前の「既にあるか」の確かめは、Windows では `\\?\`（UNC は `\\?\UNC\`）を付けて聞く（スプールと同じ
-      `extended()` を通す。`extended()` はいま `src/core/FilesWindows.cpp` の無名の名前空間にあるので、段 5 で `src/core` の
-      内部用のヘッダー `WindowsPath.h`（実装は `WindowsPath.cpp`。WIN32 のときだけビルドする）へ移し、スプール（`FilesWindows.cpp`）と
+      `extended()` を通す。`extended()` は `src/core` の
+      内部用のヘッダー `WindowsPath.h`（実装は `WindowsPath.cpp`。WIN32 のときだけビルドする）にあり、スプール（`FilesWindows.cpp`）と
       保存先の確かめ（`SaveTargetWindows.cpp`。下の「OS で分けてビルドするのは」）の両方から使う。処理は 1 つのまま、
       `\\?\` を付ける処理を書き写さず、道具の確かめとその表・テストをスプールのコードに混ぜない。`extended()` が空の文字列を返すのは受け付けない形のときだけで、それは形の確かめで先に
       断っているので起きない）ので、どの版の Windows でもこれらを装置ではなくファイルの名前として
@@ -515,7 +547,11 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     避けられません（[Findings「Undo」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md)の
     「保存はいつも段を積むわけではない」。#288）。
   - 内部では `GetOpenFilesList` からパスの一致する項目の `fileRef` を引き、`SwitchToOpenFile` →
-    `SaveActiveDocumentPath` で保存します。**保存を呼んだあとは、成否によらず（`save_failed` でも）、前面の図面とカレントレイヤを保存の前に戻します**
+    `SaveActiveDocumentPath` で保存します。**`SwitchToOpenFile` の戻り値だけを信じず、切り替えたあとの一覧で前面が名指した
+    図面になったことを確かめてから保存します**（前面が変わらないまま保存を呼ぶと、利用者が前面に開いている別の図面を
+    `to` へ保存してしまう）。前面にできなければ（`SwitchToOpenFile` が偽を返したときも）、保存を呼ばずに前面を戻し、
+    `internal`（`reason` なし）で失敗します（確かめていない場面）。保存が 0 を返したのに保存の直後の一覧に前面の項目が無いときも、
+    `internal`（`reason` なし）で失敗します（保存は済んでいるので、呼ぶ側は `documents` で確かめる）。**保存を呼んだあとは、成否によらず（`save_failed` でも）、前面の図面とカレントレイヤを保存の前に戻します**
     （戻すのも `SwitchToOpenFile`。対象がもともと前面の図面なら切り替えないので戻さない。結果の `path` は戻す前に読む。
     上記「結果の `path`」）。`SwitchToOpenFile` で前の図面へ戻すと、その図面のカレントレイヤも元どおりになります
     （[Findings「指定した図面を保存する・閉じる」の手順](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#手順getopenfileslist-で引きswitchtoopenfile-で前へ出し前面を戻す)）。
@@ -581,7 +617,10 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   - **mac でも Windows でも、どの図面でも確認は出ません**（無題・保存済み・`OpenDocumentPath` で開いただけ・古い版や
     読み取り専用・使用中のファイルを開いたコピー・大きな図面。[Findings「Windows と、「閉じる」で確認が出る図面」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows-と閉じるで確認が出る図面305mac-も)。#305）。
   - **戻り値（成功しても `false`）では成否が分かりません。** 呼び出しの後に `GetOpenFilesList` を読み、対象の図面が
-    残っていれば `internal` で失敗し、`detail` に `{"reason":"not_closed"}` を付けます。
+    残っていれば（`document` と完全に一致するパスが残っていれば）`internal` で失敗し、`detail` に `{"reason":"not_closed"}` を付けます。
+    閉じる前も `save` と同じく、切り替えたあとの一覧で前面が名指した図面になったことを確かめます（前面が変わらないまま
+    `CloseDocument()` を呼ぶと、利用者の別の図面を変更を捨てて閉じてしまう）。前面にできなければ、閉じずに前面を戻し、
+    `internal`（`reason` なし）で失敗します。
   - **`close` も `save` も、呼び出しの中で終わってから戻ります**（大きな図面でも。戻った直後の `GetOpenFilesList` は
     最終の状態で、保存したファイルも書き終わっている。[Findings「大きな図面でも、呼び出しの中で終わる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#大きな図面でも呼び出しの中で終わる290macwindows-は下の節実務の図面は測っていない)・
     [SDK リファレンス #290](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/290)）。そのため、戻った直後の一覧で成否を決めます。

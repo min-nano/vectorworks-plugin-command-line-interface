@@ -94,14 +94,29 @@ if(VW_BUILD_FUZZERS)
 endif()
 
 # --- 共通部（SDK に依らない。プラグインとテストがリンクする） ---------------------------------
-add_library(VwCliCore STATIC src/core/Bridge.cpp src/core/Json.cpp src/core/Ping.cpp
-						   src/core/Serve.cpp)
+add_library(VwCliCore STATIC src/core/Args.cpp src/core/Bridge.cpp src/core/DocumentTools.cpp
+						   src/core/Json.cpp src/core/Ping.cpp src/core/ReadTools.cpp
+						   src/core/SaveTarget.cpp src/core/Serve.cpp)
 if(WIN32)
-	target_sources(VwCliCore PRIVATE src/core/FilesWindows.cpp)
+	# WindowsPath は \\?\ を付ける処理で、スプールと保存先の確かめが共に使う。
+	target_sources(VwCliCore PRIVATE src/core/FilesWindows.cpp src/core/SaveTargetWindows.cpp
+						   src/core/WindowsPath.cpp)
 else()
-	target_sources(VwCliCore PRIVATE src/core/FilesPosix.cpp)
+	target_sources(VwCliCore PRIVATE src/core/FilesPosix.cpp src/core/SaveTargetPosix.cpp)
 	# dladdr（モジュールの場所。glibc 2.34 より前は libdl にある。mac は空）。
 	target_link_libraries(VwCliCore PUBLIC ${CMAKE_DL_LIBS})
+endif()
+# save の to を開いている図面と比べる包み（NFC と大文字小文字を区別しない比較）は、出荷する OS の
+# 呼び出しでだけ作る（Linux の代わりは置かない）。作るときだけ印を定義し、テスト
+# （tests/PathCompareTests.cpp）はこの印で中身を入れる。OS で分ける条件はここだけ。
+if(APPLE)
+	target_sources(VwCliCore PRIVATE src/core/PathCompareMac.cpp)
+	target_link_libraries(VwCliCore PUBLIC "-framework CoreFoundation")
+	target_compile_definitions(VwCliCore PUBLIC VWCLI_HAS_PATH_COMPARE=1)
+elseif(WIN32)
+	target_sources(VwCliCore PRIVATE src/core/PathCompareWindows.cpp)
+	target_link_libraries(VwCliCore PUBLIC Normaliz)
+	target_compile_definitions(VwCliCore PUBLIC VWCLI_HAS_PATH_COMPARE=1)
 endif()
 target_include_directories(VwCliCore PUBLIC src)
 vw_strict(VwCliCore)
@@ -155,8 +170,8 @@ if(VW_BUILD_PLUGIN)
 		 CONTENT "#pragma once\n// CMake が書く（CMakeLists.txt）。編集しない。\n#define VW_BUILD_VERSION \"@VW_BUILD_VERSION_LITERAL@\"\n#define VW_BUILD_BRANCH \"@VW_BUILD_BRANCH_LITERAL@\"\n"
 		 @ONLY)
 
-	set(VW_PLUGIN_SOURCES src/Clock.cpp src/ModuleMain.cpp src/tools/Ping.cpp
-						  src/tools/ToolTable.cpp)
+	set(VW_PLUGIN_SOURCES src/Clock.cpp src/ModuleMain.cpp src/tools/Documents.cpp
+						  src/tools/Ping.cpp src/tools/ReadTools.cpp src/tools/ToolTable.cpp)
 
 	# add_vw_plugin はプラグイン 1 つ（name はファイル名・フォルダ名・.vwr の名前）。
 	function(add_vw_plugin target name bundleId)
@@ -224,14 +239,21 @@ endif()
 # --- 単体テスト ---------------------------------------------------------------------------
 if(VW_BUILD_TESTS)
 	enable_testing()
-	add_executable(VwCliTests tests/BridgeTests.cpp tests/FixtureTests.cpp tests/JsonTests.cpp
-							  tests/PingTests.cpp tests/ServeTests.cpp tests/TestMain.cpp
-							  tests/TestSupport.cpp)
+	# PathCompareTests.cpp はどの OS でも並べる（中身は VWCLI_HAS_PATH_COMPARE で囲み、Linux では空。
+	# mac と Windows で印が無ければコンパイルで止まる）。
+	add_executable(VwCliTests tests/BridgeTests.cpp tests/DocumentToolsTests.cpp
+							  tests/FixtureTests.cpp tests/JsonTests.cpp tests/NumberTests.cpp
+							  tests/PathCompareTests.cpp tests/PingTests.cpp
+							  tests/ReadToolsTests.cpp tests/SaveTargetTests.cpp
+							  tests/ServeTests.cpp tests/TestMain.cpp tests/TestSupport.cpp)
 	target_link_libraries(VwCliTests PRIVATE VwCliCore)
 	vw_strict(VwCliTests)
 	# 通信規則の見本（C++ と Go のテストが同じものを読む）。
 	target_compile_definitions(VwCliTests
 							   PRIVATE VWCLI_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/protocol/fixtures")
+	# 道具の結果の決まりの見本（通信規則の見本とは別。C++ と Go のテストが同じものを読む）。
+	target_compile_definitions(VwCliTests
+							   PRIVATE VWCLI_TOOL_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
 	add_test(NAME VwCliTests COMMAND VwCliTests)
 	# 開いて待たないことのテスト（FIFO）は、退行すると失敗ではなく止まって現れる。CI のジョブの
 	# 上限まで待たないよう、上限を付ける（ふだんは数秒で終わる）。

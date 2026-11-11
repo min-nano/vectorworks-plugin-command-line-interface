@@ -188,6 +188,17 @@ func TestCallPrintsResult(t *testing.T) {
 	}
 }
 
+// 数の値は解釈しないので、float64 に収まらない数も JSON として正しければそのまま渡す（範囲を
+// 確かめるのはプラグイン）。
+func TestCallPassesNumbersUnchanged(t *testing.T) {
+	dir := echoBridge(t)
+	r := invoke(t, opts{dir: dir}, "call", "layer_objects", `{"offset":1e400,"limit":2.0000000000000001}`)
+	if r.code != exitOK || !strings.Contains(r.stdout, `"offset":1e400`) ||
+		!strings.Contains(r.stdout, `"limit":2.0000000000000001`) {
+		t.Fatalf("%+v", r)
+	}
+}
+
 func TestCallArgsFromStdin(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, opts{dir: dir, stdin: strings.NewReader(`{"b":2}`)}, "call", "x", "-")
@@ -277,7 +288,7 @@ func TestCallCannotWriteOutput(t *testing.T) {
 }
 
 func TestCallUsageErrors(t *testing.T) {
-	for _, args := range [][]string{{"call"}, {"call", "x", "[1]"}, {"call", "x", "not json"}, {"tools"}, {"nope"}, {}} {
+	for _, args := range [][]string{{"call"}, {"call", "x", "[1]"}, {"call", "x", "not json"}, {"call", "x", "null"}, {"call", "x", `{"a":1e}`}, {"tools"}, {"nope"}, {}} {
 		r := invoke(t, opts{}, args...)
 		if r.code != exitUsage {
 			t.Errorf("%v: code %d", args, r.code)

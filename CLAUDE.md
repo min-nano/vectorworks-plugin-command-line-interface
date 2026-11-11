@@ -126,6 +126,8 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 - **通信規則に関わる振る舞いは通信規則の見本（`protocol/fixtures`。`docs/fixtures.md`）に置く。** C++ と Go の
   両方のテストが同じ見本を読むので、片側だけを直すと落ちる。見本で表しにくいことだけを、各言語の
   テストに書く。
+  道具の結果の決まり（実数の綴り）は通信規則ではないので `tests/fixtures/` に置き、C++
+  （`tests/NumberTests.cpp`）と Go（`cli/internal/toolfixtures`）の両方のテストが読む。
 - 手元のテスト（CI の `cpp.yml` と同じ指定）:
   `cmake -S . -B build -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug && cmake --build build && ctest --test-dir build --output-on-failure`。
   ファジングは clang（Apple の clang は不可）で `-DVW_BUILD_FUZZERS=ON` を足し、

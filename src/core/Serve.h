@@ -67,6 +67,21 @@ struct Tool {
 	ToolFn run;
 };
 
+// ToolSpec は道具の表の 1 行のうち SDK に依らない部分（名前・説明・inputSchema・種類）。道具ごとに
+// src/core に定数で置き、src/tools/ToolTable.cpp が SDK に依る中身と組み合わせる（種類を取り違えて
+// 占有なしで呼べるようにしないことを、無 SDK のテストで確かめるため）。
+struct ToolSpec {
+	std::string_view name;
+	const char *description;
+	const char *inputSchema;
+	ToolKind kind;
+};
+
+// toolOf は ToolSpec と中身から表の 1 行を作る。
+constexpr Tool toolOf(const ToolSpec &spec, ToolFn run) {
+	return Tool{spec.name, spec.description, spec.inputSchema, spec.kind, run};
+}
+
 // 受け付けの状態。
 enum class Phase {
 	// ロックを掴んで受け付けた
