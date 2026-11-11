@@ -16,13 +16,13 @@ namespace VwCli::core {
 
 // 道具の種類（tools の結果の kind）。Read は図面を変えず、占有に照らさない。Write は図面の中身を
 // 変える（図面を変えるかが分からない道具も Write とする）。App は Vectorworks・図面のファイルや窓に
-// 働き、図面の中身は変えない（save・close・quit など）。Write と App は占有の中でだけ呼べ、終了の
-// 依頼の最中なら busy で断る。終了の依頼は種類では決めず、道具が ToolStatus::quit で返す。
+// 働き、図面の中身は変えない（save・close・quit など）。Write と App は占有の中でだけ呼べる。終了の
+// 依頼は種類では決めず、道具が ToolStatus::quit で返す。
 enum class ToolKind { Read, Write, App };
 
-// 受け付けの外の状態。タイマー（Clock）が回ごとに渡す。Quitting では、種類 Write と App の道具を
-// busy で断る（ほかの道具は応える）。この判定を残すかは、SDK リファレンス #230 の結果で段 6 の前に
-// 決める（docs/plugin/architecture.md「Vectorworks が処理中」）。
+// 受け付けの外の状態。タイマー（Clock）が回ごとに渡す。Quitting では、通信規則が受け持つ道具
+// （tools・session_start・session_end）のほかをすべて busy で断る（種類 Read と表に無い道具も。
+// docs/plugin/architecture.md「Vectorworks が処理中」）。
 enum class Activity {
 	Idle,
 	// 終了の依頼の最中（保存の確認を開いている）。

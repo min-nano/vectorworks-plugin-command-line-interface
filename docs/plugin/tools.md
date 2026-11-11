@@ -300,8 +300,9 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 - **占有の中でだけ呼べます**（[通信規則「占有」](../protocol.md#占有セッション)。占有していなければ
   `no_session`、ほかが占有していれば `occupied` で断られる）。Vectorworks が終われば占有も消えます。
 - **終了の依頼の最中は断られます**（`busy`。[通信規則「Vectorworks が処理中」](../protocol.md#vectorworks-が処理中)）。
-  上の競合で保存の確認が開いている間に届いた 2 つ目の `quit` も `busy` で断られるので、終了の依頼は重なりません
-  （この判定は残す。段 6 の前に、入れ子の判定にまとめるかを決める。[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
+  上の競合で保存の確認が開いている間に届いた 2 つ目の `quit` も `busy` で断られるので、終了の依頼は重なりません。
+  その間は `ping` と読む道具も `busy` で断られ、`tools`・`session start`・`session end` だけが応えます
+  （[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
 - **再起動の手段は持ちません**（第 2 引数は常に偽）。起動し直すのは呼ぶ側で、`session start` で占有を
   取ってから `quit`（`--session` を付ける）・止まるのを待つ・`launch`・動き出すのを待つ、を組み合わせます（更新を
   挟む形を含めて[インストール「流れ」](install-and-update.md#流れ)）。

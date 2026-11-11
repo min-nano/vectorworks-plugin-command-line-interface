@@ -30,7 +30,7 @@ OS タイマー
         ├─ 要求を名前の昇順で読んで消す（回の始めに並べたものだけ。読めない・消せないものは飛ばす）
         ├─ 呼ぶ側の待つ印（<id>.wait）を掴めたら、待つ者が居ないので実行しない
         ├─ 種類 write・app と session_end は占有に照らす（tools・種類 read は誰にでも）
-        ├─ 種類 write・app は、終了の依頼の最中（Quitting）なら busy で断る
+        ├─ 終了の依頼の最中（Quitting）なら、tools・session_start・session_end のほかを busy で断る
         └─ 道具を実行して応答を書く（quit は GetOpenFilesList で開いている図面を調べ、あれば
            detail に一覧を付けて失敗で応える。無ければ応答を書いてから、終了の依頼を返す）
      quit が頼まれていたら、終了の依頼の最中の印を立てて CloseAllFilesAndQuitVectorworks。戻ったら下ろす
@@ -81,7 +81,7 @@ OS タイマー
 
 | 場面 | 判定 | 断る要求 | 理由 |
 | --- | --- | --- | --- |
-| 終了の依頼の最中 | `Clock` が `CloseAllFilesAndQuitVectorworks` の前後で印を立てて下ろし、その間の刻みで `core::Server::serve` に `Quitting` を渡す（Windows は保存の確認の間も刻む。mac は呼んだタイマーが確認の間は刻まないので、この判定が効くのは Windows だけ） | 種類 `write`・`app` | 保存しようとしている図面を書き換えない。終了の依頼を重ねない |
+| 終了の依頼の最中 | `Clock` が `CloseAllFilesAndQuitVectorworks` の前後で印を立てて下ろし、その間の刻みで `core::Server::serve` に `Quitting` を渡す（Windows は保存の確認の間も刻む。mac は呼んだタイマーが確認の間は刻まないので、この判定が効くのは Windows だけ） | `tools`・`session_start`・`session_end` のほかすべて（種類 `read`・`ping`・表に無い道具も） | 終了の呼び出しの途中で道具が SDK を呼ばない（保存しようとしている図面を読み書きしない）。終了の依頼を重ねない |
 | 受け付けの入れ子 | `core::Server` が `serve` の途中かを持つ | すべて | 外の回の状態（並べた要求・占有の印）を取り合わない。道具の SDK 呼び出しの途中で SDK を呼ばない |
 
 - **受け付けの入れ子**は、道具の SDK 呼び出しが中でイベントを回したとき（モーダルダイアログ・進捗の
@@ -99,14 +99,18 @@ OS タイマー
   （同 4 の 9。呼ぶ側から見た扱いは[通信規則「生存の判定」](../protocol.md#生存の判定)）。ダイアログの出ない保存と
   閉じるは、大きな図面でも最中にイベントを回さないので、Windows でも入れ子になりません
   （[SDK リファレンス #290](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/290)）。
-- **終了の依頼の最中の判定は暫定です。** 守る相手は、`quit` を頼んだ当の呼ぶ側の呼び直しだけです
-  （`write`・`app` は占有の中でしか呼べないため）。保存の確認の中で 2 つ目の
+- **終了の依頼の最中の判定は、Findings が勧める「終了の呼び出しの最中」の旗に当たります。** 保存の確認の中で 2 つ目の
   `CloseAllFilesAndQuitVectorworks` を呼ぶと確認が重なって出て、Windows では呼んだタイマー自身が確認の最中に
   入り直すと分かりました（[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)。[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9）。
-  この判定は Findings が勧める「終了の呼び出しの最中」の旗に当たるので残します。段 6 の前に、入れ子の判定に
-  まとめて保存の確認の間はすべて断るかを決めます（[設計のレビュー A4](../design-review.md#a4-終了の依頼の最中に受け付けが入れ子になりうる)）。
-  終了の依頼は `serve` の外（タイマーが `serve` から戻ったあと）で行うので、保存の確認の間に入り直した刻み
-  （Windows）は入れ子にならず、いまは読む道具に応えます。mac は確認の間は刻まないので、何も応えません。
+  Windows では入り直した刻みから 2 つ目を呼べてしまうので、判定をやめる道は採れません。
+- **終了の依頼の最中は、`tools`・`session_start`・`session_end` のほかをすべて断ります**（種類 `read`・`ping`・表に
+  無い道具も）。終了の依頼は `serve` の外（タイマーが `serve` から戻ったあと）で行うので、保存の確認の間に入り直した
+  刻み（Windows）は受け付けの入れ子にはなりません。それでも `CloseAllFilesAndQuitVectorworks` という SDK 呼び出しの
+  途中なので、受け付けの入れ子と同じく道具に SDK を呼ばせません（確認の最中に読めると確かめてあるのは
+  `GetCurrentLayer()`・`GetOpenFilesList()` などに限られ、閉じようとしている図面を辿る読み方は測っていない）。
+  通信規則が受け持つ 3 つは SDK を呼ばないので応え、呼ぶ側が占有を解けるようにします（入れ子の回のように要求を
+  解析せずにすべて断ると、`session_end` も断られ、占有が起動し直すまで残る）。mac は確認の間は刻まないので、
+  何も応えません（[設計のレビュー A4](../design-review.md#a4-終了の依頼の最中に受け付けが入れ子になりうる)）。
 - **undo の記録が開いているかは見ません。** 刻みの中から記録が開いて見えた実測は、どれもプラグイン
   自身の呼び出しが開いて閉じずに戻した記録でした（Findings の 6 はプローブの `DeleteObject` が開いた
   記録、[Undo](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md) の PIO・`CreateLocus`・スクリプトエンジンもプローブが呼んだもの）。
