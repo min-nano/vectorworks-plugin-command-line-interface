@@ -81,7 +81,7 @@ OS タイマー
 
 | 場面 | 判定 | 断る要求 | 理由 |
 | --- | --- | --- | --- |
-| 終了の依頼の最中 | `Clock` が `CloseAllFilesAndQuitVectorworks` の前後で印を立てて下ろし、その間の刻みで `core::Server::serve` に `Quitting` を渡す（Windows は保存の確認の間も刻む。mac は呼んだタイマーが確認の間は刻まないので、この判定が効くのは Windows だけ） | `tools`・`session_start`・`session_end` のほかすべて（種類 `read`・`ping`・表に無い道具も） | 終了の呼び出しの途中で道具が SDK を呼ばない（保存しようとしている図面を読み書きしない）。終了の依頼を重ねない |
+| 終了の依頼の最中 | `CloseAllFilesAndQuitVectorworks` の前後で印を立てて下ろし、その間の刻みで `core::Server::serve` に `Quitting` を渡す（印の立て下ろしは `src/core` に置き、`Clock` は SDK を呼ぶだけ。Windows は保存の確認の間も刻む。mac は呼んだタイマーが確認の間は刻まないので、この判定が効くのは Windows だけ） | `tools`・`session_start`・`session_end` のほかすべて（種類 `read`・`ping`・表に無い道具も） | 終了の呼び出しの途中で道具が SDK を呼ばない（保存しようとしている図面を読み書きしない）。終了の依頼を重ねない |
 | 受け付けの入れ子 | `core::Server` が `serve` の途中かを持つ | すべて | 外の回の状態（並べた要求・占有の印）を取り合わない。道具の SDK 呼び出しの途中で SDK を呼ばない |
 
 - **受け付けの入れ子**は、道具の SDK 呼び出しが中でイベントを回したとき（モーダルダイアログ・進捗の
