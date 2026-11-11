@@ -35,11 +35,21 @@ public:
 	std::vector<std::string> classList;
 	std::vector<std::pair<std::size_t, std::size_t>> read;
 	bool layersCalled = false;
+	// layer(index) で直下まで読んだレイヤの位置（1 枚を探すときに図面全体を辿らないことを見る）。
+	std::vector<std::size_t> layersRead;
 
 	bool open() override { return isOpen; }
-	std::vector<LayerFacts> layers() override {
+	std::vector<std::string> layerNames() override {
 		layersCalled = true;
-		return layerList;
+		std::vector<std::string> names;
+		for (const LayerFacts &layer : layerList) {
+			names.push_back(layer.name);
+		}
+		return names;
+	}
+	LayerFacts layer(std::size_t index) override {
+		layersRead.push_back(index);
+		return layerList.at(index);
 	}
 	std::vector<std::string> classes() override { return classList; }
 	ObjectFacts object(std::size_t layer, std::size_t member) override {
@@ -314,6 +324,35 @@ TEST(LayerObjectsDescribesTheRange) {
 	ToolStatus type;
 	call(VwCli::core::layerObjects, R"({"layer":"1F","limit":"2"})", drawing, type);
 	CHECK(type.message.find("limit は 1 以上 1000 以下の整数です") != std::string::npos);
+}
+
+// 1 枚のレイヤを名前で探すときは、そのレイヤの直下だけを読む（頁ごとに図面全体を辿らない）。
+TEST(LayerObjectsReadsOnlyTheNamedLayer) {
+	FakeDrawing drawing = sample();
+	ToolStatus status;
+	call(VwCli::core::layerObjects, R"({"layer":"S-1"})", drawing, status);
+	REQUIRE(status.code == ErrorCode::None);
+	CHECK(drawing.layersRead == std::vector<std::size_t>{2});
+	FakeDrawing counted = sample();
+	ToolStatus countStatus;
+	call(VwCli::core::objectCounts, R"({"layer":"1F"})", counted, countStatus);
+	CHECK(counted.layersRead == std::vector<std::size_t>{1});
+}
+
+// 同じ名前のレイヤが 2 枚あれば、黙ってどちらかを読まずに internal（layer_ambiguous）で断る。
+TEST(LayerToolsRefuseAnAmbiguousLayer) {
+	FakeDrawing drawing = sample();
+	drawing.layerList.push_back(layer("1F", 1, 1, {2, 0}));
+	using Tool = Json (*)(const Json &, Drawing &, ToolStatus &);
+	for (Tool tool : {VwCli::core::layerObjects, VwCli::core::objectCounts}) {
+		drawing.layersRead.clear();
+		ToolStatus status;
+		Json result = call(tool, R"({"layer":"1F"})", drawing, status);
+		CHECK(status.code == ErrorCode::Internal);
+		CHECK_EQ(status.detail, must(R"({"reason":"layer_ambiguous"})"));
+		CHECK(result.isNull());
+		CHECK(drawing.layersRead.empty());
+	}
 }
 
 TEST(LayerObjectsRejectsALayerThatDoesNotExist) {

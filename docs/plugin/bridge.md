@@ -16,9 +16,9 @@
 | `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（`core::Server::serve`。下記）と、占有の印（`Server` が発行した 1 つをメモリに持つ）。道具の表と時刻を引数で受けるので無 SDK でテストできる |
 | `src/core/Ping.{h,cpp}` | 依らない | 道具 `ping` の中身のうち SDK に依らない部分（引数の検査と結果の形）。SDK から読む値（現在のレイヤの名前）は引数で受ける |
 | `src/core/Args.{h,cpp}` | 依らない | 道具の引数の読み方（知らない引数・型・範囲・小数部・必須の欠けを `invalid_args` にする `Reader`）と、失敗の `detail` の `reason` を付ける口 |
-| `src/core/ReadTools.{h,cpp}`・`DocumentTools.{h,cpp}` | 依らない | 読む道具と図面を扱う道具の中身のうち SDK に依らない部分（道具の表の行 `ToolSpec`（名前・説明・`inputSchema`・種類。`src/tools/ToolTable.cpp` はこの定数を使い、種類を無 SDK のテストで確かめる）・引数の検査・確かめの順・結果の形・`type_name` の表・`layer_objects` の絞り込みと頁送り・`no_document` の判定・`save` の保存先の確かめと前面を戻す手順）。SDK から読む値と SDK の呼び出しは、道具ごとの口（`Drawing`・`Documents`）で受ける |
+| `src/core/ReadTools.{h,cpp}`・`DocumentTools.{h,cpp}` | 依らない | 読む道具と図面を扱う道具の中身のうち SDK に依らない部分（道具の表の行 `ToolSpec`（名前・説明・`inputSchema`・種類。`src/tools/ToolTable.cpp` はこの定数を使い、種類を無 SDK のテストで確かめる）・引数の検査・確かめの順・結果の形・`type_name` の表・`layer_objects` の絞り込みと頁送り・`no_document` の判定・`save` の保存先の確かめと前面を戻す手順）。SDK から読む値と SDK の呼び出しは、道具ごとの口（`Drawing`・`Documents`）で受ける。`ToolSpec` はヘッダーの `inline constexpr` で、表は定数で初期化される |
 | `src/tools/ToolTable.cpp` | 依る | 道具の表 |
-| `src/tools/<道具>.cpp` | 依る | 道具の中身（`Ping.cpp`・`ReadTools.cpp`・`Documents.cpp`）。SDK から値を読み、SDK に依らない部分は `src/core` の関数に渡す（`Drawing`・`Documents` を SDK で作る。無 SDK でテストするため） |
+| `src/tools/<道具>.cpp`・`Text.h` | 依る | 道具の中身（`Ping.cpp`・`ReadTools.cpp`・`Documents.cpp`）と、`TXString` を UTF-8 にする `utf8`（`Text.h`。1 か所にまとめる）。SDK から値を読み、SDK に依らない部分は `src/core` の関数に渡す（`Drawing`・`Documents` を SDK で作る。無 SDK でテストするため） |
 | `src/Clock.cpp` | 依る | OS タイマーから `core::Server::serve(tools::table(), …)` を呼ぶ |
 
 **受け付けの手順は SDK に依らない `core/Serve` に置き、偽の道具の表でテストします**（終了の依頼の

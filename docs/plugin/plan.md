@@ -111,7 +111,8 @@
   `inputSchema` が JSON として読めることを無 SDK のテストで確かめる（[ブリッジ「分け方」](bridge.md#分け方)）。
 - **SDK から読む値と SDK の呼び出しは、道具ごとの口（`core::Drawing`・`core::Documents`）で受ける。** 読む道具の
   数え方・絞り込みと、`save`・`close` の確かめの順・前面を戻す手順を `src/core` に置き、偽の口でテストする。
-  `layer_objects` は絞ったあとの頁の図形だけを読む（名前・クラス・外形を全部の図形について読まない）。
+  `layer_objects` は名指したレイヤの直下だけを辿り、絞ったあとの頁の図形だけを読む（名前・クラス・外形を全部の図形に
+  ついて読まない）。
 - **引数の値の `null` は型の違いとして断る**（省略と見なさない。[道具](tools.md#最初に提供する道具)の冒頭）。
 - **実数の桁は指数の形の `to_chars` から取る。** 形を指定しない `to_chars` は、libstdc++ で大きな整数の値を正確な
   値の固定小数点で書いた（`999999999999999868928`）ので、見本の `999999999999999900000` に合わなかった
@@ -123,6 +124,13 @@
   `ovLayerType` 1・中身が直下に見える）を自分のレイヤと読んだ。[SDK リファレンス #310](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/310)
   で、参照の方法によらず `IsObjectFromReferencedFile` が真になると分かった。中身は情報パレットも数えるので、数え方は
   変えない（[道具「`layers`」](tools.md#layers)・[SDK の調査 8](../sdk-research.md#8-オーガナイザのファイル参照でレイヤを選んで参照したレイヤ分かった)）。
+- **`save`・`close` は、切り替えたあとの一覧で前面が名指した図面になったことを確かめてから保存・閉じる**（レビュー
+  で指摘を受けた。`SwitchToOpenFile` が真を返しても前面が変わらなければ、利用者の別の図面に効いてしまうため）。
+  パスを読めなかった図面（`path` が空）は名指せないようにし、空の `document` は `invalid_args` で断る。
+- **`layer` に一致するレイヤが 2 枚以上なら `internal`（`layer_ambiguous`）で断る**（`document_ambiguous` と揃える）。
+  `layer` を渡す道具は、名前でそのレイヤを探してその直下だけを辿る（`core::Drawing` は `layerNames`・`layer(index)` を持つ）。
+- **道具の表の行（`ToolSpec`）は `src/core` のヘッダーの `inline constexpr` にし、表を定数で初期化する**（静的な初期化の
+  順序に依らない）。
 - **`SwitchToOpenFile` が偽を返したときと、保存のあとの一覧に前面の項目が無いときは、`reason` を付けずに
   `internal` で失敗する**（確かめていない場面。[道具「図面を扱う道具」](tools.md#図面を扱う道具documentssaveclose)）。
   保存を呼ぶ口が投げたときも、前面を戻してから `internal` で応える。

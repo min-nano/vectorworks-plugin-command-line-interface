@@ -18,9 +18,28 @@ namespace VwCli::core {
 
 // 道具の表の行（種類を含む。src/tools/ToolTable.cpp はこれを使う）。save・close は図面のファイルや
 // 窓に働く App（占有の中でだけ呼べる。Read で登録すると占有なしで保存・閉じられる）。
-extern const ToolSpec kDocumentsSpec;
-extern const ToolSpec kSaveSpec;
-extern const ToolSpec kCloseSpec;
+inline constexpr ToolSpec kDocumentsSpec{
+    "documents",
+    "開いている図面の一覧（名前・パス・ディスクのファイルに結び付いていないか・前面か）を返す",
+    R"({"type":"object","properties":{},"additionalProperties":false})", ToolKind::Read};
+
+inline constexpr ToolSpec kSaveSpec{
+    "save",
+    "名指した図面を to の新しいパスへ保存する（上書き保存はしない。"
+    "既にあるファイル・開いている図面のパスは断る）。"
+    "保存すると図面のパスは to へ移り、前面の図面は保存の前に戻す",
+    R"({"type":"object","properties":{)"
+    R"("document":{"type":"string","description":"図面のパス（documents の path）"},)"
+    R"("to":{"type":"string","description":"保存先の新しいパス（絶対パス。拡張子は .vwx）"}},)"
+    R"("required":["document","to"],"additionalProperties":false})",
+    ToolKind::App};
+
+inline constexpr ToolSpec kCloseSpec{
+    "close", "名指した図面を、保存の確認を出さずに閉じる（保存せず、未保存の変更は捨てる）",
+    R"({"type":"object","properties":{)"
+    R"("document":{"type":"string","description":"図面のパス（documents の path）"}},)"
+    R"("required":["document"],"additionalProperties":false})",
+    ToolKind::App};
 
 // 失敗の detail の reason（docs/plugin/tools.md）。
 inline constexpr std::string_view kDocumentAmbiguous = "document_ambiguous";

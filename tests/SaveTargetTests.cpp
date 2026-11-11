@@ -375,8 +375,8 @@ void touch(const std::filesystem::path &path) { std::ofstream(path) << "x"; }
 
 }
 
-// この OS
-// の本物の呼び出しで、ファイルが無い・親のフォルダが無い・途中の段がファイルを「無い」と読む。
+// この OS の本物の呼び出しで、ファイルが無い・親のフォルダが無い・
+// 途中の段がファイルを「無い」と読む。
 TEST(ProbesReadTheFileSystem) {
 	TempDir dir;
 	std::filesystem::create_directories(dir.path() / "folder");
@@ -461,8 +461,8 @@ TEST(ProbesReportOtherFailures) {
 }
 
 #ifdef _WIN32
-// extended
-// は受け付けない形（相対・ドライブ相対・ルート相対・\\.\）を空にする。空の文字列の変換も空。
+// extended は受け付けない形（相対・ドライブ相対・ルート相対・\\.\）を空にする。
+// 空の文字列の変換も空。
 TEST(WindowsPathRefusesFormsItDoesNotOpen) {
 	namespace windows_path = VwCli::core::windows_path;
 	CHECK(windows_path::widen("").empty());

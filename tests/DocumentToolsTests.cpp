@@ -40,6 +40,9 @@ public:
 	std::vector<std::string> calls;
 	std::uint32_t saveError = 0;
 	bool switchFails = false;
+	// SwitchToOpenFile が真を返すのに前面が変わらない
+	// （前面を確かめずに保存・閉じると、別の図面に効く）。
+	bool switchIgnored = false;
 	// 閉じても残る（not_closed を真似る）。
 	bool closeKeeps = false;
 	// 閉じると、この ref の図面も一覧から消える（前面へ戻せない場合を真似る）。
@@ -55,6 +58,9 @@ public:
 		calls.push_back("switch " + std::to_string(ref));
 		if (switchFails) {
 			return false;
+		}
+		if (switchIgnored) {
+			return true;
 		}
 		for (OpenDocument &document : open) {
 			document.active = document.ref == ref;
@@ -178,6 +184,10 @@ std::vector<std::string> calls(std::initializer_list<const char *> names) {
 }
 
 // save・close は占有の中でだけ呼べる App（Read で登録すると、占有なしで保存・閉じられる）。
+// 種類は定数で決まる（道具の表は定数で初期化される）。
+static_assert(VwCli::core::kSaveSpec.kind == ToolKind::App);
+static_assert(VwCli::core::kCloseSpec.kind == ToolKind::App);
+
 TEST(DocumentToolKinds) {
 	CHECK(VwCli::core::kDocumentsSpec.kind == ToolKind::Read);
 	CHECK(VwCli::core::kSaveSpec.kind == ToolKind::App);
@@ -234,7 +244,7 @@ TEST(SaveSavesTheNamedDocumentAndRestoresTheFront) {
 	CHECK_EQ(result, Json::object({{"document", Json::string(std::string(kUntitled))},
 	                               {"path", Json::string("/Users/me/tmp/a.vwx")}}));
 	CHECK(docs.calls ==
-	      calls({"list", "switch 22", "save /Users/me/tmp/a.vwx", "list", "switch 11"}));
+	      calls({"list", "switch 22", "list", "save /Users/me/tmp/a.vwx", "list", "switch 11"}));
 	CHECK(docs.open[0].active);
 	std::vector<std::string> asked = {"to /Users/me/tmp/a.vwx", "parent /Users/me/tmp"};
 	CHECK(fs.asked == asked);
@@ -444,7 +454,7 @@ TEST(SaveReportsTheSdkError) {
 	CHECK(status.code == ErrorCode::Internal);
 	CHECK_EQ(status.detail, must(R"({"reason":"save_failed","gs_error":50331649})"));
 	CHECK(docs.calls ==
-	      calls({"list", "switch 22", "save /Users/me/tmp/a.vwx", "list", "switch 11"}));
+	      calls({"list", "switch 22", "list", "save /Users/me/tmp/a.vwx", "list", "switch 11"}));
 }
 
 TEST(SaveFailsWhenItCannotSwitch) {
@@ -454,7 +464,48 @@ TEST(SaveFailsWhenItCannotSwitch) {
 	ToolStatus status;
 	VwCli::core::save(saveArgs(kUntitled, "/Users/me/tmp/a.vwx"), docs, fs.environment(), status);
 	CHECK(status.code == ErrorCode::Internal);
-	CHECK(docs.calls == calls({"list", "switch 22"}));
+	CHECK(docs.calls == calls({"list", "switch 22", "list", "switch 11"}));
+}
+
+// SwitchToOpenFile が真を返しても前面が名指した図面にならなければ、保存も閉じるも呼ばずに断る
+// （利用者が前面に開いている別の図面を保存・閉じない）。
+TEST(SaveAndCloseCheckTheFrontAfterSwitching) {
+	FakeDocuments docs = sample();
+	docs.switchIgnored = true;
+	Fs fs;
+	ToolStatus saveStatus;
+	VwCli::core::save(saveArgs(kUntitled, "/Users/me/tmp/a.vwx"), docs, fs.environment(),
+	                  saveStatus);
+	CHECK(saveStatus.code == ErrorCode::Internal);
+	CHECK(saveStatus.detail.isNull());
+	CHECK(docs.calls == calls({"list", "switch 22", "list", "switch 11"}));
+	docs.calls.clear();
+	ToolStatus closeStatus;
+	VwCli::core::close(must(R"({"document":"/Users/me/old/plan.vwx"})"), docs, closeStatus);
+	CHECK(closeStatus.code == ErrorCode::Internal);
+	CHECK(docs.calls == calls({"list", "switch 33", "list", "switch 11"}));
+	CHECK_EQ(docs.open.size(), std::size_t{3});
+	CHECK_EQ(docs.open[0].path, std::string("/Users/me/plan.vwx"));
+}
+
+// パスを読めなかった図面（path が空）は名指せない。空の document は、そうした図面が 1 枚でも
+// 2 枚でも invalid_args で断る（document_ambiguous にも、その図面を閉じることにもならない）。
+TEST(SaveAndCloseDoNotMatchDocumentsWithoutAPath) {
+	for (int unreadable : {1, 2}) {
+		FakeDocuments docs = sample();
+		for (int i = 0; i < unreadable; ++i) {
+			docs.open.push_back({"", true, false, 40 + i});
+		}
+		ToolStatus closeStatus;
+		VwCli::core::close(must(R"({"document":""})"), docs, closeStatus);
+		CHECK(closeStatus.code == ErrorCode::InvalidArgs);
+		CHECK(docs.calls == calls({"list"}));
+		Fs fs;
+		ToolStatus saveStatus;
+		VwCli::core::save(saveArgs("", "/Users/me/tmp/a.vwx"), docs, fs.environment(), saveStatus);
+		CHECK(saveStatus.code == ErrorCode::InvalidArgs);
+		CHECK_EQ(docs.open.size(), std::size_t{3} + static_cast<std::size_t>(unreadable));
+	}
 }
 
 TEST(SaveFailsWhenTheFrontIsNotListed) {
@@ -476,7 +527,7 @@ TEST(CloseClosesTheNamedDocumentAndRestoresTheFront) {
 	    VwCli::core::close(must(R"({"document":"/Users/me/old/plan.vwx"})"), docs, status);
 	CHECK(status.code == ErrorCode::None);
 	CHECK_EQ(result, must(R"({"closed":true})"));
-	CHECK(docs.calls == calls({"list", "switch 33", "close", "list", "switch 11"}));
+	CHECK(docs.calls == calls({"list", "switch 33", "list", "close", "list", "switch 11"}));
 	REQUIRE(docs.open.size() == 2);
 	CHECK(docs.open[0].active);
 }
@@ -498,7 +549,7 @@ TEST(CloseDoesNotRestoreAFrontThatIsGone) {
 	ToolStatus status;
 	VwCli::core::close(must(R"({"document":"/Users/me/old/plan.vwx"})"), docs, status);
 	CHECK(status.code == ErrorCode::None);
-	CHECK(docs.calls == calls({"list", "switch 33", "close", "list"}));
+	CHECK(docs.calls == calls({"list", "switch 33", "list", "close", "list"}));
 }
 
 TEST(CloseFailsWhenItCannotSwitch) {
@@ -508,7 +559,7 @@ TEST(CloseFailsWhenItCannotSwitch) {
 	VwCli::core::close(must(R"({"document":"/Users/me/old/plan.vwx"})"), docs, status);
 	CHECK(status.code == ErrorCode::Internal);
 	CHECK(status.detail.isNull());
-	CHECK(docs.calls == calls({"list", "switch 33"}));
+	CHECK(docs.calls == calls({"list", "switch 33", "list", "switch 11"}));
 	CHECK_EQ(docs.open.size(), std::size_t{3});
 }
 
@@ -520,7 +571,7 @@ TEST(CloseReportsADocumentThatStaysOpen) {
 	                   status);
 	CHECK(status.code == ErrorCode::Internal);
 	CHECK_EQ(status.detail, must(R"({"reason":"not_closed"})"));
-	CHECK(docs.calls == calls({"list", "switch 22", "close", "list", "switch 11"}));
+	CHECK(docs.calls == calls({"list", "switch 22", "list", "close", "list", "switch 11"}));
 }
 
 TEST(CloseRejectsBadArguments) {
@@ -619,5 +670,5 @@ TEST(SaveRestoresTheFrontWhenSavingThrows) {
 	}
 	CHECK(threw);
 	CHECK(docs.calls ==
-	      calls({"list", "switch 22", "save /Users/me/tmp/a.vwx", "list", "switch 11"}));
+	      calls({"list", "switch 22", "list", "save /Users/me/tmp/a.vwx", "list", "switch 11"}));
 }

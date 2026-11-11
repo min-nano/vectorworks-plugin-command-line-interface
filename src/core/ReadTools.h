@@ -18,15 +18,47 @@
 namespace VwCli::core {
 
 // 道具の表の行（種類を含む。src/tools/ToolTable.cpp はこれを使う）。どれも図面を変えない Read。
-extern const ToolSpec kLayersSpec;
-extern const ToolSpec kClassesSpec;
-extern const ToolSpec kLayerObjectsSpec;
-extern const ToolSpec kObjectCountsSpec;
+inline constexpr ToolSpec kLayersSpec{
+    "layers",
+    "前面の図面のレイヤ（デザインとシート）を、列の順（背面→前面）に返す。"
+    "名前・種類・参照で入ったか・縮尺の分母・直下の図形の数・現在のレイヤか",
+    R"({"type":"object","properties":{"include_sheets":{"type":"boolean","default":true,)"
+    R"("description":"偽ならシートレイヤを除く"}},"additionalProperties":false})",
+    ToolKind::Read};
+
+inline constexpr ToolSpec kClassesSpec{
+    "classes",
+    "前面の図面のクラスの名前を、ID の順（作った順）に返す（参照している図面のクラスは含めない）",
+    R"({"type":"object","properties":{},"additionalProperties":false})", ToolKind::Read};
+
+inline constexpr ToolSpec kLayerObjectsSpec{
+    "layer_objects",
+    "前面の図面のレイヤの直下の図形を、背面→前面の順に返す（種別・名前・クラス・外形（mm））。"
+    "type で種別を絞り、offset と limit で頁を送る",
+    R"({"type":"object","properties":{)"
+    R"("layer":{"type":"string","description":"レイヤの名前（layers の name）"},)"
+    R"("limit":{"type":"integer","minimum":1,"maximum":1000,"default":50},)"
+    R"("offset":{"type":"integer","minimum":0,"maximum":2147483647,"default":0},)"
+    R"("type":{"type":"integer","minimum":0,"maximum":2147483647,)"
+    R"("description":"GetObjectTypeN の種別の番号。省くとすべての種別"}},)"
+    R"("required":["layer"],"additionalProperties":false})",
+    ToolKind::Read};
+
+inline constexpr ToolSpec kObjectCountsSpec{
+    "object_counts",
+    "前面の図面（layer を渡せばそのレイヤ）の直下の図形の数を、種別ごとに番号の昇順で返す",
+    R"({"type":"object","properties":{)"
+    R"("layer":{"type":"string","description":"レイヤの名前（layers の name）。省くと図面全体"}},)"
+    R"("additionalProperties":false})",
+    ToolKind::Read};
 
 // GetObjectTypeN の番号のうち、数えるときに除くもの（Objs.TDType.h）。
 inline constexpr std::int16_t kTermNode = 0;
 inline constexpr std::int16_t kUndoPlaceholderNode = 90;
 inline constexpr std::int16_t kParametricNode = 86;
+
+// 失敗の detail の reason（docs/plugin/tools.md）。layer に一致するレイヤが 2 枚以上。
+inline constexpr std::string_view kLayerAmbiguous = "layer_ambiguous";
 
 // ovLayerType の値（MiniCadCallBacks.h の ELayerType。Findings「Layers and Stories」）。3
 // はリソースの 参照で入ったデザインレイヤだけで、レイヤの参照で入ったものは 1（参照由来かは
@@ -76,12 +108,15 @@ public:
 	virtual ~Drawing() = default;
 	// open は前面の図面があるか（GetCurrentLayer() が nullptr でないか）。
 	virtual bool open() = 0;
-	// layers は前面の図面のレイヤを列の順（背面→前面）に返す。
-	virtual std::vector<LayerFacts> layers() = 0;
+	// layerNames は前面の図面のレイヤの名前を列の順（背面→前面）に返す。直下の列は辿らない（1 枚の
+	// レイヤを名前で探すときに、図面全体を辿らないため）。
+	virtual std::vector<std::string> layerNames() = 0;
+	// layer は、直前の layerNames() の index 番目のレイヤを、直下の列まで読む。
+	virtual LayerFacts layer(std::size_t index) = 0;
 	// classes は前面の図面のクラスの名前（ForEachClass(false, …)。ID の順）。
 	virtual std::vector<std::string> classes() = 0;
-	// object は、直前の layers() の layer 番目のレイヤの、列の member 番目の図形を読む。
-	virtual ObjectFacts object(std::size_t layer, std::size_t member) = 0;
+	// object は、layer(index) で読んだレイヤの、列の member 番目の図形を読む。
+	virtual ObjectFacts object(std::size_t index, std::size_t member) = 0;
 };
 
 // typeName は type_name の表（docs/plugin/tools.md「type_name の表」が真実）。表に無い番号は空。

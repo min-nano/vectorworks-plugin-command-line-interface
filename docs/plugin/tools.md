@@ -61,8 +61,9 @@
    起動の直後と全部閉じた後だけです（[Findings「Timers and Notifications」の 4 の 8](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md)）。件数が 1 以上でも前面の
    図面が無い状態があれば、読む道具は `no_document` で断り、`save`・`close` は名指した図面に働きます（どちらも道具が
    使うものに合っている）。`documents` は失敗にせず空の一覧を返し、`ping` は失敗せずに `document_open` を偽にします。
-3. 引数が名指すもの（`document`・`layer`）が実在しない → `invalid_args`。名指す図面が 1 つに決まらない
-   （`document` に一致する図面が 2 枚以上）→ `internal`（`document_ambiguous`）。
+3. 引数が名指すもの（`document`・`layer`）が実在しない → `invalid_args`。名指すものが 1 つに決まらない
+   （`document` に一致する図面が 2 枚以上 → `internal`（`document_ambiguous`）、`layer` に一致するレイヤが 2 枚以上 →
+   `internal`（`layer_ambiguous`））。
 4. 道具ごとの状態（`save` は下記の順）→ `internal`。
 
 **道具が返す失敗の `invalid_args` と `internal` は、次のように分けます**（[通信規則「応答」](../protocol.md#応答idresjson)）。
@@ -71,7 +72,8 @@
   （`document` の図面・`layer` のレイヤ）が実在しない、
   `save` の `to` の形（拡張子・使えない文字など）。
 - **`internal`** は、引数は正しく、名指すものも実在するが、それ以外の状態のために実行できないとき: 図面が無い
-  （`no_document`）・名指す図面が 1 つに決まらない（`save`・`close` の `document_ambiguous`）・
+  （`no_document`）・名指すものが 1 つに決まらない（`save`・`close` の `document_ambiguous`、`layer_objects`・
+  `object_counts` の `layer_ambiguous`）・
   図面が開いている（`quit` の `documents_open`）・保存先が埋まっている（`save` の `to_is_open`・
   `file_exists`。`to` は新しく作るファイルを名指すので、既にあることは状態に当たる）・保存先の親のフォルダが無い
   （`parent_missing`）・保存先を確かめられない（`to_check_failed`）・図面が閉じなかった（`close` の
@@ -133,7 +135,11 @@
   空の結果（`object_counts` の `total:0` など）を「中身の無い図面」と見分けられなくなるので、失敗にします。
   `documents` は失敗にせず、空の一覧を返します。`ping` は `current_layer` を `null` にします（[`ping`](#ping)）。
 - **`layer` はレイヤの名前で、`layers` の `name` と完全に一致するものを探します**（リソースの参照で入ってきた
-  レイヤは `NNA#<n>_<元の名前>` の形のまま渡す）。一致しなければ `invalid_args` で断ります。図面が無いときは、`layer` を
+  レイヤは `NNA#<n>_<元の名前>` の形のまま渡す）。一致しなければ `invalid_args` で断ります。一致するレイヤが 2 枚以上
+  あれば、どれも読まずに `internal` で失敗し、`detail` に `{"reason":"layer_ambiguous"}` を付けます（Vectorworks は
+  同じ名前のレイヤを参照で入れることも断る（[Findings「Layers and Stories」の「参照で入ってきたレイヤ」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md#参照で入ってきたレイヤ参照の方法で-2-通りの姿になる見分けは-isobjectfromreferencedfilelayer)）ので
+  ふつうは起きないが、確かめていない経路で同じ名前が 2 枚になっても、黙ってどちらかを読まない。`document_ambiguous` と同じ扱い）。
+  `layer` を渡したときは、名前でそのレイヤを探し、その直下だけを辿ります（頁ごとに図面全体を辿らない）。図面が無いときは、`layer` を
   確かめる前に `no_document` で失敗します。
 - **並び順は SDK の列の順で、背面→前面です**（`layers` も `layer_objects` も同じ向き）。画面の並びに
   合わせて並べ替えることはしません（呼ぶ側が並べ替える）。
@@ -355,7 +361,8 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   `close` で名指せない）。呼ぶ側は `path` を鍵にして一覧を扱うと項目を取りこぼします。
 - **`document`** は対象の図面のパスで、`documents` の `path` を渡します。ディスクのファイルに結び付いた図面どうしは、
   パスで一意に決まります（同じファイル名を別のフォルダに保存した 2 枚も見分けられる）。開いている図面に一致しなければ
-  `invalid_args` で断ります。
+  `invalid_args` で断ります。パスを読めなかった図面（`documents` の `path` が空）は名指せず、空の `document` は
+  `invalid_args` で断ります（空の文字列でその図面を閉じない）。
   - **`untitled` が真の図面のパスは、一意とは限りません**（確かめていない。Findings も、無題の図面を指すなら
     `fileRef` のほうが確かだとしている。[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)）。
     Vectorworks がアプリケーションのフォルダと名前から作るので、別々のフォルダにある同じ名前の古い版のファイルを開いた
@@ -540,8 +547,10 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     避けられません（[Findings「Undo」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md)の
     「保存はいつも段を積むわけではない」。#288）。
   - 内部では `GetOpenFilesList` からパスの一致する項目の `fileRef` を引き、`SwitchToOpenFile` →
-    `SaveActiveDocumentPath` で保存します。`SwitchToOpenFile` が偽を返したら、保存を呼ばずに `internal`（`reason` なし）で
-    失敗します（確かめていない場面。前面は動かない）。保存が 0 を返したのに保存の直後の一覧に前面の項目が無いときも、
+    `SaveActiveDocumentPath` で保存します。**`SwitchToOpenFile` の戻り値だけを信じず、切り替えたあとの一覧で前面が名指した
+    図面になったことを確かめてから保存します**（前面が変わらないまま保存を呼ぶと、利用者が前面に開いている別の図面を
+    `to` へ保存してしまう）。前面にできなければ（`SwitchToOpenFile` が偽を返したときも）、保存を呼ばずに前面を戻し、
+    `internal`（`reason` なし）で失敗します（確かめていない場面）。保存が 0 を返したのに保存の直後の一覧に前面の項目が無いときも、
     `internal`（`reason` なし）で失敗します（保存は済んでいるので、呼ぶ側は `documents` で確かめる）。**保存を呼んだあとは、成否によらず（`save_failed` でも）、前面の図面とカレントレイヤを保存の前に戻します**
     （戻すのも `SwitchToOpenFile`。対象がもともと前面の図面なら切り替えないので戻さない。結果の `path` は戻す前に読む。
     上記「結果の `path`」）。`SwitchToOpenFile` で前の図面へ戻すと、その図面のカレントレイヤも元どおりになります
@@ -609,7 +618,9 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     読み取り専用・使用中のファイルを開いたコピー・大きな図面。[Findings「Windows と、「閉じる」で確認が出る図面」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows-と閉じるで確認が出る図面305mac-も)。#305）。
   - **戻り値（成功しても `false`）では成否が分かりません。** 呼び出しの後に `GetOpenFilesList` を読み、対象の図面が
     残っていれば（`document` と完全に一致するパスが残っていれば）`internal` で失敗し、`detail` に `{"reason":"not_closed"}` を付けます。
-    前面にするための `SwitchToOpenFile` が偽を返したら、閉じずに `internal`（`reason` なし）で失敗します。
+    閉じる前も `save` と同じく、切り替えたあとの一覧で前面が名指した図面になったことを確かめます（前面が変わらないまま
+    `CloseDocument()` を呼ぶと、利用者の別の図面を変更を捨てて閉じてしまう）。前面にできなければ、閉じずに前面を戻し、
+    `internal`（`reason` なし）で失敗します。
   - **`close` も `save` も、呼び出しの中で終わってから戻ります**（大きな図面でも。戻った直後の `GetOpenFilesList` は
     最終の状態で、保存したファイルも書き終わっている。[Findings「大きな図面でも、呼び出しの中で終わる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#大きな図面でも呼び出しの中で終わる290macwindows-は下の節実務の図面は測っていない)・
     [SDK リファレンス #290](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/290)）。そのため、戻った直後の一覧で成否を決めます。

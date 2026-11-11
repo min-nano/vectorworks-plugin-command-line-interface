@@ -33,8 +33,8 @@ bool isMissing(std::int64_t osError) {
 }
 
 Probe probeTo(const std::string &path) {
-	// GetFileAttributesW
-	// はリパースポイントをたどらない（壊れたリンク・ジャンクションもあるとする）。
+	// GetFileAttributesW はリパースポイントをたどらない
+	// （壊れたリンク・ジャンクションもあるとする）。
 	DWORD attributes = ::GetFileAttributesW(windows_path::extended(path).c_str());
 	if (attributes == INVALID_FILE_ATTRIBUTES) {
 		return failure(::GetLastError());

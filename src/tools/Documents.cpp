@@ -3,6 +3,7 @@
 #include "core/DocumentTools.h"
 #include "core/PathCompare.h"
 #include "core/SaveTarget.h"
+#include "tools/Text.h"
 #include "tools/Tools.h"
 
 #include <cstddef>
@@ -18,8 +19,6 @@
 namespace VwCli::tools {
 
 namespace {
-
-std::string utf8(const TXString &text) { return std::string(static_cast<const char *>(text)); }
 
 // pathOf は図面のパス。SDK が返す文字列をそのまま返す（正規化しない。docs/plugin/tools.md
 // 「documents」）。読めなければ空。

@@ -10,10 +10,11 @@ namespace VwCli::tools {
 
 namespace {
 
-// 名前・説明・inputSchema・種類は src/core の各道具の定数（ToolSpec）を使い、種類を無 SDK の
+// 名前・説明・inputSchema・種類は src/core の各道具の定数（ToolSpec。constexpr なので表も定数で
+// 初期化され、静的な初期化の順序に依らない）を使い、種類を無 SDK の
 // テストで確かめる（save・close は App。Read で載せると占有なしで保存・閉じられる）。ping の名前は
 // 通信規則の綴り（core/Protocol.h）を使い、テストが確かめる名前と応える名前を 1 か所にする。
-const core::Tool kTools[] = {
+constexpr core::Tool kTools[] = {
     {core::protocol::kToolPing,
 	 "プラグインの版・通信規則の版・受け付けている Vectorworks と、図面が開いているかを返す",
 	 R"({"type":"object","properties":{},"additionalProperties":false})", core::ToolKind::Read,

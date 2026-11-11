@@ -8,29 +8,6 @@
 
 namespace VwCli::core {
 
-const ToolSpec kDocumentsSpec{
-    "documents",
-    "開いている図面の一覧（名前・パス・ディスクのファイルに結び付いていないか・前面か）を返す",
-    R"({"type":"object","properties":{},"additionalProperties":false})", ToolKind::Read};
-
-const ToolSpec kSaveSpec{
-    "save",
-    "名指した図面を to "
-    "の新しいパスへ保存する（上書き保存はしない。既にあるファイル・開いている図面の"
-    "パスは断る）。保存すると図面のパスは to へ移り、前面の図面は保存の前に戻す",
-    R"({"type":"object","properties":{)"
-    R"("document":{"type":"string","description":"図面のパス（documents の path）"},)"
-    R"("to":{"type":"string","description":"保存先の新しいパス（絶対パス。拡張子は .vwx）"}},)"
-    R"("required":["document","to"],"additionalProperties":false})",
-    ToolKind::App};
-
-const ToolSpec kCloseSpec{
-    "close", "名指した図面を、保存の確認を出さずに閉じる（保存せず、未保存の変更は捨てる）",
-    R"({"type":"object","properties":{)"
-    R"("document":{"type":"string","description":"図面のパス（documents の path）"}},)"
-    R"("required":["document"],"additionalProperties":false})",
-    ToolKind::App};
-
 namespace {
 
 // Target は名指した図面と、そのときの前面の図面。
@@ -44,14 +21,16 @@ struct Target {
 };
 
 // findTarget は document に完全に一致する図面を 1 つ探す。無ければ invalid_args、2 枚以上なら
-// internal（document_ambiguous）で失敗する。
+// internal（document_ambiguous）で失敗する。undone は失敗の文言の動詞（「保存し」「閉じ」）。
+// パスを読めなかった図面（path が空）は名指せないので、一致の対象から外す（空の document で
+// その図面を閉じられないように）。
 Target findTarget(const std::vector<OpenDocument> &list, const std::string &document,
-                  std::string_view tool, ToolStatus &status) {
+                  std::string_view tool, std::string_view undone, ToolStatus &status) {
 	Target target;
 	int matches = 0;
 	const OpenDocument *front = nullptr;
 	for (const OpenDocument &open : list) {
-		if (open.path == document) {
+		if (!open.path.empty() && open.path == document) {
 			target.document = open;
 			++matches;
 		}
@@ -68,8 +47,7 @@ Target findTarget(const std::vector<OpenDocument> &list, const std::string &docu
 	if (matches > 1) {
 		args::failWithReason(status, kDocumentAmbiguous,
 		                     "パスが " + document + " の図面が " + std::to_string(matches) +
-		                         " 枚あるので、どれも" + (tool == "save" ? "保存し" : "閉じ") +
-		                         "ませんでした");
+		                         " 枚あるので、どれも" + std::string(undone) + "ませんでした");
 		return target;
 	}
 	target.found = true;
@@ -80,24 +58,40 @@ Target findTarget(const std::vector<OpenDocument> &list, const std::string &docu
 	return target;
 }
 
-// bringForward は名指した図面を前面にする（前面なら何もしない）。できなければ internal で失敗する。
-bool bringForward(Documents &docs, const Target &target, ToolStatus &status) {
-	if (target.document.active || docs.switchTo(target.document.ref)) {
-		return true;
-	}
-	args::fail(status, ErrorCode::Internal,
-	           "図面 " + target.document.path + " を前面にできませんでした（SwitchToOpenFile）");
-	return false;
-}
-
 // restoreFront は前面を名指す前の図面へ戻す（まだ開いていれば）。戻せなくても失敗にしない。
 void restoreFront(Documents &docs, const Target &target, const std::vector<OpenDocument> &after) {
+	if (!target.hasFront) {
+		return;
+	}
 	bool stillOpen = std::any_of(after.begin(), after.end(), [&](const OpenDocument &open) {
 		return open.ref == target.front;
 	});
-	if (target.hasFront && stillOpen) {
+	if (stillOpen) {
 		(void)docs.switchTo(target.front);
 	}
+}
+
+// bringForward は名指した図面を前面にする（前面なら何もしない）。SwitchToOpenFile の戻り値だけを
+// 信じず、切り替えたあとの一覧で前面が名指した図面になったことを確かめる（前面が変わらないまま
+// 保存・閉じるを呼ぶと、利用者の別の図面に効いてしまう。CLAUDE.md の 5）。前面にできなければ、
+// 前面を戻してから internal で失敗する。
+bool bringForward(Documents &docs, const Target &target, ToolStatus &status) {
+	if (target.document.active) {
+		return true;
+	}
+	bool switched = docs.switchTo(target.document.ref);
+	std::vector<OpenDocument> after = docs.list();
+	bool front = switched && std::any_of(after.begin(), after.end(), [&](const OpenDocument &open) {
+		             return open.active && open.ref == target.document.ref &&
+					        open.path == target.document.path;
+	             });
+	if (front) {
+		return true;
+	}
+	restoreFront(docs, target, after);
+	args::fail(status, ErrorCode::Internal,
+	           "図面 " + target.document.path + " を前面にできませんでした（SwitchToOpenFile）");
+	return false;
 }
 
 }
@@ -152,7 +146,7 @@ Json save(const Json &args, Documents &docs, const SaveEnvironment &environment,
 		return Json();
 	}
 	// 3. 名指す図面。
-	Target target = findTarget(before, document, kSaveSpec.name, status);
+	Target target = findTarget(before, document, kSaveSpec.name, "保存し", status);
 	if (!target.found) {
 		return Json();
 	}
@@ -214,7 +208,7 @@ Json close(const Json &args, Documents &docs, ToolStatus &status) {
 		args::noDocument(status);
 		return Json();
 	}
-	Target target = findTarget(before, document, kCloseSpec.name, status);
+	Target target = findTarget(before, document, kCloseSpec.name, "閉じ", status);
 	if (!target.found || !bringForward(docs, target, status)) {
 		return Json();
 	}

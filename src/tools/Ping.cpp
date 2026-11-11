@@ -2,6 +2,7 @@
 
 #include "BuildConfig.h"
 #include "core/Ping.h"
+#include "tools/Text.h"
 #include "tools/Tools.h"
 
 #include <cstdint>
@@ -36,8 +37,7 @@ std::optional<std::string> currentLayer() {
 	// レイヤのハンドルに GetObjectName を使うと、レイヤの名前（「レイヤ-1」）が mac・Windows とも
 	// 読める（Findings「Timers and Notifications」の 4 の 8 の表）。
 	gSDK->GetObjectName(layer, name);
-	// operator const char* は UTF-8 を返す（Findings「TXString」）。式の中で写しきる。
-	return std::string(static_cast<const char *>(name));
+	return utf8(name);
 }
 
 }

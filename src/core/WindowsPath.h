@@ -10,8 +10,9 @@
 
 namespace VwCli::core::windows_path {
 
-// extended が付ける頭。ドライブからの絶対パスには \\?\ を、UNC（\\server\…）には
-// \\?\UNC\ を付ける。 makeDirectories は、この長さからルートの終わりを求める。
+// extended が付ける頭。ドライブからの絶対パスには \\?\ を、
+// UNC（\\server\…）には \\?\UNC\ を付ける。
+// makeDirectories は、この長さからルートの終わりを求める。
 inline constexpr std::wstring_view kExtendedPrefix = L"\\\\?\\";
 inline constexpr std::wstring_view kExtendedUncPrefix = L"\\\\?\\UNC\\";
 

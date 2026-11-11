@@ -8,41 +8,6 @@
 
 namespace VwCli::core {
 
-const ToolSpec kLayersSpec{
-    "layers",
-    "前面の図面のレイヤ（デザインとシート）を、列の順（背面→前面）に返す。名前・種類・参照で入った"
-    "か・"
-    "縮尺の分母・直下の図形の数・現在のレイヤか",
-    R"({"type":"object","properties":{"include_sheets":{"type":"boolean","default":true,)"
-    R"("description":"偽ならシートレイヤを除く"}},"additionalProperties":false})",
-    ToolKind::Read};
-
-const ToolSpec kClassesSpec{
-    "classes",
-    "前面の図面のクラスの名前を、ID の順（作った順）に返す（参照している図面のクラスは含めない）",
-    R"({"type":"object","properties":{},"additionalProperties":false})", ToolKind::Read};
-
-const ToolSpec kLayerObjectsSpec{
-    "layer_objects",
-    "前面の図面のレイヤの直下の図形を、背面→前面の順に返す（種別・名前・クラス・外形（mm））。"
-    "type で種別を絞り、offset と limit で頁を送る",
-    R"({"type":"object","properties":{)"
-    R"("layer":{"type":"string","description":"レイヤの名前（layers の name）"},)"
-    R"("limit":{"type":"integer","minimum":1,"maximum":1000,"default":50},)"
-    R"("offset":{"type":"integer","minimum":0,"maximum":2147483647,"default":0},)"
-    R"("type":{"type":"integer","minimum":0,"maximum":2147483647,)"
-    R"("description":"GetObjectTypeN の種別の番号。省くとすべての種別"}},)"
-    R"("required":["layer"],"additionalProperties":false})",
-    ToolKind::Read};
-
-const ToolSpec kObjectCountsSpec{
-    "object_counts",
-    "前面の図面（layer を渡せばそのレイヤ）の直下の図形の数を、種別ごとに番号の昇順で返す",
-    R"({"type":"object","properties":{)"
-    R"("layer":{"type":"string","description":"レイヤの名前（layers の name）。省くと図面全体"}},)"
-    R"("additionalProperties":false})",
-    ToolKind::Read};
-
 namespace {
 
 // layer_objects の limit の範囲と既定値（docs/plugin/tools.md「layer_objects・object_counts」）。
@@ -60,17 +25,47 @@ Json typeNameJson(std::int16_t type) {
 	return name ? Json::string(std::string(*name)) : Json();
 }
 
-// findLayer は名前が完全に一致するレイヤ。無ければ invalid_args で失敗し、nullptr を返す。
-const LayerFacts *findLayer(const std::vector<LayerFacts> &layers, const std::string &name,
-                            std::string_view tool, ToolStatus &status) {
-	for (const LayerFacts &layer : layers) {
-		if (layer.name == name) {
-			return &layer;
+// kNoLayer は findLayer が 1 枚に決められなかったときの値。
+constexpr std::size_t kNoLayer = static_cast<std::size_t>(-1);
+
+// findLayer は名前が完全に一致するレイヤの、列の中の位置を返す。無ければ invalid_args、2 枚以上なら
+// internal（layer_ambiguous）で失敗し、kNoLayer を返す。Vectorworks は同じ名前のレイヤを参照で
+// 入れることも断る（Findings「Layers and Stories」の「参照で入ってきたレイヤ」）が、確かめていない
+// 経路で同じ名前が 2 枚になっても、黙ってどちらかを読まない（save・close の document_ambiguous と
+// 同じ扱い）。
+std::size_t findLayer(const std::vector<std::string> &names, const std::string &name,
+                      std::string_view tool, ToolStatus &status) {
+	std::size_t found = kNoLayer;
+	int matches = 0;
+	for (std::size_t i = 0; i < names.size(); ++i) {
+		if (names[i] == name) {
+			found = i;
+			++matches;
 		}
 	}
-	args::fail(status, ErrorCode::InvalidArgs,
-	           std::string(tool) + " の引数が誤っています: レイヤ " + name + " がありません");
-	return nullptr;
+	if (matches == 0) {
+		args::fail(status, ErrorCode::InvalidArgs,
+		           std::string(tool) + " の引数が誤っています: レイヤ " + name + " がありません");
+		return kNoLayer;
+	}
+	if (matches > 1) {
+		args::failWithReason(status, kLayerAmbiguous,
+		                     "名前が " + name + " のレイヤが " + std::to_string(matches) +
+		                         " 枚あるので、どれも読みませんでした");
+		return kNoLayer;
+	}
+	return found;
+}
+
+// allLayers は前面の図面のすべてのレイヤを、直下の列まで読む。
+std::vector<LayerFacts> allLayers(Drawing &drawing) {
+	std::size_t count = drawing.layerNames().size();
+	std::vector<LayerFacts> layers;
+	layers.reserve(count);
+	for (std::size_t i = 0; i < count; ++i) {
+		layers.push_back(drawing.layer(i));
+	}
+	return layers;
 }
 
 }
@@ -136,7 +131,7 @@ Json layers(const Json &args, Drawing &drawing, ToolStatus &status) {
 		return Json();
 	}
 	Json list = Json::array();
-	for (const LayerFacts &layer : drawing.layers()) {
+	for (const LayerFacts &layer : allLayers(drawing)) {
 		Json kind;
 		if (layer.layerType == kLayerDesign || layer.layerType == kGuestLayerDesign) {
 			kind = Json::string("design");
@@ -190,14 +185,14 @@ Json layerObjects(const Json &args, Drawing &drawing, ToolStatus &status) {
 		args::noDocument(status);
 		return Json();
 	}
-	std::vector<LayerFacts> all = drawing.layers();
-	const LayerFacts *found = findLayer(all, layerName, kLayerObjectsSpec.name, status);
-	if (!found) {
+	// 名前で 1 枚を探し、そのレイヤの直下だけを読む（頁ごとに図面全体を辿らない）。
+	std::size_t at = findLayer(drawing.layerNames(), layerName, kLayerObjectsSpec.name, status);
+	if (at == kNoLayer) {
 		return Json();
 	}
-	auto at = static_cast<std::size_t>(found - all.data());
+	LayerFacts found = drawing.layer(at);
 	// 絞ったあとの並び（列の中の位置）。
-	const std::vector<std::int16_t> &types = found->memberTypes;
+	const std::vector<std::int16_t> &types = found.memberTypes;
 	std::vector<std::size_t> members;
 	for (std::size_t i = 0; i < types.size(); ++i) {
 		if (counted(types[i]) && (!type || types[i] == *type)) {
@@ -242,24 +237,22 @@ Json objectCounts(const Json &args, Drawing &drawing, ToolStatus &status) {
 		args::noDocument(status);
 		return Json();
 	}
-	std::vector<LayerFacts> all = drawing.layers();
-	std::vector<const LayerFacts *> chosen;
+	std::vector<LayerFacts> chosen;
 	if (layerName) {
-		const LayerFacts *found = findLayer(all, *layerName, kObjectCountsSpec.name, status);
-		if (!found) {
+		std::size_t at =
+		    findLayer(drawing.layerNames(), *layerName, kObjectCountsSpec.name, status);
+		if (at == kNoLayer) {
 			return Json();
 		}
-		chosen.push_back(found);
+		chosen.push_back(drawing.layer(at));
 	} else {
-		for (const LayerFacts &layer : all) {
-			chosen.push_back(&layer);
-		}
+		chosen = allLayers(drawing);
 	}
 	// 種別番号の昇順に並べる。
 	std::map<std::int16_t, std::int64_t> counts;
 	std::int64_t total = 0;
-	for (const LayerFacts *layer : chosen) {
-		for (std::int16_t type : layer->memberTypes) {
+	for (const LayerFacts &layer : chosen) {
+		for (std::int16_t type : layer.memberTypes) {
 			if (counted(type)) {
 				++counts[type];
 				++total;

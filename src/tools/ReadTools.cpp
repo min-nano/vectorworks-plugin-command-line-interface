@@ -1,6 +1,7 @@
 #include "PluginPrefix.h"
 
 #include "core/ReadTools.h"
+#include "tools/Text.h"
 #include "tools/Tools.h"
 
 #include <cstddef>
@@ -16,9 +17,6 @@ namespace VwCli::tools {
 
 namespace {
 
-// operator const char* は UTF-8 を返す（Findings「TXString」）。式の中で写しきる。
-std::string utf8(const TXString &text) { return std::string(static_cast<const char *>(text)); }
-
 // SdkDrawing は前面の図面を SDK で読む。ハンドルは道具 1 回の中でだけ持つ（刻みをまたいで持たない。
 // 閉じた図面と別の図面のハンドルが同じ番地で返る。Findings「Timers and Notifications」の 4 の 8）。
 class SdkDrawing final : public core::Drawing {
@@ -26,49 +24,57 @@ public:
 	// 図面が無ければ GetCurrentLayer() は落ちずに nullptr を返す（ping と同じ基準）。
 	bool open() override { return gSDK->GetCurrentLayer() != nullptr; }
 
-	std::vector<core::LayerFacts> layers() override {
+	std::vector<std::string> layerNames() override {
+		layers_.clear();
 		members_.clear();
-		std::vector<core::LayerFacts> out;
-		MCObjectHandle current = gSDK->GetCurrentLayer();
-		// GetDrawingHeader の子の列はレイヤを作った順に並べ、末尾にレイヤでない型 0 が 1
-		// つ居るので、 型で絞る（Findings「Layers and Stories」の「レイヤを列挙する」）。
+		std::vector<std::string> names;
+		// GetDrawingHeader の子の列はレイヤを作った順に並び、末尾にレイヤでない型 0 が 1 つ
+		// 居るので、型で絞る（Findings「Layers and Stories」の「レイヤを列挙する」）。
 		for (MCObjectHandle layer = gSDK->FirstMemberObj(gSDK->GetDrawingHeader());
 		     layer != nullptr; layer = gSDK->NextObject(layer)) {
 			if (gSDK->GetObjectTypeN(layer) != ::kLayerNode) {
 				continue;
 			}
-			core::LayerFacts facts;
 			TXString name;
 			gSDK->GetObjectName(layer, name);
-			facts.name = utf8(name);
-			// ovLayerType は Sint16 で受け取れる（デザイン 1・シート
-			// 2・リソースの参照で入ったデザイン 3）。
-			TVariableBlock value;
-			Sint16 type = 0;
-			if (gSDK->GetObjectVariable(layer, ovLayerType, value) && value.GetSint16(type)) {
-				facts.layerType = type;
-			}
-			// 参照由来かは IsObjectFromReferencedFile で見る。ovLayerType の 3
-			// はリソースの参照でしか 立たず、レイヤの参照で入ったレイヤは 1
-			// で自分のレイヤと見分けられない（Findings「Layers and
-			// Stories」の「参照で入ってきたレイヤ」。SDK リファレンス #310）。
-			facts.referenced = gSDK->IsObjectFromReferencedFile(layer) != 0;
-			double_gs scale = 1;
-			gSDK->GetLayerScaleN(layer, scale);
-			facts.scale = scale;
-			facts.current = layer == current;
-			// 直下の列は終端（型 0）と undo の置き石（型 90）を含んだまま渡す（除くのは core。
-			// Findings「Layer Objects」の 2）。
-			std::vector<MCObjectHandle> handles;
-			for (MCObjectHandle member = gSDK->FirstMemberObj(layer); member != nullptr;
-			     member = gSDK->NextObject(member)) {
-				facts.memberTypes.push_back(gSDK->GetObjectTypeN(member));
-				handles.push_back(member);
-			}
-			out.push_back(std::move(facts));
-			members_.push_back(std::move(handles));
+			names.push_back(utf8(name));
+			layers_.push_back(layer);
 		}
-		return out;
+		members_.resize(layers_.size());
+		return names;
+	}
+
+	core::LayerFacts layer(std::size_t index) override {
+		MCObjectHandle handle = layers_.at(index);
+		core::LayerFacts facts;
+		TXString name;
+		gSDK->GetObjectName(handle, name);
+		facts.name = utf8(name);
+		// ovLayerType は Sint16 で受け取れる（デザイン 1・シート 2・リソースの参照で入った
+		// デザイン 3）。
+		TVariableBlock value;
+		Sint16 type = 0;
+		if (gSDK->GetObjectVariable(handle, ovLayerType, value) && value.GetSint16(type)) {
+			facts.layerType = type;
+		}
+		// 参照由来かは IsObjectFromReferencedFile で見る。ovLayerType の 3 はリソースの参照で
+		// しか立たず、レイヤの参照で入ったレイヤは 1 で自分のレイヤと見分けられない
+		// （Findings「Layers and Stories」の「参照で入ってきたレイヤ」。SDK リファレンス #310）。
+		facts.referenced = gSDK->IsObjectFromReferencedFile(handle) != 0;
+		double_gs scale = 1;
+		gSDK->GetLayerScaleN(handle, scale);
+		facts.scale = scale;
+		facts.current = handle == gSDK->GetCurrentLayer();
+		// 直下の列は終端（型 0）と undo の置き石（型 90）を含んだまま渡す（除くのは core。
+		// Findings「Layer Objects」の 2）。
+		std::vector<MCObjectHandle> &handles = members_.at(index);
+		handles.clear();
+		for (MCObjectHandle member = gSDK->FirstMemberObj(handle); member != nullptr;
+		     member = gSDK->NextObject(member)) {
+			facts.memberTypes.push_back(gSDK->GetObjectTypeN(member));
+			handles.push_back(member);
+		}
+		return facts;
 	}
 
 	std::vector<std::string> classes() override {
@@ -96,8 +102,8 @@ public:
 		return out;
 	}
 
-	core::ObjectFacts object(std::size_t layer, std::size_t member) override {
-		MCObjectHandle handle = members_.at(layer).at(member);
+	core::ObjectFacts object(std::size_t index, std::size_t member) override {
+		MCObjectHandle handle = members_.at(index).at(member);
 		core::ObjectFacts facts;
 		TXString name;
 		gSDK->GetObjectName(handle, name);
@@ -121,7 +127,8 @@ public:
 	}
 
 private:
-	// 直前の layers() のレイヤごとの、直下の列のハンドル。
+	// 直前の layerNames() のレイヤのハンドルと、layer(index) で読んだ直下の列のハンドル。
+	std::vector<MCObjectHandle> layers_;
 	std::vector<std::vector<MCObjectHandle>> members_;
 };
 
