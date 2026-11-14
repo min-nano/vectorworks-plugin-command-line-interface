@@ -297,11 +297,17 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 - **図面を保存して閉じるのは呼ぶ側です。** 保存するか捨てるかも呼ぶ側が決めます（`quit` に保存する・捨てる指定は持たず、
   CLI にも足さない。[設計](../design.md#cli-はプリミティブに保つ)）。残したい図面（変更）は `save` で新しいパスへ保存してから、
   どの図面も[下記の `close`](#図面を扱う道具documentssaveclose)で閉じます。`close` は保存の確認を出さず、未保存の変更を捨てます。
+- **`close` で名指せない図面が開いていると、CLI だけでは終了できません。** パスを読めなかった図面（`path` が空）と、
+  `path` がほかの図面と重なる図面（`document_ambiguous`。別々のフォルダにある同じ名前の古い版のファイルを開いたものなど）は
+  `close` で閉じられないので、開いている間 `quit` は `documents_open` で断られ続けます。その図面は利用者が Vectorworks で閉じます
+  （呼ぶ側が人に頼む）。CLI から扱えるようにするのは、名指し方（`fileRef` など）を SDK リファレンスで確かめてからにします
+  （[下記「`document`」](#図面を扱う道具documentssaveclose)）。
 - **占有の中でだけ呼べます**（[通信規則「占有」](../protocol.md#占有セッション)。占有していなければ
   `no_session`、ほかが占有していれば `occupied` で断られる）。Vectorworks が終われば占有も消えます。
 - **終了の依頼の最中は断られます**（`busy`。[通信規則「Vectorworks が処理中」](../protocol.md#vectorworks-が処理中)）。
-  上の競合で保存の確認が開いている間に届いた 2 つ目の `quit` も `busy` で断られるので、終了の依頼は重なりません
-  （この判定は残す。段 6 の前に、入れ子の判定にまとめるかを決める。[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
+  上の競合で保存の確認が開いている間に届いた 2 つ目の `quit` も `busy` で断られるので、終了の依頼は重なりません。
+  その間は `ping` と読む道具も `busy` で断られ、`tools`・`session start`・`session end` だけが応えます
+  （[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
 - **再起動の手段は持ちません**（第 2 引数は常に偽）。起動し直すのは呼ぶ側で、`session start` で占有を
   取ってから `quit`（`--session` を付ける）・止まるのを待つ・`launch`・動き出すのを待つ、を組み合わせます（更新を
   挟む形を含めて[インストール「流れ」](install-and-update.md#流れ)）。

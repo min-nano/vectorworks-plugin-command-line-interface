@@ -16,7 +16,7 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 | [A1](#a1-種類-app-と終了の依頼が同じ意味になっている) | 種類 `app` と終了の依頼が同じ意味になっている | 段 4 の前 | 済（終了の依頼は道具が返す印 `ToolStatus::quit` にし、`app` は占有の中でだけ呼べる種類に限る。段 4 の共通部の変更で実装した。[ブリッジ「道具の表」](plugin/bridge.md#道具の表)） |
 | [A2](#a2-quitping-が使う-sdk-呼び出しが確かめられていない) | `quit`・`ping` が使う SDK 呼び出しが確かめられていない | 段 6（`quit`）の前 | 済（`GetCurrentLayer()` は[道具「ping」](plugin/tools.md#ping)。`CloseAllFilesAndQuitVectorworks` は刻みから呼べ、保存の確認を取り消すと戻る。[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)。[SDK の調査 4](sdk-research.md#4-最初の道具が使う-sdk-呼び出し)） |
 | [A3](#a3-未決-2-が段-2-の作りを変える) | 未決 2 が段 2 の作りを変える | 段 2 の前 | 済（undo の記録が開いているかは見ない。書く道具は自分で記録を開いて閉じ、占有の中でだけ呼べる。受け付けの入れ子は `busy` で断る。[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)） |
-| [A4](#a4-終了の依頼の最中に受け付けが入れ子になりうる) | 終了の依頼の最中に受け付けが入れ子になりうる | 段 6 | 暫定（終了の依頼の最中は `write`・`app` を `busy` で断る。[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230) の 4 の結果から、判定は残す。段 6 の前に、入れ子の判定にまとめるかを決める） |
+| [A4](#a4-終了の依頼の最中に受け付けが入れ子になりうる) | 終了の依頼の最中に受け付けが入れ子になりうる | 段 6 | 済（入れ子の判定にはまとめず、終了の依頼の最中は `tools`・`session_start`・`session_end` のほかをすべて `busy` で断る。[構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中)） |
 | [B1](#b1-更新の手順の見本が占有を残す) | 更新の手順の見本が占有を残す | 段 6 | 済（失敗の道筋で `session end` を呼ぶ形に直し、見本を `vw2026 --help` へ移した。[インストール「流れ」](plugin/install-and-update.md#流れ)） |
 | [B2](#b2-windows-の-path-の書き換えが既存の項目を壊しうる) | Windows の PATH の書き換えが既存の項目を壊しうる | 段 3b | 済（展開しない値を読み、型を保って書き戻す。`.NET` の `Microsoft.Win32.RegistryKey` で読み書きし、段 3b の `install-windows` ジョブが実物のレジストリで、値が無い・REG_SZ・REG_EXPAND_SZ の場合に型と既存の項目が保たれることを確かめた。[インストール「Windows の `Path` の読み書き」](plugin/install-and-update.md#windows-の-path-の読み書き)） |
 | [B3](#b3-vw2026_app-が環境変数の名前の決まりに反する) | `VW2026_APP` が環境変数の名前の決まりに反する | 最初の配布（段 2）の前 | 済（名前は値の通じる範囲で決める、と決まりを改めた。CLAUDE.md「Go」） |
@@ -104,6 +104,15 @@ B5 の本文を除き、段の番号は、レビューのあとに入れ替え�
 - **暫定は Findings の勧めに合っている**（`Clock` が終了の依頼の前後で立てる印が、勧められている旗に当たる）。
   Windows では入り直した刻みから 2 つ目を呼べてしまうので、判定をやめる道は採れない。段 6 の前に決めるのは、
   この判定を入れ子の判定にまとめて、保存の確認の間はすべて断るかどうかだけである。
+- **済。** 入れ子の判定にはまとめず、断る範囲だけを広げた。終了の依頼の最中は、`tools`・`session_start`・`session_end`
+  のほかをすべて `busy` で断る（種類 `read`・`ping`・表に無い道具も）。
+  - 広げる理由: 保存の確認の最中も `CloseAllFilesAndQuitVectorworks` という SDK 呼び出しの途中であり、入れ子と同じく
+    道具に SDK を呼ばせない。確認の最中に読めると確かめてあるのは `GetCurrentLayer()`・`GetOpenFilesList()` などに限られ、
+    閉じようとしている図面を辿る読み方は測っていない。mac はもともと確認の間は何も応えないので、OS の違いも減る。
+  - まとめない理由: 入れ子の回は要求を解析せずにすべて断るので、`session_end` も断られ、保存の確認が開いたまま
+    待ちきれなかった呼ぶ側が占有を解けない（B1 の手順が崩れる）。通信規則が受け持つ 3 つは SDK を呼ばないので応える。
+  - `Quitting` の振る舞いはまだ出していない（`Clock` は常に `Idle` を渡していた）ので、版は上げずに版 6 に含めた
+    （[通信規則「互換性」](protocol.md#互換性)の例外）。
 
 ## B. 文書の誤りと、文書と実装の食い違い
 

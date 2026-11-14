@@ -1,5 +1,5 @@
 {
-	"description": "終了の依頼の最中は、種類 write と app を busy で断り、ほかは応える。占有に照らすのが先",
+	"description": "終了の依頼の最中は、tools・session_start・session_end のほかをすべて busy で断る（種類 read・ping・表に無い道具も）。種類 write と app は占有に照らすのが先",
 	"steps": [
 		{
 			"description": "ロックを取る（空のスプールなので何も消さない）",
@@ -22,17 +22,18 @@
 				"c-echo": "echo-no-args.json",
 				"d-ping": "ping.json",
 				"e-edit": "edit.json",
-				"f-tools": "tools.json"
+				"f-tools": "tools.json",
+				"g-unknown": "unknown.json"
 			},
 			"expect": {
-				"calls": [{"tool": "echo"}, {"tool": "ping"}],
 				"responses": {
 					"a-edit": {"ok": false, "code": "busy"},
 					"b-quit": {"ok": false, "code": "busy"},
-					"c-echo": {"ok": true, "result": {}},
-					"d-ping": {"ok": true, "result": {}},
+					"c-echo": {"ok": false, "code": "busy"},
+					"d-ping": {"ok": false, "code": "busy"},
 					"e-edit": {"ok": false, "code": "occupied"},
-					"f-tools": {"ok": true}
+					"f-tools": {"ok": true},
+					"g-unknown": {"ok": false, "code": "busy"}
 				},
 				"files": [
 					"a-edit.res.json",
@@ -47,7 +48,9 @@
 					"e-edit.res.json",
 					"e-edit.wait",
 					"f-tools.res.json",
-					"f-tools.wait"
+					"f-tools.wait",
+					"g-unknown.res.json",
+					"g-unknown.wait"
 				]
 			}
 		},
@@ -71,11 +74,11 @@
 		},
 		{
 			"description": "終了の依頼の最中でなくなれば（保存の確認を取り消したあと）実行する",
-			"requests": {"a-edit": "edit-in-session.json"},
+			"requests": {"a-edit": "edit-in-session.json", "b-ping": "ping.json"},
 			"expect": {
-				"calls": [{"tool": "edit", "args": {}}],
-				"responses": {"a-edit": {"ok": true, "result": {}}},
-				"files": ["a-edit.res.json", "a-edit.wait", "bridge.lock"]
+				"calls": [{"tool": "edit", "args": {}}, {"tool": "ping"}],
+				"responses": {"a-edit": {"ok": true, "result": {}}, "b-ping": {"ok": true, "result": {}}},
+				"files": ["a-edit.res.json", "a-edit.wait", "b-ping.res.json", "b-ping.wait", "bridge.lock"]
 			}
 		}
 	]

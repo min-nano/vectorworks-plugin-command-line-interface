@@ -69,8 +69,10 @@ ended, and when there is no session at all. A tool that only reads (kind read,
 such as ping) runs for every call.
 
 While Vectorworks is quitting (after "call quit", while it asks whether to save
-the drawings), the plug-in refuses a tool of kind write or app with busy, and
-call exits with 23: the tool did not run.
+the drawings), the plug-in refuses every tool, ping and the tools of kind read
+included, with busy, and call exits with 23: the tool did not run. Only the
+list of tools ("call tools") and "session start" and "session end" still
+answer.
 
 A tool may take long (saving or closing a large drawing) or wait for the user
 (a tool that shows a dialog, such as save to a folder where Vectorworks cannot

@@ -19,7 +19,7 @@
 | `src/core/ReadTools.{h,cpp}`・`DocumentTools.{h,cpp}` | 依らない | 読む道具と図面を扱う道具の中身のうち SDK に依らない部分（道具の表の行 `ToolSpec`（名前・説明・`inputSchema`・種類。`src/tools/ToolTable.cpp` はこの定数を使い、種類を無 SDK のテストで確かめる）・引数の検査・確かめの順・結果の形・`type_name` の表・`layer_objects` の絞り込みと頁送り・`no_document` の判定・`save` の保存先の確かめと前面を戻す手順）。SDK から読む値と SDK の呼び出しは、道具ごとの口（`Drawing`・`Documents`）で受ける。`ToolSpec` はヘッダーの `inline constexpr` で、表は定数で初期化される |
 | `src/tools/ToolTable.cpp` | 依る | 道具の表 |
 | `src/tools/<道具>.cpp`・`Text.h` | 依る | 道具の中身（`Ping.cpp`・`ReadTools.cpp`・`Documents.cpp`）と、`TXString` を UTF-8 にする `utf8`（`Text.h`。1 か所にまとめる）。SDK から値を読み、SDK に依らない部分は `src/core` の関数に渡す（`Drawing`・`Documents` を SDK で作る。無 SDK でテストするため） |
-| `src/Clock.cpp` | 依る | OS タイマーから `core::Server::serve(tools::table(), …)` を呼ぶ |
+| `src/Clock.cpp` | 依る | OS タイマーから `core::Server::serve(tools::table(), …)` を呼び、終了の依頼があれば `CloseAllFilesAndQuitVectorworks` を呼ぶ。終了の依頼の最中の印の立て下ろし（立てる・立っている間は 2 度目を頼まない・戻ったら下ろす・立っている間の回に `Quitting` を渡す）は `src/core` に置き、`Clock` は SDK を呼ぶだけにする（段 6。保存の確認が開く競合は実機の確認で起こせないので、無 SDK のテストで確かめる） |
 
 **受け付けの手順は SDK に依らない `core/Serve` に置き、偽の道具の表でテストします**（終了の依頼の
 返し方・壊れた要求・ロックを取れたときに 1 度だけ残骸を消すこと・ロックを取れないときに何も
@@ -79,14 +79,14 @@
 4. 要求ごとに（[通信規則「占有」](../protocol.md#占有セッション)の表）:
    - `tools` → 道具の一覧を返す（表を検索しない。占有に照らさない）。
    - `session_start` → 占有されていなければ印を発行して返す（されていれば `occupied`）。
-     `session_end` → 占有に照らしてから印を消す（表を検索しない）。どちらも終了の依頼の最中かには照らさない。
+     `session_end` → 占有に照らしてから印を消す（表を検索しない）。どちらも終了の依頼の最中かには照らさない（`tools` も）。
      占有の印は `core::Server` が持つ状態（1 つだけ。メモリだけで、ファイルに書かない）で、
      Vectorworks が終われば消える。印は `<時刻のナノ秒 19 桁>-<乱数 16 桁の 16 進>` で、乱数は
      `std::random_device` から作る。
+   - 種類 `write`・`app` → 占有に照らす（無ければ `no_session`、ほかの印なら `occupied`）。
+   - 終了の依頼の最中（`Quitting`）なら、ここまでに応えていない要求（種類を問わず、表に無い道具も）を `busy` で断る。
    - 表に無い道具 → `unknown_tool` で応える（占有に照らさない）。
-   - 種類 `read`（`ping` を含む）→ 占有に照らさずに実行して応答を書く。
-   - 種類 `write`・`app` → 占有に照らし（無ければ `no_session`、ほかの印なら `occupied`）、終了の
-     依頼の最中（`Quitting`）なら `busy` で断る。通れば実行して応答を書く。
+   - 種類 `read`（`ping` を含む）→ 占有に照らさずに実行して応答を書く。種類 `write`・`app` も、通れば実行して応答を書く。
    - 道具が成功し、`ToolStatus::quit`（終了の依頼）を立てていて、応答を書けたら、終了の依頼を結果に載せて、
      **その回の残りの要求を取り出さずに戻る**（終了したら応えられないので、残りは置いたままにする）。
      種類では決めない（`quit` だけが立てる。`save`・`close` などの種類 `app` の道具は立てない）。
@@ -140,7 +140,7 @@ Windows では Vectorworks 2026 を 2 つ起動でき、どちらのプラグイ
 // Read: 図面を変えない。占有に照らさない。
 // Write: 図面の中身を変える。undo の手順に従う（下記）。
 // App: Vectorworks・図面のファイルや窓に働き、図面の中身は変えない（save・close・quit など）。
-// Write と App は占有の中でだけ呼べ、終了の依頼の最中なら busy で断る。
+// Write と App は占有の中でだけ呼べる（終了の依頼の最中は、種類を問わず busy で断る）。
 // 終了の依頼は種類では決めず、道具が ToolStatus::quit で返す。
 enum class ToolKind { Read, Write, App };
 

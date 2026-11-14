@@ -155,7 +155,8 @@ type server struct {
 	kinds map[string]string
 	// 成功したら終了を頼む道具（道具が返す終了の依頼）。nil なら quit だけ
 	quits map[string]bool
-	// 受け付けの外の状態（"quitting"）。空でなければ種類 write と app を busy で断る
+	// 受け付けの外の状態（"quitting"）。空でなければ tools・session_start・session_end のほかを
+	// すべて busy で断る
 	activity string
 	// 掴んでいるロックを放す。nil ならロックを掴んでいない
 	unlock func()
@@ -251,8 +252,9 @@ func (s *server) serveOnce() (serving, quit bool) {
 //   - tools と種類 read の道具は占有に照らさない（図面を変えないので、占有している呼ぶ側の作業と
 //     混ざらない）。表に無い道具も read とみなすので、照らさずに handle が unknown_tool で応える。
 //   - session_start は占有されていなければ印を発行し、されていれば occupied。
-//   - session_end と種類 write・app は占有の中でだけ呼べる。種類 write・app は、Vectorworks が処理中
-//     （activity）なら busy で断る。
+//   - session_end と種類 write・app は占有の中でだけ呼べる。
+//   - Vectorworks が処理中（activity）なら、tools・session_start・session_end のほかをすべて busy で
+//     断る（種類 read と表に無い道具も）。種類 write・app は占有に照らすのが先。
 //
 // 占有の印は変えず、新しい印（空なら占有の終わり）を返す。反映するのは応答を書けたときだけ。
 func (s *server) answer(tool string, args json.RawMessage, session string) (spool.Response, *string) {
@@ -280,9 +282,9 @@ func (s *server) answer(tool string, args json.RawMessage, session string) (spoo
 		if code := s.check(session); code != "" {
 			return refuse(code), nil
 		}
-		if s.activity != "" {
-			return refuse(spool.CodeBusy), nil
-		}
+	}
+	if s.activity != "" {
+		return refuse(spool.CodeBusy), nil
 	}
 	return s.run(tool, args), nil
 }
