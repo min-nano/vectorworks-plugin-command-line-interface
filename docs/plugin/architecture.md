@@ -103,6 +103,10 @@ OS タイマー
   `CloseAllFilesAndQuitVectorworks` を呼ぶと確認が重なって出て、Windows では呼んだタイマー自身が確認の最中に
   入り直すと分かりました（[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)。[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9）。
   Windows では入り直した刻みから 2 つ目を呼べてしまうので、判定をやめる道は採れません。
+  印は**呼び出しが戻ったら下ろします**。戻り値が無く、取り消されたか（Vectorworks が動き続けるか）を見分けられないので、
+  下ろさないと取り消したあとも断り続けるためです。mac では終わっていく途中にも刻みが届きますが、そこから 2 度目を
+  呼んでも何も起きないと分かっています（[SDK リファレンス #313](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/313)。
+  Windows は終わっていく回は戻ったあとに刻みが来ない）。
 - **終了の依頼の最中は、`tools`・`session_start`・`session_end` のほかをすべて断ります**（種類 `read`・`ping`・表に
   無い道具も）。終了の依頼は `serve` の外（タイマーが `serve` から戻ったあと）で行うので、保存の確認の間に入り直した
   刻み（Windows）は受け付けの入れ子にはなりません。それでも `CloseAllFilesAndQuitVectorworks` という SDK 呼び出しの
