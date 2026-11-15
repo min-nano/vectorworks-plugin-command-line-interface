@@ -54,11 +54,13 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
 - `RelWithDebInfo` は、Vectorworks が落ちたとき lldb で場所を追えるようにデバッグ情報を付けた
   ものです。clang では `Release` と最適化の段（`-O2` / `-O3`）とデバッグ情報が違います。
   最適化の違いで出方の変わる不具合は再現しないことがあるので、そのときは
-  `-DCMAKE_BUILD_TYPE=Release` で作り直します。
+  `cmake --preset vw2026 -DCMAKE_BUILD_TYPE=Release` で構成し直してビルドします。同じ
+  `build-vw2026/` のキャッシュを書き換えるので、戻すときは `cmake --preset vw2026` だけで
+  構成し直します（プリセットの `RelWithDebInfo` に戻ります）。
 - `VW_SDK_DIR` はリポジトリの外の絶対パスで書きます（`$env{HOME}/...` でもよい）。
   `.worktreeinclude` で Claude Code の worktree へ写るのはこのファイルだけで、`/vw-sdk/` は
-  写らないためです。環境変数 `VW_SDK_DIR` を使っているなら、`cacheVariables` ごと省けば
-  そちらが使われます（書くと環境変数より優先されます）。
+  写らないためです。`CMakeLists.txt` は環境変数 `VW_SDK_DIR` を読まないので、環境変数で
+  渡したいときも `"VW_SDK_DIR": "$env{VW_SDK_DIR}"` と `cacheVariables` に書きます。
 - `jobs` はマシンに合わせます（目安はコア数）。
 - プリセットはスキーマの `version: 2` なので、CMake 3.20 で足ります。
 
