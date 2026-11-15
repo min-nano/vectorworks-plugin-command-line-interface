@@ -19,8 +19,9 @@ tools") only for the calls that carry it (--session, or VW2026_SESSION). Other
 calls of such a tool exit with 23 and do not run. Without a session, nobody
 occupies the bridge, and such a tool does not run at all (23). A tool that only
 reads (kind read, such as ping) and "call tools" run for every call, in a
-session or not (but while Vectorworks is quitting, every tool other than "call
-tools" exits with 23; see "vw2026 help call").
+session or not (but while Vectorworks is quitting, every tool exits with 23
+except "call tools", "session start" and "session end", and a tool the plug-in
+does not have exits with 22; see "vw2026 help call").
 
 	vw2026 session start                     # {"session":"<ID>"}
 	vw2026 call <TOOL> --session <ID>        # a tool of kind write or app
