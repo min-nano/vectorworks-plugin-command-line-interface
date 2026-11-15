@@ -190,7 +190,8 @@ struct Tool {
 - 道具の結果は JSON のオブジェクトで返します（[通信規則「応答」](../protocol.md#応答idresjson)）。返す値が無ければ
   `Json()` でよく、`Server` が `{}` にします。オブジェクトでない値は道具の不具合として、`Server` が
   `internal` で応えます。
-- 道具が受け付けの状態を知るのは `ToolContext` からだけです（`ping` の `session`）。
+- 道具が受け付けの状態を知るのは `ToolContext` からだけです（`ping` の `session`。段 6 で、`quit` が見る「起動を終えた」印も
+  ここで渡す。[道具「quit」](tools.md#quit)）。
 - 引数の検査は道具の中で行います（JSON Schema の検証器は持たない）。省略できる引数には
   既定値を設け（`inputSchema` の `default` にも書く）、知らない引数・知っている引数の未知の値は
   `invalid_args` で返します（[通信規則「互換性」](../protocol.md#互換性)）。

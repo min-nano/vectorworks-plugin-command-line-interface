@@ -14,9 +14,13 @@ Vectorworks ──読み込む──▶ cli.vwlibrary / cli.vlb     … 起動�
 | 入口 | 処理 |
 | --- | --- |
 | `plugin_module_main`（起動時） | VCOM の初期化・SDK のコールバックを記憶・**OS タイマーの開始**（拡張機能は登録しない） |
-| OS タイマー（250 ms ごと） | 受け付け 1 回（`core::Server::serve`）→ `quit` が頼まれていたら終了を頼む |
+| OS タイマー（250 ms ごと） | 受け付け 1 回（`core::Server::serve`）→ `quit` が頼まれていたら終了を頼む。最初の刻みで下の通知を登録する |
+| 通知 `kNotifyBeforePendingUpdate`（Vectorworks のアイドルから） | 最初の 1 回で「起動を終えた」印を立てるだけ（以後は何もしない。ここから終了を頼まない）。`quit` はこの印が立つまで断る（[道具「quit」](tools.md#quit)。[SDK リファレンス #317](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/317)） |
 
-OS タイマーは起動時に開始し、最初の刻みから受け付けます。
+OS タイマーは起動時に開始し、最初の刻みから受け付けます。通知は `plugin_module_main` ではなく最初の刻みで登録します
+（Windows の Vectorworks は起動時にモジュールを一度降ろして読み込み直すので、留める前の `plugin_module_main` で渡した
+関数の番地は残らない。刻みはモジュールを留めてから作ったタイマーから来る。下記「Windows ではタイマーを作る前にモジュールを
+留めます」）。通知は起動を終えたあとも 20 ms ほどの間隔で届くので、中では印を立てるだけにします（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9「起動を終えた目印」）。
 
 ## 受け付けの流れ
 

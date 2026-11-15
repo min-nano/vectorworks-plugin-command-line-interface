@@ -272,6 +272,20 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 終了で保存の確認が出ます。そこで **`quit` は、図面を 1 枚も開いていないときだけ受け付けます**。
 開いている図面を閉じておくのは呼ぶ側の役割です。
 
+- **Vectorworks が起動を終えるまでは、終了を頼まずに `internal` で失敗します**（`detail` は `{"reason":"starting"}`。
+  図面の一覧を見るより先に返す）。`error` は「Vectorworks が起動を終えていないので終了しませんでした」を含む固定の文言です。
+  - 起動を終える前に終了を頼むと、mac では、Cinema4D（Cineware）の起動を待つ間なら起動画面のまま止まって強制終了でしか
+    止まらず、「開発元不明のプラグイン」のダイアログの間なら頼みが黙って捨てられます。どちらも呼んだ側からは失敗が見えません
+    （[SDK リファレンス #312](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/312)。[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9）。
+  - プラグインは最初の刻み（起動画面の頃）から応えるので、`launch` のあと `status` が動いていると答え、`ping` が応えても、
+    まだ起動を終えていないことがあります。
+  - **起動を終えたかは、最初の `kNotifyBeforePendingUpdate` で知ります**（Vectorworks のアイドルから届く通知。起動画面・
+    Cineware の起動待ち・「開発元不明のプラグイン」のダイアログの間には届かず、ホーム画面が出たあとに初めて届く。その後の
+    刻みから終了を頼むとふつうに終わる。[SDK リファレンス #317](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/317)。同 4 の 9「起動を終えた目印」）。ダイアログの間は、
+    利用者が「続ける」を押すまで `starting` で断られ続けます。呼び直すか・いつまで待つかは呼ぶ側が決めます
+    （[設計「CLI はプリミティブに保つ」](../design.md#cli-はプリミティブに保つ)）。
+  - Windows は測っていません（[#316](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/316)。仮想環境で DirectX を有効にできない）。mac と同じ作りにし、起動を終えたあとに
+    `quit` が受け付けられること（通知が Windows でも届くこと）を段 6 の実機の確認で見ます。
 - **図面が 1 枚でも開いていれば、終了を頼まずに `internal` で失敗します。** 受け付けの中で
   `GetOpenFilesList` の件数を読みます（図面が 0 枚のときも落ちない。[道具「ping」](#ping)）。
   `error` は「図面が開いているので終了しませんでした。先に図面を閉じてください」を含む固定の文言で、
@@ -285,7 +299,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 
   | フィールド | 値 |
   | --- | --- |
-  | `reason` | `documents_open`（`quit` の失敗の理由を表す固定の綴り。呼ぶ側はこれで分岐する） |
+  | `reason` | `documents_open`（`quit` の失敗の理由を表す固定の綴り。呼ぶ側はこれで分岐する。起動を終えていないときは上の `starting` で、`documents` を持たない） |
   | `documents[].name` | 図面の名前 |
   | `documents[].path` | 図面のパス（`documents` と同じ。`untitled` が真の図面は「アプリケーションのフォルダ＋名前」（「名称未設定 N」・「<元の名前> コピー 1」など）でファイルとしては存在しない） |
   | `documents[].untitled` | ディスクのファイルに結び付いていない図面か（`documents` の `untitled` と同じ） |
