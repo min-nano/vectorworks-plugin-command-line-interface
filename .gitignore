@@ -18,3 +18,10 @@ build*/
 
 # macOS
 .DS_Store
+
+# 手元のビルドの各自の設定（docs/plugin/build-and-release.md「手元のビルド」）。
+# ビルド先 build-vw2026/ は上の build*/ で除外される
+/CMakeUserPresets.json
+
+# Claude Code の各自の設定
+/.claude/settings.local.json

@@ -8,6 +8,8 @@ cmake_minimum_required(VERSION 3.20)
 #   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DVW_SDK_DIR=<SDKLib を含むフォルダ>  # mac
 #   cmake -S . -B build -A x64 -DVW_SDK_DIR=<SDKLib を含むフォルダ>                     # Windows
 #   cmake --build build --config Release --target VwCli
+# 手元（mac）では CMakePresets.json のプリセット vw2026 を使う（RelWithDebInfo。
+# docs/plugin/build-and-release.md「手元のビルド」）。
 #
 # 単体テスト（SDK は要らない。CLAUDE.md「C++」の手元のテストと同じ指定。CI の cpp.yml はカバレッジも測る）:
 #   cmake -S . -B build -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=ON \
