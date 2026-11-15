@@ -18,3 +18,7 @@ build*/
 
 # macOS
 .DS_Store
+
+# ローカルビルド（各自の CMakeUserPresets.json。プリセット vw2026 のビルド先は build-vw2026/）
+/CMakeUserPresets.json
+/.claude/settings.local.json
