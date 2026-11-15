@@ -361,17 +361,22 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 	// 表に無い道具と種類 Read の道具は占有に照らさない（図面を変えないので、占有している呼ぶ側の
 	// 作業と混ざらない）。
 	const Tool *tool = findTool(tools, name);
-	if (!tool) {
-		return respond(failure(protocol::kCodeUnknownTool, "知らない道具です: " + name));
-	}
-	if (tool->kind != ToolKind::Read) {
+	if (tool && tool->kind != ToolKind::Read) {
 		if (std::optional<Json> refusal = refuseOutsideSession(session_, *request)) {
 			return respond(*refusal);
 		}
-		if (activity == Activity::Quitting) {
-			return respond(failure(protocol::kCodeBusy,
-			                       "Vectorworks に終了を頼んでいる最中なので実行しませんでした"));
-		}
+	}
+	// 表に無い道具は、終了の依頼の最中も unknown_tool で応える（SDK を呼ばない。綴りの誤りを、
+	// 呼び直せば通るかのような busy で返さない）。
+	if (!tool) {
+		return respond(failure(protocol::kCodeUnknownTool, "知らない道具です: " + name));
+	}
+	// 終了の依頼の最中は、表の道具をすべて断る（種類 Read と ping も）。終了の呼び出しの途中で、
+	// 道具に SDK を呼ばせないため。SDK を呼ばない 3 つの道具（上の tools・session_start・
+	// session_end）は応える。占有に照らすのが先。
+	if (activity == Activity::Quitting) {
+		return respond(failure(protocol::kCodeBusy,
+		                       "Vectorworks に終了を頼んでいる最中なので実行しませんでした"));
 	}
 
 	ToolReply reply = runTool(*tool, request->args, ToolContext{inSession()});

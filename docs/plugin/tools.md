@@ -272,6 +272,20 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 終了で保存の確認が出ます。そこで **`quit` は、図面を 1 枚も開いていないときだけ受け付けます**。
 開いている図面を閉じておくのは呼ぶ側の役割です。
 
+- **Vectorworks が起動を終えるまでは、終了を頼まずに `internal` で失敗します**（`detail` は `{"reason":"starting"}`。
+  図面の一覧を見るより先に返す）。`error` は「Vectorworks が起動を終えていないので終了しませんでした」を含む固定の文言です。
+  - 起動を終える前に終了を頼むと、mac では、Cinema4D（Cineware）の起動を待つ間なら起動画面のまま止まって強制終了でしか
+    止まらず、「開発元不明のプラグイン」のダイアログの間なら頼みが黙って捨てられます。どちらも呼んだ側からは失敗が見えません
+    （[SDK リファレンス #312](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/312)。[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9）。
+  - プラグインは最初の刻み（起動画面の頃）から応えるので、`launch` のあと `status` が動いていると答え、`ping` が応えても、
+    まだ起動を終えていないことがあります。
+  - **起動を終えたかは、最初の `kNotifyBeforePendingUpdate` で知ります**（Vectorworks のアイドルから届く通知。起動画面・
+    Cineware の起動待ち・「開発元不明のプラグイン」のダイアログの間には届かず、ホーム画面が出たあとに初めて届く。その後の
+    刻みから終了を頼むとふつうに終わる。[SDK リファレンス #317](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/317)。同 4 の 9「起動を終えた目印」）。ダイアログの間は、
+    利用者が「続ける」を押すまで `starting` で断られ続けます。呼び直すか・いつまで待つかは呼ぶ側が決めます
+    （[設計「CLI はプリミティブに保つ」](../design.md#cli-はプリミティブに保つ)）。
+  - Windows は測っていません（[#316](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/316)。仮想環境で DirectX を有効にできない）。mac と同じ作りにし、起動を終えたあとに
+    `quit` が受け付けられること（通知が Windows でも届くこと）を段 6 の実機の確認で見ます。
 - **図面が 1 枚でも開いていれば、終了を頼まずに `internal` で失敗します。** 受け付けの中で
   `GetOpenFilesList` の件数を読みます（図面が 0 枚のときも落ちない。[道具「ping」](#ping)）。
   `error` は「図面が開いているので終了しませんでした。先に図面を閉じてください」を含む固定の文言で、
@@ -285,7 +299,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 
   | フィールド | 値 |
   | --- | --- |
-  | `reason` | `documents_open`（`quit` の失敗の理由を表す固定の綴り。呼ぶ側はこれで分岐する） |
+  | `reason` | `documents_open`（`quit` の失敗の理由を表す固定の綴り。呼ぶ側はこれで分岐する。起動を終えていないときは上の `starting` で、`documents` を持たない） |
   | `documents[].name` | 図面の名前 |
   | `documents[].path` | 図面のパス（`documents` と同じ。`untitled` が真の図面は「アプリケーションのフォルダ＋名前」（「名称未設定 N」・「<元の名前> コピー 1」など）でファイルとしては存在しない） |
   | `documents[].untitled` | ディスクのファイルに結び付いていない図面か（`documents` の `untitled` と同じ） |
@@ -297,11 +311,17 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 - **図面を保存して閉じるのは呼ぶ側です。** 保存するか捨てるかも呼ぶ側が決めます（`quit` に保存する・捨てる指定は持たず、
   CLI にも足さない。[設計](../design.md#cli-はプリミティブに保つ)）。残したい図面（変更）は `save` で新しいパスへ保存してから、
   どの図面も[下記の `close`](#図面を扱う道具documentssaveclose)で閉じます。`close` は保存の確認を出さず、未保存の変更を捨てます。
+- **`close` で名指せない図面が開いていると、CLI だけでは終了できません。** パスを読めなかった図面（`path` が空）と、
+  `path` がほかの図面と重なる図面（`document_ambiguous`。別々のフォルダにある同じ名前の古い版のファイルを開いたものなど）は
+  `close` で閉じられないので、開いている間 `quit` は `documents_open` で断られ続けます。その図面は利用者が Vectorworks で閉じます
+  （呼ぶ側が人に頼む）。CLI から扱えるようにするのは、名指し方（`fileRef` など）を SDK リファレンスで確かめてからにします
+  （[下記「`document`」](#図面を扱う道具documentssaveclose)）。
 - **占有の中でだけ呼べます**（[通信規則「占有」](../protocol.md#占有セッション)。占有していなければ
   `no_session`、ほかが占有していれば `occupied` で断られる）。Vectorworks が終われば占有も消えます。
 - **終了の依頼の最中は断られます**（`busy`。[通信規則「Vectorworks が処理中」](../protocol.md#vectorworks-が処理中)）。
-  上の競合で保存の確認が開いている間に届いた 2 つ目の `quit` も `busy` で断られるので、終了の依頼は重なりません
-  （この判定は残す。段 6 の前に、入れ子の判定にまとめるかを決める。[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
+  上の競合で保存の確認が開いている間に届いた 2 つ目の `quit` も `busy` で断られるので、終了の依頼は重なりません。
+  その間は `ping` と読む道具も `busy` で断られ、`tools`・`session start`・`session end` だけが応えます（表に無い道具は `unknown_tool`）
+  （[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
 - **再起動の手段は持ちません**（第 2 引数は常に偽）。起動し直すのは呼ぶ側で、`session start` で占有を
   取ってから `quit`（`--session` を付ける）・止まるのを待つ・`launch`・動き出すのを待つ、を組み合わせます（更新を
   挟む形を含めて[インストール「流れ」](install-and-update.md#流れ)）。

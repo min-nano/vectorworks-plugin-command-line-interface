@@ -155,7 +155,8 @@ type server struct {
 	kinds map[string]string
 	// 成功したら終了を頼む道具（道具が返す終了の依頼）。nil なら quit だけ
 	quits map[string]bool
-	// 受け付けの外の状態（"quitting"）。空でなければ種類 write と app を busy で断る
+	// 受け付けの外の状態（"quitting"）。空でなければ表の道具をすべて busy で断る（SDK を呼ばない
+	// tools・session_start・session_end と、表に無い道具は除く）
 	activity string
 	// 掴んでいるロックを放す。nil ならロックを掴んでいない
 	unlock func()
@@ -249,10 +250,15 @@ func (s *server) serveOnce() (serving, quit bool) {
 // answer は要求を占有に照らしてから応える（docs/protocol.md「占有」）。
 //
 //   - tools と種類 read の道具は占有に照らさない（図面を変えないので、占有している呼ぶ側の作業と
-//     混ざらない）。表に無い道具も read とみなすので、照らさずに handle が unknown_tool で応える。
+//     混ざらない）。表に無い道具も占有に照らさず、handle が unknown_tool で応える（Vectorworks が
+//     処理中でも）。
 //   - session_start は占有されていなければ印を発行し、されていれば occupied。
-//   - session_end と種類 write・app は占有の中でだけ呼べる。種類 write・app は、Vectorworks が処理中
-//     （activity）なら busy で断る。
+//   - session_end と種類 write・app は占有の中でだけ呼べる。
+//   - Vectorworks が処理中（activity）なら、表の道具をすべて busy で断る（種類 read と ping も）。
+//     SDK を呼ばない tools・session_start・session_end は応える。種類 write・app は占有に照らすのが先。
+//
+// 表に無い道具は kinds で見分ける（kinds に無く quit でもない道具）。kinds を渡さない Start では
+// 見分けられないので、どの道具も表にあるとみなす（処理中は unknown_tool ではなく busy になる）。
 //
 // 占有の印は変えず、新しい印（空なら占有の終わり）を返す。反映するのは応答を書けたときだけ。
 func (s *server) answer(tool string, args json.RawMessage, session string) (spool.Response, *string) {
@@ -280,9 +286,9 @@ func (s *server) answer(tool string, args json.RawMessage, session string) (spoo
 		if code := s.check(session); code != "" {
 			return refuse(code), nil
 		}
-		if s.activity != "" {
-			return refuse(spool.CodeBusy), nil
-		}
+	}
+	if s.activity != "" && s.inTable(tool) {
+		return refuse(spool.CodeBusy), nil
 	}
 	return s.run(tool, args), nil
 }
@@ -322,6 +328,15 @@ func (s *server) kind(tool string) string {
 		return "app"
 	}
 	return "read"
+}
+
+// inTable は、道具が道具の表にあるか。kinds が無ければ見分けられないので、どの道具もあるとみなす。
+func (s *server) inTable(tool string) bool {
+	if s.kinds == nil || tool == "quit" {
+		return true
+	}
+	_, found := s.kinds[tool]
+	return found
 }
 
 // quitsOn は、道具が成功したら終了を頼むか。quits が無ければ quit だけ（本物の道具の表で終了を
