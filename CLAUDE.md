@@ -132,6 +132,8 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   `.worktreeinclude` で worktree にも写る）のプリセット `vw2026` を使う:
   `cmake --preset vw2026 && cmake --build --preset vw2026`。SDK の場所（`VW_SDK_DIR`）は各自の
   Mac に固有なので、そこにだけ書く（プリセットの中身の例は vectorworks-plugin-native-template の README）。
+  ビルドタイプは `RelWithDebInfo`（lldb で追えるようにデバッグ情報を付ける。CI の `Release` とは
+  最適化の段とデバッグ情報だけが違う）。
 - 手元のテスト（CI の `cpp.yml` と同じ指定）:
   `cmake -S . -B build -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug && cmake --build build && ctest --test-dir build --output-on-failure`。
   ファジングは clang（Apple の clang は不可）で `-DVW_BUILD_FUZZERS=ON` を足し、
