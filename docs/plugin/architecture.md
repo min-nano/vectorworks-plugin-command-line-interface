@@ -34,7 +34,8 @@ OS タイマー
         ├─ 要求を名前の昇順で読んで消す（回の始めに並べたものだけ。読めない・消せないものは飛ばす）
         ├─ 呼ぶ側の待つ印（<id>.wait）を掴めたら、待つ者が居ないので実行しない
         ├─ 種類 write・app と session_end は占有に照らす（tools・種類 read は誰にでも）
-        ├─ 終了の依頼の最中（Quitting）なら、tools・session_start・session_end のほかを busy で断る
+        ├─ 表に無い道具は unknown_tool で応える（終了の依頼の最中も）
+        ├─ 終了の依頼の最中（Quitting）なら、表の道具を busy で断る（tools・session_start・session_end は応える）
         └─ 道具を実行して応答を書く（quit は GetOpenFilesList で開いている図面を調べ、あれば
            detail に一覧を付けて失敗で応える。無ければ応答を書いてから、終了の依頼を返す）
      quit が頼まれていたら、終了の依頼の最中の印を立てて CloseAllFilesAndQuitVectorworks。戻ったら下ろす
@@ -85,7 +86,7 @@ OS タイマー
 
 | 場面 | 判定 | 断る要求 | 理由 |
 | --- | --- | --- | --- |
-| 終了の依頼の最中 | `CloseAllFilesAndQuitVectorworks` の前後で印を立てて下ろし、その間の刻みで `core::Server::serve` に `Quitting` を渡す（印の立て下ろしは `src/core` に置き、`Clock` は SDK を呼ぶだけ。Windows は保存の確認の間も刻む。mac は呼んだタイマーが確認の間は刻まないので、この判定が効くのは Windows だけ） | `tools`・`session_start`・`session_end` のほかすべて（種類 `read`・`ping`・表に無い道具も） | 終了の呼び出しの途中で道具が SDK を呼ばない（保存しようとしている図面を読み書きしない）。終了の依頼を重ねない |
+| 終了の依頼の最中 | `CloseAllFilesAndQuitVectorworks` の前後で印を立てて下ろし、その間の刻みで `core::Server::serve` に `Quitting` を渡す（印の立て下ろしは `src/core` に置き、`Clock` は SDK を呼ぶだけ。Windows は保存の確認の間も刻む。mac は呼んだタイマーが確認の間は刻まないので、この判定が効くのは Windows だけ） | 道具の表の道具すべて（種類 `read`・`ping` も。SDK を呼ばない `tools`・`session_start`・`session_end` は応え、表に無い道具は `unknown_tool`） | 終了の呼び出しの途中で道具が SDK を呼ばない（保存しようとしている図面を読み書きしない）。終了の依頼を重ねない |
 | 受け付けの入れ子 | `core::Server` が `serve` の途中かを持つ | すべて | 外の回の状態（並べた要求・占有の印）を取り合わない。道具の SDK 呼び出しの途中で SDK を呼ばない |
 
 - **受け付けの入れ子**は、道具の SDK 呼び出しが中でイベントを回したとき（モーダルダイアログ・進捗の
@@ -111,12 +112,12 @@ OS タイマー
   下ろさないと取り消したあとも断り続けるためです。mac では終わっていく途中にも刻みが届きますが、そこから 2 度目を
   呼んでも何も起きないと分かっています（[SDK リファレンス #313](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/313)。
   Windows は終わっていく回は戻ったあとに刻みが来ない）。
-- **終了の依頼の最中は、`tools`・`session_start`・`session_end` のほかをすべて断ります**（種類 `read`・`ping`・表に
-  無い道具も）。終了の依頼は `serve` の外（タイマーが `serve` から戻ったあと）で行うので、保存の確認の間に入り直した
+- **終了の依頼の最中は、道具の表の道具をすべて断ります**（種類 `read`・`ping` も。表に無い道具は SDK を呼ばないので
+  ふだんどおり `unknown_tool` で応え、綴りの誤りを呼び直せば通るかのような `busy` で返さない）。終了の依頼は `serve` の外（タイマーが `serve` から戻ったあと）で行うので、保存の確認の間に入り直した
   刻み（Windows）は受け付けの入れ子にはなりません。それでも `CloseAllFilesAndQuitVectorworks` という SDK 呼び出しの
   途中なので、受け付けの入れ子と同じく道具に SDK を呼ばせません（確認の最中に読めると確かめてあるのは
   `GetCurrentLayer()`・`GetOpenFilesList()` などに限られ、閉じようとしている図面を辿る読み方は測っていない）。
-  通信規則が受け持つ 3 つは SDK を呼ばないので応え、呼ぶ側が占有を解けるようにします（入れ子の回のように要求を
+  SDK を呼ばない 3 つの道具（`tools`・`session_start`・`session_end`）は応え、呼ぶ側が占有を解けるようにします（入れ子の回のように要求を
   解析せずにすべて断ると、`session_end` も断られ、占有が起動し直すまで残る）。mac は確認の間は刻まないので、
   何も応えません（[設計のレビュー A4](../design-review.md#a4-終了の依頼の最中に受け付けが入れ子になりうる)）。
 - **undo の記録が開いているかは見ません。** 刻みの中から記録が開いて見えた実測は、どれもプラグイン

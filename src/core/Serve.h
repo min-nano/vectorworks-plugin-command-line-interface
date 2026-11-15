@@ -20,9 +20,10 @@ namespace VwCli::core {
 // 依頼は種類では決めず、道具が ToolStatus::quit で返す。
 enum class ToolKind { Read, Write, App };
 
-// 受け付けの外の状態。タイマー（Clock）が回ごとに渡す。Quitting では、通信規則が受け持つ道具
-// （tools・session_start・session_end）のほかをすべて busy で断る（種類 Read と表に無い道具も。
-// docs/plugin/architecture.md「Vectorworks が処理中」）。
+// 受け付けの外の状態。タイマー（Clock）が回ごとに渡す。Quitting では、道具の表の道具をすべて
+// busy で断る（種類 Read と ping も）。SDK を呼ばない 3 つの道具（tools・session_start・
+// session_end）と、表に無い道具の unknown_tool はふだんどおり応える
+// （docs/plugin/architecture.md「Vectorworks が処理中」）。
 enum class Activity {
 	Idle,
 	// 終了の依頼の最中（保存の確認を開いている）。
