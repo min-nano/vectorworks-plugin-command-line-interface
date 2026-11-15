@@ -8,7 +8,7 @@
 | --- | --- |
 | プロジェクト | `project(VwCli CXX)`（Apple では OBJCXX も） |
 | 選択肢 | `VW_BUILD_PLUGIN`（ON）・`VW_BUILD_TESTS`（OFF）・`VW_BUILD_FUZZERS`（OFF。clang の libFuzzer が要る）・`VW_ENABLE_SANITIZERS`（OFF。ASan と UBSan。MSVC は ASan だけ）・`VW_ENABLE_COVERAGE`（OFF。clang は source-based coverage、MSVC は `/PROFILE` を付けてリンクし Visual Studio の `Microsoft.CodeCoverage.Console` で測る。clang-cl は不可）・`VW_ENABLE_PCH`（ON）。`VW_BUILD_PLUGIN` が ON で `VW_SDK_DIR` が無ければ構成で止める（黙ってプラグインを外さない）。SDK の無いところ（テスト・検査・ファジング。ubuntu を含む）は `-DVW_BUILD_PLUGIN=OFF` を付ける |
-| SDK | `VW_SDK_DIR`（`SDKLib` を含む）。mac は `libVWSDK.a`＋VWMM・`BuildVWR`、Windows は x64 だけ（`VWSDK.lib`・`VWMM.lib`・`buildvwr.exe`）。どれかが無ければ構成で止める。プラグインは Release でビルドする（`RELEASE_BLD`。Windows は `/MD`。SDK の Release のライブラリに合わせる） |
+| SDK | `VW_SDK_DIR`（`SDKLib` を含む）。mac は `libVWSDK.a`＋VWMM・`BuildVWR`、Windows は x64 だけ（`VWSDK.lib`・`VWMM.lib`・`buildvwr.exe`）。どれかが無ければ構成で止める。配るプラグイン（CI）は Release でビルドする（`RELEASE_BLD`。Windows は `/MD`。SDK の Release のライブラリに合わせる。どちらも構成によらず付くので、[手元のビルド](#手元のビルド)の `RelWithDebInfo` でも SDK とずれない） |
 | 警告 | `/W4 /permissive-`・`-Wall -Wextra -Wpedantic` は SDK に依らないターゲット（共通部・テスト・ファジング）にだけ付ける。SDK のヘッダは `SYSTEM` で読み、`/permissive-` を通る保証が無いのでプラグインには付けない |
 | 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。プラグインとテストがリンク。OS ごとの呼び出しは `FilesPosix.cpp` / `FilesWindows.cpp` の片方と、段 5 から、保存先をファイルシステムに聞く包みの `SaveTargetPosix.cpp` / `SaveTargetWindows.cpp` の片方、Windows だけの `WindowsPath.cpp`（スプールと保存先の確かめが共有する `extended()`）、パスを比べる包みの `PathCompareMac.cpp`（`-framework CoreFoundation` をリンク）/ `PathCompareWindows.cpp`（`Normaliz.lib` をリンク）の片方。Linux ではパスを比べる包みを持たない） |
 | テスト | `VwCliTests`（`tests/*Tests.cpp`。外部のテストの枠組みに依らない）・`JsonFuzzer`（`tests/JsonFuzzer.cpp`）。テストは `protocol/fixtures` を読む |
@@ -20,6 +20,47 @@
 
 `add_vw_plugin` は、見本にある殻と本体の分割・同梱スクリプト・版のファイル（plist の版の鍵など）を
 持ちません。版の情報が `build.json` とコンパイル時の定義の 2 つ以外に散らばらないようにするためです。
+
+### 手元のビルド
+
+mac の手元でプラグインをビルドするときは、プリセット `vw2026`（Vectorworks の版）を使います。
+共通の設定は、コミットしてある `CMakePresets.json` の隠しプリセット `vw2026-base` にあります
+（ビルド先 `build-vw2026/`・`RelWithDebInfo`・生成器 `Unix Makefiles`）。各自の Mac に固有のもの
+——SDK の場所と並列数——だけを、コミットしない `CMakeUserPresets.json`（`.gitignore` 済み）に
+書いて継ぎます。
+
+```json
+{
+  "version": 2,
+  "configurePresets": [
+    {
+      "name": "vw2026",
+      "inherits": "vw2026-base",
+      "cacheVariables": { "VW_SDK_DIR": "/Users/<you>/vw-sdk/2026-NNA-eng-mac-SDK" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "vw2026", "inherits": "vw2026-base", "configurePreset": "vw2026", "jobs": 4 }
+  ]
+}
+```
+
+```sh
+cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
+```
+
+- **mac だけの手順です。** Windows は Visual Studio の生成器（`-A x64`）で、`CMAKE_BUILD_TYPE` が
+  効かないので、このプリセットは使いません（上の CMake の表のとおり `--config Release`）。
+- `RelWithDebInfo` は、Vectorworks が落ちたとき lldb で場所を追えるようにデバッグ情報を付けた
+  ものです。clang では `Release` と最適化の段（`-O2` / `-O3`）とデバッグ情報が違います。
+  最適化の違いで出方の変わる不具合は再現しないことがあるので、そのときは
+  `-DCMAKE_BUILD_TYPE=Release` で作り直します。
+- `VW_SDK_DIR` はリポジトリの外の絶対パスで書きます（`$env{HOME}/...` でもよい）。
+  `.worktreeinclude` で Claude Code の worktree へ写るのはこのファイルだけで、`/vw-sdk/` は
+  写らないためです。環境変数 `VW_SDK_DIR` を使っているなら、`cacheVariables` ごと省けば
+  そちらが使われます（書くと環境変数より優先されます）。
+- `jobs` はマシンに合わせます（目安はコア数）。
+- プリセットはスキーマの `version: 2` なので、CMake 3.20 で足ります。
 
 ## CI
 
