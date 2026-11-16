@@ -142,6 +142,20 @@
   なく管理共有（`\\localhost\C$`。VM の Vectorworks が昇格して動いていた）で見た。前面を確かめてから保存・閉じる・
   `layer_ambiguous`・レイヤを 1 枚だけ辿る（レビューの対応）は、実機の確認のあとに入れた。
 
+段 6 で決めたこと（真実は各ページ）:
+
+- **起動を終えた印と終了の依頼の最中の印は `core::Lifecycle`（`src/core/Lifecycle.h`）が持ち、刻み 1 回の手順は
+  `core::tick` に置く。** `tick` は `Lifecycle` の状態（`Quitting` か・起動を終えたか）を渡して受け付けを 1 回走らせ、
+  終了の依頼が返れば印を立てて終了の呼び出しを呼び、戻ったら（投げても）下ろす。印が立っていれば 2 度目を頼まない。
+  `Clock` は通知の登録と `CloseAllFilesAndQuitVectorworks` を `tick` に渡すだけにし、保存の確認の間に刻みが入り直す
+  こと（Windows）は、偽の終了の呼び出しの中から `tick` を呼んで無 SDK のテストで真似る（[ブリッジ「分け方」](bridge.md#分け方)）。
+- **起動を終えたかは `ToolContext::started` で道具に渡す**（`core::Server::serve` の引数で受ける。[ブリッジ「道具の表」](bridge.md#道具の表)）。
+- **`quit` の SDK に依らない部分は `src/core/Quit` に置き、開いている図面の一覧は `core::Documents` で受ける**（図面を
+  扱う道具と同じ口。SDK の側は `src/tools/Documents.cpp` に置く）。確かめの順は、引数の形（`invalid_args`）→ 起動を
+  終えたか（`starting`）→ 開いている図面（`documents_open`）（[道具「quit」](tools.md#quit)）。
+- **通知 `kNotifyBeforePendingUpdate` は、登録できるまで刻みごとに登録し直す**（登録できない間は `quit` が `starting`
+  で断り続けるので、黙って受け付けられなくなることはない）。
+
 その先（順序は未定）:
 
 - **他のプラグインの機能を名前で呼ぶ**（`CallPluginLibrary`。形は[未決 3](open-questions.md#3-ほかのプラグインの機能の呼び出しの形)）。

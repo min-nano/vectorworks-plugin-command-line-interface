@@ -3,6 +3,7 @@
 #include "Clock.h"
 
 #include "core/Bridge.h"
+#include "core/Lifecycle.h"
 #include "core/Serve.h"
 #include "tools/ToolTable.h"
 
@@ -29,12 +30,45 @@ std::int64_t nowNanos() {
 	    .count();
 }
 
-// tick は受け付け 1 回。例外は Vectorworks へ通さない（docs/plugin/bridge.md「受け付け 1 回」）。
+// 起動を終えた印と終了の依頼の最中の印。立て下ろしの手順は core（core/Lifecycle.h）で、ここは
+// SDK を呼ぶだけ。
+core::Lifecycle gLifecycle;
+
+// onNotify は通知 kNotifyBeforePendingUpdate（Vectorworks のアイドルから届く）。最初の 1 回で
+// 「起動を終えた」印を立てるだけにする（以後も 20 ms ほどの間隔で届くので、何もしない。ここから
+// 終了を頼まない。Findings「Timers and Notifications」の 4 の 9「起動を終えた目印」）。
+void onNotify(StatusID id, StatusData /*data*/) {
+	if (id == kNotifyBeforePendingUpdate) {
+		gLifecycle.markStarted();
+	}
+}
+
+// registerNotify は onNotify を登録する。plugin_module_main ではなく刻みから呼ぶ（Windows の
+// Vectorworks は起動時にモジュールを一度降ろして読み込み直すので、留める前に渡した番地は残らない。
+// 刻みはモジュールを留めてから作ったタイマーから来る。docs/plugin/architecture.md「入口」）。
+// 登録できなければ次の刻みでやり直す（その間 quit は starting で断る）。
+void registerNotify() {
+	static bool registered = false;
+	if (registered) {
+		return;
+	}
+	registered = gSDK->RegisterNotificationProcedure(
+	    &onNotify, static_cast<OSType>(kNotifyBeforePendingUpdate));
+}
+
+// requestQuit は終了を頼む。保存の確認を出すかは図面しだい（quit は図面が 0 枚のときだけ終了の
+// 依頼を返すので、ふつうは出ない）で、再起動はしない（docs/plugin/tools.md「quit」）。保存の確認が
+// 開くと、取り消されるか終えるまで戻らない（Windows はその間も刻み、tick に入り直す）。
+void requestQuit() { gSDK->CloseAllFilesAndQuitVectorworks(true, false); }
+
+// tick は受け付け 1 回と、頼まれていれば終了の依頼。例外は Vectorworks へ通さない
+// （docs/plugin/bridge.md「受け付け 1 回」）。
 void tick() {
 	if (gSDK == nullptr) {
 		return;
 	}
 	try {
+		registerNotify();
 		// 受け付けは Vectorworks が終わるまで 1 つ。スプールの場所を求められなければ、次の刻みで
 		// やり直す。
 		static std::optional<core::Server> server;
@@ -45,9 +79,7 @@ void tick() {
 			}
 			server.emplace(std::move(*dir));
 		}
-		// 結果の quit（終了の依頼）は見ない。立てる道具（quit）が表に無いので立たない
-		// （段 6 で足す）。
-		server->serve(tools::table(), nowNanos(), core::Activity::Idle);
+		core::tick(*server, tools::table(), nowNanos(), gLifecycle, &requestQuit);
 	} catch (...) {
 		// 次の刻みでやり直す。
 		return;

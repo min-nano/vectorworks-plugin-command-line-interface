@@ -80,6 +80,7 @@ Server *gServer = nullptr;
 // nests が入れ子に渡す道具の表（表の定義より前に使うので、テストが置く）。
 std::span<const Tool> gTools;
 bool gSession = false;
+bool gStarted = false;
 
 Json record(const char *name) {
 	gCalls.emplace_back(name);
@@ -133,6 +134,7 @@ Json throwsInt(const Json &, const ToolContext &, ToolStatus &) {
 
 Json readContext(const Json &, const ToolContext &context, ToolStatus &) {
 	gSession = context.session;
+	gStarted = context.started;
 	return record("context");
 }
 
@@ -265,6 +267,20 @@ TEST(ServeTellsToolsWhetherASessionIsIssued) {
 	caller.put("3", R"({"tool":"context","session":")" + session + R"("})");
 	server.serve(kTools, kNow);
 	CHECK(gSession);
+}
+
+// 起動を終えたか（受け付けの外の状態）は、serve に渡したとおりに道具へ渡す（quit が見る）。
+TEST(ServeTellsToolsWhetherVectorworksHasStarted) {
+	TempDir dir;
+	Server server(dir.utf8Path());
+	Caller caller(dir);
+	gStarted = true;
+	caller.put("1", R"({"tool":"context"})");
+	server.serve(kTools, kNow);
+	CHECK(!gStarted);
+	caller.put("2", R"({"tool":"context"})");
+	server.serve(kTools, kNow, VwCli::core::Activity::Idle, true);
+	CHECK(gStarted);
 }
 
 TEST(ServeIssuesSessionsSpelledLikeIds) {

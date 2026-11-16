@@ -1,7 +1,8 @@
 #pragma once
 
-// OS タイマー（docs/plugin/architecture.md「受け付けの流れ」）。刻みごとに受け付けを 1 回行う。
-// 終了の依頼（quit）と Quitting は段 6 で足す（docs/plugin/plan.md）。
+// OS タイマー（docs/plugin/architecture.md「受け付けの流れ」）。刻みごとに受け付けを 1 回行い、
+// 道具 quit が終了の依頼を返せば、受け付けの外で終了を頼む。起動を終えた印を立てる通知も、最初の
+// 刻みで登録する（docs/plugin/architecture.md「入口」）。
 
 namespace VwCli {
 

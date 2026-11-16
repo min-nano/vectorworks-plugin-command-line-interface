@@ -17,9 +17,11 @@
 | `src/core/Ping.{h,cpp}` | 依らない | 道具 `ping` の中身のうち SDK に依らない部分（引数の検査と結果の形）。SDK から読む値（現在のレイヤの名前）は引数で受ける |
 | `src/core/Args.{h,cpp}` | 依らない | 道具の引数の読み方（知らない引数・型・範囲・小数部・必須の欠けを `invalid_args` にする `Reader`）と、失敗の `detail` の `reason` を付ける口 |
 | `src/core/ReadTools.{h,cpp}`・`DocumentTools.{h,cpp}` | 依らない | 読む道具と図面を扱う道具の中身のうち SDK に依らない部分（道具の表の行 `ToolSpec`（名前・説明・`inputSchema`・種類。`src/tools/ToolTable.cpp` はこの定数を使い、種類を無 SDK のテストで確かめる）・引数の検査・確かめの順・結果の形・`type_name` の表・`layer_objects` の絞り込みと頁送り・`no_document` の判定・`save` の保存先の確かめと前面を戻す手順）。SDK から読む値と SDK の呼び出しは、道具ごとの口（`Drawing`・`Documents`）で受ける。`ToolSpec` はヘッダーの `inline constexpr` で、表は定数で初期化される |
+| `src/core/Quit.{h,cpp}` | 依らない | 道具 `quit` の中身のうち SDK に依らない部分（表の行 `kQuitSpec`・引数の検査・確かめの順（引数の形 → 起動を終えたか → 開いている図面）・失敗の `detail`）。開いている図面の一覧は `core::Documents` で受ける |
+| `src/core/Lifecycle.h` | 依らない | 起動を終えた印と終了の依頼の最中の印（`core::Lifecycle`。通知から立てる・終了を頼む間だけ立てる・立っている間は 2 度目を頼まない・戻ったら（投げても）下ろす・立っている間は `Quitting`）と、刻み 1 回の手順（`core::tick`。印の状態を渡して `serve` を呼び、終了の依頼が返れば受け付けの外で終了を頼む）。終了の呼び出しは引数で受けるので、保存の確認の間に刻みが入り直すこと（Windows）を無 SDK のテストで真似られる |
 | `src/tools/ToolTable.cpp` | 依る | 道具の表 |
 | `src/tools/<道具>.cpp`・`Text.h` | 依る | 道具の中身（`Ping.cpp`・`ReadTools.cpp`・`Documents.cpp`）と、`TXString` を UTF-8 にする `utf8`（`Text.h`。1 か所にまとめる）。SDK から値を読み、SDK に依らない部分は `src/core` の関数に渡す（`Drawing`・`Documents` を SDK で作る。無 SDK でテストするため） |
-| `src/Clock.cpp` | 依る | OS タイマーから `core::Server::serve(tools::table(), …)` を呼び、終了の依頼があれば `CloseAllFilesAndQuitVectorworks` を呼ぶ。終了の依頼の最中の印の立て下ろし（立てる・立っている間は 2 度目を頼まない・戻ったら下ろす・立っている間の回に `Quitting` を渡す）は `src/core` に置き、`Clock` は SDK を呼ぶだけにする（段 6。保存の確認が開く競合は実機の確認で起こせないので、無 SDK のテストで確かめる） |
+| `src/Clock.cpp` | 依る | OS タイマーから `core::tick` を呼び、終了の呼び出しとして `CloseAllFilesAndQuitVectorworks(true, false)` を渡す。最初の刻みで通知 `kNotifyBeforePendingUpdate` を登録し（登録できるまで刻みごとにやり直す）、届いたら `core::Lifecycle` の「起動を終えた」印を立てるだけにする。印の扱いは `src/core/Lifecycle.h` に置き、`Clock` は SDK を呼ぶだけ（保存の確認が開く競合は実機の確認で起こせないので、無 SDK のテストで確かめる） |
 
 **受け付けの手順は SDK に依らない `core/Serve` に置き、偽の道具の表でテストします**（終了の依頼の
 返し方・壊れた要求・ロックを取れたときに 1 度だけ残骸を消すこと・ロックを取れないときに何も
@@ -49,7 +51,9 @@
 ## 受け付け 1 回（`core::Server::serve`）
 
 `serve` は道具の表・時刻と、終了の依頼の最中か（`core::Activity`。`Idle`・`Quitting`。
-[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）を受け取ります。
+[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）と、Vectorworks が起動を終えたか（道具に
+`ToolContext::started` で渡す。[道具「quit」](tools.md#quit)）を受け取ります。どちらもタイマーが `core::Lifecycle` から渡します
+（`core::tick`）。
 
 0. **`serve` の途中にまた呼ばれたら（受け付けの入れ子）**、外の回の状態に触れず、取り出せる要求を
    すべて `busy` で断って戻る。手順は 2 の取り出しと待つ印の確かめだけで、解析も道具の実行もしない
@@ -162,6 +166,8 @@ struct ToolStatus {
 struct ToolContext {
 	// 占有の印を発行しているか（ping の session）。
 	bool session = false;
+	// Vectorworks が起動を終えたか（quit が見る。最初の kNotifyBeforePendingUpdate で立つ）。
+	bool started = false;
 };
 
 // 失敗と終了の依頼は status に書き（戻り値は使わない）、例外は Server が internal で応える。
@@ -190,8 +196,8 @@ struct Tool {
 - 道具の結果は JSON のオブジェクトで返します（[通信規則「応答」](../protocol.md#応答idresjson)）。返す値が無ければ
   `Json()` でよく、`Server` が `{}` にします。オブジェクトでない値は道具の不具合として、`Server` が
   `internal` で応えます。
-- 道具が受け付けの状態を知るのは `ToolContext` からだけです（`ping` の `session`。段 6 で、`quit` が見る「起動を終えた」印も
-  ここで渡す。[道具「quit」](tools.md#quit)）。
+- 道具が受け付けの状態を知るのは `ToolContext` からだけです（`ping` の `session`・`quit` が見る「起動を終えた」印の
+  `started`。[道具「quit」](tools.md#quit)）。
 - 引数の検査は道具の中で行います（JSON Schema の検証器は持たない）。省略できる引数には
   既定値を設け（`inputSchema` の `default` にも書く）、知らない引数・知っている引数の未知の値は
   `invalid_args` で返します（[通信規則「互換性」](../protocol.md#互換性)）。
@@ -212,5 +218,5 @@ struct Tool {
 ## 受け付けの結果
 
 `core::Server::serve` がタイマーへ返す値（`ServeResult`）です。`phase`（`serving` / `waiting` /
-`error`）・`message`（`error` なら理由）・`quit`（終了の依頼）。タイマーが見るのは `quit` だけで、
+`error`）・`message`（`error` なら理由）・`quit`（終了の依頼）。タイマー（`core::tick`）が見るのは `quit` だけで、
 ほかは単体テストで手順を確かめるためにあります。
