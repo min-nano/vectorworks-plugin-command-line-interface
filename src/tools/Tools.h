@@ -26,4 +26,7 @@ core::Json save(const core::Json &args, const core::ToolContext &context, core::
 core::Json close(const core::Json &args, const core::ToolContext &context,
                  core::ToolStatus &status);
 
+// 終了の依頼（Documents.cpp。開いている図面の一覧を図面を扱う道具と同じ口で読む）。
+core::Json quit(const core::Json &args, const core::ToolContext &context, core::ToolStatus &status);
+
 }

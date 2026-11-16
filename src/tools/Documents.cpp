@@ -2,6 +2,7 @@
 
 #include "core/DocumentTools.h"
 #include "core/PathCompare.h"
+#include "core/Quit.h"
 #include "core/SaveTarget.h"
 #include "tools/Text.h"
 #include "tools/Tools.h"
@@ -89,6 +90,14 @@ core::Json close(const core::Json &args, const core::ToolContext & /*context*/,
                  core::ToolStatus &status) {
 	SdkDocuments docs;
 	return core::close(args, docs, status);
+}
+
+// quit は開いている図面の一覧（GetOpenFilesList）だけを読むので、図面を扱う道具と同じ口を使う。
+// 終了は頼まない（終了の依頼を返すだけで、頼むのは受け付けの外の Clock）。
+core::Json quit(const core::Json &args, const core::ToolContext &context,
+                core::ToolStatus &status) {
+	SdkDocuments docs;
+	return core::quit(args, context, docs, status);
 }
 
 }

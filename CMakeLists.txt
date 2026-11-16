@@ -97,8 +97,8 @@ endif()
 
 # --- 共通部（SDK に依らない。プラグインとテストがリンクする） ---------------------------------
 add_library(VwCliCore STATIC src/core/Args.cpp src/core/Bridge.cpp src/core/DocumentTools.cpp
-						   src/core/Json.cpp src/core/Ping.cpp src/core/ReadTools.cpp
-						   src/core/SaveTarget.cpp src/core/Serve.cpp)
+						   src/core/Json.cpp src/core/Ping.cpp src/core/Quit.cpp
+						   src/core/ReadTools.cpp src/core/SaveTarget.cpp src/core/Serve.cpp)
 if(WIN32)
 	# WindowsPath は \\?\ を付ける処理で、スプールと保存先の確かめが共に使う。
 	target_sources(VwCliCore PRIVATE src/core/FilesWindows.cpp src/core/SaveTargetWindows.cpp
@@ -245,7 +245,7 @@ if(VW_BUILD_TESTS)
 	# mac と Windows で印が無ければコンパイルで止まる）。
 	add_executable(VwCliTests tests/BridgeTests.cpp tests/DocumentToolsTests.cpp
 							  tests/FixtureTests.cpp tests/JsonTests.cpp tests/NumberTests.cpp
-							  tests/PathCompareTests.cpp tests/PingTests.cpp
+							  tests/PathCompareTests.cpp tests/PingTests.cpp tests/QuitTests.cpp
 							  tests/ReadToolsTests.cpp tests/SaveTargetTests.cpp
 							  tests/ServeTests.cpp tests/TestMain.cpp tests/TestSupport.cpp)
 	target_link_libraries(VwCliTests PRIVATE VwCliCore)
