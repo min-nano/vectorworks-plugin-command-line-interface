@@ -216,6 +216,57 @@ jobs:
           name: cli-windows-x64.zip
           path: dist/cli-windows-x64.zip
 
+  # Vectorworks 2025 の SDK でプラグインがビルドできるかの確かめ（docs/plugin/build-and-release.md
+  # 「Vectorworks 2025」）。梱包・公開はしない（release は待たない）。2025 の mac の SDK のヘッダは
+  # clang 19 以降で通らないので、ビルドは CI の Xcode 16.2 だけで行い、手元ではビルドしない。
+  build-vw2025:
+    needs: meta
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            sdk: mac
+          - os: windows-latest
+            sdk: win
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      VW_SDK_URL: https://release.vectorworks.net/latest/Vectorworks/2025-NNA-eng-${{ matrix.sdk }}-SDK.zip
+      VW_SDK_DIR: ${{ github.workspace }}/vw-sdk-2025
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      # 取り出すものは meta の出力に頼らず、ここに条件を書く（build-mac の取り出しの手順のコメント）。
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
+      - uses: ./.github/actions/prepare-build
+        with:
+          sha: ${{ needs.meta.outputs.sha }}
+          sdk-cache-prefix: vw-sdk-2025-${{ matrix.sdk }}
+      - if: runner.os == 'macOS'
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app
+      - name: plug-in
+        env:
+          BRANCH: ${{ needs.meta.outputs.branch }}
+        run: |
+          set -eu
+          if [ "$RUNNER_OS" = macOS ]; then
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DVW_SDK_DIR="$VW_SDK_DIR" \
+              -DVW_BUILD_VERSION="$VERSION" -DVW_BUILD_BRANCH="$BRANCH"
+            cmake --build build --target VwCli --parallel "$(sysctl -n hw.ncpu)"
+            lipo -info build/cli.vwlibrary/Contents/MacOS/cli
+            test -e build/cli.vwlibrary/Contents/Resources/cli.vwr
+          else
+            cmake -S . -B build -A x64 -DVW_SDK_DIR="$VW_SDK_DIR" \
+              -DVW_BUILD_VERSION="$VERSION" -DVW_BUILD_BRANCH="$BRANCH"
+            cmake --build build --config Release --target VwCli --parallel
+            test -f build/Release/cli.vlb
+            test -e build/Release/cli.vwr
+          fi
+
   # マニフェストを書き、下書きのリリースに資産を上げ終えてから公開する（下書きは利用者の URL から
   # 見えないので、資産が揃わない間を見せない。latest は公開した時点で進む）。タグは使い回さない。
   release:
