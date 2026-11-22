@@ -44,8 +44,8 @@ main() {
 	2025 | 2026) ;;
 	*) fail "this script is not the one a release published; use $repo/releases/latest/download/get-vw2026.sh" ;;
 	esac
-	command="vw$year"
-	name="get-$command"
+	cli="vw$year"
+	name="get-$cli"
 	latest="$repo/releases/latest/download/$name.sh"
 	valid_tag "$tag" || fail "this script is not the one a release published; use $latest"
 
@@ -103,7 +103,7 @@ main() {
 	if [ "$year" = 2026 ]; then
 		asset="cli-$target.zip"
 	else
-		asset="cli-$command-$target.zip"
+		asset="cli-$cli-$target.zip"
 	fi
 	url="$repo/releases/download/$tag/$asset"
 
@@ -114,14 +114,14 @@ main() {
 	echo "$name: downloading $url" >&2
 	curl -fsSL --retry 3 -o "$tmp/cli.zip" "$url" || fail "cannot download $url"
 	# CLI だけを取り出す（実行ビットは zip のものを保つ）。
-	unzip -q "$tmp/cli.zip" "bin/$command" -d "$tmp" || fail "no bin/$command in $url"
+	unzip -q "$tmp/cli.zip" "bin/$cli" -d "$tmp" || fail "no bin/$cli in $url"
 
 	# 利用者の環境の install の指定（VW2026_INSTALL_CHECK・VW2026_REGISTRY。2025 は VW2025_）は渡さない（この
 	# スクリプトは cli@<tag> を既定のレジストリから入れるだけで、--check もレジストリも受け付けない）。
 	unset "VW${year}_INSTALL_CHECK" "VW${year}_REGISTRY"
 	# 標準入力は渡さない（curl | sh では標準入力がこのスクリプトそのもの）。
 	code=0
-	"$tmp/bin/$command" "$@" </dev/null || code=$?
+	"$tmp/bin/$cli" "$@" </dev/null || code=$?
 	if [ "$code" -eq 6 ]; then
 		echo "$name: Vectorworks is running. Quit Vectorworks and run this script again." >&2
 	fi

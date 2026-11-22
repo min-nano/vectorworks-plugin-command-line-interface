@@ -521,6 +521,26 @@ jobs:
           $dir = "$env:RUNNER_TEMP/release"
           Expand-Archive -LiteralPath $zipPath -DestinationPath $dir
           "RELEASE_DIR=$dir" >> $env:GITHUB_ENV
+      # mac の初回のスクリプト（公開した get-vw<版>.sh）で、一時の <Plug-Ins> に入れて外す（Windows の初回の
+      # スクリプトは install-windows-editions が確かめる）。リンク（~/.local/bin/vw<版>）はランナーのホームに作って
+      # 消す（ランナーは使い捨て）。
+      - if: runner.os == 'macOS'
+        name: first-time script
+        run: |
+          set -eu
+          script="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/get-vw$YEAR.sh"
+          plugins="$RUNNER_TEMP/Plug-Ins"
+          mkdir -p "$plugins"
+          curl -fsSL --retry 4 --retry-delay 5 "$script" | sh -s -- --plugins-dir "$plugins" | tee "$RUNNER_TEMP/install.json"
+          test "$(jq -r .outcome "$RUNNER_TEMP/install.json")" = installed
+          test "$(jq -r .tag "$RUNNER_TEMP/install.json")" = "$TAG"
+          test -x "$plugins/cli/bin/vw$YEAR"
+          test -f "$plugins/cli/vw$YEAR-install.json"
+          test "$(readlink "$HOME/.local/bin/vw$YEAR")" = "$plugins/cli/bin/vw$YEAR"
+          curl -fsSL --retry 4 --retry-delay 5 "$script" | sh -s -- --plugins-dir "$plugins" uninstall | tee "$RUNNER_TEMP/uninstall.json"
+          test "$(jq -r .outcome "$RUNNER_TEMP/uninstall.json")" = uninstalled
+          test ! -e "$plugins/cli"
+          test ! -L "$HOME/.local/bin/vw$YEAR"
       # build.json と CLI の版が、ビルドした sha になっている。CLI はその版のもの（vw2025 は 2025）。
       - run: |
           set -eu
