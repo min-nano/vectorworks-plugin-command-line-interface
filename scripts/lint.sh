@@ -11,10 +11,12 @@ cd "$root"
 
 status=0
 
-# OS ごとに分かれるコード（launch など）があるため、テストを実行する OS それぞれで検査する。
+# OS ごとに分かれるコード（launch など）があるため、テストを実行する OS それぞれで検査する。版ごとに
+# 分かれるコード（ビルドタグ vw2025。docs/plugin/editions.md）も、2026 と 2025 の両方で検査する。
 # cli/ で動かし、ビルドと同じ cli/go.mod の Go の検査ツールを使う。
 for goos in darwin windows; do
 	GOOS="$goos" go -C cli vet ./... || status=1
+	GOOS="$goos" go -C cli vet -tags vw2025 ./... || status=1
 done
 
 # 検査ツールは go.mod の無いリポジトリのルートでは動かないので、tools/ で実行する。

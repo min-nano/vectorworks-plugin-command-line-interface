@@ -8,11 +8,13 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 // helperEnv が設定されていれば、テストの実行ファイルは Start に起動される側として振る舞い、
 // 指定されたファイルを書いてすぐ終わる（TestMain）。
-const helperEnv = "VW2026_LAUNCH_TEST_MARKER"
+const helperEnv = edition.EnvPrefix + "LAUNCH_TEST_MARKER"
 
 func TestMain(m *testing.M) {
 	if marker := os.Getenv(helperEnv); marker != "" {
@@ -64,7 +66,7 @@ func TestCommandMac(t *testing.T) {
 		t.Fatalf("got %v, %v", argv, err)
 	}
 	// .app は存在を確かめずに open -a へ渡す（open が探す）。
-	app := "/Applications/Vectorworks 2026/Vectorworks 2026.app/"
+	app := "/Applications/" + edition.Product + "/" + edition.Product + ".app/"
 	argv, err = command("darwin", app)
 	if err != nil || !reflect.DeepEqual(argv, []string{"/usr/bin/open", "-a", app}) {
 		t.Fatalf("got %v, %v", argv, err)

@@ -3,6 +3,8 @@ package install
 import (
 	"errors"
 	"fmt"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 // ErrRunning は、ロックを掴む Vectorworks が居るので何もしなかった（専用の終了コード）。
@@ -17,7 +19,7 @@ type RunsInsideError struct {
 }
 
 func (e *RunsInsideError) Error() string {
-	return fmt.Sprintf("vw2026 runs from the folder it would uninstall, %s; nothing is removed", e.Dir)
+	return fmt.Sprintf(edition.Command+" runs from the folder it would uninstall, %s; nothing is removed", e.Dir)
 }
 
 // usageError は使い方の誤り（名前・タグ・指定の形）。外からは Usagef で作り、IsUsage で見分ける。

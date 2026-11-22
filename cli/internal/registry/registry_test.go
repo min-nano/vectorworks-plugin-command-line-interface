@@ -3,6 +3,8 @@ package registry
 import (
 	"strings"
 	"testing"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 // 既定のレジストリは CLI に埋め込むので、読めなければ install cli が動かない。cli の規則は
@@ -15,10 +17,10 @@ func TestDefaultRegistry(t *testing.T) {
 	}
 	base := "https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/"
 	for requested, want := range map[string]string{
-		"latest":                     base + "latest/download/vw2026.json",
-		"0.0.0-a1b2c3d":              base + "download/0.0.0-a1b2c3d/vw2026.json",
-		"dev-feature-x-61-a1b2c3d":   base + "download/dev-feature-x-61-a1b2c3d/vw2026.json",
-		"latest-but-not-the-keyword": base + "download/latest-but-not-the-keyword/vw2026.json",
+		"latest":                     base + "latest/download/" + edition.Command + ".json",
+		"0.0.0-a1b2c3d":              base + "download/0.0.0-a1b2c3d/" + edition.Command + ".json",
+		"dev-feature-x-61-a1b2c3d":   base + "download/dev-feature-x-61-a1b2c3d/" + edition.Command + ".json",
+		"latest-but-not-the-keyword": base + "download/latest-but-not-the-keyword/" + edition.Command + ".json",
 	} {
 		rule, ok := cli.Select(requested)
 		if !ok || rule.Location(requested) != want {
@@ -88,7 +90,7 @@ func TestMatch(t *testing.T) {
 func TestSelectFirstMatch(t *testing.T) {
 	entry := Entry{Manifests: []Rule{
 		{Match: "stable", Path: "https://example.com/stable.json"},
-		{Match: "*", Path: "https://example.com/{tag}/vw2026.json"},
+		{Match: "*", Path: "https://example.com/{tag}/" + edition.Command + ".json"},
 		{Match: "stable", Path: "https://example.com/never.json"},
 	}}
 	if rule, _ := entry.Select("stable"); rule.Path != "https://example.com/stable.json" {

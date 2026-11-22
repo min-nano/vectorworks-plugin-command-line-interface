@@ -63,12 +63,15 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
   渡したいときも `"VW_SDK_DIR": "$env{VW_SDK_DIR}"` と `cacheVariables` に書きます。
 - `jobs` はマシンに合わせます（目安はコア数）。
 - プリセットはスキーマの `version: 2` なので、CMake 3.20 で足ります。
+- **Vectorworks 2025 のプラグインは手元でビルドしません。** CI の `build-mac-vw2025`・`build-windows-vw2025` だけで
+  ビルドします。手元の Command Line Tools（Apple clang 19 以降）では 2025 の SDK のヘッダで止まります
+  （[版「ビルド」](editions.md#ビルド)）。
 
 ## CI
 
 | ワークフロー | 起動 | 中身 |
 | --- | --- | --- |
-| `go.yml`（既存） | push / PR・マージキュー | Go のテスト（macOS・Windows）と、配る 3 つのターゲットへのビルドの確かめ（出力は上げない）。両方の OS のカバレッジを Codecov へ送る（どちらもフラグ `go`）。ubuntu で `spool.NestingDepth` のファジングを 2 つの対象で 30 秒ずつ回す |
+| `go.yml`（既存） | push / PR・マージキュー | Go のテスト（macOS・Windows）と、配る 3 つのターゲットへのビルドの確かめ（出力は上げない）。テストとビルドは 2026 と 2025（`-tags vw2025`。[版](editions.md)）の両方で行う。両方の OS・両方の版のカバレッジを Codecov へ送る（どれもフラグ `go`）。ubuntu で `spool.NestingDepth` のファジングを 2 つの対象で 30 秒ずつ回す |
 | `format.yml`（既存） | push / PR・マージキュー | `scripts/format.sh`（[整形](../format.md)。gofmt・shfmt・clang-format・PSScriptAnalyzer） |
 | `cpp.yml` | push / PR・マージキュー | 無 SDK の単体テストと通信規則の見本の照合（macOS は ASan・UBSan 付き、Windows は MSVC で付けない）。macOS（clang の source-based coverage）と Windows（MSVC のビルドを `Microsoft.CodeCoverage.Console` で）の単体テストでカバレッジを測り、共通部（`src/core`）の分を Codecov へ送る（どちらもフラグ `cpp`。`FilesWindows.cpp` は Windows の分にだけ入る。段 5 から足すパスを比べる包みも、`PathCompareMac.cpp` は macOS の分に、`PathCompareWindows.cpp` は Windows の分にだけ入る（どちらも `VwCliTests` の中で走るので、いまの測り方のままでよい）。Windows の範囲は `tests/MsvcCoverage.xml`。Windows はテストを計測の下で 1 回だけ走らせる）。ubuntu の clang で同じテストを ASan・UBSan 付きで走らせ（ただし `save` の `to` を開いている図面と比べる OS の呼び出しの包み（`PathCompareMac.cpp`・`PathCompareWindows.cpp`）は mac と Windows でだけビルドし、そのテストは Linux では中身の無い翻訳単位になる。[道具「パスの一致の判定」](tools.md#図面を扱う道具documentssaveclose)）、`core/Json` のファジングを 120 秒回す |
 | `lint.yml`（既存） | push / PR・マージキュー | `scripts/lint.sh`（[検査](../lint.md)。go vet・actionlint・shellcheck・clang-tidy（無 SDK）・PSScriptAnalyzer） |
@@ -81,12 +84,12 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
 | ジョブ | 中身 |
 | --- | --- |
 | `meta` | ビルドする sha・刻印・公開先のタグ（`0.0.0-<短い sha>` / `dev-<slug>-<PR 番号>-<短い sha>` / 公開しない）を決め、`build.json` を書く（mac と Windows の zip に同じものを入れる）。ビルドのジョブは取り出すコミットを `meta` の出力に頼らず、同じ条件（同じリポジトリの PR だけ head）を自分の `checkout` に書き、取り出したものが `meta` の sha と同じかを確かめる（CodeQL が信頼できないコードの取り出しでないと読めるように。`meta` を変えても取り出すものが変わらないように） |
-| `build-mac` | `macos-15`・Xcode 16.2（SDK リファレンスの `plugin/` と同じ）。プラグインのビルドとアドホック署名、Go の arm64 と amd64 を `lipo` で universal に、zip |
-| `build-windows` | `windows-latest`・MSVC。プラグインのビルド、Go の amd64、zip（.NET の `ZipFile`。項目の名前の区切りを `/` にするため。Windows PowerShell 5.1 の `Compress-Archive` は `\` にする） |
-| `release` | 公開するときだけ。2 つの zip の sha256 を求めてマニフェスト（`vw2026.json`。[レジストリ「マニフェスト」](../registry.md#マニフェストvw2026json)）を書き、**下書きのリリース**を作って、zip・マニフェスト・初回のスクリプトを上げ終えてから公開する（下書きは利用者の URL から見えないので、資産が揃わない間を見せない。`latest` は公開した時点で進む）。**そのタグの公開済みのリリースが既にあれば、タグが指すコミットが今回の完全な sha と同じなら何もせず（同じ sha の実行し直し。タグを使い回さない）、違えば失敗にする**（短い sha が重なった。[リリースの形](#リリースの形)）。下書きのまま残ったもの（前の実行が途中で止まった）は消して作り直す。PR では、同じ PR の別のタグの下書き（push で止められた前の実行のもの）も消す |
-| `verify` | 公開した資産を利用者と同じ道筋（既定のレジストリの `cli` の規則が指すマニフェスト → その `asset`）で mac と Windows で取ってきて、マニフェストの `tag` が公開したタグで sha256 が zip と合うこと、zip の直下が `build.json`・`bin/`・`hooks/`・プラグインだけで `bin/` の中が CLI だけであること、`build.json` と `bin/vw2026 version` の版がビルドした sha であること（mac は署名と `.vwr` も）を確かめる。main で `--latest` を付けて公開したときは、`latest` の規則（`releases/latest/download/vw2026.json`）でも取り、公開したタグを指すことを確かめる |
+| `build-mac` | `macos-15`・Xcode 16.2（SDK リファレンスの `plugin/` と同じ）。プラグインのビルドとアドホック署名、Go の arm64 と amd64 を `lipo` で universal に、zip。版の行列で走り、2026 は `build-mac`、2025 は `build-mac-vw2025`（2025 の SDK と `-tags vw2025`。[版「ビルド」](editions.md#ビルド)） |
+| `build-windows` | `windows-latest`・MSVC。プラグインのビルド、Go の amd64、zip（.NET の `ZipFile`。項目の名前の区切りを `/` にするため。Windows PowerShell 5.1 の `Compress-Archive` は `\` にする）。版の行列で走り、2026 は `build-windows`、2025 は `build-windows-vw2025` |
+| `release` | 公開するときだけ。版ごとに 2 つの zip の sha256 を求めてマニフェスト（`vw2026.json`・`vw2025.json`。[レジストリ「マニフェスト」](../registry.md#マニフェストvw2026json)）を書き、**下書きのリリース**を作って、zip・マニフェスト・初回のスクリプトを上げ終えてから公開する（下書きは利用者の URL から見えないので、資産が揃わない間を見せない。`latest` は公開した時点で進む）。**そのタグの公開済みのリリースが既にあれば、タグが指すコミットが今回の完全な sha と同じなら何もせず（同じ sha の実行し直し。タグを使い回さない）、違えば失敗にする**（短い sha が重なった。[リリースの形](#リリースの形)）。下書きのまま残ったもの（前の実行が途中で止まった）は消して作り直す。PR では、同じ PR の別のタグの下書き（push で止められた前の実行のもの）も消す |
+| `verify` | 公開した資産を利用者と同じ道筋（既定のレジストリの `cli` の規則が指すマニフェスト → その `asset`）で mac と Windows で、版ごとに取ってきて、マニフェストの `tag` が公開したタグで sha256 が zip と合うこと、zip の直下が `build.json`・`bin/`・`hooks/`・プラグインだけで `bin/` の中が CLI だけであること、`build.json` と `bin/vw2026 version` の版がビルドした sha であること（mac は署名と `.vwr` も）を確かめる。mac では、公開した初回のスクリプト（`get-vw2026.sh`・`get-vw2025.sh`）で一時の `<Plug-Ins>` に入れて外す（Windows の初回のスクリプトは `install-windows` が確かめる）。main で `--latest` を付けて公開したときは、`latest` の規則（`releases/latest/download/vw2026.json`）でも取り、公開したタグを指すことを確かめる |
 | `verify-result` | `verify` の結果を 1 つのチェックにまとめる（必須のチェックにするため）。公開するときは `release` と `verify` が成功したこと、公開しないときはどちらも飛ばされたことを確かめる。`verify` は行列のジョブで、公開しないときは行列を展開する前に飛ばされ、行列の値の入った名前（`verify (macos-latest, macos-arm64)` 等）のチェックを出さないので、`verify` そのものは必須にできない。前のジョブが失敗・中止しても飛ばされないよう `always()` で走らせる |
-| `install-windows` | PR のプレリリースを公開したときだけ（`needs: [meta, release]`。main では走らせない）。`windows-latest` で、PR の CLI を `install cli@<その PR のタグ>` で `<Plug-Ins>\cli\` に入れ、**入った PR の CLI に**、タグの違う記録にしてからの `install` と `install cli@latest` を走らせて、PR の Go のコードに動いている自分をよけさせる（PR でよけ方を壊したら落ちるように）。入った CLI の `uninstall cli` が断って初回のスクリプトを示すことと、フォルダの外の PR の CLI（初回のスクリプトと同じ形）が何も残さずに外すことも確かめる。利用者の `Path` の型と既存の項目が保たれることも確かめる。**PR の CLI が `latest` を入れられないとき（段 3b の PR 自身で `latest` にマニフェストが無い・PR の CLI が `latest` の `manifest_version` を読めない）は、`install cli@latest` を飛ばす**（[インストール「テスト」](install-and-update.md#テスト)） |
+| `install-windows` | PR のプレリリースを公開したときだけ（`needs: [meta, release]`。main では走らせない）。版の行列のジョブ `install-windows-editions`（2025 は `vw2025` と 2025 の `<Plug-Ins>`）で走らせ、`install-windows` がその結果を 1 つのチェックにまとめる（必須のチェック。`verify-result` と同じ理由で、行列のジョブは飛ばされると行列の値の入った名前のチェックを出さない。PR のプレリリースを公開したときは成功を、それ以外は飛ばされたことを確かめる）。`windows-latest` で、PR の CLI を `install cli@<その PR のタグ>` で `<Plug-Ins>\cli\` に入れ、**入った PR の CLI に**、タグの違う記録にしてからの `install` と `install cli@latest` を走らせて、PR の Go のコードに動いている自分をよけさせる（PR でよけ方を壊したら落ちるように）。入った CLI の `uninstall cli` が断って初回のスクリプトを示すことと、フォルダの外の PR の CLI（初回のスクリプトと同じ形）が何も残さずに外すことも確かめる。利用者の `Path` の型と既存の項目が保たれることも確かめる。**PR の CLI が `latest` を入れられないとき（段 3b の PR 自身で `latest` にマニフェストが無い・PR の CLI が `latest` の `manifest_version` を読めない）は、`install cli@latest` を飛ばす**（[インストール「テスト」](install-and-update.md#テスト)） |
 
 fork の PR・マージキュー・main 以外の手動の実行は、マージのためのコミット（fork の PR）またはその ref を
 ビルドするだけで、公開しません（`build.yml` も必須のチェックにできるよう、`merge_group` を付ける）。
@@ -121,6 +124,11 @@ fork の PR・マージキュー・main 以外の手動の実行は、マージ�
 - 自動レビューは差し当たり持ちません（持つなら Secrets に `CLAUDE_CODE_OAUTH_TOKEN` が要る）。
 - 署名はアドホック（`codesign --force --deep --sign -`）。Developer ID と公証はしません。
 
+### Vectorworks 2025
+
+2025 の `cli` も同じジョブで作り、同じリリースに上げます。名前と、2025 のプラグインを手元でビルドしない理由は
+[版](editions.md)にあります。
+
 ## 梱包
 
 `build.yml` の mac ジョブで Go もビルドし、`lipo` で universal にします（Go は arm64 の
@@ -135,6 +143,9 @@ cli-macos-arm64.zip                     cli-windows-x64.zip
    └─ hooks/（install.sh・uninstall.sh・    └─ hooks\（install.ps1・uninstall.ps1・
             lib.sh）                                 lib.ps1）
 ```
+
+2025 の zip（`cli-vw2025-macos-arm64.zip`・`cli-vw2025-windows-x64.zip`）も同じ形で、`bin/` の CLI が `vw2025`
+（`vw2025.exe`）です（[版](editions.md)）。
 
 zip の中身はそのまま `<Plug-Ins>/cli/` に置かれ、`bin/` の CLI もそこから動かします。`hooks/` のフックは
 PATH だけを置きます（[インストール「CLI とスプールの置き場所」](install-and-update.md#cli-とスプールの置き場所)）。zip の項目の区切りは
@@ -184,9 +195,10 @@ PATH だけを置きます（[インストール「CLI とスプールの置き�
   （`github.event.pull_request.head.repo.full_name == github.repository`）でだけ走らせる。fork の
   head は信頼できないコードで、`github.head_ref` はどのリポジトリのブランチかを区別しない。
 - 資産: `vw2026.json`（マニフェスト）・`cli-macos-arm64.zip` / `cli-windows-x64.zip`・
-  `get-vw2026.{sh,ps1}`（初回のスクリプト。利用者は `releases/latest/download/` のものを使う）。
-  初回のスクリプトはビルドしたコミットの `scripts/get-vw2026.{sh,ps1}` の `@VW2026_TAG@` をそのリリースのタグに置き換えて
-  上げる（どのリリースから取ったスクリプトも、そのリリースの `cli` を入れる・外す。置き換えたかは `release` が確かめる。
+  `get-vw2026.{sh,ps1}`（初回のスクリプト。利用者は `releases/latest/download/` のものを使う）と、2025 の
+  同じもの（`vw2025.json`・`cli-vw2025-macos-arm64.zip` / `cli-vw2025-windows-x64.zip`・`get-vw2025.{sh,ps1}`。[版](editions.md)）。
+  初回のスクリプトはビルドしたコミットの雛形 `scripts/get-vw.{sh,ps1}` の `@VW_TAG@` をそのリリースのタグに、`@VW_YEAR@` を
+  版に置き換えて上げる（どのリリースから取ったスクリプトも、そのリリースのその版の `cli` を入れる・外す。置き換えたかは `release` が確かめる。
   [インストール「初回のスクリプト」](install-and-update.md#初回のスクリプトget-vw2026sh--ps1)）。PowerShell のものは ASCII だけで書き、
   BOM を除いて上げる（Windows PowerShell 5.1 の `Invoke-RestMethod` は charset の無い本文を ISO-8859-1 で読むので、
   BOM や ASCII の外の文字が `iex` に崩れて渡る。`release` が確かめる）。段 2 の `build.yml` は転がりタグ `stable` と

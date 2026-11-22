@@ -4,6 +4,10 @@
 # cli. The tag is that of the release the script came from; for another tag, fetch the script of
 # that tag. It runs on Windows PowerShell 5.1.
 #
+# This file is a template: the release writes its tag and the edition into it to make
+# get-vw2026.ps1 and get-vw2025.ps1 (docs/plugin/editions.md). The one of 2025 takes out vw2025.exe
+# and installs or uninstalls the cli of Vectorworks 2025.
+#
 # This file is ASCII only, and the release uploads it without the BOM. Invoke-RestMethod in
 # Windows PowerShell 5.1 decodes a body without a charset (a release asset) as ISO-8859-1, so a
 # BOM or any non-ASCII text would reach Invoke-Expression garbled.
@@ -33,11 +37,19 @@
 	# The release replaces the tag with its own when it publishes the script
 	# (docs/plugin/build-and-release.md). The script of any release installs and uninstalls the cli
 	# of that release.
-	$tag = '@VW2026_TAG@'
+	# The release writes the edition (2026 or 2025) too. It decides the names of the command, the
+	# environment variables, and the asset.
+	$tag = '@VW_TAG@'
+	$year = '@VW_YEAR@'
+	if ($year -cnotmatch '^(2025|2026)$') {
+		throw "get-vw: this script is not the one a release published; use $repo/releases/latest/download/get-vw2026.ps1"
+	}
+	$command = 'vw' + $year
+	$name = 'get-' + $command
 	# Only the characters of a tag (docs/registry.md), as it goes into the URL; this also refuses
 	# the script of the repository, which no release has replaced.
 	if ($tag -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') {
-		throw "get-vw2026: this script is not the one a release published; use $repo/releases/latest/download/get-vw2026.ps1"
+		throw "${name}: this script is not the one a release published; use $repo/releases/latest/download/$name.ps1"
 	}
 
 	# The only positional argument is uninstall (or uninstall cli), and the only flag is
@@ -60,7 +72,7 @@
 				continue
 			}
 			if ($arg.StartsWith('-')) {
-				throw "get-vw2026: unknown flag: $arg (this script takes only --plugins-dir)"
+				throw "${name}: unknown flag: $arg (this script takes only --plugins-dir)"
 			}
 			$positional++
 			if ($positional -eq 1 -and $arg -ceq 'uninstall') {
@@ -71,7 +83,7 @@
 			if ($positional -eq 2 -and $uninstall -and $arg -ceq 'cli') {
 				continue
 			}
-			throw "get-vw2026: unexpected argument: $arg (this script installs cli@$tag; for another tag, use $repo/releases/download/<tag>/get-vw2026.ps1)"
+			throw "${name}: unexpected argument: $arg (this script installs cli@$tag; for another tag, use $repo/releases/download/<tag>/$name.ps1)"
 		})
 	if ($uninstall) {
 		$argv = @('uninstall', 'cli') + $flags
@@ -81,17 +93,24 @@
 	}
 
 	# The target is windows-x64 (Vectorworks runs as x64 on Windows on ARM too). The URL has the
-	# shape of the rules of cli in the default registry; the script does not read the manifest.
-	$url = "$repo/releases/download/$tag/cli-windows-x64.zip"
+	# shape of the rules of cli in the default registry; the script does not read the manifest. The
+	# asset of 2026 is cli-windows-x64.zip, and that of 2025 is cli-vw2025-windows-x64.zip.
+	if ($year -ceq '2026') {
+		$asset = 'cli-windows-x64.zip'
+	}
+	else {
+		$asset = 'cli-' + $command + '-windows-x64.zip'
+	}
+	$url = "$repo/releases/download/$tag/$asset"
 
 	# Windows PowerShell 5.1 may not use TLS 1.2 by default.
 	[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-	$temp = Join-Path ([IO.Path]::GetTempPath()) ('get-vw2026-' + [Guid]::NewGuid().ToString('N'))
+	$temp = Join-Path ([IO.Path]::GetTempPath()) ($name + '-' + [Guid]::NewGuid().ToString('N'))
 	[void] (New-Item -ItemType Directory -Path $temp)
 	try {
 		$zip = Join-Path $temp 'cli.zip'
-		[Console]::Error.WriteLine("get-vw2026: downloading $url")
-		# Retry a failure that may pass on its own, as curl --retry 3 does in get-vw2026.sh: no response,
+		[Console]::Error.WriteLine("${name}: downloading $url")
+		# Retry a failure that may pass on its own, as curl --retry 3 does in get-vw.sh: no response,
 		# 408, 429 or 5xx, up to 3 more times, 1, 2 and 4 seconds apart. Other failures stop at once.
 		for ($attempt = 0; ; $attempt++) {
 			try {
@@ -107,18 +126,18 @@
 				if ($attempt -ge 3 -or -not $transient) {
 					throw
 				}
-				[Console]::Error.WriteLine("get-vw2026: retrying $url ($($_.Exception.Message))")
+				[Console]::Error.WriteLine("${name}: retrying $url ($($_.Exception.Message))")
 				Start-Sleep -Seconds ([int] [math]::Pow(2, $attempt))
 			}
 		}
 		# Take out the CLI only.
 		Add-Type -AssemblyName System.IO.Compression.FileSystem
-		$exe = Join-Path $temp 'vw2026.exe'
+		$exe = Join-Path $temp ($command + '.exe')
 		$archive = [IO.Compression.ZipFile]::OpenRead($zip)
 		try {
-			$entry = $archive.GetEntry('bin/vw2026.exe')
+			$entry = $archive.GetEntry('bin/' + $command + '.exe')
 			if (-not $entry) {
-				throw "get-vw2026: no bin/vw2026.exe in $url"
+				throw "${name}: no bin/$command.exe in $url"
 			}
 			[IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $exe)
 		}
@@ -144,8 +163,8 @@
 		# The install flags of the user's environment are not passed on (this script installs
 		# cli@<tag> from the default registry only, and takes neither --check nor a registry). They
 		# are removed from the child's environment only, not from the session.
-		[void] $info.EnvironmentVariables.Remove('VW2026_INSTALL_CHECK')
-		[void] $info.EnvironmentVariables.Remove('VW2026_REGISTRY')
+		[void] $info.EnvironmentVariables.Remove('VW' + $year + '_INSTALL_CHECK')
+		[void] $info.EnvironmentVariables.Remove('VW' + $year + '_REGISTRY')
 		$info.RedirectStandardOutput = $true
 		$info.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
 		$process = [Diagnostics.Process]::Start($info)
@@ -157,7 +176,7 @@
 			$output.TrimEnd("`r", "`n")
 		}
 		if ($LASTEXITCODE -eq 6) {
-			[Console]::Error.WriteLine('get-vw2026: Vectorworks is running. Quit Vectorworks and run this script again.')
+			[Console]::Error.WriteLine($name + ': Vectorworks is running. Quit Vectorworks and run this script again.')
 		}
 	}
 	finally {

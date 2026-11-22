@@ -7,6 +7,8 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 // userTempDir は利用者ごとの一時フォルダ（confstr(_CS_DARWIN_USER_TEMP_DIR)）。cgo を使わないので
@@ -33,7 +35,7 @@ func defaultPluginsDir() (string, error) {
 	if !filepath.IsAbs(current.HomeDir) {
 		return "", errors.New("the home folder is unknown")
 	}
-	return filepath.Join(current.HomeDir, "Library", "Application Support", "Vectorworks", "2026", "Plug-Ins"), nil
+	return filepath.Join(current.HomeDir, "Library", "Application Support", "Vectorworks", edition.Year, "Plug-Ins"), nil
 }
 
 // machineIsArm64 は計算機が arm64 か。mac の CLI は universal なので、Rosetta の下の端末からは

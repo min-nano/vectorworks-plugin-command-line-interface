@@ -1,5 +1,6 @@
 #!/bin/sh
-# cli の uninstall のフック（mac）。~/.local/bin/vw2026 が <Plug-Ins>/cli/bin/vw2026 を指すリンク（同じ
+# cli の uninstall のフック（mac）。~/.local/bin/vw2026 が <Plug-Ins>/cli/bin/vw2026 を指すリンク（2025 の CLI が
+# 走らせたときは vw2025。lib.sh の hook_year。同じ
 # ディレクトリを別の書き方で指すものも含む。lib.sh の link_points_to）のときだけ消し、標準出力に
 # {"path":…,"left":[…]} を 1 つだけ書く
 # （docs/plugin/install-and-update.md「`uninstall` のフック」）。
@@ -16,13 +17,15 @@ set -u
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib.sh"
 
-install_dir="$(absolute_dir VW2026_HOOK_INSTALL_DIR "${VW2026_HOOK_INSTALL_DIR-}")" || exit 1
+year="$(hook_year)" || exit 1
+install_dir="$(hook_install_dir "$year")" || exit 1
+command="vw$year"
 home="$(absolute_dir HOME "${HOME-}")" || exit 1
-link="$home/.local/bin/vw2026"
+link="$home/.local/bin/$command"
 
 state=none
 left=""
-if link_points_to "$link" "$install_dir/bin/vw2026"; then
+if link_points_to "$link" "$install_dir/bin/$command"; then
 	rm -f "$link" 2>/dev/null
 	if [ -L "$link" ]; then
 		state=failed

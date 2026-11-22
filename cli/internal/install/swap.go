@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
 
@@ -104,9 +105,9 @@ func (o *Options) finishInstall(p places, name, tag string, moved *movedCLI, had
 		note = moved.restoreInto(keptDir)
 	}
 	if kept != nil {
-		fmt.Fprintf(o.stderr(), "vw2026: %v%s\n", kept, note)
+		fmt.Fprintf(o.stderr(), edition.Command+": %v%s\n", kept, note)
 	} else if note != "" {
-		fmt.Fprintf(o.stderr(), "vw2026: the previous version is kept in %s%s\n", keptDir, note)
+		fmt.Fprintf(o.stderr(), edition.Command+": the previous version is kept in %s%s\n", keptDir, note)
 	}
 	_ = removeStaging(p)
 	_ = removeFile(p.marker)
@@ -224,7 +225,7 @@ func (o *Options) settleOld(p places, name, again, advice string) (string, error
 	if err := rename(p.oldDir, kept); err != nil {
 		return "", renameError(p.oldDir, err, again)
 	}
-	fmt.Fprintf(o.stderr(), "vw2026: the previous folder of %s has no valid record or module, so it is kept in %s "+
+	fmt.Fprintf(o.stderr(), edition.Command+": the previous folder of %s has no valid record or module, so it is kept in %s "+
 		"(it may hold your files); delete it when it is no longer needed\n", name, kept)
 	return kept, nil
 }
@@ -246,7 +247,7 @@ func (o *Options) discard(p places, name, command string) error {
 		return renameError(p.oldDir, err, command)
 	}
 	if err := removeAll(p.stageDir); err != nil {
-		fmt.Fprintf(o.stderr(), "vw2026: %s cannot be deleted yet (%v); the next install or uninstall of %s deletes it\n",
+		fmt.Fprintf(o.stderr(), edition.Command+": %s cannot be deleted yet (%v); the next install or uninstall of %s deletes it\n",
 			p.stageDir, err, name)
 	}
 	return nil

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 // fakeExecutable は <dir>/cli/bin/vw2026 に空のファイルを作り、そのパスと、期待するスプール
@@ -19,7 +21,7 @@ func fakeExecutable(t *testing.T) (executable, spool string) {
 	if err := os.MkdirAll(bin, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	executable = filepath.Join(bin, "vw2026")
+	executable = filepath.Join(bin, edition.Command)
 	if err := os.WriteFile(executable, nil, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +39,7 @@ func TestDirOfIsNextToTheBinFolder(t *testing.T) {
 // 求める。
 func TestDirOfFollowsLinks(t *testing.T) {
 	executable, want := fakeExecutable(t)
-	link := filepath.Join(t.TempDir(), "vw2026")
+	link := filepath.Join(t.TempDir(), edition.Command)
 	if err := os.Symlink(executable, link); err != nil {
 		// Windows はシンボリックリンクを作るのに権限（開発者モード）が要る。PATH に載せるのは
 		// フォルダなので、リンクを通して走ることは無い。
@@ -51,7 +53,7 @@ func TestDirOfFollowsLinks(t *testing.T) {
 // リンクを解けなければ（ここでは実行ファイルが無い）、解く前のパスから求める。
 func TestDirOfFallsBackToTheGivenPath(t *testing.T) {
 	root := t.TempDir()
-	executable := filepath.Join(root, "cli", "bin", "vw2026")
+	executable := filepath.Join(root, "cli", "bin", edition.Command)
 	if got, want := DirOf(executable), filepath.Join(root, "cli", SpoolDirName); got != want {
 		t.Fatalf("DirOf(%s) = %s, want %s", executable, got, want)
 	}
@@ -65,7 +67,7 @@ func TestDirIgnoresEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := DirOf(executable)
-	for _, name := range []string{"VW2026_SPOOL", "HOME", "LOCALAPPDATA", "APPDATA", "TMPDIR"} {
+	for _, name := range []string{edition.EnvPrefix + "SPOOL", "HOME", "LOCALAPPDATA", "APPDATA", "TMPDIR"} {
 		t.Setenv(name, t.TempDir())
 	}
 	if got, err := Dir(); err != nil || got != want {

@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 // UninstallResult は uninstall の出力。
@@ -106,7 +108,7 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 			if record != nil && record.Name == name {
 				reason = fmt.Sprintf("its module %s is missing; run install to repair it first", record.Module)
 			}
-			return nil, false, fmt.Errorf("%s is not a plug-in that vw2026 installed (%s); nothing is removed", p.dest, reason)
+			return nil, false, fmt.Errorf("%s is not a plug-in that "+edition.Command+" installed (%s); nothing is removed", p.dest, reason)
 		}
 		// 走らせている CLI がフォルダの中にあれば（入れた cli の vw2026 で uninstall cli）、外さない。外すと
 		// CLI は使わなくなるので、フォルダの外で動く CLI（初回のスクリプトの一時フォルダのもの）で外す。

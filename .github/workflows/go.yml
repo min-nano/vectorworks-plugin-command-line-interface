@@ -36,13 +36,17 @@ jobs:
       # PowerShell は「.」を区切り文字として解釈し -coverprofile=coverage.out が 2 つの引数として入力されるため、bash で実行する。
       - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
         shell: bash
+      # 2025 の CLI（ビルドタグ vw2025。docs/plugin/editions.md）も同じテストで確かめる。版で分かれるファイルが
+      # どちらかの回でだけ走るので、両方の結果を送る。
+      - run: go test -race -tags vw2025 -covermode=atomic -coverprofile=coverage-vw2025.out ./...
+        shell: bash
       # OS ごとに分岐するコード（launch 等）があるので、全 OS の結果を送る（Codecov で重なる）。
       # C++（cpp.yml の cpp）と分けて見られるように、go のフラグを付ける。
       # 第三者の Action なのでコミットに固定する（上げるのは Dependabot）。
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: cli/coverage.out
+          files: cli/coverage.out,cli/coverage-vw2025.out
           flags: go
           fail_ci_if_error: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
 
@@ -92,4 +96,6 @@ jobs:
             os="${target%/*}"; arch="${target#*/}"
             CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
               go build -trimpath -o "$RUNNER_TEMP/vw2026-${os}-${arch}" ./cmd/vw2026
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
+              go build -trimpath -tags vw2025 -o "$RUNNER_TEMP/vw2025-${os}-${arch}" ./cmd/vw2026
           done

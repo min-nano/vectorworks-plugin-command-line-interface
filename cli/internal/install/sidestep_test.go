@@ -5,11 +5,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 // fakeExecutable は <Plug-Ins>/cli/bin/vw2026（入れた cli の CLI）。
 func (h *harness) fakeExecutable() string {
-	return filepath.Join(h.plugins, "cli", "bin", "vw2026")
+	return filepath.Join(h.plugins, "cli", "bin", edition.Command)
 }
 
 // 走らせている CLI が付け替えるフォルダの中にあれば、<Work>/old/ へよけてから付け替える。
@@ -52,12 +54,12 @@ func TestCleanOldCLIs(t *testing.T) {
 	h.installCLI()
 	old := filepath.Join(h.work, "old")
 	os.MkdirAll(old, 0o700)
-	keep := []string{"vw2026", "vw2026.old", "other.old-1", "cli.uninstalling.old-x"}
-	for _, name := range append(keep, "vw2026.old-1", "vw2026.exe.old-2", "vw2026.old-busy") {
+	keep := []string{edition.Command, edition.Command + ".old", "other.old-1", "cli.uninstalling.old-x"}
+	for _, name := range append(keep, edition.Command+".old-1", edition.Command+".exe.old-2", edition.Command+".old-busy") {
 		os.WriteFile(filepath.Join(old, name), nil, 0o600)
 	}
-	os.Mkdir(filepath.Join(old, "vw2026.old-dir"), 0o700)
-	busy := filepath.Join(old, "vw2026.old-busy")
+	os.Mkdir(filepath.Join(old, edition.Command+".old-dir"), 0o700)
+	busy := filepath.Join(old, edition.Command+".old-busy")
 	pathOpWhen(t, &removeFile, func(path string) error {
 		if path == busy {
 			return os.ErrPermission
@@ -65,10 +67,10 @@ func TestCleanOldCLIs(t *testing.T) {
 		return nil
 	})
 	h.mustInstall(release{name: "cli", tag: "c2"})
-	if !exists(busy) || exists(filepath.Join(old, "vw2026.old-1")) || exists(filepath.Join(old, "vw2026.exe.old-2")) {
+	if !exists(busy) || exists(filepath.Join(old, edition.Command+".old-1")) || exists(filepath.Join(old, edition.Command+".exe.old-2")) {
 		t.Fatal("install should delete what it can")
 	}
-	for _, name := range append(keep, "vw2026.old-dir") {
+	for _, name := range append(keep, edition.Command+".old-dir") {
 		if !exists(filepath.Join(old, name)) {
 			t.Errorf("deleted %s", name)
 		}
@@ -83,17 +85,17 @@ func TestCleanOldCLIs(t *testing.T) {
 func TestWithin(t *testing.T) {
 	tmp := t.TempDir()
 	dir := filepath.Join(tmp, "Plug-Ins", "cli")
-	executable := filepath.Join(dir, "bin", "vw2026")
+	executable := filepath.Join(dir, "bin", edition.Command)
 	os.MkdirAll(filepath.Dir(executable), 0o755)
 	os.WriteFile(executable, nil, 0o700)
-	outside := filepath.Join(tmp, "elsewhere", "vw2026")
+	outside := filepath.Join(tmp, "elsewhere", edition.Command)
 	os.MkdirAll(filepath.Dir(outside), 0o755)
 	os.WriteFile(outside, nil, 0o700)
 
 	check := func(name, path, dir string, want bool) {
 		t.Helper()
 		rel, ok := within(path, dir)
-		if ok != want || (ok && filepath.ToSlash(rel) != "bin/vw2026") {
+		if ok != want || (ok && filepath.ToSlash(rel) != "bin/"+edition.Command) {
 			t.Errorf("%s: %q %v", name, rel, ok)
 		}
 	}
@@ -119,7 +121,7 @@ func TestWithin(t *testing.T) {
 func TestSidestepFollowsTheLink(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
-	link := filepath.Join(h.tmp, "local-bin", "vw2026")
+	link := filepath.Join(h.tmp, "local-bin", edition.Command)
 	os.MkdirAll(filepath.Dir(link), 0o755)
 	if err := os.Symlink(h.fakeExecutable(), link); err != nil {
 		t.Skip("cannot make a symbolic link:", err)

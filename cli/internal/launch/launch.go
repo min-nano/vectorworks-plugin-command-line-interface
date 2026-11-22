@@ -17,14 +17,17 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
-// DefaultMacApp は macOS で起動するアプリの名前。プラグインは Vectorworks 2026 用なので、
-// その版だけを起動する（別の版ではプラグインが読み込まれない）。
-const DefaultMacApp = "Vectorworks 2026"
+// DefaultMacApp は macOS で起動するアプリの名前（Vectorworks 2026。2025 の CLI は Vectorworks 2025）。
+// プラグインはその版用なので、その版だけを起動する（別の版ではプラグインが読み込まれない）。
+const DefaultMacApp = edition.Product
 
-// defaultWindowsExe は Windows の既定のインストール先の実行ファイル（%ProgramFiles% の下）。
-const defaultWindowsExe = `Vectorworks 2026\Vectorworks2026.exe`
+// defaultWindowsExe は Windows の既定のインストール先の実行ファイル（%ProgramFiles% の下の
+// Vectorworks 2026\Vectorworks2026.exe。2025 の CLI は 2025）。
+const defaultWindowsExe = edition.Product + `\Vectorworks` + edition.Year + `.exe`
 
 // Command は起動するコマンド（argv）を返す。
 func Command(app string) ([]string, error) {
@@ -51,7 +54,7 @@ func command(goos, app string) ([]string, error) {
 		if info, err := os.Stat(exe); err == nil && !info.IsDir() {
 			return []string{exe}, nil
 		}
-		return nil, fmt.Errorf("Vectorworks 2026 was not found at %s", exe)
+		return nil, fmt.Errorf("%s was not found at %s", edition.Product, exe)
 	default:
 		return nil, errors.New("launching Vectorworks is not supported on this OS")
 	}

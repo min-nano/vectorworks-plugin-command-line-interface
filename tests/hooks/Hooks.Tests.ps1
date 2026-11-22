@@ -20,9 +20,12 @@ BeforeAll {
 
 	# Invoke-Hook はフック（install・uninstall）を子のプロセスで走らせる。偽の置き場所は子の中で
 	# $StoreArguments（Get-FakePathStore の引数）から作り、走らせたあとの State を返す。
-	# $InstallDir が空なら VW2026_HOOK_INSTALL_DIR を渡さない。
+	# 版 $Year の CLI と同じく VW<版>_HOOK_* を渡し、ほかの版の名前は渡さない。$InstallDir が空なら
+	# VW<版>_HOOK_INSTALL_DIR を渡さない。$BothEditions を付けると、ほかの版の VW<版>_HOOK_INSTALL_DIR にも
+	# $InstallDir を渡す（フックが断ることを確かめる）。
 	function Invoke-Hook {
-		param([string] $Hook, [string] $InstallDir, [string] $PluginDir, [string] $StoreArguments)
+		param([string] $Year, [string] $Hook, [string] $InstallDir, [string] $PluginDir, [string] $StoreArguments,
+			[switch] $BothEditions)
 		$stateFile = Join-Path $TestDrive ([Guid]::NewGuid().ToString() + '.json')
 		$hookScript = Join-Path $script:hooks ($Hook + '.ps1')
 		$command = @(
@@ -40,11 +43,16 @@ BeforeAll {
 		$info.UseShellExecute = $false
 		$info.RedirectStandardOutput = $true
 		$info.RedirectStandardError = $true
+		$info.EnvironmentVariables.Remove('VW2025_HOOK_INSTALL_DIR')
 		$info.EnvironmentVariables.Remove('VW2026_HOOK_INSTALL_DIR')
 		if (-not [string]::IsNullOrEmpty($InstallDir)) {
-			$info.EnvironmentVariables['VW2026_HOOK_INSTALL_DIR'] = $InstallDir
+			$info.EnvironmentVariables['VW' + $Year + '_HOOK_INSTALL_DIR'] = $InstallDir
+			if ($BothEditions) {
+				$other = if ($Year -eq '2025') { '2026' } else { '2025' }
+				$info.EnvironmentVariables['VW' + $other + '_HOOK_INSTALL_DIR'] = $InstallDir
+			}
 		}
-		$info.EnvironmentVariables['VW2026_HOOK_PLUGIN_DIR'] = $PluginDir
+		$info.EnvironmentVariables['VW' + $Year + '_HOOK_PLUGIN_DIR'] = $PluginDir
 		$process = [Diagnostics.Process]::Start($info)
 		$stderr = $process.StandardError.ReadToEndAsync()
 		$stdout = [IO.MemoryStream]::new()
@@ -62,11 +70,13 @@ BeforeAll {
 		}
 	}
 
-	# Initialize-PluginDir は <Plug-Ins>\cli\bin\vw2026.exe を作り、<Plug-Ins>\cli を返す（日本語を含むパス）。
+	# Initialize-PluginDir は版 $Year の CLI（<Plug-Ins>\cli\bin\vw2026.exe・vw2025.exe）を作り、
+	# <Plug-Ins>\cli を返す（日本語を含むパス）。
 	function Initialize-PluginDir {
+		param([string] $Year)
 		$dir = Join-Path (Join-Path $TestDrive ([Guid]::NewGuid().ToString() + ' 日本語')) 'cli'
 		New-Item -ItemType Directory -Path ($dir + '\bin') -Force | Out-Null
-		New-Item -ItemType File -Path ($dir + '\bin\vw2026.exe') | Out-Null
+		New-Item -ItemType File -Path ($dir + '\bin\vw' + $Year + '.exe') | Out-Null
 		return $dir
 	}
 
@@ -271,79 +281,86 @@ Describe 'Uninstall-PathEntry' {
 	}
 }
 
-Describe 'install.ps1' {
+Describe 'install.ps1 (<Year>)' -ForEach @(@{ Year = '2026' }, @{ Year = '2025' }) {
 	It 'adds the entry and writes one JSON object in ASCII, for a path in Japanese' {
-		$dir = Initialize-PluginDir
-		$r = Invoke-Hook -Hook install -InstallDir $dir -PluginDir $dir -StoreArguments "-Value 'C:\a'"
+		$dir = Initialize-PluginDir $Year
+		$r = Invoke-Hook -Year $Year -Hook install -InstallDir $dir -PluginDir $dir -StoreArguments "-Value 'C:\a'"
 		$r.Code | Should -Be 0
 		Get-Ascii $r.Stdout | Should -BeExactly "{`"path`":`"added`"}`n"
 		$r.State.Value | Should -BeExactly ('C:\a;' + $dir + '\bin')
 		$r.State.Notified | Should -Be 1
 	}
 	It 'reports exists for the entry already there' {
-		$dir = Initialize-PluginDir
+		$dir = Initialize-PluginDir $Year
 		$store = '-Value ' + (ConvertTo-Quoted ($dir + '\bin'))
-		$r = Invoke-Hook -Hook install -InstallDir ($dir + '\') -PluginDir $dir -StoreArguments $store
+		$r = Invoke-Hook -Year $Year -Hook install -InstallDir ($dir + '\') -PluginDir $dir -StoreArguments $store
 		$r.Code | Should -Be 0
 		Get-Ascii $r.Stdout | Should -BeExactly "{`"path`":`"exists`"}`n"
 		$r.State.Writes | Should -Be 0
 	}
 	It 'fails without changing anything when the CLI is missing' {
-		$dir = Initialize-PluginDir
-		Remove-Item -LiteralPath ($dir + '\bin\vw2026.exe')
-		$r = Invoke-Hook -Hook install -InstallDir $dir -PluginDir $dir -StoreArguments "-Value 'C:\a'"
+		$dir = Initialize-PluginDir $Year
+		Remove-Item -LiteralPath ($dir + '\bin\vw' + $Year + '.exe')
+		$r = Invoke-Hook -Year $Year -Hook install -InstallDir $dir -PluginDir $dir -StoreArguments "-Value 'C:\a'"
 		$r.Code | Should -Be 1
 		$r.Stdout.Length | Should -Be 0
 		$r.State.Writes | Should -Be 0
 	}
-	It 'fails without changing anything when VW2026_HOOK_INSTALL_DIR is missing or relative' {
-		$dir = Initialize-PluginDir
+	It 'fails without changing anything when VW<Year>_HOOK_INSTALL_DIR is missing or relative' {
+		$dir = Initialize-PluginDir $Year
 		foreach ($installDir in @('', 'cli')) {
-			$r = Invoke-Hook -Hook install -InstallDir $installDir -PluginDir $dir -StoreArguments "-Value 'C:\a'"
+			$r = Invoke-Hook -Year $Year -Hook install -InstallDir $installDir -PluginDir $dir -StoreArguments "-Value 'C:\a'"
 			$r.Code | Should -Be 1
 			$r.Stdout.Length | Should -Be 0
 			$r.State.Writes | Should -Be 0
 		}
 	}
+	It 'fails without changing anything when both VW2025_HOOK_INSTALL_DIR and VW2026_HOOK_INSTALL_DIR are set' {
+		$dir = Initialize-PluginDir $Year
+		$r = Invoke-Hook -Year $Year -Hook install -InstallDir $dir -PluginDir $dir -StoreArguments "-Value 'C:\a'" -BothEditions
+		$r.Code | Should -Be 1
+		$r.Stdout.Length | Should -Be 0
+		$r.State.Writes | Should -Be 0
+	}
 }
 
-Describe 'uninstall.ps1' {
-	It 'removes the entry by VW2026_HOOK_INSTALL_DIR while the folder is moved away' {
-		$dir = Initialize-PluginDir
+Describe 'uninstall.ps1 (<Year>)' -ForEach @(@{ Year = '2026' }, @{ Year = '2025' }) {
+	It 'removes the entry by VW<Year>_HOOK_INSTALL_DIR while the folder is moved away' {
+		$dir = Initialize-PluginDir $Year
 		$moved = Join-Path $TestDrive ([Guid]::NewGuid().ToString() + ' old')
 		Move-Item -LiteralPath $dir -Destination $moved
 		$store = '-Value ' + (ConvertTo-Quoted ('C:\a;' + $dir + '\bin'))
-		$r = Invoke-Hook -Hook uninstall -InstallDir $dir -PluginDir $moved -StoreArguments $store
+		$r = Invoke-Hook -Year $Year -Hook uninstall -InstallDir $dir -PluginDir $moved -StoreArguments $store
 		$r.Code | Should -Be 0
 		Get-Ascii $r.Stdout | Should -BeExactly "{`"path`":`"removed`",`"left`":[]}`n"
 		$r.State.Value | Should -BeExactly 'C:\a'
 	}
 	It 'reports none without the entry' {
-		$dir = Initialize-PluginDir
-		$r = Invoke-Hook -Hook uninstall -InstallDir $dir -PluginDir $dir -StoreArguments "-Value 'C:\a'"
+		$dir = Initialize-PluginDir $Year
+		$r = Invoke-Hook -Year $Year -Hook uninstall -InstallDir $dir -PluginDir $dir -StoreArguments "-Value 'C:\a'"
 		$r.Code | Should -Be 0
 		Get-Ascii $r.Stdout | Should -BeExactly "{`"path`":`"none`",`"left`":[]}`n"
 	}
 	It 'does not fail when it cannot write, and lists the entry in left' {
-		$dir = Initialize-PluginDir
+		$dir = Initialize-PluginDir $Year
 		$store = '-FailWrite -Value ' + (ConvertTo-Quoted ($dir + '\bin'))
-		$r = Invoke-Hook -Hook uninstall -InstallDir $dir -PluginDir $dir -StoreArguments $store
+		$r = Invoke-Hook -Year $Year -Hook uninstall -InstallDir $dir -PluginDir $dir -StoreArguments $store
 		$r.Code | Should -Be 0
 		$left = ConvertTo-HookJson ('HKCU\Environment\Path: ' + $dir + '\bin')
 		Get-Ascii $r.Stdout | Should -BeExactly ("{`"path`":`"failed`",`"left`":[" + $left + "]}`n")
 	}
-	It 'fails without changing anything when VW2026_HOOK_INSTALL_DIR is not an absolute path' {
-		$dir = Initialize-PluginDir
+	It 'fails without changing anything when VW<Year>_HOOK_INSTALL_DIR is not an absolute path' {
+		$dir = Initialize-PluginDir $Year
 		$store = '-Value ' + (ConvertTo-Quoted ($dir + '\bin'))
-		$r = Invoke-Hook -Hook uninstall -InstallDir '\Plug-Ins\cli' -PluginDir $dir -StoreArguments $store
+		$r = Invoke-Hook -Year $Year -Hook uninstall -InstallDir '\Plug-Ins\cli' -PluginDir $dir -StoreArguments $store
 		$r.Code | Should -Be 1
 		$r.Stdout.Length | Should -Be 0
 		$r.State.Writes | Should -Be 0
 	}
-	It 'fails without changing anything when VW2026_HOOK_INSTALL_DIR is missing' {
-		$dir = Initialize-PluginDir
+	It 'fails without changing anything when VW<Year>_HOOK_INSTALL_DIR is missing' {
+		$dir = Initialize-PluginDir $Year
 		$store = '-Value ' + (ConvertTo-Quoted ($dir + '\bin'))
-		$r = Invoke-Hook -Hook uninstall -InstallDir '' -PluginDir $dir -StoreArguments $store
+		$r = Invoke-Hook -Year $Year -Hook uninstall -InstallDir '' -PluginDir $dir -StoreArguments $store
 		$r.Code | Should -Be 1
 		$r.Stdout.Length | Should -Be 0
 		$r.State.Writes | Should -Be 0

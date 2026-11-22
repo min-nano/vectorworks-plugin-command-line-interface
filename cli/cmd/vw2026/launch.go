@@ -4,17 +4,18 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/launch"
 )
 
 type launchCmd struct {
-	App string `env:"VW2026_APP" placeholder:"NAME-OR-PATH" help:"Application or executable to start."`
+	App string `env:"${prefix}APP" placeholder:"NAME-OR-PATH" help:"Application or executable to start."`
 }
 
 func (launchCmd) Help() string {
-	return `
+	return edition.Expand(`
 Launch starts Vectorworks unless the bridge is already running. It does not
-wait for the bridge; run status in a loop next to wait for it ("vw2026 help
+wait for the bridge; run status in a loop next to wait for it ("${cmd} help
 status").
 
 It prints one of
@@ -22,8 +23,8 @@ It prints one of
 	{"launched":true,"command":[...]}
 	{"running":true,"spool":"...","launched":false}
 
-The default application is "Vectorworks 2026" on macOS, started with
-"open -a", and %ProgramFiles%\Vectorworks 2026\Vectorworks2026.exe on
+The default application is "${product}" on macOS, started with
+"open -a", and %ProgramFiles%\${product}\Vectorworks${year}.exe on
 Windows. Launch does not search other places; name them with --app. A value
 that does not end in .app is started as an executable.
 
@@ -40,11 +41,11 @@ So {"launched":true,...} does not tell whether the bridge will start; run
 status in a loop. It turns to 0 when Vectorworks was still starting. If it
 stays at 5, either the plug-in is not loaded (for example, it is not
 installed, or it was not enabled in the dialog about plug-ins from
-unidentified developers), this vw2026 runs from outside the folder of the
+unidentified developers), this ${cmd} runs from outside the folder of the
 plug-in and looks at another spool (status shows the spool it looks at; see
-"vw2026 --help"), or Vectorworks was quitting and has quit, and launch can be
+"${cmd} --help"), or Vectorworks was quitting and has quit, and launch can be
 run again.
-`
+`)
 }
 
 // run does not wait: waiting is the caller's choice
@@ -64,13 +65,13 @@ func (c *launchCmd) run(e *env) int {
 		// 起動するものの指定（フラグと環境変数）は、それを定義するここで案内する。Windows では実行ファイルを指す。
 		what := "the application"
 		if runtime.GOOS == "windows" {
-			what = "Vectorworks2026.exe"
+			what = "Vectorworks" + edition.Year + ".exe"
 		}
-		fmt.Fprintf(e.stderr, "vw2026: %v; point --app (VW2026_APP) to %s\n", err, what)
+		fmt.Fprintf(e.stderr, edition.Command+": %v; point --app ("+edition.EnvPrefix+"APP) to %s\n", err, what)
 		return exitFailure
 	}
 	if err := e.start(argv); err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: launch: %v\n", err)
+		fmt.Fprintf(e.stderr, edition.Command+": launch: %v\n", err)
 		return exitFailure
 	}
 	return emit(e, map[string]any{"launched": true, "command": argv})

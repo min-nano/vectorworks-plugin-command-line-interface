@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"unsafe"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 var (
@@ -48,7 +50,7 @@ func userTempDir() (string, error) {
 }
 
 func defaultPluginsDir() (string, error) {
-	return knownFolder(&folderRoamingAppData, "Nemetschek", "Vectorworks", "2026", "Plug-Ins")
+	return knownFolder(&folderRoamingAppData, "Nemetschek", "Vectorworks", edition.Year, "Plug-Ins")
 }
 
 // target は windows-x64 だけ（Windows on ARM でも Vectorworks は x64 のエミュレーションで動く）。
