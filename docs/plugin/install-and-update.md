@@ -8,6 +8,9 @@
 `uninstall` を走らせるだけの短いスクリプト（`get-vw2026.sh` / `.ps1`）を使います（入れる前は CLI が無く、外した
 あとは CLI を使わないため。入っている CLI で外すと、Windows では動いている自分を消せずに残す）。
 
+このページは 2026 の名前で書きます。2025 の `cli`（`vw2025`・`get-vw2025.sh` / `.ps1`・`VW2025_HOOK_*`）も同じ手順で、
+名前の読み替えは[版](editions.md)にあります。
+
 | 段 | 手段 | すること |
 | --- | --- | --- |
 | 初回 | `get-vw2026.sh` / `.ps1`（curl などで取ってパイプで実行） | 一時フォルダに、スクリプトを取ったリリースの CLI を取り出し、`vw2026 install cli@<そのリリースのタグ>` を走らせる |
@@ -129,8 +132,9 @@ irm …/releases/download/<tag>/get-vw2026.ps1 | iex                            
 **スクリプトを取ってきたリリースの CLI を取り出して、`install cli@<そのリリースのタグ>`（または `uninstall cli`）を
 走らせるだけ**です。配置の手順・PATH・判断は `install` / `uninstall` と `cli` のフックが持ち、スクリプトは持ちません。
 
-- **入れる・外すタグは、スクリプトを取ってきたリリースのタグに決まっています。** リリースは、スクリプトの
-  `@VW2026_TAG@` をそのリリースのタグに置き換えて上げます（[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
+- **入れる・外すタグは、スクリプトを取ってきたリリースのタグに決まっています。** リリースは、雛形（`scripts/get-vw.sh` /
+  `.ps1`）の `@VW_TAG@` をそのリリースのタグに、`@VW_YEAR@` を版（2026・2025）に置き換えて、`get-vw2026.*` と
+  `get-vw2025.*` を上げます（[ビルド「リリースの形」](build-and-release.md#リリースの形)・[版](editions.md)）。
   `releases/download/<tag>/get-vw2026.sh` を取れば `<tag>` が、`releases/latest/download/get-vw2026.sh` を取れば
   そのとき latest のリリースのタグが入ります。どのタグを入れるかは取る URL だけで決まり、引数でタグを渡す形は
   持ちません（取ったスクリプトと入る CLI の版がいつも揃う）。置き換えていないスクリプト（リポジトリのものを
@@ -600,6 +604,9 @@ help。ここには写さない）。
 - 標準出力に JSON のオブジェクトを 1 つだけ出します（`install` は `{"path":…}`。下記「PATH」。
   `uninstall` は `{"path":…,"left":[…]}`。`left` は消せなかった・確かめられなかったもの）。`install` /
   `uninstall` の出力の `hook` に載ります。
+- **同じフックを 2026 と 2025 の zip に入れます。** フックは、渡された変数の名前（`VW2026_HOOK_INSTALL_DIR` か
+  `VW2025_HOOK_INSTALL_DIR`）で版を決め、CLI の名前（`vw2026` / `vw2025`。mac のリンクの名前と、`bin/` にあるかを
+  確かめる CLI）を決めます。どちらも無いとき・両方あるときは、何も変える前に失敗します（[版](editions.md)）。
 - PATH が指す先は `VW2026_HOOK_INSTALL_DIR`（`<Plug-Ins>/cli/`）の `bin/` です（[レジストリ「フックに渡す環境変数」](../registry.md#フックに渡す環境変数)）。
   `uninstall` のフックはフォルダを `<Work>/old/cli/` へ移したあとで走る（`VW2026_HOOK_PLUGIN_DIR` は移した先）
   ので、取り除く項目は `VW2026_HOOK_INSTALL_DIR` から決めます。
@@ -889,7 +896,7 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
     取らない・ターゲットが違えば取って入れ直す）
   - フックの失敗の戻し（新しいフォルダを名前の変更でよけてから前の版を戻す）・`registry` の比べ方（渡した URL の文字列どうし）・レジストリの書き方（`https://` と `file://` の URL だけ。空白で区切る。パスのままは使い方の誤り）
   - `uninstall` の出力の `remaining`（どの名前でも出す）
-  - 既定のレジストリ（`cli/internal/registry/default.json`）が正しく読めること
+  - 既定のレジストリ（`cli/internal/registry/default-vw2026.json`・`default-vw2025.json`）が正しく読めること
   - タグの検査（`.`・`..`・先頭が英数字でないものを断る）とターゲットの決め方（mac は計算機の種類で
     決め、プロセスの種類では決めない。判定の関数を差し替えて確かめる）
   - 動いている CLI のよけ方（走らせている CLI の実行ファイルの場所を関数で差し替え、一時ディレクトリの
@@ -920,7 +927,8 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
     - `install` / `uninstall` は、ロックを入れる先の `<Plug-Ins>/cli/spool` で見る（`env.spool` ではない。
       入れる先の Vectorworks が動いているかを見るため）。
 - **`cli` のフック**: CI の `hooks.yml`（[ビルド「CI」](build-and-release.md#ci)）で確かめます。どちらも
-  一時ディレクトリを `HOME`・`VW2026_HOOK_*` に渡し、利用者の場所に触れません。
+  一時ディレクトリを `HOME`・`VW2026_HOOK_*` に渡し、利用者の場所に触れません。どちらも、版ごと（`VW2026_HOOK_*`
+  と `VW2025_HOOK_*`）にすべてを走らせ、両方の名前があるときに何も変えずに断ることも確かめます。
   - mac（`sh`）: `tests/hooks/hooks_test.sh`（`sh` で書いた小さなテスト。外部の枠組みを使わない）。
     `lib.sh` の関数と、`install.sh` / `uninstall.sh` の全体（リンク・別の場所を指すリンクと利用者の
     ファイルに触れない・`uninstall` は `VW2026_HOOK_PLUGIN_DIR` が移した先でも `VW2026_HOOK_INSTALL_DIR`

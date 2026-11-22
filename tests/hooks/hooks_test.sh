@@ -1,9 +1,19 @@
 #!/bin/sh
 # cli のフック（scripts/hooks/*.sh）のテスト（docs/plugin/install-and-update.md「テスト」）。
 # 外部の枠組みを使わない。HOME と VW2026_HOOK_* には一時ディレクトリを渡し、利用者の場所に触れない。
+# 版ごと（2026 の CLI が渡す VW2026_HOOK_* と、2025 の CLI が渡す VW2025_HOOK_*）に、すべてを走らせる
+# （docs/plugin/editions.md）。
 #
-#   sh tests/hooks/hooks_test.sh
+#   sh tests/hooks/hooks_test.sh           # 2026 と 2025
+#   sh tests/hooks/hooks_test.sh 2025      # 1 つの版だけ
 set -u
+
+if [ $# -eq 0 ]; then
+	/bin/sh "$0" 2026 && /bin/sh "$0" 2025
+	exit
+fi
+year="$1"
+command="vw$year"
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 hooks="$root/scripts/hooks"
@@ -32,18 +42,20 @@ setup() {
 	case_dir="$work/$1"
 	home="$case_dir/home"
 	plugin="$case_dir/Plug-Ins/cli"
-	link="$home/.local/bin/vw2026"
+	link="$home/.local/bin/$command"
 	mkdir -p "$home" "$plugin/bin"
-	: >"$plugin/bin/vw2026"
+	: >"$plugin/bin/$command"
 	out=""
 	code=0
 }
 
 # run_hook は scripts/hooks/$1.sh をプラグインのフォルダ（$2）で走らせ、標準出力を out、終了コードを
-# code に置く。HOME・PATH・VW2026_HOOK_INSTALL_DIR は呼ぶ前に置いた hook_home・hook_path・hook_install_dir。
+# code に置く。HOME・PATH・VW<版>_HOOK_INSTALL_DIR は呼ぶ前に置いた hook_home・hook_path・hook_install_dir。
+# ほかの版の VW<版>_HOOK_* は渡さない（CLI と同じ）。
 run_hook() {
-	out="$(cd "$2" && HOME="$hook_home" PATH="$hook_path" VW2026_HOOK_INSTALL_DIR="$hook_install_dir" \
-		VW2026_HOOK_PLUGIN_DIR="$2" /bin/sh "$hooks/$1.sh" 2>"$work/stderr")"
+	out="$(cd "$2" && env -u VW2025_HOOK_INSTALL_DIR -u VW2026_HOOK_INSTALL_DIR HOME="$hook_home" PATH="$hook_path" \
+		"VW${year}_HOOK_INSTALL_DIR=$hook_install_dir" "VW${year}_HOOK_PLUGIN_DIR=$2" \
+		/bin/sh "$hooks/$1.sh" 2>"$work/stderr")"
 	code=$?
 }
 
@@ -114,12 +126,12 @@ setup linked
 install_hook
 expect "install linked: code" "$code" 0
 expect "install linked: output" "$out" '{"path":"linked"}'
-expect "install linked: link" "$(readlink "$link")" "$plugin/bin/vw2026"
+expect "install linked: link" "$(readlink "$link")" "$plugin/bin/$command"
 # 2 回目は同じリンクを見つけて何もしない
 install_hook
 expect "install again: code" "$code" 0
 expect "install again: output" "$out" '{"path":"exists"}'
-expect "install again: link" "$(readlink "$link")" "$plugin/bin/vw2026"
+expect "install again: link" "$(readlink "$link")" "$plugin/bin/$command"
 
 setup trailing-slash
 install_hook
@@ -134,7 +146,7 @@ hook_install_dir="$plugin"
 run_hook install "$plugin"
 expect "install not_in_path: code" "$code" 0
 expect "install not_in_path: output" "$out" '{"path":"not_in_path"}'
-expect "install not_in_path: link" "$(readlink "$link")" "$plugin/bin/vw2026"
+expect "install not_in_path: link" "$(readlink "$link")" "$plugin/bin/$command"
 grep -q 'not in PATH' "$work/stderr" || fail "install not_in_path: no advice on the standard error"
 # リンクが既にあっても、PATH に無ければ not_in_path
 run_hook install "$plugin"
@@ -150,10 +162,10 @@ expect "install over a user file: file" "$(cat "$link")" mine
 
 setup other-link
 mkdir -p "$home/.local/bin"
-ln -s "$case_dir/elsewhere/bin/vw2026" "$link"
+ln -s "$case_dir/elsewhere/bin/$command" "$link"
 install_hook
 expect "install over another link: output" "$out" '{"path":"conflict"}'
-expect "install over another link: link" "$(readlink "$link")" "$case_dir/elsewhere/bin/vw2026"
+expect "install over another link: link" "$(readlink "$link")" "$case_dir/elsewhere/bin/$command"
 
 setup bin-is-a-file
 mkdir -p "$home/.local"
@@ -163,7 +175,7 @@ expect "install when ~/.local/bin is a file: output" "$out" '{"path":"conflict"}
 expect "install when ~/.local/bin is a file: file" "$(cat "$home/.local/bin")" mine
 
 setup no-cli
-rm "$plugin/bin/vw2026"
+rm "$plugin/bin/$command"
 install_hook
 expect "install without the CLI: code" "$code" 1
 expect "install without the CLI: output" "$out" ""
@@ -174,12 +186,27 @@ hook_home="$home"
 hook_path="$home/.local/bin:/usr/bin:/bin"
 hook_install_dir=""
 run_hook install "$plugin"
-expect "install without VW2026_HOOK_INSTALL_DIR: code" "$code" 1
-expect "install without VW2026_HOOK_INSTALL_DIR: output" "$out" ""
+expect "install without VW${year}_HOOK_INSTALL_DIR: code" "$code" 1
+expect "install without VW${year}_HOOK_INSTALL_DIR: output" "$out" ""
 hook_install_dir="relative/cli"
 run_hook install "$plugin"
-expect "install with a relative VW2026_HOOK_INSTALL_DIR: code" "$code" 1
-[ -e "$home/.local" ] && fail "install without VW2026_HOOK_INSTALL_DIR made ~/.local"
+expect "install with a relative VW${year}_HOOK_INSTALL_DIR: code" "$code" 1
+[ -e "$home/.local" ] && fail "install without VW${year}_HOOK_INSTALL_DIR made ~/.local"
+
+# 両方の版の名前があれば、何も変えずに断る（CLI はほかの版の名前を渡さない）。
+setup both-editions
+out="$(cd "$plugin" && HOME="$home" PATH="$home/.local/bin:/usr/bin:/bin" VW2025_HOOK_INSTALL_DIR="$plugin" \
+	VW2026_HOOK_INSTALL_DIR="$plugin" /bin/sh "$hooks/install.sh" 2>"$work/stderr")"
+code=$?
+expect "install with both editions: code" "$code" 1
+expect "install with both editions: output" "$out" ""
+[ -e "$home/.local" ] && fail "install with both editions made ~/.local"
+# どちらの版の名前も無ければ断る。
+out="$(cd "$plugin" && env -u VW2025_HOOK_INSTALL_DIR -u VW2026_HOOK_INSTALL_DIR HOME="$home" \
+	PATH="$home/.local/bin:/usr/bin:/bin" /bin/sh "$hooks/install.sh" 2>"$work/stderr")"
+code=$?
+expect "install with no edition: code" "$code" 1
+expect "install with no edition: output" "$out" ""
 
 # --- uninstall.sh ---
 
@@ -220,7 +247,7 @@ expect "uninstall with the real path: output" "$out" '{"path":"removed","left":[
 # 同じ CLI を指す相対のリンクも、install は exists とみなし、uninstall は消す。
 setup relative-link
 mkdir -p "$home/.local/bin"
-ln -s ../../../Plug-Ins/cli/bin/vw2026 "$link"
+ln -s "../../../Plug-Ins/cli/bin/$command" "$link"
 install_hook
 expect "install with a relative link: output" "$out" '{"path":"exists"}'
 uninstall_hook
@@ -238,15 +265,15 @@ expect "install with PATH through a link: output" "$out" '{"path":"linked"}'
 
 setup uninstall-other-link
 mkdir -p "$home/.local/bin"
-ln -s "$case_dir/elsewhere/bin/vw2026" "$link"
+ln -s "$case_dir/elsewhere/bin/$command" "$link"
 uninstall_hook
 expect "uninstall with another link: output" "$out" '{"path":"none","left":[]}'
-expect "uninstall with another link: link" "$(readlink "$link")" "$case_dir/elsewhere/bin/vw2026"
+expect "uninstall with another link: link" "$(readlink "$link")" "$case_dir/elsewhere/bin/$command"
 
 # 前方一致だけで <Plug-Ins>/cli-other などを指すリンクを消さない
 setup uninstall-sibling
 mkdir -p "$home/.local/bin"
-ln -s "$plugin/bin-other/vw2026" "$link"
+ln -s "$plugin/bin-other/$command" "$link"
 uninstall_hook
 expect "uninstall with a sibling link: output" "$out" '{"path":"none","left":[]}'
 [ -L "$link" ] || fail "uninstall with a sibling link: removed the link"
@@ -262,9 +289,9 @@ setup uninstall-no-env
 install_hook
 hook_install_dir=""
 run_hook uninstall "$plugin"
-expect "uninstall without VW2026_HOOK_INSTALL_DIR: code" "$code" 1
-expect "uninstall without VW2026_HOOK_INSTALL_DIR: output" "$out" ""
-[ -L "$link" ] || fail "uninstall without VW2026_HOOK_INSTALL_DIR: removed the link"
+expect "uninstall without VW${year}_HOOK_INSTALL_DIR: code" "$code" 1
+expect "uninstall without VW${year}_HOOK_INSTALL_DIR: output" "$out" ""
+[ -L "$link" ] || fail "uninstall without VW${year}_HOOK_INSTALL_DIR: removed the link"
 hook_install_dir="$plugin"
 hook_home=""
 run_hook uninstall "$plugin"
@@ -275,7 +302,7 @@ expect "uninstall without HOME: code" "$code" 1
 setup '日本語 "q" \b'
 install_hook
 expect "install with a japanese path: output" "$out" '{"path":"linked"}'
-expect "install with a japanese path: link" "$(readlink "$link")" "$plugin/bin/vw2026"
+expect "install with a japanese path: link" "$(readlink "$link")" "$plugin/bin/$command"
 uninstall_hook
 expect "uninstall with a japanese path: output" "$out" '{"path":"removed","left":[]}'
 
@@ -297,7 +324,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 if [ "$failures" -ne 0 ]; then
-	printf '%d failed\n' "$failures" >&2
+	printf '%d failed (%s)\n' "$failures" "$year" >&2
 	exit 1
 fi
-echo ok
+echo "ok ($year)"

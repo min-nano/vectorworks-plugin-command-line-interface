@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/install"
 )
@@ -62,7 +63,7 @@ func TestUninstallNotInstalled(t *testing.T) {
 	fakeInstalled(t, fallback, "from-default")
 	// 入った CLI は、自分の入った <Plug-Ins>（<own>/cli/bin/vw2026 と cli の記録）を使う。
 	fakeInstalled(t, own, "cli")
-	installed := filepath.Join(own, "cli", "bin", "vw2026")
+	installed := filepath.Join(own, "cli", "bin", edition.Command)
 	os.MkdirAll(filepath.Dir(installed), 0o755)
 	os.WriteFile(installed, nil, 0o700)
 	// cli でない名前は cli のある <Plug-Ins> でだけ扱うので、フォルダの外の CLI の場合は cli を外す（入っていない）。
@@ -91,7 +92,7 @@ func TestUsageErrorsPrintJSON(t *testing.T) {
 		args []string
 	}{
 		{opts{}, []string{"install", "cli"}},
-		{opts{vars: map[string]string{"VW2026_REGISTRY": " "}}, []string{"install", "cli@latest"}},
+		{opts{vars: map[string]string{edition.EnvPrefix + "REGISTRY": " "}}, []string{"install", "cli@latest"}},
 		{opts{}, []string{"install", "CLI@latest"}},
 	} {
 		r := invoke(t, c.o, c.args...)
@@ -108,7 +109,7 @@ func TestUsageErrorsPrintJSON(t *testing.T) {
 func TestPluginsDirFlag(t *testing.T) {
 	fallback := t.TempDir()
 	fakeInstalled(t, fallback, "cli")
-	installed := filepath.Join(fallback, "cli", "bin", "vw2026")
+	installed := filepath.Join(fallback, "cli", "bin", edition.Command)
 	os.MkdirAll(filepath.Dir(installed), 0o755)
 	os.WriteFile(installed, nil, 0o700)
 	for _, c := range []struct {
@@ -174,7 +175,7 @@ func TestDeployPlacesNotLocated(t *testing.T) {
 	// 走らせている CLI の場所が分かっても（フォルダの外）、既定の場所を求められなければ 1。
 	stderr.Reset()
 	outside := e
-	outside.executable = func() (string, error) { return filepath.Join(t.TempDir(), "vw2026"), nil }
+	outside.executable = func() (string, error) { return filepath.Join(t.TempDir(), edition.Command), nil }
 	if code := run([]string{"uninstall", "cli"}, outside); code != exitFailure ||
 		!strings.Contains(stderr.String(), "cannot locate the folder of plug-ins") {
 		t.Fatalf("%d %s", code, stderr.String())
@@ -226,9 +227,9 @@ func TestInstallFromLocalRegistry(t *testing.T) {
 		t.Fatalf("a path: %+v", r)
 	}
 	// 空の値（空白だけを含む）は、引数でも環境変数でも使い方の誤り。
-	r := invoke(t, opts{plugins: plugins, vars: map[string]string{"VW2026_REGISTRY": " "}}, "install", "demo@d1")
+	r := invoke(t, opts{plugins: plugins, vars: map[string]string{edition.EnvPrefix + "REGISTRY": " "}}, "install", "demo@d1")
 	if r.code != exitUsage || !strings.Contains(r.stderr, "the registry is empty") {
-		t.Fatalf("an empty VW2026_REGISTRY: %+v", r)
+		t.Fatalf("an empty "+edition.EnvPrefix+"REGISTRY: %+v", r)
 	}
 	if r := invoke(t, opts{plugins: plugins}, "install", "demo@d1", "--registry", ""); r.code != exitUsage {
 		t.Fatalf("an empty --registry: %+v", r)
@@ -238,7 +239,7 @@ func TestInstallFromLocalRegistry(t *testing.T) {
 	if r.code != exitFailure || !strings.Contains(r.stdout, "looked in: default "+fileURL(other)+")") {
 		t.Fatalf("in no registry: %+v", r)
 	}
-	vars := map[string]string{"VW2026_REGISTRY": fileURL(other) + " " + registryPath}
+	vars := map[string]string{edition.EnvPrefix + "REGISTRY": fileURL(other) + " " + registryPath}
 	r = invoke(t, opts{plugins: plugins, vars: vars}, "install", "demo@d1", "--check")
 	if r.code != exitOK || !strings.Contains(r.stdout, `"outcome":"available"`) || exist(filepath.Join(plugins, "demo")) {
 		t.Fatalf("--check: %+v", r)
@@ -273,13 +274,13 @@ func exist(path string) bool {
 func TestUninstallFromInsideShowsTheScript(t *testing.T) {
 	plugins := t.TempDir()
 	fakeInstalled(t, plugins, "cli")
-	executable := filepath.Join(plugins, "cli", "bin", "vw2026")
+	executable := filepath.Join(plugins, "cli", "bin", edition.Command)
 	os.MkdirAll(filepath.Dir(executable), 0o755)
 	os.WriteFile(executable, nil, 0o700)
 	r := invoke(t, opts{plugins: plugins, executable: executable}, "uninstall", "cli")
 	var out map[string]string
 	if r.code != exitUsage || json.Unmarshal([]byte(r.stdout), &out) != nil || out["outcome"] != "failed" ||
-		!strings.Contains(out["command"], "download/t1/get-vw2026") || !strings.HasSuffix(out["command"], " uninstall") ||
+		!strings.Contains(out["command"], "download/t1/"+edition.Bootstrap) || !strings.HasSuffix(out["command"], " uninstall") ||
 		!strings.Contains(r.stderr, out["command"]) || !strings.Contains(r.stderr, "latest/download") {
 		t.Fatalf("%+v", r)
 	}
@@ -317,14 +318,14 @@ func TestUninstallScript(t *testing.T) {
 	tagged := releases + "download/t1/"
 	latest := releases + "latest/download/"
 	for _, c := range []struct{ goos, tag, dir, want string }{
-		{"darwin", "t1", "", "curl -fsSL " + tagged + "get-vw2026.sh | sh -s -- uninstall"},
-		{"darwin", "latest", "", "curl -fsSL " + latest + "get-vw2026.sh | sh -s -- uninstall"},
-		{"darwin", "t1", "/a b/it's", "curl -fsSL " + tagged + `get-vw2026.sh | sh -s -- uninstall --plugins-dir '/a b/it'\''s'`},
-		{"windows", "t1", "", "& ([scriptblock]::Create((irm " + tagged + "get-vw2026.ps1))) uninstall"},
-		{"windows", "latest", `C:\a b\it's`, "& ([scriptblock]::Create((irm " + latest + `get-vw2026.ps1))) uninstall --plugins-dir 'C:\a b\it''s'`},
+		{"darwin", "t1", "", "curl -fsSL " + tagged + edition.Bootstrap + ".sh | sh -s -- uninstall"},
+		{"darwin", "latest", "", "curl -fsSL " + latest + edition.Bootstrap + ".sh | sh -s -- uninstall"},
+		{"darwin", "t1", "/a b/it's", "curl -fsSL " + tagged + edition.Bootstrap + `.sh | sh -s -- uninstall --plugins-dir '/a b/it'\''s'`},
+		{"windows", "t1", "", "& ([scriptblock]::Create((irm " + tagged + edition.Bootstrap + ".ps1))) uninstall"},
+		{"windows", "latest", `C:\a b\it's`, "& ([scriptblock]::Create((irm " + latest + edition.Bootstrap + `.ps1))) uninstall --plugins-dir 'C:\a b\it''s'`},
 		// PowerShell は活字の引用符も単一引用符の区切りにするので、それも重ねる。
 		{"windows", "t1", "C:\\O\u2019B\u2018r\u201ai\u201bn", "& ([scriptblock]::Create((irm " + tagged +
-			"get-vw2026.ps1))) uninstall --plugins-dir 'C:\\O\u2019\u2019B\u2018\u2018r\u201a\u201ai\u201b\u201bn'"},
+			edition.Bootstrap + ".ps1))) uninstall --plugins-dir 'C:\\O\u2019\u2019B\u2018\u2018r\u201a\u201ai\u201b\u201bn'"},
 	} {
 		if got := uninstallScript(c.goos, c.tag, c.dir); got != c.want {
 			t.Errorf("%s %s %q:\n got %s\nwant %s", c.goos, c.tag, c.dir, got, c.want)

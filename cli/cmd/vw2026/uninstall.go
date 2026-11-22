@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/install"
 )
 
@@ -17,35 +18,35 @@ type uninstallCmd struct {
 }
 
 func (uninstallCmd) Help() string {
-	return `
-Uninstall removes a plug-in that vw2026 installed
+	return edition.Expand(`
+Uninstall removes a plug-in that ${cmd} installed
 (docs/plugin/install-and-update.md). It reads only the record in
 <Plug-Ins>/<NAME>/, not the registries, so it works offline and for a plug-in
 that left the registry. It removes a folder only when the record names the
 folder and the module of the record is there; otherwise it removes nothing.
-Like install, it works on the folder of plug-ins that this vw2026 is installed
-in (see "vw2026 help install").
+Like install, it works on the folder of plug-ins that this ${cmd} is installed
+in (see "${cmd} help install").
 
-	vw2026 uninstall my-plugin
+	${cmd} uninstall my-plugin
 
-Uninstall does not remove the folder that this vw2026 runs from, such as cli
-for the vw2026 on the PATH (<Plug-Ins>/cli/bin/vw2026): once cli is
-uninstalled, vw2026 is not used any more. It changes nothing, exits with 2,
+Uninstall does not remove the folder that this ${cmd} runs from, such as cli
+for the ${cmd} on the PATH (<Plug-Ins>/cli/bin/${cmd}): once cli is
+uninstalled, ${cmd} is not used any more. It changes nothing, exits with 2,
 and shows the first-time script of the installed tag to run instead, which
-uninstalls cli with a vw2026 of that tag outside the folder (and leaves nothing
-behind; the script of a release always uses the vw2026 of that release). On
+uninstalls cli with a ${cmd} of that tag outside the folder (and leaves nothing
+behind; the script of a release always uses the ${cmd} of that release). On
 macOS and on Windows:
 
-	curl -fsSL ` + releases + `download/<TAG>/get-vw2026.sh | sh -s -- uninstall
-	& ([scriptblock]::Create((irm ` + releases + `download/<TAG>/get-vw2026.ps1))) uninstall
+	curl -fsSL ` + releases + `download/<TAG>/${bootstrap}.sh | sh -s -- uninstall
+	& ([scriptblock]::Create((irm ` + releases + `download/<TAG>/${bootstrap}.ps1))) uninstall
 
 A prerelease is deleted when its pull request closes; then use the script of
-latest, which uninstalls with the vw2026 of latest:
+latest, which uninstalls with the ${cmd} of latest:
 
-	curl -fsSL ` + releases + `latest/download/get-vw2026.sh | sh -s -- uninstall
+	curl -fsSL ` + releases + `latest/download/${bootstrap}.sh | sh -s -- uninstall
 
 Uninstall first moves the folder out of <Plug-Ins>, then runs the uninstall
-hook of the installed version (for cli, it takes vw2026 off the PATH), then
+hook of the installed version (for cli, it takes ${cmd} off the PATH), then
 deletes the folder. If the hook fails, the folder goes back. If uninstall
 stops after moving the folder (Ctrl-C, power loss), run it again: it goes on
 from the hook, and if the hook fails then, the folder stays moved out (it may
@@ -57,12 +58,12 @@ hook.
 Like install, uninstall changes nothing while Vectorworks is running with the
 bridge (exit status 6), and a plug-in other than cli is uninstalled only from a
 folder of plug-ins that has cli. Like install, it checks the cli first: when
-that folder has no cli that vw2026 installed, it fails with 1 even while
+that folder has no cli that ${cmd} installed, it fails with 1 even while
 Vectorworks is running. If cli is missing because an install or uninstall of
 cli stopped halfway, quit Vectorworks and finish that first with the
 first-time script (with --plugins-dir for a folder other than the default; see
-vw2026 help install). Uninstalling cli
-does not refuse while other plug-ins remain, but without vw2026 they can no
+${cmd} help install). Uninstalling cli
+does not refuse while other plug-ins remain, but without ${cmd} they can no
 longer be uninstalled; see "remaining".
 
 It prints one line of JSON with one of these outcomes:
@@ -73,17 +74,17 @@ It prints one line of JSON with one of these outcomes:
 	{"outcome":"vectorworks_running",...}
 	{"outcome":"failed","name":"...","message":"...","command":"..."}
 
-"remaining" lists the plug-ins that vw2026 installed and that remain in
-<Plug-Ins>. "left" lists the moved-away copies of vw2026 (left by an update on
+"remaining" lists the plug-ins that ${cmd} installed and that remain in
+<Plug-Ins>. "left" lists the moved-away copies of ${cmd} (left by an update on
 Windows) that could not be deleted. They are in the temporary folder of the
 user; the next install or uninstall deletes them, and so does the cleanup of
 temporary files of Windows if it is turned on (Storage Sense, Disk Cleanup).
 "command" is the first-time script (of the installed tag) to run when this
-vw2026 runs from the folder.
+${cmd} runs from the folder.
 
 Exit status: 0 success (including not_installed), 1 failure, 2 wrong usage
-(including a vw2026 that runs from the folder), 6 Vectorworks is running.
-`
+(including a ${cmd} that runs from the folder), 6 Vectorworks is running.
+`)
 }
 
 func (c *uninstallCmd) run(e *env) int {
@@ -110,7 +111,7 @@ func (c *uninstallCmd) run(e *env) int {
 			given = options.PluginsDir
 		}
 		command := uninstallScript(runtime.GOOS, inside.Tag, given)
-		fmt.Fprintf(e.stderr, "vw2026: %v. vw2026 is not used once %s is uninstalled; run the first-time script "+
+		fmt.Fprintf(e.stderr, edition.Command+": %v. "+edition.Command+" is not used once %s is uninstalled; run the first-time script "+
 			"of the installed tag instead:\n\t%s\nIf that release no longer exists (a prerelease is deleted when "+
 			"its pull request closes), use latest:\n\t%s\n",
 			err, c.Name, command, uninstallScript(runtime.GOOS, "latest", given))
@@ -139,13 +140,13 @@ func uninstallScript(goos, tag, pluginsDir string) string {
 		base = releases + "latest/download/"
 	}
 	if goos == "windows" {
-		command := "& ([scriptblock]::Create((irm " + base + "get-vw2026.ps1))) uninstall"
+		command := "& ([scriptblock]::Create((irm " + base + edition.Bootstrap + ".ps1))) uninstall"
 		if pluginsDir != "" {
 			command += " --plugins-dir '" + powershellQuote.Replace(pluginsDir) + "'"
 		}
 		return command
 	}
-	command := "curl -fsSL " + base + "get-vw2026.sh | sh -s -- uninstall"
+	command := "curl -fsSL " + base + edition.Bootstrap + ".sh | sh -s -- uninstall"
 	if pluginsDir != "" {
 		command += " --plugins-dir '" + strings.ReplaceAll(pluginsDir, "'", `'\''`) + "'"
 	}

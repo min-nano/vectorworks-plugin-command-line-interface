@@ -9,12 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// oldCLIPrefixes は、よけた CLI の名前の頭（<Work>/old/ の直下の vw2026.old-* / vw2026.exe.old-*）。
-// 名前に . を含むので、<Work>/old/<name>/（名前は . を含まない）と重ならない。
-var oldCLIPrefixes = []string{"vw2026.old-", "vw2026.exe.old-"}
+// oldCLIPrefixes は、よけた CLI の名前の頭（<Work>/old/ の直下の vw2026.old-* / vw2026.exe.old-*。2025 は
+// vw2025）。名前に . を含むので、<Work>/old/<name>/（名前は . を含まない）と重ならない。
+var oldCLIPrefixes = []string{edition.Command + ".old-", edition.Command + ".exe.old-"}
 
 // oldCLIName は、この OS でよけた CLI に付ける名前の頭（oldCLIPrefixes の 1 つ。Windows だけ実行ファイルの
 // 名前に .exe が付く）。後始末が探す頭と同じ一覧から選ぶので、食い違わない。
@@ -47,7 +48,7 @@ func (m *movedCLI) restore() string {
 		return ""
 	}
 	if err := rename(m.to, m.from()); err != nil {
-		return fmt.Sprintf("; the running vw2026 cannot be moved back (%v): move it back from %s to %s by hand "+
+		return fmt.Sprintf("; the running "+edition.Command+" cannot be moved back (%v): move it back from %s to %s by hand "+
 			"before the next install or uninstall (they delete it)", err, m.to, m.from())
 	}
 	return ""
@@ -61,7 +62,7 @@ func (m *movedCLI) restoreInto(into string) string {
 	}
 	target := filepath.Join(into, m.rel)
 	if err := rename(m.to, target); err != nil {
-		return fmt.Sprintf("; the vw2026 of the previous version is in %s (%v): move it to %s if you put the previous "+
+		return fmt.Sprintf("; the "+edition.Command+" of the previous version is in %s (%v): move it to %s if you put the previous "+
 			"version back, before the next install or uninstall (they delete it)", m.to, err, target)
 	}
 	return ""
@@ -73,7 +74,7 @@ func (m *movedCLI) where() string {
 	if m == nil {
 		return ""
 	}
-	return fmt.Sprintf(", then move the running vw2026 back from %s to %s", m.to, m.from())
+	return fmt.Sprintf(", then move the running "+edition.Command+" back from %s to %s", m.to, m.from())
 }
 
 // sidestep は、走らせている CLI の実行ファイルが dir の中にあれば、old へ名前の変更で移す

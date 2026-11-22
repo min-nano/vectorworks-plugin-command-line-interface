@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 // 新しい版を残した install（フックの間に Vectorworks が起動した・フックが通ったのに記録を書き換えられなかった）と、
@@ -29,16 +31,16 @@ func failRecordWrite(t *testing.T, dir string) (restore func()) {
 func checkMovedCLI(t *testing.T, h *harness, dir string, moved int, message string) {
 	t.Helper()
 	if left, _ := filepath.Glob(filepath.Join(h.work, "old", oldCLIName+"*")); len(left) != moved {
-		t.Fatalf("%d moved vw2026 should stay in old: %v", moved, left)
+		t.Fatalf("%d moved "+edition.Command+" should stay in old: %v", moved, left)
 	}
 	if moved > 0 {
-		if target := filepath.Join(dir, "bin", "vw2026"); !strings.Contains(message, target) {
-			t.Fatalf("the message should name where to put vw2026 back (%s): %s", target, message)
+		if target := filepath.Join(dir, "bin", edition.Command); !strings.Contains(message, target) {
+			t.Fatalf("the message should name where to put "+edition.Command+" back (%s): %s", target, message)
 		}
 		return
 	}
-	if data, err := os.ReadFile(filepath.Join(dir, "bin", "vw2026")); err != nil || string(data) != "cli c1" {
-		t.Fatal("the previous version should have its vw2026 back:", string(data), err)
+	if data, err := os.ReadFile(filepath.Join(dir, "bin", edition.Command)); err != nil || string(data) != "cli c1" {
+		t.Fatal("the previous version should have its "+edition.Command+" back:", string(data), err)
 	}
 }
 
@@ -77,7 +79,7 @@ func TestFinishingInstallPassesThePreviousTag(t *testing.T) {
 	}
 	runs := h.hookRuns("cli")
 	last := runs[len(runs)-1]
-	if last.Env["VW2026_HOOK_PREVIOUS_TAG"] != "c1" || last.Env["VW2026_HOOK_TAG"] != "c2" {
+	if last.Env[edition.EnvPrefix+"HOOK_PREVIOUS_TAG"] != "c1" || last.Env[edition.EnvPrefix+"HOOK_TAG"] != "c2" {
 		t.Fatalf("%+v", last.Env)
 	}
 	if exists(filepath.Join(h.work, "old", "cli")) {
@@ -96,7 +98,7 @@ func TestFinishingFirstInstallPassesNoPreviousTag(t *testing.T) {
 		t.Fatalf("%+v %v", result, err)
 	}
 	runs := h.hookRuns("cli")
-	if last := runs[len(runs)-1]; last.Env["VW2026_HOOK_PREVIOUS_TAG"] != "" || last.Env["VW2026_HOOK_TAG"] != "c1" {
+	if last := runs[len(runs)-1]; last.Env[edition.EnvPrefix+"HOOK_PREVIOUS_TAG"] != "" || last.Env[edition.EnvPrefix+"HOOK_TAG"] != "c1" {
 		t.Fatalf("%+v", last.Env)
 	}
 }
@@ -123,7 +125,7 @@ func TestLeftoverOldAfterASuccessfulHookIsNotThePreviousTag(t *testing.T) {
 		t.Fatalf("%+v %v", result, err)
 	}
 	runs := h.hookRuns("cli")
-	if last := runs[len(runs)-1]; last.Env["VW2026_HOOK_PREVIOUS_TAG"] != "c2" {
+	if last := runs[len(runs)-1]; last.Env[edition.EnvPrefix+"HOOK_PREVIOUS_TAG"] != "c2" {
 		t.Fatalf("%+v", last.Env)
 	}
 }
@@ -175,7 +177,7 @@ func TestUpdatingAKeptVersionNeedsFinishing(t *testing.T) {
 		t.Fatalf("%+v %v", result, err)
 	}
 	runs := h.hookRuns("cli")
-	if last := runs[len(runs)-1]; last.Env["VW2026_HOOK_PREVIOUS_TAG"] != "c2" || last.Env["VW2026_HOOK_TAG"] != "c3" {
+	if last := runs[len(runs)-1]; last.Env[edition.EnvPrefix+"HOOK_PREVIOUS_TAG"] != "c2" || last.Env[edition.EnvPrefix+"HOOK_TAG"] != "c3" {
 		t.Fatalf("%+v", last.Env)
 	}
 }
@@ -205,7 +207,7 @@ func TestReinstallingAKeptVersionWithoutItsModule(t *testing.T) {
 		t.Fatalf("%+v %v", result, err)
 	}
 	runs := h.hookRuns("cli")
-	if last := runs[len(runs)-1]; last.Env["VW2026_HOOK_PREVIOUS_TAG"] != "c1" || last.Env["VW2026_HOOK_TAG"] != "c2" {
+	if last := runs[len(runs)-1]; last.Env[edition.EnvPrefix+"HOOK_PREVIOUS_TAG"] != "c1" || last.Env[edition.EnvPrefix+"HOOK_TAG"] != "c2" {
 		t.Fatalf("%+v", last.Env)
 	}
 }
@@ -259,7 +261,7 @@ func TestCannotClearHookPendingPutsTheMovedCLIBack(t *testing.T) {
 		moved   int
 	}{
 		{"put back", false, "", 0},
-		{"cannot put back", true, "the vw2026 of the previous version is in", 1},
+		{"cannot put back", true, "the " + edition.Command + " of the previous version is in", 1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			h := newHarness(t)
@@ -267,7 +269,7 @@ func TestCannotClearHookPendingPutsTheMovedCLIBack(t *testing.T) {
 			h.publish(release{name: "cli", tag: "c2"})
 			failRecordWrite(t, filepath.Join(h.plugins, "cli"))
 			if c.blocked {
-				failRename(t, "", filepath.Join(h.work, "old", "cli", "bin", "vw2026"))
+				failRename(t, "", filepath.Join(h.work, "old", "cli", "bin", edition.Command))
 			}
 			o, stderr := h.capturing()
 			o.Executable = h.fakeExecutable()
@@ -292,14 +294,14 @@ func TestKeepPutsTheMovedCLIIntoThePreviousVersion(t *testing.T) {
 		moved   int
 	}{
 		{"put back", false, "", 0},
-		{"cannot put back", true, "the vw2026 of the previous version is in", 1},
+		{"cannot put back", true, "the " + edition.Command + " of the previous version is in", 1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			h := newHarness(t)
 			h.mustInstall(release{name: "cli", tag: "c1"})
 			h.publish(release{name: "cli", tag: "c2", install: h.lockingHook(hookPlan{Exit: 1})})
 			if c.blocked {
-				failRename(t, "", filepath.Join(h.work, "old", "cli", "bin", "vw2026"))
+				failRename(t, "", filepath.Join(h.work, "old", "cli", "bin", edition.Command))
 			}
 			done, _ := h.lockWhenHookStarts(h.cliSpool())
 			o := h.options()
@@ -327,7 +329,7 @@ func TestKeptPreviousVersionGetsTheMovedCLI(t *testing.T) {
 		moved   int
 	}{
 		{"put back", false, "", 0},
-		{"cannot put back", true, "the vw2026 of the previous version is in", 1},
+		{"cannot put back", true, "the " + edition.Command + " of the previous version is in", 1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			h := newHarness(t)
@@ -337,7 +339,7 @@ func TestKeptPreviousVersionGetsTheMovedCLI(t *testing.T) {
 			os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
 			if c.blocked {
 				renameWhen(t, func(oldpath, newpath string) error {
-					if strings.Contains(newpath, ".kept-") && strings.HasSuffix(newpath, filepath.Join("bin", "vw2026")) {
+					if strings.Contains(newpath, ".kept-") && strings.HasSuffix(newpath, filepath.Join("bin", edition.Command)) {
 						return errInjected
 					}
 					return nil
@@ -389,7 +391,7 @@ func TestSettleOldAdviceDependsOnTheStage(t *testing.T) {
 	}
 	h.publish(release{name: "cli", tag: "c2"})
 	unlock := func() {}
-	h.onGet("/cli/c2/vw2026.json", func() { unlock = h.holdLock() })
+	h.onGet("/cli/c2/"+edition.Command+".json", func() { unlock = h.holdLock() })
 	if result, err := h.install("cli", "c2"); !errors.Is(err, ErrRunning) || result.Outcome != outcomeRunning ||
 		!strings.Contains(err.Error(), "nothing is changed") || strings.Contains(err.Error(), "clean it up") {
 		t.Fatalf("%+v %v", result, err)

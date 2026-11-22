@@ -11,12 +11,14 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
 // workDirName は、利用者ごとの一時フォルダの下の <Work> の名前の頭（docs/plugin/install-and-update.md
 // 「作業の場所」。WorkDirFor が <Plug-Ins> ごとの鍵を足す）。vw2026 だけが使うので、通信規則の見本には載せない。
-const workDirName = "vectorworks2026-cli"
+// 版ごとに分ける（2025 は vectorworks2025-cli。docs/plugin/editions.md）。
+const workDirName = "vectorworks" + edition.Year + "-cli"
 
 // WorkDir は <Work> の頭（利用者ごとの一時フォルダの下の workDirName。WorkDirFor に渡す）を返す。場所の根は環境変数を
 // 読まずに OS の決まった場所から求める（走らせ方で場所が変わると、前の回が残した old/ を次の回が見つけられなくなる

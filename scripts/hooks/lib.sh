@@ -11,6 +11,30 @@ hook_fail() {
 	exit 1
 }
 
+# hook_edition は、渡されたフックの変数の名前から版を決め、hook_command（vw2026）・hook_install_name
+# （VW2026_HOOK_INSTALL_DIR）・hook_install_value（その値）を置く。CLI は自分の版の名前（2025 の CLI は
+# VW2025_HOOK_*）だけを渡すので、2025 と 2026 の zip に同じフックを入れられる（docs/plugin/editions.md）。
+# どちらも無いとき・両方あるときは、何も変える前に失敗にする。
+hook_edition() {
+	hook_year=""
+	if [ -n "${VW2025_HOOK_INSTALL_DIR+x}" ]; then
+		hook_year=2025
+		hook_install_value="$VW2025_HOOK_INSTALL_DIR"
+	fi
+	if [ -n "${VW2026_HOOK_INSTALL_DIR+x}" ]; then
+		if [ -n "$hook_year" ]; then
+			hook_fail "both VW2025_HOOK_INSTALL_DIR and VW2026_HOOK_INSTALL_DIR are set"
+		fi
+		hook_year=2026
+		hook_install_value="$VW2026_HOOK_INSTALL_DIR"
+	fi
+	if [ -z "$hook_year" ]; then
+		hook_fail "VW2026_HOOK_INSTALL_DIR (or VW2025_HOOK_INSTALL_DIR) is not set"
+	fi
+	hook_command="vw$hook_year"
+	hook_install_name="VW${hook_year}_HOOK_INSTALL_DIR"
+}
+
 # strip_slashes は末尾の / を除いて書く（根の / は残す）。
 strip_slashes() {
 	strip_slashes_s="$1"

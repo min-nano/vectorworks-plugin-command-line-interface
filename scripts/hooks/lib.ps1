@@ -266,17 +266,38 @@ function Initialize-HookConsole {
 	try { [Console]::OutputEncoding = $utf8 } catch { Write-HookException 'cannot set the encoding' $_ }
 }
 
-# Get-HookInstallDir は VW2026_HOOK_INSTALL_DIR を確かめて、末尾の区切りを除いて返す。絶対パスで
+# Get-HookYear は、渡されたフックの変数の名前から版（'2026' か '2025'）を決めて返す。CLI は自分の版の
+# 名前（2025 の CLI は VW2025_HOOK_*）だけを渡すので、2025 と 2026 の zip に同じフックを入れられる
+# （docs/plugin/editions.md）。どちらも無いとき・両方あるときは $null（呼ぶ側は何も変えずに失敗で終わる）。
+function Get-HookYear {
+	$has2025 = $null -ne [Environment]::GetEnvironmentVariable('VW2025_HOOK_INSTALL_DIR')
+	$has2026 = $null -ne [Environment]::GetEnvironmentVariable('VW2026_HOOK_INSTALL_DIR')
+	if ($has2025 -and $has2026) {
+		Write-HookError 'both VW2025_HOOK_INSTALL_DIR and VW2026_HOOK_INSTALL_DIR are set'
+		return $null
+	}
+	if ($has2025) {
+		return '2025'
+	}
+	if ($has2026) {
+		return '2026'
+	}
+	Write-HookError 'VW2026_HOOK_INSTALL_DIR (or VW2025_HOOK_INSTALL_DIR) is not set'
+	return $null
+}
+
+# Get-HookInstallDir は版 $Year の VW<版>_HOOK_INSTALL_DIR を確かめて、末尾の区切りを除いて返す。絶対パスで
 # なければ $null（呼ぶ側は何も変えずに失敗で終わる）。
-function Get-HookInstallDir {
-	$dir = $env:VW2026_HOOK_INSTALL_DIR
+function Get-HookInstallDir([string] $Year) {
+	$name = 'VW' + $Year + '_HOOK_INSTALL_DIR'
+	$dir = [Environment]::GetEnvironmentVariable($name)
 	if ([string]::IsNullOrEmpty($dir)) {
-		Write-HookError 'VW2026_HOOK_INSTALL_DIR is not set'
+		Write-HookError ($name + ' is not set')
 		return $null
 	}
 	# IsPathRooted ではなく、Path の項目と同じ確かめで決める（\x や C:x は、今のドライブやディレクトリで解かれてしまう）。
 	if (-not (Test-PathEntryAbsolute $dir)) {
-		Write-HookError ('VW2026_HOOK_INSTALL_DIR is not an absolute path: ' + $dir)
+		Write-HookError ($name + ' is not an absolute path: ' + $dir)
 		return $null
 	}
 	return $dir.TrimEnd('\', '/')

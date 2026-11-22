@@ -88,14 +88,30 @@ jobs:
           name: build-json
           path: build.json
 
-  # mac の zip: cli.vwlibrary/・build.json・bin/vw2026（universal）・hooks/（sh）。
+  # mac の zip: cli.vwlibrary/・build.json・bin/vw2026（universal）・hooks/（sh）。版ごとに作る
+  # （docs/plugin/editions.md）。2026 はジョブ名を build-mac のまま（必須のチェック）にし、2025 は
+  # build-mac-vw2025 で、Vectorworks 2025 の SDK でプラグインを、ビルドタグ vw2025 で vw2025 をビルドする。
+  # 2025 の mac の SDK のヘッダは clang 19 以降で通らないので、どちらも Xcode 16.2 でビルドする。
   build-mac:
+    name: ${{ matrix.name }}
     needs: meta
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: build-mac
+            year: "2026"
+            zip: cli-macos-arm64.zip
+          - name: build-mac-vw2025
+            year: "2025"
+            zip: cli-vw2025-macos-arm64.zip
     runs-on: macos-15
     env:
-      VW_SDK_URL: https://release.vectorworks.net/latest/Vectorworks/2026-NNA-eng-mac-SDK.zip
+      VW_SDK_URL: https://release.vectorworks.net/latest/Vectorworks/${{ matrix.year }}-NNA-eng-mac-SDK.zip
       VW_SDK_DIR: ${{ github.workspace }}/vw-sdk
       VERSION: ${{ needs.meta.outputs.version }}
+      YEAR: ${{ matrix.year }}
+      ZIP: ${{ matrix.zip }}
     steps:
       # 取り出すものは meta の出力に頼らず、ここに条件を書く（同じリポジトリの PR だけ head。fork の
       # PR はマージのためのコミット）。CodeQL が安全だと読めるようにし、meta を変えたときに信頼
@@ -106,7 +122,7 @@ jobs:
       - uses: ./.github/actions/prepare-build
         with:
           sha: ${{ needs.meta.outputs.sha }}
-          sdk-cache-prefix: vw-sdk-2026-mac
+          sdk-cache-prefix: vw-sdk-${{ matrix.year }}-mac
       # SDK リファレンスの plugin/ が実機で読み込まれているビルドと同じ Xcode に合わせる。
       - run: sudo xcode-select -s /Applications/Xcode_16.2.app
       - name: plug-in
@@ -125,18 +141,25 @@ jobs:
           test -e build/cli.vwlibrary/Contents/Resources/cli.vwr
           ditto build/cli.vwlibrary stage/cli.vwlibrary
       # Go は arm64 のバイナリをリンクのときにアドホック署名する。lipo は各アーキテクチャの署名を保つ。
+      # 2025 はビルドタグ vw2025 を付ける（コマンド名・環境変数・置き場所・既定のレジストリが 2025 になる）。
       - name: cli
         run: |
           set -eu
+          tags=""
+          if [ "$YEAR" != 2026 ]; then
+            tags="vw$YEAR"
+          fi
           for arch in arm64 amd64; do
-            CGO_ENABLED=0 GOOS=darwin GOARCH="$arch" go -C cli build -trimpath \
-              -ldflags "-s -w -X main.version=$VERSION" -o "$RUNNER_TEMP/vw2026-$arch" ./cmd/vw2026
+            CGO_ENABLED=0 GOOS=darwin GOARCH="$arch" go -C cli build -trimpath -tags "$tags" \
+              -ldflags "-s -w -X main.version=$VERSION" -o "$RUNNER_TEMP/vw$YEAR-$arch" ./cmd/vw2026
           done
           mkdir -p stage/bin
-          lipo -create -output stage/bin/vw2026 "$RUNNER_TEMP/vw2026-arm64" "$RUNNER_TEMP/vw2026-amd64"
-          lipo -info stage/bin/vw2026
-          stage/bin/vw2026 version
+          lipo -create -output "stage/bin/vw$YEAR" "$RUNNER_TEMP/vw$YEAR-arm64" "$RUNNER_TEMP/vw$YEAR-amd64"
+          lipo -info "stage/bin/vw$YEAR"
+          "stage/bin/vw$YEAR" version
+          "stage/bin/vw$YEAR" --help | head -1 | grep -q "^Usage: vw$YEAR "
       # フックは PATH だけを置く（docs/plugin/install-and-update.md「cli のフック」）。mac は sh のものだけ。
+      # どの版の zip にも同じフックを入れる（フックは渡された VW<版>_HOOK_* で版を決める）。
       - name: hooks
         run: |
           set -eu
@@ -147,24 +170,38 @@ jobs:
         run: |
           set -eu
           mkdir -p dist
-          (cd stage && zip -qr ../dist/cli-macos-arm64.zip .)
-          unzip -Z1 dist/cli-macos-arm64.zip
+          (cd stage && zip -qr "../dist/$ZIP" .)
+          unzip -Z1 "dist/$ZIP"
       - uses: actions/upload-artifact@v7
         with:
-          name: cli-macos-arm64.zip
-          path: dist/cli-macos-arm64.zip
+          name: ${{ matrix.zip }}
+          path: dist/${{ matrix.zip }}
 
-  # Windows の zip: cli.vlb・cli.vwr・build.json・bin\vw2026.exe・hooks\（PowerShell）。
+  # Windows の zip: cli.vlb・cli.vwr・build.json・bin\vw2026.exe・hooks\（PowerShell）。版ごとに作る
+  # （build-mac と同じ。2026 は build-windows、2025 は build-windows-vw2025）。
   build-windows:
+    name: ${{ matrix.name }}
     needs: meta
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: build-windows
+            year: "2026"
+            zip: cli-windows-x64.zip
+          - name: build-windows-vw2025
+            year: "2025"
+            zip: cli-vw2025-windows-x64.zip
     runs-on: windows-latest
     defaults:
       run:
         shell: bash
     env:
-      VW_SDK_URL: https://release.vectorworks.net/latest/Vectorworks/2026-NNA-eng-win-SDK.zip
+      VW_SDK_URL: https://release.vectorworks.net/latest/Vectorworks/${{ matrix.year }}-NNA-eng-win-SDK.zip
       VW_SDK_DIR: ${{ github.workspace }}/vw-sdk-win
       VERSION: ${{ needs.meta.outputs.version }}
+      YEAR: ${{ matrix.year }}
+      ZIP: ${{ matrix.zip }}
     steps:
       # 取り出すものは meta の出力に頼らず、ここに条件を書く（同じリポジトリの PR だけ head。fork の
       # PR はマージのためのコミット）。CodeQL が安全だと読めるようにし、meta を変えたときに信頼
@@ -175,7 +212,7 @@ jobs:
       - uses: ./.github/actions/prepare-build
         with:
           sha: ${{ needs.meta.outputs.sha }}
-          sdk-cache-prefix: vw-sdk-2026-win
+          sdk-cache-prefix: vw-sdk-${{ matrix.year }}-win
       - name: plug-in
         env:
           BRANCH: ${{ needs.meta.outputs.branch }}
@@ -188,12 +225,17 @@ jobs:
       - name: cli
         run: |
           set -eu
+          tags=""
+          if [ "$YEAR" != 2026 ]; then
+            tags="vw$YEAR"
+          fi
           mkdir -p stage/bin
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go -C cli build -trimpath \
-            -ldflags "-s -w -X main.version=$VERSION" -o ../stage/bin/vw2026.exe ./cmd/vw2026
-          stage/bin/vw2026.exe version
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go -C cli build -trimpath -tags "$tags" \
+            -ldflags "-s -w -X main.version=$VERSION" -o "../stage/bin/vw$YEAR.exe" ./cmd/vw2026
+          "stage/bin/vw$YEAR.exe" version
+          "stage/bin/vw$YEAR.exe" --help | head -1 | grep -q "^Usage: vw$YEAR "
       # フックは PATH だけを置く（docs/plugin/install-and-update.md「cli のフック」）。Windows は
-      # PowerShell のものだけ。
+      # PowerShell のものだけ。どの版の zip にも同じフックを入れる。
       - name: hooks
         run: |
           set -eu
@@ -207,79 +249,14 @@ jobs:
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force dist | Out-Null
           Add-Type -AssemblyName System.IO.Compression.FileSystem
-          [IO.Compression.ZipFile]::CreateFromDirectory("$PWD/stage", "$PWD/dist/cli-windows-x64.zip")
-          $zip = [IO.Compression.ZipFile]::OpenRead("$PWD/dist/cli-windows-x64.zip")
+          [IO.Compression.ZipFile]::CreateFromDirectory("$PWD/stage", "$PWD/dist/$env:ZIP")
+          $zip = [IO.Compression.ZipFile]::OpenRead("$PWD/dist/$env:ZIP")
           $zip.Entries.FullName
           $zip.Dispose()
       - uses: actions/upload-artifact@v7
         with:
-          name: cli-windows-x64.zip
-          path: dist/cli-windows-x64.zip
-
-  # Vectorworks 2025 の SDK でプラグインがビルドできるかの確かめ（docs/plugin/build-and-release.md
-  # 「Vectorworks 2025」）。プラグインだけを成果物に残し、梱包・公開はしない（release は待たない）。
-  # 2025 の mac の SDK のヘッダは clang 19 以降で通らないので、ビルドは CI の Xcode 16.2 だけで行い、
-  # 手元ではビルドしない。
-  build-vw2025:
-    needs: meta
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-15
-            sdk: mac
-          - os: windows-latest
-            sdk: win
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash
-    env:
-      VW_SDK_URL: https://release.vectorworks.net/latest/Vectorworks/2025-NNA-eng-${{ matrix.sdk }}-SDK.zip
-      VW_SDK_DIR: ${{ github.workspace }}/vw-sdk-2025
-      VERSION: ${{ needs.meta.outputs.version }}
-    steps:
-      # 取り出すものは meta の出力に頼らず、ここに条件を書く（build-mac の取り出しの手順のコメント）。
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
-      - uses: ./.github/actions/prepare-build
-        with:
-          sha: ${{ needs.meta.outputs.sha }}
-          sdk-cache-prefix: vw-sdk-2025-${{ matrix.sdk }}
-      - if: runner.os == 'macOS'
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app
-      - name: plug-in
-        env:
-          BRANCH: ${{ needs.meta.outputs.branch }}
-        run: |
-          set -eu
-          if [ "$RUNNER_OS" = macOS ]; then
-            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DVW_SDK_DIR="$VW_SDK_DIR" \
-              -DVW_BUILD_VERSION="$VERSION" -DVW_BUILD_BRANCH="$BRANCH"
-            cmake --build build --target VwCli --parallel "$(sysctl -n hw.ncpu)"
-            # build-mac と同じアドホック署名。.vwr を入れた後にかけ、リソースまで封をする。
-            codesign --force --deep --sign - build/cli.vwlibrary
-            codesign --verify --strict --verbose=2 build/cli.vwlibrary
-            lipo -info build/cli.vwlibrary/Contents/MacOS/cli
-            test -e build/cli.vwlibrary/Contents/Resources/cli.vwr
-            mkdir -p stage
-            ditto build/cli.vwlibrary stage/cli.vwlibrary
-          else
-            cmake -S . -B build -A x64 -DVW_SDK_DIR="$VW_SDK_DIR" \
-              -DVW_BUILD_VERSION="$VERSION" -DVW_BUILD_BRANCH="$BRANCH"
-            cmake --build build --config Release --target VwCli --parallel
-            test -f build/Release/cli.vlb
-            test -e build/Release/cli.vwr
-            mkdir -p stage
-            cp build/Release/cli.vlb build/Release/cli.vwr stage/
-          fi
-      # 実機（Vectorworks 2025）で確かめるために、プラグインだけを成果物として残す（公開はしない）。
-      # CLI と build.json は build-mac / build-windows の zip のものを使う。
-      - uses: actions/upload-artifact@v7
-        with:
-          name: cli-vw2025-${{ matrix.sdk }}-plugin
-          path: stage/
+          name: ${{ matrix.zip }}
+          path: dist/${{ matrix.zip }}
 
   # マニフェストを書き、下書きのリリースに資産を上げ終えてから公開する（下書きは利用者の URL から
   # 見えないので、資産が揃わない間を見せない。latest は公開した時点で進む）。タグは使い回さない。
@@ -304,8 +281,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
           sparse-checkout: |
-            scripts/get-vw2026.sh
-            scripts/get-vw2026.ps1
+            scripts/get-vw.sh
+            scripts/get-vw.ps1
           sparse-checkout-cone-mode: false
       - run: test "$(git rev-parse HEAD)" = "$SHA"
       - uses: actions/download-artifact@v8
@@ -313,50 +290,62 @@ jobs:
           pattern: cli-*.zip
           path: dist
           merge-multiple: true
-      # マニフェスト（docs/registry.md「マニフェスト」）。資産は絶対の参照で、このタグのリリースを指す
-      # （同じマニフェストを latest の場所から取っても、指す zip は変わらない）。
+      # マニフェスト（docs/registry.md「マニフェスト」）。版ごとに 1 つ（vw2026.json・vw2025.json。
+      # docs/plugin/editions.md）。資産は絶対の参照で、このタグのリリースを指す（同じマニフェストを latest の
+      # 場所から取っても、指す zip は変わらない）。
       - name: manifest
         run: |
           set -eu
           base="https://github.com/$GH_REPO/releases/download/$TAG"
-          mac="$(sha256sum dist/cli-macos-arm64.zip | cut -d' ' -f1)"
-          win="$(sha256sum dist/cli-windows-x64.zip | cut -d' ' -f1)"
-          jq -n --arg tag "$TAG" --arg base "$base" --arg mac "$mac" --arg win "$win" '{
-            manifest_version: 1,
-            tag: $tag,
-            targets: {
-              "macos-arm64": {
-                asset: ($base + "/cli-macos-arm64.zip"),
-                sha256: $mac,
-                hooks: {install: ["sh", "hooks/install.sh"], uninstall: ["sh", "hooks/uninstall.sh"]}
-              },
-              "windows-x64": {
-                asset: ($base + "/cli-windows-x64.zip"),
-                sha256: $win,
-                hooks: {install: ["powershell", "hooks/install.ps1"], uninstall: ["powershell", "hooks/uninstall.ps1"]}
+          for year in 2026 2025; do
+            if [ "$year" = 2026 ]; then
+              prefix=cli-
+            else
+              prefix="cli-vw$year-"
+            fi
+            mac="$(sha256sum "dist/${prefix}macos-arm64.zip" | cut -d' ' -f1)"
+            win="$(sha256sum "dist/${prefix}windows-x64.zip" | cut -d' ' -f1)"
+            jq -n --arg tag "$TAG" --arg base "$base" --arg prefix "$prefix" --arg mac "$mac" --arg win "$win" '{
+              manifest_version: 1,
+              tag: $tag,
+              targets: {
+                "macos-arm64": {
+                  asset: ($base + "/" + $prefix + "macos-arm64.zip"),
+                  sha256: $mac,
+                  hooks: {install: ["sh", "hooks/install.sh"], uninstall: ["sh", "hooks/uninstall.sh"]}
+                },
+                "windows-x64": {
+                  asset: ($base + "/" + $prefix + "windows-x64.zip"),
+                  sha256: $win,
+                  hooks: {install: ["powershell", "hooks/install.ps1"], uninstall: ["powershell", "hooks/uninstall.ps1"]}
+                }
               }
-            }
-          }' > dist/vw2026.json
-          cat dist/vw2026.json
-      # 初回のスクリプト。@VW2026_TAG@ をこのリリースのタグに置き換える（どのリリースから取ったスクリプトも、
-      # そのリリースの cli を入れる。タグは英数字と . _ - だけなので、sed の置き換えにそのまま書ける）。
+            }' > "dist/vw$year.json"
+            cat "dist/vw$year.json"
+          done
+      # 初回のスクリプト。雛形（scripts/get-vw.sh・.ps1）の @VW_TAG@ をこのリリースのタグに、@VW_YEAR@ を版に
+      # 置き換えて、版ごとに作る（get-vw2026.*・get-vw2025.*。どのリリースから取ったスクリプトも、その
+      # リリースのその版の cli を入れる。タグは英数字と . _ - だけなので、sed の置き換えにそのまま書ける）。
       # PowerShell のものは BOM を除いて上げる（Windows PowerShell 5.1 の Invoke-RestMethod は charset の
       # 無い本文を ISO-8859-1 で読むので、BOM が iex に崩れて渡る）。同じ理由で ASCII だけであることを確かめる。
       - name: scripts
         run: |
           set -eu
-          sed "s/@VW2026_TAG@/$TAG/g" scripts/get-vw2026.sh > dist/get-vw2026.sh
-          sed -e '1s/^\xEF\xBB\xBF//' -e "s/@VW2026_TAG@/$TAG/g" scripts/get-vw2026.ps1 > dist/get-vw2026.ps1
-          for script in dist/get-vw2026.sh dist/get-vw2026.ps1; do
-            if ! grep -qF "'$TAG'" "$script" || grep -qF '@VW2026_TAG@' "$script"; then
-              echo "$script does not have the tag $TAG" >&2
+          for year in 2026 2025; do
+            sed -e "s/@VW_TAG@/$TAG/g" -e "s/@VW_YEAR@/$year/g" scripts/get-vw.sh > "dist/get-vw$year.sh"
+            sed -e '1s/^\xEF\xBB\xBF//' -e "s/@VW_TAG@/$TAG/g" -e "s/@VW_YEAR@/$year/g" scripts/get-vw.ps1 \
+              > "dist/get-vw$year.ps1"
+            for script in "dist/get-vw$year.sh" "dist/get-vw$year.ps1"; do
+              if ! grep -qF "'$TAG'" "$script" || ! grep -qF "'$year'" "$script" || grep -qF '@VW_' "$script"; then
+                echo "$script does not have the tag $TAG and the edition $year" >&2
+                exit 1
+              fi
+            done
+            if LC_ALL=C grep -n '[^[:print:][:space:]]' "dist/get-vw$year.ps1"; then
+              echo "get-vw$year.ps1 must be ASCII only" >&2
               exit 1
             fi
           done
-          if LC_ALL=C grep -n '[^[:print:][:space:]]' dist/get-vw2026.ps1; then
-            echo "get-vw2026.ps1 must be ASCII only" >&2
-            exit 1
-          fi
           ls -l dist
       # 同じタグの公開済みのリリースがあれば、タグが今回の完全な sha を指すなら何もせず（同じ sha の
       # 実行し直し）、違えば失敗にする（短い sha が重なった。docs/plugin/build-and-release.md「リリースの形」）。
@@ -399,6 +388,8 @@ jobs:
           fi
           gh release create "$TAG" dist/vw2026.json dist/cli-macos-arm64.zip dist/cli-windows-x64.zip \
             dist/get-vw2026.sh dist/get-vw2026.ps1 \
+            dist/vw2025.json dist/cli-vw2025-macos-arm64.zip dist/cli-vw2025-windows-x64.zip \
+            dist/get-vw2025.sh dist/get-vw2025.ps1 \
             --draft --target "$SHA" --title "$TITLE" --notes "Built from $SHA." "${kind[@]}"
           # 作ったばかりの下書きは、一覧に載るまで少しかかることがある（載る前に引くと id が無く、公開が
           # 404 になる）。載るまで引き直し、載らなければ失敗にする。
@@ -425,7 +416,7 @@ jobs:
           echo "latest=$latest" >> "$GITHUB_OUTPUT"
 
   # 公開した資産を、利用者と同じ道筋（既定のレジストリの cli の規則が指すマニフェスト → その asset）で
-  # 取ってきて確かめる。
+  # 取ってきて確かめる。版ごと（2026 と 2025。docs/plugin/editions.md）に確かめる。
   verify:
     needs: [meta, release]
     strategy:
@@ -434,8 +425,16 @@ jobs:
         include:
           - os: macos-latest
             target: macos-arm64
+            year: "2026"
           - os: windows-latest
             target: windows-x64
+            year: "2026"
+          - os: macos-latest
+            target: macos-arm64
+            year: "2025"
+          - os: windows-latest
+            target: windows-x64
+            year: "2025"
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -445,12 +444,13 @@ jobs:
       VERSION: ${{ needs.meta.outputs.version }}
       LATEST: ${{ needs.release.outputs.latest }}
       TARGET: ${{ matrix.target }}
+      YEAR: ${{ matrix.year }}
     steps:
-      # 規則は CLI に埋め込むのと同じ既定のレジストリ（ビルドしたコミットのもの）から読む。
+      # 規則は CLI に埋め込むのと同じ既定のレジストリ（ビルドしたコミットのもの。版ごとのファイル）から読む。
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
-          sparse-checkout: cli/internal/registry/default.json
+          sparse-checkout: cli/internal/registry/default-vw${{ matrix.year }}.json
           sparse-checkout-cone-mode: false
       - env:
           SHA: ${{ needs.meta.outputs.sha }}
@@ -464,13 +464,14 @@ jobs:
           manifest_url() {
             jq -r --arg tag "$1" '.plugins.cli.manifests
               | map(select(.match as $m | $tag | test("^" + ($m | gsub("\\."; "\\.") | gsub("\\*"; ".*")) + "$")))
-              | first | .path | gsub("\\{tag\\}"; $tag)' cli/internal/registry/default.json
+              | first | .path | gsub("\\{tag\\}"; $tag)' "cli/internal/registry/default-vw$YEAR.json"
           }
-          curl -fsSL --retry 4 --retry-delay 5 -o "$RUNNER_TEMP/vw2026.json" "$(manifest_url "$TAG")"
-          cat "$RUNNER_TEMP/vw2026.json"
-          test "$(jq -r .tag "$RUNNER_TEMP/vw2026.json")" = "$TAG"
-          asset="$(jq -r --arg t "$TARGET" '.targets[$t].asset' "$RUNNER_TEMP/vw2026.json")"
-          want="$(jq -r --arg t "$TARGET" '.targets[$t].sha256' "$RUNNER_TEMP/vw2026.json")"
+          manifest="$RUNNER_TEMP/vw$YEAR.json"
+          curl -fsSL --retry 4 --retry-delay 5 -o "$manifest" "$(manifest_url "$TAG")"
+          cat "$manifest"
+          test "$(jq -r .tag "$manifest")" = "$TAG"
+          asset="$(jq -r --arg t "$TARGET" '.targets[$t].asset' "$manifest")"
+          want="$(jq -r --arg t "$TARGET" '.targets[$t].sha256' "$manifest")"
           curl -fL --retry 4 --retry-delay 5 -o "$RUNNER_TEMP/release.zip" "$asset"
           # 標準入力から読ませる（Windows の Git Bash の sha256sum は、パスに \ があると行の頭に \ を付ける）。
           if command -v sha256sum > /dev/null; then
@@ -492,14 +493,14 @@ jobs:
           top="$(unzip -Z1 "$zip" | cut -d/ -f1 | sort -u | tr '\n' ' ')"
           test "$top" = "bin build.json cli.vwlibrary hooks " || { echo "unexpected top level: $top"; exit 1; }
           bin="$(unzip -Z1 "$zip" | grep '^bin/.' | tr '\n' ' ')"
-          test "$bin" = "bin/vw2026 " || { echo "unexpected bin/: $bin"; exit 1; }
+          test "$bin" = "bin/vw$YEAR " || { echo "unexpected bin/: $bin"; exit 1; }
           hooks="$(unzip -Z1 "$zip" | grep '^hooks/.' | sort | tr '\n' ' ')"
           test "$hooks" = "hooks/install.sh hooks/lib.sh hooks/uninstall.sh " || { echo "unexpected hooks/: $hooks"; exit 1; }
           dir="$RUNNER_TEMP/release"
           unzip -q "$zip" -d "$dir"
           codesign --verify --strict --verbose=2 "$dir/cli.vwlibrary"
           test -e "$dir/cli.vwlibrary/Contents/Resources/cli.vwr"
-          lipo -info "$dir/bin/vw2026"
+          lipo -info "$dir/bin/vw$YEAR"
           echo "RELEASE_DIR=$dir" >> "$GITHUB_ENV"
       - if: runner.os == 'Windows'
         shell: pwsh
@@ -514,19 +515,20 @@ jobs:
           $top = ($names | ForEach-Object { ($_ -split '/')[0] } | Sort-Object -Unique) -join ' '
           if ($top -cne 'bin build.json cli.vlb cli.vwr hooks') { throw "unexpected top level: $top" }
           $bin = ($names | Where-Object { $_ -like 'bin/?*' }) -join ' '
-          if ($bin -cne 'bin/vw2026.exe') { throw "unexpected bin/: $bin" }
+          if ($bin -cne "bin/vw$env:YEAR.exe") { throw "unexpected bin/: $bin" }
           $hooks = ($names | Where-Object { $_ -like 'hooks/?*' } | Sort-Object) -join ' '
           if ($hooks -cne 'hooks/install.ps1 hooks/lib.ps1 hooks/uninstall.ps1') { throw "unexpected hooks/: $hooks" }
           $dir = "$env:RUNNER_TEMP/release"
           Expand-Archive -LiteralPath $zipPath -DestinationPath $dir
           "RELEASE_DIR=$dir" >> $env:GITHUB_ENV
-      # build.json と CLI の版が、ビルドした sha になっている。
+      # build.json と CLI の版が、ビルドした sha になっている。CLI はその版のもの（vw2025 は 2025）。
       - run: |
           set -eu
           cat "$RELEASE_DIR/build.json"
           test "$(jq -r .version "$RELEASE_DIR/build.json")" = "$VERSION"
-          "$RELEASE_DIR/bin/vw2026" version | tee "$RUNNER_TEMP/version.json"
+          "$RELEASE_DIR/bin/vw$YEAR" version | tee "$RUNNER_TEMP/version.json"
           test "$(jq -r .version "$RUNNER_TEMP/version.json")" = "$VERSION"
+          "$RELEASE_DIR/bin/vw$YEAR" --help | head -1 | grep "^Usage: vw$YEAR "
 
   # verify の結果を 1 つのチェックにまとめる（必須のチェックにするため）。verify は行列のジョブで、
   # 公開しないとき（マージキュー・fork の PR）は release とともに行列を展開する前に飛ばされ、行列の値の
@@ -562,9 +564,20 @@ jobs:
   # 実物のレジストリで確かめる。ランナーは使い捨てなので既定の場所を使い、元の値は戻さない。main では
   # 版の違う相手が無いので走らせない。初回のスクリプトは、利用者と同じく Windows PowerShell 5.1 で、
   # 公開したものを Invoke-RestMethod で取って走らせる。
+  # 版ごとに走らせる（docs/plugin/editions.md）。2026 はジョブ名を install-windows のまま（必須のチェック）にし、
+  # 2025 は install-windows-vw2025 で、vw2025 と Vectorworks 2025 の <Plug-Ins> を使う。
   install-windows:
+    name: ${{ matrix.name }}
     needs: [meta, release]
     if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: install-windows
+            year: "2026"
+          - name: install-windows-vw2025
+            year: "2025"
     runs-on: windows-latest
     defaults:
       run:
@@ -572,22 +585,24 @@ jobs:
     env:
       TAG: ${{ needs.meta.outputs.tag }}
       VERSION: ${{ needs.meta.outputs.version }}
+      YEAR: ${{ matrix.year }}
     steps:
-      # 各手順が読み込む関数。場所は vw2026 と同じく OS の決まった場所から求める
+      # 各手順が読み込む関数。場所は vw2026（2025 は vw2025）と同じく OS の決まった場所から求める
       # （docs/plugin/identifiers.md「置き場所」）。
       - name: helpers
         run: |
           @'
-          $plugins = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'Nemetschek\Vectorworks\2026\Plug-Ins'
+          $year = $env:YEAR
+          $plugins = Join-Path ([Environment]::GetFolderPath('ApplicationData')) "Nemetschek\Vectorworks\$year\Plug-Ins"
           # <Work> は <Plug-Ins> ごと（install.WorkDirFor: 小文字にした <Plug-Ins> の sha256 の先頭 12 桁。ランナーの
           # <Plug-Ins> の書き方にリンクは無い）。食い違えば、4 の「<Work> がある」の確かめで落ちる。
           $sha = [Security.Cryptography.SHA256]::Create()
           $key = -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($plugins.ToLowerInvariant()))[0..5] | ForEach-Object { $_.ToString('x2') })
-          $work = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) "Temp\vectorworks2026-cli-$key"
+          $work = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) "Temp\vectorworks$year-cli-$key"
           $bin = Join-Path $plugins 'cli\bin'
-          $exe = Join-Path $bin 'vw2026.exe'
+          $exe = Join-Path $bin "vw$year.exe"
 
-          # vw2026 の出力の JSON をログに出して読む。終了コードが 0 でなければ止める。
+          # vw2026（vw2025）の出力の JSON をログに出して読む。終了コードが 0 でなければ止める。
           function Read-Output($Text) {
               $code = $LASTEXITCODE
               Write-Host $Text
@@ -596,7 +611,7 @@ jobs:
           }
           # その PR のタグの公開した初回のスクリプトを、引数を付けて走らせる（引数が無ければ、そのタグの cli を入れる）。
           function Invoke-Bootstrap {
-              $script = Invoke-RestMethod -UseBasicParsing "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:TAG/get-vw2026.ps1"
+              $script = Invoke-RestMethod -UseBasicParsing "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:TAG/get-vw$year.ps1"
               $arguments = $args
               Read-Output (& ([scriptblock]::Create($script)) @arguments)
           }
@@ -627,7 +642,7 @@ jobs:
               }
           }
           function Get-MovedCli {
-              @(Get-ChildItem -LiteralPath (Join-Path $work 'old') -Filter 'vw2026.exe.old-*' -File -ErrorAction SilentlyContinue)
+              @(Get-ChildItem -LiteralPath (Join-Path $work 'old') -Filter "vw$year.exe.old-*" -File -ErrorAction SilentlyContinue)
           }
           '@ | Set-Content -Encoding UTF8 "$env:RUNNER_TEMP\helpers.ps1"
       # latest を入れる手順 7 を走らせるか。PR の CLI が読めるのは PR のマニフェストと同じ manifest_version
@@ -637,8 +652,8 @@ jobs:
         run: |
           set -eu
           base="https://github.com/$GITHUB_REPOSITORY/releases"
-          pr="$(curl -fsSL --retry 4 --retry-delay 5 "$base/download/$TAG/vw2026.json" | jq .manifest_version)"
-          latest="$(curl -fsSL "$base/latest/download/vw2026.json" 2>/dev/null | jq .manifest_version || true)"
+          pr="$(curl -fsSL --retry 4 --retry-delay 5 "$base/download/$TAG/vw$YEAR.json" | jq .manifest_version)"
+          latest="$(curl -fsSL "$base/latest/download/vw$YEAR.json" 2>/dev/null | jq .manifest_version || true)"
           echo "manifest_version: PR $pr, latest ${latest:-none}"
           if [ "$latest" = "$pr" ]; then
             echo "install=true" >> "$GITHUB_OUTPUT"
@@ -686,10 +701,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           Write-Host $text
           $out = $text | ConvertFrom-Json
-          if ($code -ne 2 -or $out.outcome -ne 'failed' -or $out.command -notlike "*download/$env:TAG/get-vw2026.ps1))) uninstall") {
+          if ($code -ne 2 -or $out.outcome -ne 'failed' -or $out.command -notlike "*download/$env:TAG/get-vw$env:YEAR.ps1))) uninstall") {
               throw "exit code $code"
           }
-          if (-not (Test-Path -LiteralPath (Join-Path $plugins 'cli\vw2026-install.json'))) { throw 'cli is removed' }
+          if (-not (Test-Path -LiteralPath (Join-Path $plugins "cli\vw$year-install.json"))) { throw 'cli is removed' }
           # 2 で終わったのが正しいので、ステップの終了コード（$LASTEXITCODE）を戻す。
           $global:LASTEXITCODE = 0
       # 4. 入った PR の CLI で、記録のタグを違うものにしてから同じビルドを入れ直す。動いている自分を
@@ -697,7 +712,7 @@ jobs:
       - name: install with the installed CLI moves it aside
         run: |
           . "$env:RUNNER_TEMP\helpers.ps1"
-          $recordPath = Join-Path $plugins 'cli\vw2026-install.json'
+          $recordPath = Join-Path $plugins "cli\vw$year-install.json"
           $record = Get-Content -Raw -LiteralPath $recordPath | ConvertFrom-Json
           $record.tag = 'dev-previous'
           # BOM を付けずに書く（Set-Content -Encoding UTF8 は BOM を付け、Go の JSON が読めない）。

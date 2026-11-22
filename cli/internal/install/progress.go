@@ -5,6 +5,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 // 進み具合を書く間隔（docs/plugin/install-and-update.md「流れ」）。端末では同じ行を書き
@@ -31,9 +33,9 @@ type progress struct {
 func (o *Options) startProgress(ref string, total int64) *progress {
 	p := &progress{w: o.stderr(), terminal: o.Terminal, total: total, last: time.Now()}
 	if total >= 0 {
-		fmt.Fprintf(p.w, "vw2026: downloading %s (%s)\n", ref, mebibytes(total))
+		fmt.Fprintf(p.w, edition.Command+": downloading %s (%s)\n", ref, mebibytes(total))
 	} else {
-		fmt.Fprintf(p.w, "vw2026: downloading %s\n", ref)
+		fmt.Fprintf(p.w, edition.Command+": downloading %s\n", ref)
 	}
 	return p
 }
@@ -73,7 +75,7 @@ func (p *progress) status() string {
 // line は 1 行を書く。端末では行の頭へ戻って書き直し、前より短ければ残りを空白で消す（VT の
 // 制御列は、Windows の古いコンソールで効かないので使わない）。
 func (p *progress) line(text string) {
-	text = "vw2026: " + text
+	text = edition.Command + ": " + text
 	if !p.terminal {
 		fmt.Fprintln(p.w, text)
 		return

@@ -1,5 +1,6 @@
 #!/bin/sh
-# cli の install のフック（mac）。~/.local/bin/vw2026 から <Plug-Ins>/cli/bin/vw2026 へのリンクを置き、
+# cli の install のフック（mac）。~/.local/bin/vw2026 から <Plug-Ins>/cli/bin/vw2026 へのリンクを置き
+# （2025 の CLI が走らせたときは vw2025。lib.sh の hook_edition）、
 # 標準出力に {"path":…} を 1 つだけ書く（docs/plugin/install-and-update.md「PATH」）。
 #
 #   linked       リンクを作った（~/.local/bin は PATH にある）
@@ -15,14 +16,15 @@ set -u
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib.sh"
 
-install_dir="$(absolute_dir VW2026_HOOK_INSTALL_DIR "${VW2026_HOOK_INSTALL_DIR-}")" || exit 1
+hook_edition
+install_dir="$(absolute_dir "$hook_install_name" "$hook_install_value")" || exit 1
 home="$(absolute_dir HOME "${HOME-}")" || exit 1
-target="$install_dir/bin/vw2026"
+target="$install_dir/bin/$hook_command"
 if [ ! -f "$target" ]; then
 	hook_fail "the CLI is missing: $target"
 fi
 bin_dir="$home/.local/bin"
-link="$bin_dir/vw2026"
+link="$bin_dir/$hook_command"
 
 if link_points_to "$link" "$target"; then
 	state=exists

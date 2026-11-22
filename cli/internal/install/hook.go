@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
 
@@ -30,19 +31,37 @@ type hookEnv struct {
 func (h hookEnv) environ() []string {
 	var env []string
 	for _, kv := range os.Environ() {
-		// 呼ぶ側の環境に同じ名前があっても、こちらの値だけを渡す。
-		if !strings.HasPrefix(strings.ToUpper(kv), "VW2026_HOOK_") {
+		// 呼ぶ側の環境に同じ名前があっても、こちらの値だけを渡す。ほかの版の名前（VW2025_HOOK_* と
+		// VW2026_HOOK_*）も渡さない。cli のフックは渡された名前で版を決め、両方あると断るため
+		// （docs/plugin/editions.md）。
+		if !isHookVar(kv) {
 			env = append(env, kv)
 		}
 	}
+	p := edition.HookEnvPrefix
 	return append(env,
-		"VW2026_HOOK_NAME="+h.name,
-		"VW2026_HOOK_TAG="+h.tag,
-		"VW2026_HOOK_PREVIOUS_TAG="+h.previous,
-		"VW2026_HOOK_TARGET="+h.target,
-		"VW2026_HOOK_PLUGIN_DIR="+h.pluginDir,
-		"VW2026_HOOK_INSTALL_DIR="+h.installDir,
+		p+"NAME="+h.name,
+		p+"TAG="+h.tag,
+		p+"PREVIOUS_TAG="+h.previous,
+		p+"TARGET="+h.target,
+		p+"PLUGIN_DIR="+h.pluginDir,
+		p+"INSTALL_DIR="+h.installDir,
 	)
+}
+
+// isHookVar は、環境の 1 項目 kv が、どれかの版のフックの変数（VW<4 桁>_HOOK_*。大文字と小文字を区別しない）か。
+func isHookVar(kv string) bool {
+	const head, tail = "VW", "_HOOK_"
+	upper := strings.ToUpper(kv)
+	if len(upper) < len(head)+4+len(tail) || !strings.HasPrefix(upper, head) {
+		return false
+	}
+	for _, c := range upper[len(head) : len(head)+4] {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return strings.HasPrefix(upper[len(head)+4:], tail)
 }
 
 // interpreter は、フックの 1 つ目（sh・powershell）を走らせる argv の頭。PATH からは探さない。
@@ -118,7 +137,7 @@ func (o *Options) runHook(kind string, argv []string, env hookEnv) (json.RawMess
 	cmd.WaitDelay = hookWaitDelay
 	err = cmd.Run()
 	if errors.Is(err, exec.ErrWaitDelay) {
-		fmt.Fprintf(o.stderr(), "vw2026: the %s hook left a process that keeps its output open; vw2026 stopped waiting for it\n", kind)
+		fmt.Fprintf(o.stderr(), edition.Command+": the %s hook left a process that keeps its output open; "+edition.Command+" stopped waiting for it\n", kind)
 		err = nil
 	}
 	if err != nil {

@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 // 入った CLI（<X>/cli/bin/ にあり、<X>/cli/ に記録・モジュール・スプールのどれかがある。中身は読まない）なら <X>。
@@ -13,18 +15,18 @@ import (
 func TestPluginsDirOf(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
-	executable := filepath.Join(h.plugins, "cli", "bin", "vw2026")
+	executable := filepath.Join(h.plugins, "cli", "bin", edition.Command)
 	// リンクを解いた場所を返すので、書き方（mac の /var と /private/var、Windows の短い名前）ではなく同一性で比べる。
 	if dir, ok := PluginsDirOf(executable); !ok || !SameDirectory(dir, h.plugins) {
 		t.Fatal(dir, ok)
 	}
-	link := filepath.Join(h.tmp, "vw2026-link")
+	link := filepath.Join(h.tmp, edition.Command+"-link")
 	if err := os.Symlink(executable, link); err == nil {
 		if dir, ok := PluginsDirOf(link); !ok || !SameDirectory(dir, h.plugins) {
 			t.Fatal("link:", dir, ok)
 		}
 	}
-	for _, path := range []string{"", filepath.Join(h.tmp, "vw2026"), filepath.Join(h.plugins, "cli", "vw2026")} {
+	for _, path := range []string{"", filepath.Join(h.tmp, edition.Command), filepath.Join(h.plugins, "cli", edition.Command)} {
 		if dir, ok := PluginsDirOf(path); ok {
 			t.Error(path, dir)
 		}
@@ -87,7 +89,7 @@ func TestPluginsDirOfCase(t *testing.T) {
 	dir := filepath.Join(tmp, "CLI")
 	os.MkdirAll(filepath.Join(dir, "BIN"), 0o755)
 	os.WriteFile(filepath.Join(dir, RecordFile), nil, 0o644)
-	executable := filepath.Join(dir, "BIN", "vw2026")
+	executable := filepath.Join(dir, "BIN", edition.Command)
 	os.WriteFile(executable, nil, 0o700)
 	if _, ok := PluginsDirOf(executable); ok != (runtime.GOOS == "windows") {
 		t.Fatal(ok)

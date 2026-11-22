@@ -13,11 +13,12 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
 
-// RecordFile は入れたときの記録（docs/registry.md「入れたときの記録」）。
-const RecordFile = "vw2026-install.json"
+// RecordFile は入れたときの記録（docs/registry.md「入れたときの記録」。2025 は vw2025-install.json）。
+const RecordFile = edition.Command + "-install.json"
 
 // recordVersion は読み書きする record_version。
 const recordVersion = 1
@@ -107,7 +108,7 @@ func readRecord(dir string) (*Record, error) {
 	case raw.RecordVersion == nil:
 		return nil, errors.New("record_version is missing")
 	case *raw.RecordVersion != recordVersion:
-		return nil, fmt.Errorf("unknown record_version %d (this vw2026 reads %d)", *raw.RecordVersion, recordVersion)
+		return nil, fmt.Errorf("unknown record_version %d (this "+edition.Command+" reads %d)", *raw.RecordVersion, recordVersion)
 	case raw.Name == "" || raw.Registry == "" || raw.Target == "" || raw.Module == "":
 		return nil, errors.New("the record lacks name, registry, target or module")
 	case !registry.ValidTag(raw.Tag):
