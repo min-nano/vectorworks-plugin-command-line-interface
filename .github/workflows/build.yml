@@ -217,8 +217,9 @@ jobs:
           path: dist/cli-windows-x64.zip
 
   # Vectorworks 2025 の SDK でプラグインがビルドできるかの確かめ（docs/plugin/build-and-release.md
-  # 「Vectorworks 2025」）。プラグインだけを成果物に残し、梱包・公開はしない（release は待たない）。2025 の mac の SDK のヘッダは
-  # clang 19 以降で通らないので、ビルドは CI の Xcode 16.2 だけで行い、手元ではビルドしない。
+  # 「Vectorworks 2025」）。プラグインだけを成果物に残し、梱包・公開はしない（release は待たない）。
+  # 2025 の mac の SDK のヘッダは clang 19 以降で通らないので、ビルドは CI の Xcode 16.2 だけで行い、
+  # 手元ではビルドしない。
   build-vw2025:
     needs: meta
     strategy:
