@@ -59,8 +59,8 @@ curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface
   2025 は 2025 の SDK でプラグインを、`-tags vw2025` で `vw2025` をビルドします。SDK のキャッシュの前置きは
   `vw-sdk-2025-mac`・`vw-sdk-2025-win` です。
 - `release` は版ごとにマニフェストと初回のスクリプトを作り、すべてを同じ下書きのリリースに上げてから公開します。
-  `verify` は版ごと・OS ごとに、利用者と同じ道筋で取って確かめます。`install-windows` も版ごとに走り、2025 は
-  `install-windows-vw2025` です。
+  `verify` は版ごと・OS ごとに、利用者と同じ道筋で取って確かめます。`install-windows` も版ごとに走ります
+  （行列のジョブ `install-windows-editions` の結果を、必須のチェック `install-windows` がまとめる）。
 - **2025 のプラグインは手元（mac）でビルドしません。** 2025 の mac の SDK のヘッダ
   （`Kernel/Base/TypesArray.h` の `TXGenericArray<T>::SetSize`）は、クラスに無いメンバー `RemoveAt` を呼んでいて、
   テンプレートの定義の時点でこれを誤りとする clang 19 以降ではヘッダを読むだけで止まります（2026 の SDK では

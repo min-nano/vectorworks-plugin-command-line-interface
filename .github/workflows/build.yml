@@ -111,7 +111,7 @@ jobs:
       VW_SDK_DIR: ${{ github.workspace }}/vw-sdk
       VERSION: ${{ needs.meta.outputs.version }}
       YEAR: ${{ matrix.year }}
-      ZIP: ${{ matrix.zip }}
+      ARCHIVE: ${{ matrix.zip }}
     steps:
       # 取り出すものは meta の出力に頼らず、ここに条件を書く（同じリポジトリの PR だけ head。fork の
       # PR はマージのためのコミット）。CodeQL が安全だと読めるようにし、meta を変えたときに信頼
@@ -170,8 +170,8 @@ jobs:
         run: |
           set -eu
           mkdir -p dist
-          (cd stage && zip -qr "../dist/$ZIP" .)
-          unzip -Z1 "dist/$ZIP"
+          (cd stage && zip -qr "../dist/$ARCHIVE" .)
+          unzip -Z1 "dist/$ARCHIVE"
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.zip }}
@@ -201,7 +201,7 @@ jobs:
       VW_SDK_DIR: ${{ github.workspace }}/vw-sdk-win
       VERSION: ${{ needs.meta.outputs.version }}
       YEAR: ${{ matrix.year }}
-      ZIP: ${{ matrix.zip }}
+      ARCHIVE: ${{ matrix.zip }}
     steps:
       # 取り出すものは meta の出力に頼らず、ここに条件を書く（同じリポジトリの PR だけ head。fork の
       # PR はマージのためのコミット）。CodeQL が安全だと読めるようにし、meta を変えたときに信頼
@@ -249,8 +249,8 @@ jobs:
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force dist | Out-Null
           Add-Type -AssemblyName System.IO.Compression.FileSystem
-          [IO.Compression.ZipFile]::CreateFromDirectory("$PWD/stage", "$PWD/dist/$env:ZIP")
-          $zip = [IO.Compression.ZipFile]::OpenRead("$PWD/dist/$env:ZIP")
+          [IO.Compression.ZipFile]::CreateFromDirectory("$PWD/stage", "$PWD/dist/$env:ARCHIVE")
+          $zip = [IO.Compression.ZipFile]::OpenRead("$PWD/dist/$env:ARCHIVE")
           $zip.Entries.FullName
           $zip.Dispose()
       - uses: actions/upload-artifact@v7
@@ -564,20 +564,16 @@ jobs:
   # 実物のレジストリで確かめる。ランナーは使い捨てなので既定の場所を使い、元の値は戻さない。main では
   # 版の違う相手が無いので走らせない。初回のスクリプトは、利用者と同じく Windows PowerShell 5.1 で、
   # 公開したものを Invoke-RestMethod で取って走らせる。
-  # 版ごとに走らせる（docs/plugin/editions.md）。2026 はジョブ名を install-windows のまま（必須のチェック）にし、
-  # 2025 は install-windows-vw2025 で、vw2025 と Vectorworks 2025 の <Plug-Ins> を使う。
-  install-windows:
-    name: ${{ matrix.name }}
+  # 版ごとに走らせる（docs/plugin/editions.md）。2025 は vw2025 と Vectorworks 2025 の <Plug-Ins> を使う。
+  # 必須のチェックは、結果をまとめる install-windows にする（行列のジョブは、飛ばされると行列の値の入った名前の
+  # チェックを出さないので、そのままでは必須にできない。verify-result と同じ）。
+  install-windows-editions:
     needs: [meta, release]
     if: github.event_name == 'pull_request'
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: install-windows
-            year: "2026"
-          - name: install-windows-vw2025
-            year: "2025"
+        year: ["2026", "2025"]
     runs-on: windows-latest
     defaults:
       run:
@@ -754,3 +750,29 @@ jobs:
           if ($version -eq $env:VERSION) { throw "latest is the PR build $version" }
           if ((Get-MovedCli).Count -eq 0) { throw 'the CLI was not moved' }
           if (Test-Path -LiteralPath (Join-Path $work 'old\cli')) { throw 'old\cli is left' }
+
+  # install-windows-editions の結果を 1 つのチェックにまとめる（必須のチェック）。PR のプレリリースを公開したときは
+  # release と install-windows-editions が成功したこと、それ以外（main・マージキュー・fork の PR）は
+  # install-windows-editions が飛ばされたことを確かめる。前のジョブが失敗・中止しても飛ばされないよう always() で
+  # 走らせる。
+  install-windows:
+    needs: [meta, release, install-windows-editions]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          EVENT: ${{ github.event_name }}
+          META: ${{ needs.meta.result }}
+          PUBLISH: ${{ needs.meta.outputs.publish }}
+          RELEASE: ${{ needs.release.result }}
+          INSTALL: ${{ needs.install-windows-editions.result }}
+        run: |
+          set -eu
+          echo "event: $EVENT, meta: $META, publish: $PUBLISH, release: $RELEASE, install: $INSTALL"
+          test "$META" = success
+          if [ "$EVENT" = pull_request ] && [ "$PUBLISH" = true ]; then
+            test "$RELEASE" = success
+            test "$INSTALL" = success
+          else
+            test "$INSTALL" = skipped
+          fi
