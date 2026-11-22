@@ -168,11 +168,11 @@ src/
 ├─ Module-Info.plist.in                    … mac のバンドルの Info.plist（版の鍵を持たない）
 ├─ core/                                   … SDK に依らない（Protocol・Json・Files・Bridge・Serve・Lifecycle・Ping・Quit など）。プラグインとテストがリンク
 └─ tools/                                  … 道具の表（ToolTable.cpp）と中身（Ping.cpp など。SDK 依存。SDK に依らない部分は core へ）
-scripts/                                   … 整形と検査（format.sh・lint.sh・powershell.ps1）・CI（fetch-vw-sdk.sh・vw-sdk-cache-key.sh・dev-tag.sh）・get-vw2026（.sh / .ps1。CLI を取って install を走らせるだけ）・hooks/（cli のフック。PATH。zip の直下に入る）
+scripts/                                   … 整形と検査（format.sh・lint.sh・powershell.ps1）・CI（fetch-vw-sdk.sh・vw-sdk-cache-key.sh・dev-tag.sh）・get-vw（.sh / .ps1。初回のスクリプトの雛形。リリースが get-vw2026・get-vw2025 を作る。CLI を取って install を走らせるだけ）・hooks/（cli のフック。PATH。zip の直下に入る）
 resources/                                 … cli.vwr（拡張機能を登録しないので最小限。Strings/cli.vwstrings に使わない文字列 1 つだけ）
 tests/                                     … 無 SDK の単体テスト・ファジングの入口・スクリプトのテスト
 protocol/fixtures/                         … 通信規則の見本（C++ と Go の両方のテストが読む。docs/fixtures.md）
-cli/                                       … vw2026（Go）。インストールと更新（install）・アンインストール（uninstall）・既定のレジストリ（internal/registry/default.json）もここ
+cli/                                       … vw2026・vw2025（Go。版はビルドタグで決め、internal/edition が持つ）。インストールと更新（install）・アンインストール（uninstall）・既定のレジストリ（internal/registry/default-vw2026.json・default-vw2025.json）もここ
 ```
 
 - 名前空間は `VwCli`（`VwCli::core` / `VwCli::tools`）。図面にも配布物にも現れない内部の綴りで、

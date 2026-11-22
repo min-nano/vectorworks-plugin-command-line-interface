@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
@@ -35,7 +36,7 @@ type hookPlan struct {
 	Raw []byte `json:"raw,omitempty"`
 	// 終了コード
 	Exit int `json:"exit"`
-	// 引数・作業ディレクトリ・VW2026_HOOK_* を JSON で書き足す（1 行 1 回）ファイル
+	// 引数・作業ディレクトリ・フックの変数（どの版の VW<4 桁>_HOOK_* も）を JSON で書き足す（1 行 1 回）ファイル
 	Record string `json:"record,omitempty"`
 	// 走り始めたら作るファイル
 	Signal string `json:"signal,omitempty"`
@@ -91,7 +92,7 @@ func TestHookHelper(t *testing.T) {
 		dir, _ := os.Getwd()
 		run := hookRun{Args: args[at+2:], Dir: dir, Env: map[string]string{}}
 		for _, kv := range os.Environ() {
-			if name, value, _ := strings.Cut(kv, "="); strings.HasPrefix(name, "VW2026_HOOK_") {
+			if name, value, _ := strings.Cut(kv, "="); isHookVar(name) {
 				run.Env[name] = value
 			}
 		}
@@ -112,7 +113,7 @@ func TestHookHelper(t *testing.T) {
 	}
 	if plan.Linger != "" {
 		child := exec.Command(os.Args[0], "-test.run=^TestHookLinger$")
-		child.Env = append(os.Environ(), "VW2026_TEST_LINGER="+plan.Linger)
+		child.Env = append(os.Environ(), edition.EnvPrefix+"TEST_LINGER="+plan.Linger)
 		// 作業ディレクトリをプラグインのフォルダの外にする（Windows で、テストの片付けが消せなくならないように）。
 		child.Dir = os.TempDir()
 		child.Stdout = os.Stdout
@@ -127,7 +128,7 @@ func TestHookHelper(t *testing.T) {
 // TestHookLinger は、フックが後ろに残す子として走る（VW2026_TEST_LINGER のファイルができるまで待ち、
 // 終わる前に <そのファイル>.done を作る）。テストとして走ったとき（環境変数が無い）は何もしない。
 func TestHookLinger(t *testing.T) {
-	release := os.Getenv("VW2026_TEST_LINGER")
+	release := os.Getenv(edition.EnvPrefix + "TEST_LINGER")
 	if release == "" {
 		return
 	}
@@ -186,10 +187,10 @@ func newHarness(t *testing.T) *harness {
 	t.Cleanup(h.server.Close)
 	// 既定のレジストリの代わり。cli と demo を、latest は決まった場所、それ以外はタグで指す。
 	def, err := registry.Parse([]byte(`{"registry_version":1,"plugins":{`+
-		`"cli":{"manifests":[{"match":"latest","path":"`+h.url("/cli/latest/vw2026.json")+`"},`+
-		`{"match":"*","path":"`+h.url("/cli/{tag}/vw2026.json")+`"}]},`+
-		`"demo":{"manifests":[{"match":"latest","path":"`+h.url("/demo/latest/vw2026.json")+`"},`+
-		`{"match":"*","path":"`+h.url("/demo/{tag}/vw2026.json")+`"}]}}}`), true)
+		`"cli":{"manifests":[{"match":"latest","path":"`+h.url("/cli/latest/"+edition.Command+".json")+`"},`+
+		`{"match":"*","path":"`+h.url("/cli/{tag}/"+edition.Command+".json")+`"}]},`+
+		`"demo":{"manifests":[{"match":"latest","path":"`+h.url("/demo/latest/"+edition.Command+".json")+`"},`+
+		`{"match":"*","path":"`+h.url("/demo/{tag}/"+edition.Command+".json")+`"}]}}}`), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +350,7 @@ func (h *harness) publish(r release) string {
 		entries = []entry{
 			{name: r.name + ".vwlibrary/Contents/MacOS/" + r.name, body: "module " + r.tag, mode: 0o755},
 			{name: "version.txt", body: r.tag},
-			{name: "bin/vw2026", body: "cli " + r.tag, mode: 0o755},
+			{name: "bin/" + edition.Command, body: "cli " + r.tag, mode: 0o755},
 			{name: "hooks/install.hook", body: planJSON(h.t, install)},
 			{name: "hooks/uninstall.hook", body: planJSON(h.t, uninstall)},
 		}
@@ -376,9 +377,9 @@ func (h *harness) publish(r release) string {
 		h.t.Fatal(err)
 	}
 	h.serve(zipPath, data)
-	h.serve("/"+r.name+"/"+r.tag+"/vw2026.json", manifest)
+	h.serve("/"+r.name+"/"+r.tag+"/"+edition.Command+".json", manifest)
 	if r.latest {
-		h.serve("/"+r.name+"/latest/vw2026.json", manifest)
+		h.serve("/"+r.name+"/latest/"+edition.Command+".json", manifest)
 	}
 	return zipPath
 }

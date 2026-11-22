@@ -7,44 +7,45 @@ import (
 	"os"
 	"strings"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/install"
 )
 
 type installCmd struct {
 	Plugin string `arg:"" placeholder:"NAME@TAG" help:"Plug-in to install and its tag, such as cli@latest."`
-	Check  bool   `env:"VW2026_INSTALL_CHECK" negatable:"" help:"Only tell whether a new build is available; change nothing."`
+	Check  bool   `env:"${prefix}INSTALL_CHECK" negatable:"" help:"Only tell whether a new build is available; change nothing."`
 	// sep:"none" で、URL のコンマで分けない（kong は既定で、引数と環境変数の値をコンマで分ける）。空白で
 	// 分けるのは run の中（URL は空白を含まない）。
-	Registry []string `env:"VW2026_REGISTRY" sep:"none" placeholder:"URL" help:"Registry (an https:// or a file:// URL) to look the name up in after the default one (repeatable; spaces separate several; an empty value is wrong usage)."`
+	Registry []string `env:"${prefix}REGISTRY" sep:"none" placeholder:"URL" help:"Registry (an https:// or a file:// URL) to look the name up in after the default one (repeatable; spaces separate several; an empty value is wrong usage)."`
 
 	// 初回のスクリプトだけが渡す --plugins-dir（pluginsDirFlag）
 	pluginsDirFlag `embed:""`
 }
 
 func (installCmd) Help() string {
-	return `
+	return edition.Expand(`
 Install installs one plug-in, or updates it, from its release
 (docs/plugin/install-and-update.md). The same command installs cli itself
 and any other plug-in in a registry (docs/registry.md). Both the name and the
 tag are required; there is no default tag.
 
-	vw2026 install cli@latest
-	vw2026 install cli@dev-feature-x-61-a1b2c3d
-	vw2026 install cli@latest --check
-	vw2026 install my-plugin@2026.3.1 --registry https://example.com/plugins.json
-	vw2026 install my-plugin@2026.3.1 --registry file:///Users/me/plugins.json
+	${cmd} install cli@latest
+	${cmd} install cli@dev-feature-x-61-a1b2c3d
+	${cmd} install cli@latest --check
+	${cmd} install my-plugin@2026.3.1 --registry https://example.com/plugins.json
+	${cmd} install my-plugin@2026.3.1 --registry file:///Users/me/plugins.json
 
-Install looks the name up in the registry built into vw2026, then in each
+Install looks the name up in the registry built into ${cmd}, then in each
 --registry in order, and uses the first one that has it. A registry is an
 https:// or a file:// URL; write a path as file:///... (on Windows
 file:///C:/...), with %20 for a space. --registry can be repeated, and spaces
-separate registries in a value (a URL has no space), so VW2026_REGISTRY can
+separate registries in a value (a URL has no space), so ${prefix}REGISTRY can
 hold several. The first rule of that entry
 that matches the tag gives the manifest; the manifest gives the zip and its
 sha256. The plug-in goes into <Plug-Ins>/<NAME>/ with a record of the install
-(vw2026-install.json), replacing the folder as a whole, and then its install
-hook runs: for cli, the hook puts vw2026 on the PATH. Install does not touch a
-folder of that name that vw2026 did not install, or that came from another
+(${cmd}-install.json), replacing the folder as a whole, and then its install
+hook runs: for cli, the hook puts ${cmd} on the PATH. Install does not touch a
+folder of that name that ${cmd} did not install, or that came from another
 registry. A plug-in other than cli goes only into a folder of plug-ins that
 has cli; install checks this before whether Vectorworks is running, so it fails
 with 1 for a folder without cli even while Vectorworks is running. If cli is
@@ -63,7 +64,7 @@ install fetches the manifest to learn the tag.
 Install changes nothing while Vectorworks is running with the bridge (it holds
 the lock in <Plug-Ins>/cli/spool/): it prints {"outcome":"vectorworks_running"}
 and exits with 6, even for the same tag. It does not quit Vectorworks and does
-not wait; quit Vectorworks first (see "vw2026 --help" for the sequence). --check
+not wait; quit Vectorworks first (see "${cmd} --help" for the sequence). --check
 works while Vectorworks runs. When it cannot read that lock (other than because
 it is not there), it cannot tell whether Vectorworks runs, so it changes
 nothing and exits with 1.
@@ -92,16 +93,16 @@ in the message, and exits with 1; quit Vectorworks, then run install with the
 same tag again (it runs only the hook). Replacing the folder fails on Windows
 while a program has a file in it open or has its current directory in it.
 
-<Plug-Ins> is the folder of plug-ins that this vw2026 is installed in (it runs
-as <Plug-Ins>/cli/bin/vw2026), so install and uninstall always work on the
-folder that holds the running cli. A vw2026 outside such a folder (the
+<Plug-Ins> is the folder of plug-ins that this ${cmd} is installed in (it runs
+as <Plug-Ins>/cli/bin/${cmd}), so install and uninstall always work on the
+folder that holds the running cli. A ${cmd} outside such a folder (the
 first-time script's, or one built by hand) uses the Plug-Ins folder of
-Vectorworks 2026 for this user:
-~/Library/Application Support/Vectorworks/2026/Plug-Ins on macOS and
-%APPDATA%\Nemetschek\Vectorworks\2026\Plug-Ins on Windows. To use another
+${product} for this user:
+~/Library/Application Support/Vectorworks/${year}/Plug-Ins on macOS and
+%APPDATA%\Nemetschek\Vectorworks\${year}\Plug-Ins on Windows. To use another
 folder, give it to the first-time script (--plugins-dir <Plug-Ins>), which
-passes it to its vw2026; an installed vw2026 refuses it. Install works in
-vectorworks2026-cli-<key> in the temporary folder of the user (one for each
+passes it to its ${cmd}; an installed ${cmd} refuses it. Install works in
+vectorworks${year}-cli-<key> in the temporary folder of the user (one for each
 folder of plug-ins), which must be on the same volume as <Plug-Ins>.
 
 Install has no time limit on the network or the hook: stop it (Ctrl-C) or limit
@@ -113,7 +114,7 @@ every 10 seconds, then "downloaded <size>".
 Do not run install or uninstall at the same time as another install or
 uninstall. Exit status: 0 success (including up_to_date and available), 1
 failure, 2 wrong usage, 6 Vectorworks is running.
-`
+`)
 }
 
 func (c *installCmd) run(e *env) int {
@@ -132,7 +133,7 @@ func (c *installCmd) run(e *env) int {
 	for _, value := range c.Registry {
 		urls := strings.Fields(value)
 		if len(urls) == 0 {
-			return deployFailed(e, name, install.Usagef("the registry is empty: give a URL to --registry, or unset VW2026_REGISTRY"))
+			return deployFailed(e, name, install.Usagef("the registry is empty: give a URL to --registry, or unset "+edition.EnvPrefix+"REGISTRY"))
 		}
 		registries = append(registries, urls...)
 	}
@@ -175,7 +176,7 @@ func deployOptions(e *env, given *string) (install.Options, error) {
 	var err error
 	switch {
 	case given != nil && installed:
-		return install.Options{}, install.Usagef("--plugins-dir is only for the first-time script; this vw2026 is "+
+		return install.Options{}, install.Usagef("--plugins-dir is only for the first-time script; this "+edition.Command+" is "+
 			"installed in %s and works on that folder", own)
 	case given != nil && *given == "":
 		return install.Options{}, install.Usagef("the folder of plug-ins is empty: give an absolute path to --plugins-dir")
@@ -184,7 +185,7 @@ func deployOptions(e *env, given *string) (install.Options, error) {
 	case installed:
 		pluginsDir = own
 	case exeErr != nil:
-		return install.Options{}, fmt.Errorf("cannot locate this vw2026, so the folder of plug-ins it is installed in "+
+		return install.Options{}, fmt.Errorf("cannot locate this "+edition.Command+", so the folder of plug-ins it is installed in "+
 			"is unknown: %w", exeErr)
 	default:
 		if pluginsDir, err = e.pluginsDir(); err != nil {
@@ -216,14 +217,14 @@ func isTerminal(w io.Writer) bool {
 // 書き、終了コード 6 を返す。install.Install と install.Uninstall は、ErrRunning を返すとき必ず結果も返す
 // （どこで分かっても同じ形。Uninstall は始めの確かめでだけ ErrRunning を返し、そこで結果を作る）。
 func deployRunning(e *env, err error, result any) int {
-	fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+	fmt.Fprintf(e.stderr, edition.Command+": %v\n", err)
 	emit(e, result)
 	return exitRunning
 }
 
 // deployFailed は失敗を標準出力の JSON（message）と標準エラーに書き、終了コードを返す。
 func deployFailed(e *env, name string, err error) int {
-	fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+	fmt.Fprintf(e.stderr, edition.Command+": %v\n", err)
 	emit(e, map[string]any{"outcome": "failed", "name": name, "message": err.Error()})
 	if install.IsUsage(err) {
 		return exitUsage

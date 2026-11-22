@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
 
@@ -267,8 +268,8 @@ func inspect(dest, name, source string) (*Record, error) {
 	}
 	record, err := readRecord(dest)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("%s has no record of vw2026 (installed by hand or by another installer); "+
-			"vw2026 does not touch it", dest)
+		return nil, fmt.Errorf("%s has no record of "+edition.Command+" (installed by hand or by another installer); "+
+			edition.Command+" does not touch it", dest)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("the record in %s cannot be read (%v); decide what to do with the folder", dest, err)
@@ -312,7 +313,7 @@ func pluginFolder(dest string) (bool, error) {
 	case err != nil:
 		return false, err
 	case info.Mode().Type() != os.ModeDir:
-		return false, fmt.Errorf("%s is not a folder that vw2026 installed (not a plain folder); vw2026 does not touch it", dest)
+		return false, fmt.Errorf("%s is not a folder that "+edition.Command+" installed (not a plain folder); "+edition.Command+" does not touch it", dest)
 	}
 	return true, nil
 }

@@ -15,6 +15,7 @@ Vectorworks の中で動くプラグイン（`cli`）の設計です。全体の
 | [bridge.md](bridge.md) | 受け付け（スプール・道具の表・終了の依頼） |
 | [tools.md](tools.md) | 最初に提供する道具の仕様 |
 | [identifiers.md](identifiers.md) | 名前・置き場所・リリースのタグ |
+| [editions.md](editions.md) | 版（Vectorworks 2026 と 2025）ごとの名前・置き場所・ビルド・リリース |
 | [build-and-release.md](build-and-release.md) | CMake・CI・リリースの形 |
 | [install-and-update.md](install-and-update.md) | インストールと更新（`vw2026 install`）・CLI とスプールの置き場所・`cli` のフック（PATH）・初回のスクリプト・アンインストール（`vw2026 uninstall`）。レジストリとマニフェストの書き方は [../registry.md](../registry.md) |
 | [plan.md](plan.md) | 実装の順序（1 段 1 PR）・各段の終わりの確かめ方 |

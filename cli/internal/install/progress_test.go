@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 // 取得の進み具合を標準エラーに書く。端末でなければ 1 行ずつ足し、端末なら同じ行を書き直して改行で
@@ -46,9 +48,9 @@ func TestDownloadProgress(t *testing.T) {
 		terminal bool
 		want     []string
 	}{
-		"log":      {"/known.zip", false, []string{"(3.0 MiB)\n", "MiB of 3.0 MiB (", "%)\n", "vw2026: downloaded 3.0 MiB\n"}},
-		"terminal": {"/known.zip", true, []string{"(3.0 MiB)\n", "\rvw2026: ", "%)", "\rvw2026: downloaded 3.0 MiB", "\n"}},
-		"unknown":  {"/unknown.zip", false, []string{h.url("/unknown.zip") + "\n", "vw2026: downloaded 3.0 MiB\n"}},
+		"log":      {"/known.zip", false, []string{"(3.0 MiB)\n", "MiB of 3.0 MiB (", "%)\n", edition.Command + ": downloaded 3.0 MiB\n"}},
+		"terminal": {"/known.zip", true, []string{"(3.0 MiB)\n", "\r" + edition.Command + ": ", "%)", "\r" + edition.Command + ": downloaded 3.0 MiB", "\n"}},
+		"unknown":  {"/unknown.zip", false, []string{h.url("/unknown.zip") + "\n", edition.Command + ": downloaded 3.0 MiB\n"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			o, stderr := h.capturing()
@@ -75,7 +77,7 @@ func TestProgressLine(t *testing.T) {
 	p := &progress{w: &stderr, terminal: true, total: -1}
 	p.line("a line longer than the last one")
 	p.finish(errors.New("cut"))
-	if got := stderr.String(); got != "\rvw2026: a line longer than the last one\rvw2026: stopped after 0.0 MiB          \n" {
+	if got := stderr.String(); got != "\r"+edition.Command+": a line longer than the last one\r"+edition.Command+": stopped after 0.0 MiB          \n" {
 		t.Fatalf("%q", got)
 	}
 }

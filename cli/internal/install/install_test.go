@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
@@ -26,7 +27,7 @@ func TestInstallFirstTime(t *testing.T) {
 		t.Fatal("not installed")
 	}
 	// 実行ビットを保つ。
-	if info, err := os.Stat(filepath.Join(h.plugins, "cli", "bin", "vw2026")); err != nil || info.Mode().Perm()&0o100 == 0 && os.PathSeparator == '/' {
+	if info, err := os.Stat(filepath.Join(h.plugins, "cli", "bin", edition.Command)); err != nil || info.Mode().Perm()&0o100 == 0 && os.PathSeparator == '/' {
 		t.Fatalf("%v %v", info, err)
 	}
 	record, err := readRecord(filepath.Join(h.plugins, "cli"))
@@ -50,7 +51,14 @@ func TestInstallHookEnvironment(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	hooks := registry.Hooks{Install: []string{"sh", "hooks/install.hook", "a b", "--x"}, Uninstall: []string{"sh", "hooks/uninstall.hook"}}
-	t.Setenv("VW2026_HOOK_TAG", "from the caller")
+	t.Setenv(edition.EnvPrefix+"HOOK_TAG", "from the caller")
+	// ほかの版の名前も渡さない（cli のフックは渡された名前で版を決め、両方あると断る）。
+	other := "VW2025_HOOK_INSTALL_DIR"
+	if edition.Year == "2025" {
+		other = "VW2026_HOOK_INSTALL_DIR"
+	}
+	t.Setenv(other, "from the caller")
+	t.Setenv("vw1999_hook_name", "from the caller")
 	h.mustInstall(release{name: "cli", tag: "c2", hooks: &hooks})
 	runs := h.hookRuns("cli")
 	if len(runs) != 2 {
@@ -58,21 +66,24 @@ func TestInstallHookEnvironment(t *testing.T) {
 	}
 	dest := filepath.Join(h.plugins, "cli")
 	first, second := runs[0], runs[1]
-	if first.Env["VW2026_HOOK_PREVIOUS_TAG"] != "" || first.Env["VW2026_HOOK_TAG"] != "c1" {
+	if first.Env[edition.EnvPrefix+"HOOK_PREVIOUS_TAG"] != "" || first.Env[edition.EnvPrefix+"HOOK_TAG"] != "c1" {
 		t.Errorf("first: %+v", first)
 	}
 	want := map[string]string{
-		"VW2026_HOOK_NAME":         "cli",
-		"VW2026_HOOK_TAG":          "c2",
-		"VW2026_HOOK_PREVIOUS_TAG": "c1",
-		"VW2026_HOOK_TARGET":       testTarget,
-		"VW2026_HOOK_PLUGIN_DIR":   dest,
-		"VW2026_HOOK_INSTALL_DIR":  dest,
+		edition.EnvPrefix + "HOOK_NAME":         "cli",
+		edition.EnvPrefix + "HOOK_TAG":          "c2",
+		edition.EnvPrefix + "HOOK_PREVIOUS_TAG": "c1",
+		edition.EnvPrefix + "HOOK_TARGET":       testTarget,
+		edition.EnvPrefix + "HOOK_PLUGIN_DIR":   dest,
+		edition.EnvPrefix + "HOOK_INSTALL_DIR":  dest,
 	}
 	for name, value := range want {
 		if second.Env[name] != value {
 			t.Errorf("%s = %q, want %q", name, second.Env[name], value)
 		}
+	}
+	if len(second.Env) != len(want) {
+		t.Errorf("the hook got other variables: %+v", second.Env)
 	}
 	if !sameDir(t, second.Dir, dest) || strings.Join(second.Args, "|") != "a b|--x" {
 		t.Errorf("second: %+v", second)
@@ -119,12 +130,12 @@ func TestInstallSameTagRunsOnlyTheRecordedHook(t *testing.T) {
 	if result.Outcome != outcomeUpToDate || string(result.Hook) != `{"ran":"install","tag":"c1"}` {
 		t.Fatalf("%+v", result)
 	}
-	if h.hit("/cli/c1/vw2026.json") != 1 || h.hit(zip) != 1 {
-		t.Fatalf("fetched again: manifest %d, zip %d", h.hit("/cli/c1/vw2026.json"), h.hit(zip))
+	if h.hit("/cli/c1/"+edition.Command+".json") != 1 || h.hit(zip) != 1 {
+		t.Fatalf("fetched again: manifest %d, zip %d", h.hit("/cli/c1/"+edition.Command+".json"), h.hit(zip))
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 	runs := h.hookRuns("cli")
-	if len(runs) != 2 || runs[1].Env["VW2026_HOOK_PREVIOUS_TAG"] != "c1" || runs[1].Env["VW2026_HOOK_TAG"] != "c1" {
+	if len(runs) != 2 || runs[1].Env[edition.EnvPrefix+"HOOK_PREVIOUS_TAG"] != "c1" || runs[1].Env[edition.EnvPrefix+"HOOK_TAG"] != "c1" {
 		t.Fatalf("%+v", runs)
 	}
 }
@@ -141,8 +152,8 @@ func TestInstallLatestFetchesOnlyTheManifest(t *testing.T) {
 	if err != nil || result.Outcome != outcomeUpToDate || result.Tag != "c1" {
 		t.Fatalf("%+v %v", result, err)
 	}
-	if h.hit("/cli/latest/vw2026.json") != 2 || h.hit(zip) != 1 {
-		t.Fatalf("manifest %d, zip %d", h.hit("/cli/latest/vw2026.json"), h.hit(zip))
+	if h.hit("/cli/latest/"+edition.Command+".json") != 2 || h.hit(zip) != 1 {
+		t.Fatalf("manifest %d, zip %d", h.hit("/cli/latest/"+edition.Command+".json"), h.hit(zip))
 	}
 }
 
@@ -156,7 +167,7 @@ func TestInstallSameTagOtherTargetReinstalls(t *testing.T) {
 	if err != nil || result.Outcome != outcomeInstalled {
 		t.Fatalf("%+v %v", result, err)
 	}
-	if h.hit("/cli/c1/vw2026.json") != 2 {
+	if h.hit("/cli/c1/"+edition.Command+".json") != 2 {
 		t.Fatal("the manifest was not fetched")
 	}
 }
@@ -421,7 +432,7 @@ func TestInstallRenameFailureRestores(t *testing.T) {
 			h := newHarness(t)
 			h.mustInstall(release{name: "cli", tag: "c1"})
 			h.publish(release{name: "cli", tag: "c2"})
-			executable := filepath.Join(h.plugins, "cli", "bin", "vw2026")
+			executable := filepath.Join(h.plugins, "cli", "bin", edition.Command)
 			failRename(t, from(h), "")
 			before := snapshot(t, h.plugins)
 			o := h.options()
@@ -440,7 +451,7 @@ func TestInstallRenameFailureRestores(t *testing.T) {
 // oldCLIs は <Work>/old/ の直下のよけた CLI。
 func oldCLIs(t *testing.T, h *harness) []string {
 	t.Helper()
-	matches, err := filepath.Glob(filepath.Join(h.work, "old", "vw2026*.old-*"))
+	matches, err := filepath.Glob(filepath.Join(h.work, "old", edition.Command+"*.old-*"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -474,7 +485,7 @@ func TestInstallHookFailureRestores(t *testing.T) {
 			}
 			h.mustInstall(release{name: "cli", tag: "c1"})
 			h.publish(release{name: "cli", tag: "c2", install: &plan})
-			executable := filepath.Join(h.plugins, "cli", "bin", "vw2026")
+			executable := filepath.Join(h.plugins, "cli", "bin", edition.Command)
 			before := snapshot(t, h.plugins)
 			o := h.options()
 			o.Executable = executable
@@ -657,12 +668,12 @@ func TestLookup(t *testing.T) {
 	o := h.options()
 	o.Registries = []string{local}
 	entry, source, err := o.lookup("cli")
-	if err != nil || source != "default" || entry.Manifests[0].Path != h.url("/cli/latest/vw2026.json") {
+	if err != nil || source != "default" || entry.Manifests[0].Path != h.url("/cli/latest/"+edition.Command+".json") {
 		t.Fatalf("%v %s %v", entry, source, err)
 	}
 
 	// 名前が見つかる前に取れないレジストリがあれば、そこで失敗にする（後ろに名前があっても）。
-	h.serve("/registry.json", []byte(extra("other", h.url("/other/{tag}/vw2026.json"))))
+	h.serve("/registry.json", []byte(extra("other", h.url("/other/{tag}/"+edition.Command+".json"))))
 	o.Registries = []string{h.url("/missing.json"), h.url("/registry.json")}
 	if _, _, err := o.lookup("other"); err == nil {
 		t.Fatal("should fail on the missing registry")
@@ -694,7 +705,7 @@ func TestInstallRuleSelection(t *testing.T) {
 	registryPath := fileURL(filepath.Join(h.tmp, "plugins.json"))
 	os.WriteFile(filepath.Join(h.tmp, "plugins.json"), []byte(`{"registry_version":1,"plugins":{"other":{"manifests":[`+
 		`{"match":"stable","path":"`+h.url("/other/missing.json")+`"},`+
-		`{"match":"*","path":"`+h.url("/other/{tag}/vw2026.json")+`"}]}}}`), 0o644)
+		`{"match":"*","path":"`+h.url("/other/{tag}/"+edition.Command+".json")+`"}]}}}`), 0o644)
 	o := h.options()
 	o.Registries = []string{registryPath}
 	h.publish(release{name: "other", tag: "stable"})
@@ -704,7 +715,7 @@ func TestInstallRuleSelection(t *testing.T) {
 	// /other/o2/vw2026.json にタグ o1 のマニフェストを置く。
 	h.publish(release{name: "other", tag: "o1"})
 	h.mu.Lock()
-	h.files["/other/o2/vw2026.json"] = h.files["/other/o1/vw2026.json"]
+	h.files["/other/o2/"+edition.Command+".json"] = h.files["/other/o1/"+edition.Command+".json"]
 	h.mu.Unlock()
 	if _, err := Install(o, "other", "o2", false); err == nil || !strings.Contains(err.Error(), `"o1"`) {
 		t.Fatal(err)

@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 // Vectorworks の無い OS では場所もターゲットも決まらない（テストは場所とターゲットを渡す）。
-var errUnsupported = errors.New("Vectorworks 2026 does not run on " + runtime.GOOS)
+var errUnsupported = errors.New(edition.Product + " does not run on " + runtime.GOOS)
 
 func userTempDir() (string, error) {
 	return "", errUnsupported

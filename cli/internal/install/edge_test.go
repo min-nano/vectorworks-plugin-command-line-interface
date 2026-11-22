@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
 
@@ -19,11 +20,11 @@ import (
 func TestRealInterpreter(t *testing.T) {
 	h := newHarness(t)
 	hooks := registry.Hooks{Install: []string{"sh", "hooks/install.sh", "x y"}}
-	script := entry{name: "hooks/install.sh", body: `printf '{"arg":"%s","tag":"%s"}' "$1" "$VW2026_HOOK_TAG"` + "\n"}
+	script := entry{name: "hooks/install.sh", body: `printf '{"arg":"%s","tag":"%s"}' "$1" "$` + edition.EnvPrefix + `HOOK_TAG"` + "\n"}
 	want := `{"arg":"x y","tag":"r1"}`
 	if runtime.GOOS == "windows" {
 		hooks = registry.Hooks{Install: []string{"powershell", "hooks/install.ps1", "x y"}}
-		script = entry{name: "hooks/install.ps1", body: `[Console]::Out.Write('{"arg":"' + $args[0] + '","tag":"' + $env:VW2026_HOOK_TAG + '"}')`}
+		script = entry{name: "hooks/install.ps1", body: `[Console]::Out.Write('{"arg":"' + $args[0] + '","tag":"' + $env:` + edition.EnvPrefix + `HOOK_TAG + '"}')`}
 	}
 	h.publish(release{name: "cli", tag: "r1", hooks: &hooks, entries: []entry{
 		{name: "cli.vwlibrary/x", body: "m"},
@@ -282,7 +283,7 @@ func TestUninstallKeepsOtherThings(t *testing.T) {
 func TestSidestepOutside(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
-	outside := filepath.Join(h.tmp, "elsewhere", "vw2026")
+	outside := filepath.Join(h.tmp, "elsewhere", edition.Command)
 	os.MkdirAll(filepath.Dir(outside), 0o755)
 	os.WriteFile(outside, nil, 0o700)
 	o := h.options()

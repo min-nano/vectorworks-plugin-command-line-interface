@@ -3,7 +3,6 @@
 package registry
 
 import (
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +11,8 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 // Version は読めるレジストリの registry_version。
@@ -25,11 +26,6 @@ const DefaultName = "default"
 
 // tagPlaceholder は規則の path の中で、@ の後ろの文字列に置き換わる部分。
 const tagPlaceholder = "{tag}"
-
-// defaultJSON は既定のレジストリ。CLI に埋め込み、必ず先頭に引く（docs/registry.md「レジストリの順」）。
-//
-//go:embed default.json
-var defaultJSON []byte
 
 // Default は既定のレジストリを返す。埋め込んだものは TestDefaultRegistry が読めることを確かめるので、
 // 誤りは返さない（読めないのはビルドの誤りで、実行時には起きない）。
@@ -96,7 +92,7 @@ func Parse(data []byte, remote bool) (*Registry, error) {
 		return nil, errors.New("not a registry: registry_version is missing")
 	}
 	if *raw.RegistryVersion != Version {
-		return nil, fmt.Errorf("unknown registry_version %d (this vw2026 reads %d)", *raw.RegistryVersion, Version)
+		return nil, fmt.Errorf("unknown registry_version %d (this "+edition.Command+" reads %d)", *raw.RegistryVersion, Version)
 	}
 	registry := &Registry{Plugins: map[string]Entry{}}
 	for name, plugin := range raw.Plugins {
@@ -283,7 +279,7 @@ func ParseManifest(data []byte, remote bool) (*Manifest, error) {
 		return nil, errors.New("not a manifest: manifest_version is missing")
 	}
 	if *raw.ManifestVersion != manifestVersion {
-		return nil, fmt.Errorf("unknown manifest_version %d (this vw2026 reads %d; to update vw2026, run the first-time script)",
+		return nil, fmt.Errorf("unknown manifest_version %d (this "+edition.Command+" reads %d; to update "+edition.Command+", run the first-time script)",
 			*raw.ManifestVersion, manifestVersion)
 	}
 	if !ValidTag(raw.Tag) {

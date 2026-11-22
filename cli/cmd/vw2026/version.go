@@ -1,18 +1,19 @@
 package main
 
 import (
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
 type versionCmd struct{}
 
 func (versionCmd) Help() string {
-	return `
+	return edition.Expand(`
 Version prints the version of this CLI and the version of the protocol it
 speaks (docs/protocol.md).
 
 	{"version":"abc1234","protocol":6}
-`
+`)
 }
 
 func (versionCmd) run(e *env) int {

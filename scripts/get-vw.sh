@@ -4,6 +4,9 @@
 # （docs/plugin/install-and-update.md「初回のスクリプト」）。入れる・外すタグは、スクリプトを取ってきた
 # リリースのタグに決まっている（ほかのタグはそのタグのスクリプトを取る）。
 #
+# このファイルは雛形で、リリースがタグと版を書き込んで get-vw2026.sh と get-vw2025.sh を作る
+# （docs/plugin/editions.md）。2025 のものは vw2025 を取り出して Vectorworks 2025 の cli を入れる・外す。
+#
 #   curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.sh | sh
 #   curl -fsSL …/releases/download/<tag>/get-vw2026.sh | sh                          # そのタグを入れる
 #   curl -fsSL …/get-vw2026.sh | sh -s -- --plugins-dir <Plug-Ins>                   # 既定以外の場所へ
@@ -14,8 +17,11 @@ set -eu
 
 repo="https://github.com/min-nano/vectorworks-plugin-command-line-interface"
 
+# name はこのスクリプトの名前（get-vw2026）。版が書き込まれる前は雛形の名前。
+name=get-vw
+
 fail() {
-	echo "get-vw2026: $*" >&2
+	echo "$name: $*" >&2
 	exit 1
 }
 
@@ -31,8 +37,16 @@ valid_tag() {
 main() {
 	# タグは、リリースが公開するときにそのリリースのタグに置き換える（docs/plugin/build-and-release.md
 	# 「リリース」）。どのリリースから取ったスクリプトも、そのリリースの cli を入れる・外す。
-	tag='@VW2026_TAG@'
-	latest="$repo/releases/latest/download/get-vw2026.sh"
+	# 版も同じく、リリースが書き込む（2026 か 2025）。コマンド・環境変数・資産の名前が版で決まる。
+	tag='@VW_TAG@'
+	year='@VW_YEAR@'
+	case "$year" in
+	2025 | 2026) ;;
+	*) fail "this script is not the one a release published; use $repo/releases/latest/download/get-vw2026.sh" ;;
+	esac
+	cli="vw$year"
+	name="get-$cli"
+	latest="$repo/releases/latest/download/$name.sh"
 	valid_tag "$tag" || fail "this script is not the one a release published; use $latest"
 
 	# 位置の引数は uninstall（uninstall cli）だけ、指定は --plugins-dir（--plugins-dir=<dir> も）だけを
@@ -62,7 +76,7 @@ main() {
 					continue
 				fi
 				fail "unexpected argument: $arg (this script installs cli@$tag;" \
-					"for another tag, use $repo/releases/download/<tag>/get-vw2026.sh)"
+					"for another tag, use $repo/releases/download/<tag>/$name.sh)"
 				;;
 			esac
 		fi
@@ -76,7 +90,7 @@ main() {
 
 	# ターゲットは計算機で決める（Rosetta の下の端末でも、Vectorworks は arm64 で動く。
 	# docs/registry.md「名前・タグ・ターゲット」）。
-	[ "$(uname -s)" = Darwin ] || fail "this script is for macOS; on Windows, use get-vw2026.ps1"
+	[ "$(uname -s)" = Darwin ] || fail "this script is for macOS; on Windows, use $name.ps1"
 	# リリースが配るのは macos-arm64 だけ（docs/plugin/identifiers.md）。ほかは取りに行く前に止める
 	# （無い zip を取りに行って、分かりにくい「取れない」で終わらないように）。
 	if [ "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" = 1 ]; then
@@ -85,25 +99,31 @@ main() {
 		fail "cli is not built for this Mac (macos-x64, an Intel Mac); it runs on an Apple silicon Mac"
 	fi
 	# 既定のレジストリの cli の規則と同じ形の場所（マニフェストは読まない。JSON を読まずに済むように）。
-	url="$repo/releases/download/$tag/cli-$target.zip"
+	# 2026 の資産は cli-<ターゲット>.zip、2025 は cli-vw2025-<ターゲット>.zip（docs/plugin/editions.md）。
+	if [ "$year" = 2026 ]; then
+		asset="cli-$target.zip"
+	else
+		asset="cli-$cli-$target.zip"
+	fi
+	url="$repo/releases/download/$tag/$asset"
 
-	tmp="$(mktemp -d "${TMPDIR:-/tmp}/get-vw2026.XXXXXX")"
+	tmp="$(mktemp -d "${TMPDIR:-/tmp}/$name.XXXXXX")"
 	trap 'rm -rf "$tmp"' EXIT
 	trap 'exit 130' INT
 	trap 'exit 143' TERM
-	echo "get-vw2026: downloading $url" >&2
+	echo "$name: downloading $url" >&2
 	curl -fsSL --retry 3 -o "$tmp/cli.zip" "$url" || fail "cannot download $url"
 	# CLI だけを取り出す（実行ビットは zip のものを保つ）。
-	unzip -q "$tmp/cli.zip" bin/vw2026 -d "$tmp" || fail "no bin/vw2026 in $url"
+	unzip -q "$tmp/cli.zip" "bin/$cli" -d "$tmp" || fail "no bin/$cli in $url"
 
-	# 利用者の環境の install の指定（VW2026_INSTALL_CHECK・VW2026_REGISTRY）は渡さない（このスクリプトは cli@<tag> を
-	# 既定のレジストリから入れるだけで、--check もレジストリも受け付けない）。
-	unset VW2026_INSTALL_CHECK VW2026_REGISTRY
+	# 利用者の環境の install の指定（VW2026_INSTALL_CHECK・VW2026_REGISTRY。2025 は VW2025_）は渡さない（この
+	# スクリプトは cli@<tag> を既定のレジストリから入れるだけで、--check もレジストリも受け付けない）。
+	unset "VW${year}_INSTALL_CHECK" "VW${year}_REGISTRY"
 	# 標準入力は渡さない（curl | sh では標準入力がこのスクリプトそのもの）。
 	code=0
-	"$tmp/bin/vw2026" "$@" </dev/null || code=$?
+	"$tmp/bin/$cli" "$@" </dev/null || code=$?
 	if [ "$code" -eq 6 ]; then
-		echo "get-vw2026: Vectorworks is running. Quit Vectorworks and run this script again." >&2
+		echo "$name: Vectorworks is running. Quit Vectorworks and run this script again." >&2
 	fi
 	exit "$code"
 }

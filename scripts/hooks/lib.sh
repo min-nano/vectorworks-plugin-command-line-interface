@@ -11,6 +11,31 @@ hook_fail() {
 	exit 1
 }
 
+# hook_year は、渡されたフックの変数の名前から版（2026 か 2025）を決めて書く。CLI は自分の版の名前（2025 の
+# CLI は VW2025_HOOK_*）だけを渡すので、2025 と 2026 の zip に同じフックを入れられる（docs/plugin/editions.md）。
+# どちらも無いとき・両方あるときは、理由を書いて 1 で終わる（呼ぶ側は $(...) の終了コードを見て、何も変える前に
+# 終わる）。
+hook_year() {
+	if [ -n "${VW2025_HOOK_INSTALL_DIR+x}" ] && [ -n "${VW2026_HOOK_INSTALL_DIR+x}" ]; then
+		hook_fail "both VW2025_HOOK_INSTALL_DIR and VW2026_HOOK_INSTALL_DIR are set"
+	elif [ -n "${VW2025_HOOK_INSTALL_DIR+x}" ]; then
+		printf 2025
+	elif [ -n "${VW2026_HOOK_INSTALL_DIR+x}" ]; then
+		printf 2026
+	else
+		hook_fail "VW2026_HOOK_INSTALL_DIR (or VW2025_HOOK_INSTALL_DIR) is not set"
+	fi
+}
+
+# hook_install_dir は、版 $1 の VW<版>_HOOK_INSTALL_DIR を absolute_dir で確かめて書く（絶対パスでなければ
+# 理由を書いて 1 で終わる）。
+hook_install_dir() {
+	case $1 in
+	2025) absolute_dir VW2025_HOOK_INSTALL_DIR "${VW2025_HOOK_INSTALL_DIR-}" ;;
+	*) absolute_dir VW2026_HOOK_INSTALL_DIR "${VW2026_HOOK_INSTALL_DIR-}" ;;
+	esac
+}
+
 # strip_slashes は末尾の / を除いて書く（根の / は残す）。
 strip_slashes() {
 	strip_slashes_s="$1"

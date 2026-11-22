@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
 func TestUninstall(t *testing.T) {
@@ -29,8 +31,8 @@ func TestUninstall(t *testing.T) {
 	runs := h.hookRuns("demo")
 	last := runs[len(runs)-1]
 	old := filepath.Join(h.work, "old", "demo")
-	if last.Env["VW2026_HOOK_PLUGIN_DIR"] != old || last.Env["VW2026_HOOK_INSTALL_DIR"] != filepath.Join(h.plugins, "demo") ||
-		last.Env["VW2026_HOOK_TAG"] != "d1" || last.Env["VW2026_HOOK_PREVIOUS_TAG"] != "" || !strings.HasSuffix(last.Dir, "demo") {
+	if last.Env[edition.EnvPrefix+"HOOK_PLUGIN_DIR"] != old || last.Env[edition.EnvPrefix+"HOOK_INSTALL_DIR"] != filepath.Join(h.plugins, "demo") ||
+		last.Env[edition.EnvPrefix+"HOOK_TAG"] != "d1" || last.Env[edition.EnvPrefix+"HOOK_PREVIOUS_TAG"] != "" || !strings.HasSuffix(last.Dir, "demo") {
 		t.Fatalf("%+v", last)
 	}
 	again, err := Uninstall(h.options(), "demo")
@@ -163,7 +165,7 @@ func TestUninstallResumes(t *testing.T) {
 	if err != nil || result.Outcome != outcomeUninstalled || exists(old) || exists(marker) {
 		t.Fatalf("%+v %v", result, err)
 	}
-	if runs := h.hookRuns("demo"); runs[len(runs)-1].Env["VW2026_HOOK_PLUGIN_DIR"] != old {
+	if runs := h.hookRuns("demo"); runs[len(runs)-1].Env[edition.EnvPrefix+"HOOK_PLUGIN_DIR"] != old {
 		t.Fatalf("%+v", runs)
 	}
 }
@@ -236,7 +238,7 @@ func TestUninstallFromInsideTheFolder(t *testing.T) {
 	h.installCLI()
 	before := snapshot(t, h.plugins)
 	o := h.options()
-	o.Executable = filepath.Join(h.plugins, "cli", "bin", "vw2026")
+	o.Executable = filepath.Join(h.plugins, "cli", "bin", edition.Command)
 	_, err := Uninstall(o, "cli")
 	var inside *RunsInsideError
 	if !errors.As(err, &inside) || inside.Tag != "c1" || !strings.Contains(err.Error(), "nothing is removed") {
@@ -247,7 +249,7 @@ func TestUninstallFromInsideTheFolder(t *testing.T) {
 		t.Fatal("ran the hook or left the marker")
 	}
 	// フォルダの外の CLI なら外せる。
-	o.Executable = filepath.Join(h.tmp, "elsewhere", "vw2026")
+	o.Executable = filepath.Join(h.tmp, "elsewhere", edition.Command)
 	if result, err := Uninstall(o, "cli"); err != nil || result.Outcome != outcomeUninstalled {
 		t.Fatalf("%+v %v", result, err)
 	}

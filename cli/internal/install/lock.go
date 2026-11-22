@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
@@ -61,11 +62,11 @@ func checkCLI(plugins, name string) error {
 	}
 	dir := filepath.Join(plugins, cliName)
 	if !validRecord(dir, cliName) {
-		return fmt.Errorf("%s has no cli that vw2026 installed; vw2026 installs and "+
+		return fmt.Errorf("%s has no cli that "+edition.Command+" installed; "+edition.Command+" installs and "+
 			"uninstalls a plug-in only in the folder of plug-ins that has cli (it tells "+
 			"whether Vectorworks is running from the lock of cli). If an install or "+
 			"uninstall of cli stopped halfway, quit Vectorworks, run that install or "+
-			"uninstall of cli again with the first-time script (get-vw2026; give it "+
+			"uninstall of cli again with the first-time script ("+edition.Bootstrap+"; give it "+
 			"--plugins-dir %s unless this is the default folder of plug-ins), then run "+
 			"this again", plugins, plugins)
 	}

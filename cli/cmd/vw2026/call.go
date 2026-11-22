@@ -7,20 +7,21 @@ import (
 	"io"
 	"strings"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
 type callCmd struct {
-	Tool    string  `arg:"" help:"Tool to call (\"vw2026 call tools\" lists them)."`
+	Tool    string  `arg:"" help:"Tool to call (\"${cmd} call tools\" lists them)."`
 	Args    string  `arg:"" optional:"" name:"args" help:"Arguments as a JSON object, or - to read them from the standard input."`
-	Raw     bool    `env:"VW2026_CALL_RAW" negatable:"" help:"Print the whole response (ok, result, error, and detail)."`
-	Timeout float64 `env:"VW2026_CALL_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
-	Session string  `env:"VW2026_SESSION" placeholder:"ID" help:"Session to call in (\"vw2026 session start\" prints it)."`
+	Raw     bool    `env:"${prefix}CALL_RAW" negatable:"" help:"Print the whole response (ok, result, error, and detail)."`
+	Timeout float64 `env:"${prefix}CALL_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
+	Session string  `env:"${prefix}SESSION" placeholder:"ID" help:"Session to call in (\"${cmd} session start\" prints it)."`
 }
 
 func (callCmd) Help() string {
-	return `
-Call calls one tool of the bridge and prints its result. "vw2026 call tools"
+	return edition.Expand(`
+Call calls one tool of the bridge and prints its result. "${cmd} call tools"
 lists the tools; docs/plugin/tools.md describes them.
 
 The arguments are a JSON object. "-" reads them from the standard input.
@@ -28,8 +29,8 @@ Without them, the tool is called with no arguments. Call does not check the
 arguments against the tool; the plug-in does. Call only refuses a request
 that the plug-in would not read (over 1 MiB, or nested deeper than 64).
 
-	vw2026 call layers '{"include_sheets":false}'
-	echo '{"layer":"1F"}' | vw2026 call layer_objects -
+	${cmd} call layers '{"include_sheets":false}'
+	echo '{"layer":"1F"}' | ${cmd} call layer_objects -
 
 On success, call prints the result of the tool. With --raw it prints the
 whole response. When the tool fails, call writes its code and reason to the
@@ -51,8 +52,8 @@ even though the tool ran. When the tool failed, call keeps its exit code even
 if it cannot write the detail.
 
 When the bridge is not running, call exits with 5 and writes the spool it
-looked at to the standard error, so that a vw2026 run from outside the folder
-of the plug-in (see "vw2026 --help") can be told from a stopped Vectorworks.
+looked at to the standard error, so that a ${cmd} run from outside the folder
+of the plug-in (see "${cmd} --help") can be told from a stopped Vectorworks.
 
 When --timeout runs out, call stops waiting, withdraws the request, and
 exits with 3: the tool did not run. If the plug-in had already taken the
@@ -62,7 +63,7 @@ tool did not run, so call exits with 3 for it, not with 21 or 22. A call that
 is killed while waiting leaves a request that will not run either.
 
 A tool that changes the drawing or Vectorworks (kind write or app, such as
-quit; see "call tools") runs only in a session (see "vw2026 help session").
+quit; see "call tools") runs only in a session (see "${cmd} help session").
 Called outside its session, it exits with 23: the tool did not run. So it does
 when another session occupies the bridge, when the session it calls in has
 ended, and when there is no session at all. A tool that only reads (kind read,
@@ -88,7 +89,7 @@ with 23: the tool did not run.
 
 For busy, in either case, the reason is on the standard error. Call again later;
 call does not retry by itself.
-`
+`)
 }
 
 func (c *callCmd) run(e *env) int {
@@ -98,7 +99,7 @@ func (c *callCmd) run(e *env) int {
 		if text == "-" {
 			data, err := io.ReadAll(e.stdin)
 			if err != nil {
-				fmt.Fprintf(e.stderr, "vw2026: read stdin: %v\n", err)
+				fmt.Fprintf(e.stderr, edition.Command+": read stdin: %v\n", err)
 				return exitFailure
 			}
 			text = string(data)
@@ -108,7 +109,7 @@ func (c *callCmd) run(e *env) int {
 		// プラグインへ渡し、プラグインが引数の誤りとして断る）。
 		var probe map[string]json.RawMessage
 		if json.Unmarshal([]byte(text), &probe) != nil || probe == nil {
-			fmt.Fprint(e.stderr, "vw2026: args must be a JSON object\n")
+			fmt.Fprint(e.stderr, edition.Command+": args must be a JSON object\n")
 			return exitUsage
 		}
 		payload = json.RawMessage(strings.TrimSpace(text))
@@ -138,7 +139,7 @@ func (c *callCmd) run(e *env) int {
 	// 道具が失敗したときは、出力（detail）を書けなくても道具の終了コードを残す（呼ぶ側がやり直すかを決める
 	// 手がかりなので。書けなかったことは標準エラーに書いてある）。
 	if !response.OK {
-		fmt.Fprintf(e.stderr, "vw2026: %s: %s: %s\n", c.Tool, response.Code, response.Error)
+		fmt.Fprintf(e.stderr, edition.Command+": %s: %s: %s\n", c.Tool, response.Code, response.Error)
 		return toolCodeFor(response.Code)
 	}
 	// 成功したのに結果を書けなければ、その失敗で終わる（空や途中までの出力を正しいものとして扱わせない）。
@@ -151,9 +152,9 @@ func (c *callCmd) run(e *env) int {
 func failed(e *env, bridge *spool.Bridge, err error) int {
 	code := codeFor(err)
 	if code == exitDown {
-		fmt.Fprintf(e.stderr, "vw2026: %v (spool: %s; try `vw2026 status`)\n", err, bridge.Dir)
+		fmt.Fprintf(e.stderr, edition.Command+": %v (spool: %s; try `"+edition.Command+" status`)\n", err, bridge.Dir)
 	} else {
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+		fmt.Fprintf(e.stderr, edition.Command+": %v\n", err)
 	}
 	return code
 }

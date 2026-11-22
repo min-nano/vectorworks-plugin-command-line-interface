@@ -21,6 +21,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/install"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/launch"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
@@ -118,21 +119,21 @@ type cli struct {
 }
 
 func (cli) Help() string {
-	return `
-Vw2026 sends tool calls, one at a time, to the bridge that the cli plug-in
-runs inside Vectorworks 2026.
+	return edition.Expand(`
+${Cmd} sends tool calls, one at a time, to the bridge that the cli plug-in
+runs inside ${product}.
 
 It is a primitive: each run does exactly what it is told once. It does not
 retry, wait for a session to be free, or interpret the tools; the caller
 does those (docs/design.md). Exclusive use of the bridge is the plug-in's:
-vw2026 only asks it for a session and carries the session in the calls
-("vw2026 help session"). The bridge and vw2026 exchange files in a spool by the
+${cmd} only asks it for a session and carries the session in the calls
+("${cmd} help session"). The bridge and ${cmd} exchange files in a spool by the
 protocol in docs/protocol.md. The spool is the folder spool in the folder of
-the cli plug-in (<Plug-Ins>/cli/spool; docs/plugin/identifiers.md). vw2026
-finds it from where its own executable is (<Plug-Ins>/cli/bin/vw2026, after
+the cli plug-in (<Plug-Ins>/cli/spool; docs/plugin/identifiers.md). ${cmd}
+finds it from where its own executable is (<Plug-Ins>/cli/bin/${cmd}, after
 following links; if they cannot be followed, from the path as it is), and
 nothing changes it: the plug-in finds the same folder from where its module
-is, and looks only there. A copy of vw2026 run from
+is, and looks only there. A copy of ${cmd} run from
 outside that folder (for example, from an unpacked zip) looks for the spool
 next to its own folder, finds no bridge there, and reports the bridge as not
 running; the commands show the spool they looked at.
@@ -142,37 +143,37 @@ reason for a failure to the standard error, and reports the outcome in its
 exit status. Flags may come before or after the positional arguments.
 
 Each flag that takes a setting can also be set by an environment variable,
-shown in the help of the command ("vw2026 help <command>"), for example
-VW2026_CALL_TIMEOUT for "call --timeout". A flag on the command line takes
+shown in the help of the command ("${cmd} help <command>"), for example
+${prefix}CALL_TIMEOUT for "call --timeout". A flag on the command line takes
 precedence over its variable. A variable that is set but empty is a value too:
 an empty timeout is wrong usage. For a switch such as --raw, the variable takes
 true or false (or 1 or 0), and --no-raw turns it off again.
 
-	vw2026 status
-	vw2026 call tools
-	vw2026 launch
+	${cmd} status
+	${cmd} call tools
+	${cmd} launch
 
-vw2026 does not wait for the bridge to start or stop: the caller runs status
-in a loop ("vw2026 help status").
+${cmd} does not wait for the bridge to start or stop: the caller runs status
+in a loop ("${cmd} help status").
 
-vw2026 installs, updates, and uninstalls the plug-ins ("vw2026 help
+${cmd} installs, updates, and uninstalls the plug-ins ("${cmd} help
 install"). It updates cli itself too; the first-time script installs cli and
-uninstalls it ("vw2026 help uninstall"). It changes nothing while Vectorworks
+uninstalls it ("${cmd} help uninstall"). It changes nothing while Vectorworks
 is running with the bridge, and it does not quit Vectorworks. To update the plug-in while
 Vectorworks runs, the caller combines the commands. Quit runs only in a
 session and only while no drawing is open, so the caller saves and closes the
 drawings first. End the session on
 each failure: otherwise it stays until Vectorworks quits, and other callers
-are refused. In sh, with the waits of "vw2026 help status":
+are refused. In sh, with the waits of "${cmd} help status":
 
-	# "session" in the output of vw2026 session start
+	# "session" in the output of ${cmd} session start
 	id=...
 	# with drawings open, quit fails and lists them in "detail"
-	vw2026 call quit --session "$id"; code=$?
-	if [ "$code" -ne 0 ]; then vw2026 session end --session "$id"; exit "$code"; fi
+	${cmd} call quit --session "$id"; code=$?
+	if [ "$code" -ne 0 ]; then ${cmd} session end --session "$id"; exit "$code"; fi
 	# until the bridge stops
 	for i in $(seq 120); do
-	    vw2026 status >/dev/null 2>&1; code=$?
+	    ${cmd} status >/dev/null 2>&1; code=$?
 	    [ "$code" -ne 0 ] && break
 	    sleep 1
 	done
@@ -182,13 +183,13 @@ are refused. In sh, with the waits of "vw2026 help status":
 	# the same reason, and the session stays until Vectorworks quits.
 	case $code in
 	    5) ;;
-	    0) vw2026 session end --session "$id"; exit 3 ;;
-	    *) vw2026 session end --session "$id"; exit "$code" ;;
+	    0) ${cmd} session end --session "$id"; exit 3 ;;
+	    *) ${cmd} session end --session "$id"; exit "$code" ;;
 	esac
-	vw2026 install cli@latest && vw2026 launch || exit
+	${cmd} install cli@latest && ${cmd} launch || exit
 	# until the bridge starts (0: started; 5: ran out, or 1: failed)
 	for i in $(seq 120); do
-	    vw2026 status >/dev/null 2>&1; code=$?
+	    ${cmd} status >/dev/null 2>&1; code=$?
 	    [ "$code" -ne 5 ] && break
 	    sleep 1
 	done
@@ -205,7 +206,7 @@ The commands exit with
 	3  timed out, or refused for a missing wait file (the tool did not run and will not run;
 	   Vectorworks is running)
 	4  the plug-in took the request but no response came (the tool may have run)
-	5  the bridge is not running (or this vw2026 looks at another spool)
+	5  the bridge is not running (or this ${cmd} looks at another spool)
 	6  Vectorworks is running, so install or uninstall did nothing
 	21 the tool reported a failure (internal)
 	22 the tool reported wrong usage (invalid_request, unknown_tool, or invalid_args)
@@ -226,15 +227,21 @@ answers only when Vectorworks runs its timer, which it may not do in the middle
 of a long operation or in some of its dialogs (docs/protocol.md). Status reports
 this state as running; call waits up to --timeout and then exits with 3.
 Recover from 5 and 3 differently: 5 means the bridge is not running
-(Vectorworks is not running, or it is running without the bridge; see "vw2026
+(Vectorworks is not running, or it is running without the bridge; see "${cmd}
 help launch"), while 3 means the bridge is running but did not answer in time,
 so launching Vectorworks again or reinstalling the plug-in does not help. A 5
-can also mean that this vw2026 runs from outside the folder of the plug-in and
+can also mean that this ${cmd} runs from outside the folder of the plug-in and
 looks at another spool: before launching Vectorworks again, check the spool
 that the command shows (on the standard error, and in the output of status).
 Tell 3 and 4 apart before calling a tool that changes the drawing again: after
 3 the tool did not run, while after 4 it may have.
-`
+`)
+}
+
+// grammarOptions は、コマンドの定義を読むのに要る kong の指定（名前と、タグに差し込む版ごとの値）。
+// テストも同じものでコマンドの定義を読む。
+func grammarOptions() []kong.Option {
+	return []kong.Option{kong.Name(edition.Command), kong.Vars(edition.Vars())}
 }
 
 // command is what every command struct implements. kong's own Run convention
@@ -262,14 +269,13 @@ func run(args []string, e env) int {
 	var grammar cli
 	// kong asks to exit after printing the help
 	exited := -1
-	parser, err := kong.New(&grammar,
-		kong.Name("vw2026"),
+	parser, err := kong.New(&grammar, append(grammarOptions(),
 		kong.Writers(e.stdout, e.stderr),
 		kong.Exit(func(code int) { exited = code }),
 		kong.ConfigureHelp(kong.HelpOptions{WrapUpperBound: 80}),
-	)
+	)...)
 	if err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: %v\n", err)
+		fmt.Fprintf(e.stderr, edition.Command+": %v\n", err)
 		return exitFailure
 	}
 	ctx, err := parser.Parse(args)
@@ -282,7 +288,7 @@ func run(args []string, e env) int {
 		}
 		return exited
 	case err != nil:
-		fmt.Fprintf(e.stderr, "vw2026: %v (run \"vw2026 --help\")\n", err)
+		fmt.Fprintf(e.stderr, edition.Command+": %v (run \""+edition.Command+" --help\")\n", err)
 		return exitUsage
 	}
 	cmd := ctx.Selected().Target.Addr().Interface().(command)
@@ -294,7 +300,7 @@ func run(args []string, e env) int {
 func open(e *env) *spool.Bridge {
 	dir, err := e.spool()
 	if err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: cannot locate the spool: %v\n", err)
+		fmt.Fprintf(e.stderr, edition.Command+": cannot locate the spool: %v\n", err)
 		return nil
 	}
 	return spool.Open(dir)
@@ -308,7 +314,7 @@ func seconds(value float64) time.Duration {
 func emit(e *env, value any) int {
 	data, err := json.Marshal(value)
 	if err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: encode output: %v\n", err)
+		fmt.Fprintf(e.stderr, edition.Command+": encode output: %v\n", err)
 		return exitFailure
 	}
 	return emitRaw(e, data)
@@ -319,7 +325,7 @@ func emit(e *env, value any) int {
 // macOS と Linux では Go の既定どおり SIGPIPE で終わり、ここへは来ない（Windows では誤りとして来る）。
 func emitRaw(e *env, data []byte) int {
 	if _, err := fmt.Fprintf(e.stdout, "%s\n", data); err != nil {
-		fmt.Fprintf(e.stderr, "vw2026: write output: %v\n", err)
+		fmt.Fprintf(e.stderr, edition.Command+": write output: %v\n", err)
 		return exitFailure
 	}
 	return exitOK

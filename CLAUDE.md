@@ -52,6 +52,9 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
    | `cli` の `install` のフック | なし |
    | `cli` の `uninstall` のフック | `<Plug-Ins>/cli/bin/vw2026` を指す `~/.local/bin/vw2026`・`Path` の `<Plug-Ins>\cli\bin` と一致する項目（どちらも `VW2026_HOOK_INSTALL_DIR` から決め、同じ場所かはディレクトリの同一性で決める） |
 
+   2025 の `cli`（`vw2025`）では、表の名前を `docs/plugin/editions.md` の表で読み替える（`vw2025.old-*`・
+   `~/.local/bin/vw2025`・`VW2025_HOOK_INSTALL_DIR` など）。消してよいものの範囲は同じ。
+
 ## 整形と検査
 
 - **整形（`scripts/format.sh`）と検査（`scripts/lint.sh`）を分ける。** 整形は直すだけ、検査は

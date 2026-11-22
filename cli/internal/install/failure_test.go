@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
@@ -311,7 +312,7 @@ func TestInstallManifestErrors(t *testing.T) {
 	if _, err := Install(o, "other", "latest", false); err == nil || !strings.Contains(err.Error(), "no rule") {
 		t.Error(err)
 	}
-	h.serve("/cli/broken/vw2026.json", []byte("{"))
+	h.serve("/cli/broken/"+edition.Command+".json", []byte("{"))
 	if _, err := h.install("cli", "broken"); err == nil || !strings.Contains(err.Error(), "manifest") {
 		t.Error(err)
 	}
@@ -434,7 +435,7 @@ func TestInstallCannotPutTheOldVersionBack(t *testing.T) {
 	o := h.options()
 	o.Executable = h.fakeExecutable()
 	if _, err := Install(o, "cli", "c2", false); err == nil || !strings.Contains(err.Error(), "by hand") ||
-		!strings.Contains(err.Error(), old) || !strings.Contains(err.Error(), "move the running vw2026 back") {
+		!strings.Contains(err.Error(), old) || !strings.Contains(err.Error(), "move the running "+edition.Command+" back") {
 		t.Fatal(err)
 	}
 }
@@ -465,7 +466,7 @@ func TestInstallHookFailureCannotUndo(t *testing.T) {
 				t.Fatal(err)
 			}
 			// 前の版を戻せないときは、よけた CLI の場所も示す。
-			if name == "old version" && !strings.Contains(err.Error(), "move the running vw2026 back") {
+			if name == "old version" && !strings.Contains(err.Error(), "move the running "+edition.Command+" back") {
 				t.Fatal(err)
 			}
 		})
@@ -490,7 +491,7 @@ func TestCannotRestoreTheSidesteppedCLI(t *testing.T) {
 			h.mustInstall(release{name: "cli", tag: "c1"})
 			h.publish(release{name: "cli", tag: "c2", install: c.plan})
 			c.fail(h)
-			executable := filepath.Join(h.plugins, "cli", "bin", "vw2026")
+			executable := filepath.Join(h.plugins, "cli", "bin", edition.Command)
 			renameWhen(t, func(from, to string) error {
 				if to == executable && strings.HasPrefix(filepath.Base(from), oldCLIName) {
 					return errInjected
@@ -1299,7 +1300,7 @@ func TestOverlappingPlaces(t *testing.T) {
 func TestInstallSameTagLockTakenWhileFetching(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1", latest: true})
-	h.onGet("/cli/latest/vw2026.json", func() { h.holdLock() })
+	h.onGet("/cli/latest/"+edition.Command+".json", func() { h.holdLock() })
 	runs := len(h.hookRuns("cli"))
 	before := snapshot(t, h.plugins)
 	if result, err := h.install("cli", "latest"); !errors.Is(err, ErrRunning) || result.Outcome != outcomeRunning {
@@ -1319,7 +1320,7 @@ func TestInstallSameTagLockUnreadableWhileFetching(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1", latest: true})
 	spoolDir := filepath.Join(h.plugins, "cli", spool.SpoolDirName)
-	h.onGet("/cli/latest/vw2026.json", func() {
+	h.onGet("/cli/latest/"+edition.Command+".json", func() {
 		os.RemoveAll(spoolDir)
 		os.WriteFile(spoolDir, nil, 0o600)
 	})

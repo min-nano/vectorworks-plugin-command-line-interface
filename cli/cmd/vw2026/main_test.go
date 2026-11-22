@@ -16,6 +16,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
@@ -46,7 +47,7 @@ var envVars = sync.OnceValue(func() []string {
 
 // eachFlag は、コマンド（kong の葉）ごとに、その指定（親の指定を含む）を順に fn へ渡す。
 func eachFlag(fn func(command *kong.Node, flag *kong.Flag)) {
-	for _, node := range kong.Must(&cli{}).Model.Leaves(true) {
+	for _, node := range kong.Must(&cli{}, grammarOptions()...).Model.Leaves(true) {
 		for _, group := range node.AllFlags(false) {
 			for _, flag := range group {
 				fn(node, flag)
@@ -106,7 +107,7 @@ func invoke(t *testing.T, o opts, args ...string) result {
 		o.work = filepath.Join(t.TempDir(), "work")
 	}
 	if o.executable == "" {
-		o.executable = filepath.Join(t.TempDir(), "vw2026")
+		o.executable = filepath.Join(t.TempDir(), edition.Command)
 		if err := os.WriteFile(o.executable, nil, 0o700); err != nil {
 			t.Fatal(err)
 		}
@@ -315,7 +316,7 @@ func TestLaunchSkipsWhenLive(t *testing.T) {
 func TestLaunchStartsApp(t *testing.T) {
 	app := fakeApp(t)
 	var started []string
-	r := invoke(t, opts{vars: map[string]string{"VW2026_APP": app}, started: &started}, "launch")
+	r := invoke(t, opts{vars: map[string]string{edition.EnvPrefix + "APP": app}, started: &started}, "launch")
 	if r.code != exitOK || len(started) != 1 || started[0] != app {
 		t.Fatalf("%+v %v", r, started)
 	}
@@ -324,7 +325,7 @@ func TestLaunchStartsApp(t *testing.T) {
 func TestLaunchStartFails(t *testing.T) {
 	app := fakeApp(t)
 	failed := func([]string) error { return errors.New("exec format error") }
-	r := invoke(t, opts{vars: map[string]string{"VW2026_APP": app}, start: failed}, "launch")
+	r := invoke(t, opts{vars: map[string]string{edition.EnvPrefix + "APP": app}, start: failed}, "launch")
 	if r.code != exitFailure || r.stdout != "" || !strings.Contains(r.stderr, "exec format error") {
 		t.Fatalf("%+v", r)
 	}
@@ -334,10 +335,10 @@ func TestLaunchStartFails(t *testing.T) {
 func TestLaunchAppNotFound(t *testing.T) {
 	var started []string
 	missing := filepath.Join(t.TempDir(), "missing")
-	vars := map[string]string{"VW2026_APP": missing}
+	vars := map[string]string{edition.EnvPrefix + "APP": missing}
 	r := invoke(t, opts{vars: vars, started: &started}, "launch")
 	if r.code != exitFailure || started != nil || !strings.Contains(r.stderr, missing) ||
-		!strings.Contains(r.stderr, "point --app (VW2026_APP) to") {
+		!strings.Contains(r.stderr, "point --app ("+edition.EnvPrefix+"APP) to") {
 		t.Fatalf("%+v %v", r, started)
 	}
 }
@@ -418,7 +419,7 @@ func TestHelp(t *testing.T) {
 // TestEveryCommandRuns は、kong に並べたコマンドがすべて command を満たすことを確かめる
 // （満たさなければ run の型アサーションが実行時に落ちる）。
 func TestEveryCommandRuns(t *testing.T) {
-	for _, node := range kong.Must(&cli{}).Model.Leaves(true) {
+	for _, node := range kong.Must(&cli{}, grammarOptions()...).Model.Leaves(true) {
 		if _, ok := node.Target.Addr().Interface().(command); !ok {
 			t.Errorf("%s does not implement command", node.Name)
 		}
@@ -467,9 +468,9 @@ func TestSessionStartCallEnd(t *testing.T) {
 	if r := invoke(t, opts{dir: dir}, "call", "ping"); r.code != exitOK {
 		t.Fatalf("ping is for everyone: %+v", r)
 	}
-	inSession := map[string]string{"VW2026_SESSION": started.Session}
+	inSession := map[string]string{edition.EnvPrefix + "SESSION": started.Session}
 	if r := invoke(t, opts{dir: dir, vars: inSession}, "call", "quit"); r.code != exitOK {
-		t.Fatalf("quit in the session (from VW2026_SESSION): %+v", r)
+		t.Fatalf("quit in the session (from "+edition.EnvPrefix+"SESSION): %+v", r)
 	}
 	if r := invoke(t, opts{dir: dir, vars: inSession}, "session", "end"); r.code != exitOK ||
 		strings.TrimSpace(r.stdout) != `{"ended":true}` {
@@ -527,31 +528,31 @@ func TestToolCodeFor(t *testing.T) {
 // 指定は環境変数でも与えられ、両方あれば引数が勝つ。
 func TestFlagsFromEnv(t *testing.T) {
 	dir := echoBridge(t)
-	raw := map[string]string{"VW2026_CALL_RAW": "true"}
+	raw := map[string]string{edition.EnvPrefix + "CALL_RAW": "true"}
 	if r := invoke(t, opts{dir: dir, vars: raw}, "call", "fail"); r.code != exitToolFailure ||
 		!strings.Contains(r.stdout, `"code":"internal"`) {
-		t.Fatalf("VW2026_CALL_RAW: %+v", r)
+		t.Fatalf(edition.EnvPrefix+"CALL_RAW: %+v", r)
 	}
 	r := invoke(t, opts{dir: dir, vars: raw}, "call", "fail", "--no-raw")
 	if r.code != exitToolFailure || r.stdout != "" {
-		t.Fatalf("--no-raw over VW2026_CALL_RAW: %+v", r)
+		t.Fatalf("--no-raw over "+edition.EnvPrefix+"CALL_RAW: %+v", r)
 	}
 
 	busy, _ := fakeplugin.NewHeldDir(t)
-	short := map[string]string{"VW2026_CALL_TIMEOUT": "0.3"}
+	short := map[string]string{edition.EnvPrefix + "CALL_TIMEOUT": "0.3"}
 	if r := invoke(t, opts{dir: busy, vars: short}, "call", "ping"); r.code != exitTimeout {
-		t.Fatalf("VW2026_CALL_TIMEOUT: %+v", r)
+		t.Fatalf(edition.EnvPrefix+"CALL_TIMEOUT: %+v", r)
 	}
-	long := map[string]string{"VW2026_CALL_TIMEOUT": "60"}
+	long := map[string]string{edition.EnvPrefix + "CALL_TIMEOUT": "60"}
 	r = invoke(t, opts{dir: busy, vars: long}, "call", "ping", "--timeout", "0.3")
 	if r.code != exitTimeout {
-		t.Fatalf("--timeout over VW2026_CALL_TIMEOUT: %+v", r)
+		t.Fatalf("--timeout over "+edition.EnvPrefix+"CALL_TIMEOUT: %+v", r)
 	}
-	session := map[string]string{"VW2026_SESSION_TIMEOUT": "0.3"}
+	session := map[string]string{edition.EnvPrefix + "SESSION_TIMEOUT": "0.3"}
 	if r := invoke(t, opts{dir: busy, vars: session}, "session", "start"); r.code != exitTimeout {
-		t.Fatalf("VW2026_SESSION_TIMEOUT: %+v", r)
+		t.Fatalf(edition.EnvPrefix+"SESSION_TIMEOUT: %+v", r)
 	}
-	empty := map[string]string{"VW2026_CALL_TIMEOUT": ""}
+	empty := map[string]string{edition.EnvPrefix + "CALL_TIMEOUT": ""}
 	if r := invoke(t, opts{dir: busy, vars: empty}, "call", "ping"); r.code != exitUsage {
 		t.Fatalf("an empty timeout: %+v", r)
 	}
@@ -616,7 +617,9 @@ func TestCallStoppedWhileWaitingShowsTheSpool(t *testing.T) {
 // スプールの場所を求められなければ（実行ファイルの場所が分からないなど）、スプールを見るコマンドは
 // どこで失敗したかと理由を標準エラーに書いて 1 で終わる。
 func TestSpoolNotLocated(t *testing.T) {
-	locate := func() (string, error) { return "", errors.New("lstat /nowhere/bin/vw2026: no such file or directory") }
+	locate := func() (string, error) {
+		return "", errors.New("lstat /nowhere/bin/" + edition.Command + ": no such file or directory")
+	}
 	for _, args := range [][]string{
 		{"status"},
 		{"call", "ping"},
@@ -625,7 +628,7 @@ func TestSpoolNotLocated(t *testing.T) {
 		{"session", "end", "--session", "x"},
 	} {
 		r := invoke(t, opts{locate: locate}, args...)
-		want := "vw2026: cannot locate the spool: lstat /nowhere/bin/vw2026: no such file or directory"
+		want := edition.Command + ": cannot locate the spool: lstat /nowhere/bin/" + edition.Command + ": no such file or directory"
 		if r.code != exitFailure || r.stdout != "" || !strings.Contains(r.stderr, want) {
 			t.Errorf("%v: %+v", args, r)
 		}
@@ -663,14 +666,14 @@ func TestEveryFlagHasEnv(t *testing.T) {
 // session end も）。全体で使う値に VW2026_SESSION_X のような名前を付けると、session コマンドの指定 X と
 // 区別できなくなるため（CLAUDE.md「Go」）。
 func TestEnvNamesDoNotCollide(t *testing.T) {
-	app := kong.Must(&cli{})
+	app := kong.Must(&cli{}, grammarOptions()...)
 	// コマンドの道筋（"session end"）ごとの接頭辞（"VW2026_SESSION_END_"）。
 	prefixes := map[string]string{}
 	var walk func(nodes []*kong.Node)
 	walk = func(nodes []*kong.Node) {
 		for _, node := range nodes {
 			path := node.Path()
-			prefixes[path] = "VW2026_" + strings.ToUpper(strings.NewReplacer(" ", "_", "-", "_").Replace(path)) + "_"
+			prefixes[path] = edition.EnvPrefix + strings.ToUpper(strings.NewReplacer(" ", "_", "-", "_").Replace(path)) + "_"
 			walk(node.Children)
 		}
 	}
