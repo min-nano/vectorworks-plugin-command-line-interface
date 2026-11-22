@@ -217,7 +217,7 @@ jobs:
           path: dist/cli-windows-x64.zip
 
   # Vectorworks 2025 の SDK でプラグインがビルドできるかの確かめ（docs/plugin/build-and-release.md
-  # 「Vectorworks 2025」）。梱包・公開はしない（release は待たない）。2025 の mac の SDK のヘッダは
+  # 「Vectorworks 2025」）。プラグインだけを成果物に残し、梱包・公開はしない（release は待たない）。2025 の mac の SDK のヘッダは
   # clang 19 以降で通らないので、ビルドは CI の Xcode 16.2 だけで行い、手元ではビルドしない。
   build-vw2025:
     needs: meta
@@ -257,15 +257,28 @@ jobs:
             cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DVW_SDK_DIR="$VW_SDK_DIR" \
               -DVW_BUILD_VERSION="$VERSION" -DVW_BUILD_BRANCH="$BRANCH"
             cmake --build build --target VwCli --parallel "$(sysctl -n hw.ncpu)"
+            # build-mac と同じアドホック署名。.vwr を入れた後にかけ、リソースまで封をする。
+            codesign --force --deep --sign - build/cli.vwlibrary
+            codesign --verify --strict --verbose=2 build/cli.vwlibrary
             lipo -info build/cli.vwlibrary/Contents/MacOS/cli
             test -e build/cli.vwlibrary/Contents/Resources/cli.vwr
+            mkdir -p stage
+            ditto build/cli.vwlibrary stage/cli.vwlibrary
           else
             cmake -S . -B build -A x64 -DVW_SDK_DIR="$VW_SDK_DIR" \
               -DVW_BUILD_VERSION="$VERSION" -DVW_BUILD_BRANCH="$BRANCH"
             cmake --build build --config Release --target VwCli --parallel
             test -f build/Release/cli.vlb
             test -e build/Release/cli.vwr
+            mkdir -p stage
+            cp build/Release/cli.vlb build/Release/cli.vwr stage/
           fi
+      # 実機（Vectorworks 2025）で確かめるために、プラグインだけを成果物として残す（公開はしない）。
+      # CLI と build.json は build-mac / build-windows の zip のものを使う。
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli-vw2025-${{ matrix.sdk }}-plugin
+          path: stage/
 
   # マニフェストを書き、下書きのリリースに資産を上げ終えてから公開する（下書きは利用者の URL から
   # 見えないので、資産が揃わない間を見せない。latest は公開した時点で進む）。タグは使い回さない。

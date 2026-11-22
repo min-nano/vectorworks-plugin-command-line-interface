@@ -64,6 +64,7 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
 - `jobs` はマシンに合わせます（目安はコア数）。
 - プリセットはスキーマの `version: 2` なので、CMake 3.20 で足ります。
 - **Vectorworks 2025 のプラグインは手元でビルドしません。** CI の `build-vw2025` だけでビルドします（[Vectorworks 2025](#vectorworks-2025)）。
+  手元の Command Line Tools（Apple clang 19 以降）では 2025 の SDK のヘッダで止まります。
 
 ## CI
 
@@ -84,7 +85,7 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
 | `meta` | ビルドする sha・刻印・公開先のタグ（`0.0.0-<短い sha>` / `dev-<slug>-<PR 番号>-<短い sha>` / 公開しない）を決め、`build.json` を書く（mac と Windows の zip に同じものを入れる）。ビルドのジョブは取り出すコミットを `meta` の出力に頼らず、同じ条件（同じリポジトリの PR だけ head）を自分の `checkout` に書き、取り出したものが `meta` の sha と同じかを確かめる（CodeQL が信頼できないコードの取り出しでないと読めるように。`meta` を変えても取り出すものが変わらないように） |
 | `build-mac` | `macos-15`・Xcode 16.2（SDK リファレンスの `plugin/` と同じ）。プラグインのビルドとアドホック署名、Go の arm64 と amd64 を `lipo` で universal に、zip |
 | `build-windows` | `windows-latest`・MSVC。プラグインのビルド、Go の amd64、zip（.NET の `ZipFile`。項目の名前の区切りを `/` にするため。Windows PowerShell 5.1 の `Compress-Archive` は `\` にする） |
-| `build-vw2025` | mac（`macos-15`・Xcode 16.2）と Windows（`windows-latest`・MSVC）で、Vectorworks 2025 の SDK に対してプラグインをビルドするだけ。梱包・公開はせず、`release` も待たない（[Vectorworks 2025](#vectorworks-2025)） |
+| `build-vw2025` | mac（`macos-15`・Xcode 16.2）と Windows（`windows-latest`・MSVC）で、Vectorworks 2025 の SDK に対してプラグインをビルドし、プラグインだけを成果物に残す。梱包・公開はせず、`release` も待たない（[Vectorworks 2025](#vectorworks-2025)） |
 | `release` | 公開するときだけ。2 つの zip の sha256 を求めてマニフェスト（`vw2026.json`。[レジストリ「マニフェスト」](../registry.md#マニフェストvw2026json)）を書き、**下書きのリリース**を作って、zip・マニフェスト・初回のスクリプトを上げ終えてから公開する（下書きは利用者の URL から見えないので、資産が揃わない間を見せない。`latest` は公開した時点で進む）。**そのタグの公開済みのリリースが既にあれば、タグが指すコミットが今回の完全な sha と同じなら何もせず（同じ sha の実行し直し。タグを使い回さない）、違えば失敗にする**（短い sha が重なった。[リリースの形](#リリースの形)）。下書きのまま残ったもの（前の実行が途中で止まった）は消して作り直す。PR では、同じ PR の別のタグの下書き（push で止められた前の実行のもの）も消す |
 | `verify` | 公開した資産を利用者と同じ道筋（既定のレジストリの `cli` の規則が指すマニフェスト → その `asset`）で mac と Windows で取ってきて、マニフェストの `tag` が公開したタグで sha256 が zip と合うこと、zip の直下が `build.json`・`bin/`・`hooks/`・プラグインだけで `bin/` の中が CLI だけであること、`build.json` と `bin/vw2026 version` の版がビルドした sha であること（mac は署名と `.vwr` も）を確かめる。main で `--latest` を付けて公開したときは、`latest` の規則（`releases/latest/download/vw2026.json`）でも取り、公開したタグを指すことを確かめる |
 | `verify-result` | `verify` の結果を 1 つのチェックにまとめる（必須のチェックにするため）。公開するときは `release` と `verify` が成功したこと、公開しないときはどちらも飛ばされたことを確かめる。`verify` は行列のジョブで、公開しないときは行列を展開する前に飛ばされ、行列の値の入った名前（`verify (macos-latest, macos-arm64)` 等）のチェックを出さないので、`verify` そのものは必須にできない。前のジョブが失敗・中止しても飛ばされないよう `always()` で走らせる |
@@ -126,8 +127,13 @@ fork の PR・マージキュー・main 以外の手動の実行は、マージ�
 ### Vectorworks 2025
 
 Vectorworks 2025 の SDK（`https://release.vectorworks.net/latest/Vectorworks/2025-NNA-eng-{mac,win}-SDK.zip`）に
-対してプラグインがビルドできるかを、`build.yml` の `build-vw2025` で確かめます。いまはビルドの確かめだけで、
-2025 用のプラグインの梱包・公開・`vw2026 install` での配置は持ちません。
+対してプラグインがビルドできるかを、`build.yml` の `build-vw2025` で確かめます。2025 用のプラグインの梱包・
+公開・`vw2026 install` での配置は持ちません。
+
+- 実機で確かめるために、プラグインだけを実行の成果物（`cli-vw2025-mac-plugin` / `cli-vw2025-win-plugin`。
+  mac は `build-mac` と同じアドホック署名）として残します。CLI と `build.json` は同じ実行の
+  `cli-macos-arm64.zip` / `cli-windows-x64.zip` のものを使い、2025 のプラグインのフォルダの `cli/` へ手で
+  置きます。
 
 - **ビルドは CI だけで行い、手元ではビルドしない。** 2025 の mac の SDK のヘッダ
   （`Kernel/Base/TypesArray.h` の `TXGenericArray<T>::SetSize`）は、クラスに無いメンバー `RemoveAt` を
