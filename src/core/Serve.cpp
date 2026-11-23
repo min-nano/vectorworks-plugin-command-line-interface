@@ -213,7 +213,7 @@ Server::Server(std::string spoolDir)
               .dump()) {}
 
 ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos, Activity activity,
-                          bool started) {
+                          Startup startup) {
 	ServeResult result;
 	if (serving_) {
 		refuseAll();
@@ -258,7 +258,7 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos, Ac
 		Outcome outcome;
 		const std::string *body = nullptr;
 		try {
-			outcome = answer(*text, tools, nowNanos, activity, started);
+			outcome = answer(*text, tools, nowNanos, activity, startup);
 			body = &outcome.body;
 		} catch (...) {
 			// answer は状態を変えない（Serve.h）。outcome も代入されていない。
@@ -317,7 +317,7 @@ void Server::refuseAll() {
 }
 
 Server::Outcome Server::answer(const std::string &text, std::span<const Tool> tools,
-                               std::int64_t nowNanos, Activity activity, bool started) {
+                               std::int64_t nowNanos, Activity activity, Startup startup) {
 	auto respond = [](const Json &response, bool quit = false) {
 		Outcome outcome;
 		outcome.body = response.dump();
@@ -380,7 +380,7 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		                       "Vectorworks に終了を頼んでいる最中なので実行しませんでした"));
 	}
 
-	ToolReply reply = runTool(*tool, request->args, ToolContext{inSession(), started});
+	ToolReply reply = runTool(*tool, request->args, ToolContext{inSession(), startup});
 	// 道具はもう実行したので、ここで投げると、実行した要求に internal で応えることになる（避け
 	// られない。応答を書き出すための確保だけが残る）。
 	return respond(reply.response, reply.quit);

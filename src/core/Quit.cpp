@@ -16,9 +16,17 @@ Json quit(const Json &args, const ToolContext &context, Documents &docs, ToolSta
 	}
 	// 2. 起動を終えたか。図面の一覧を見るより先に返す（起動の途中に終了を頼むと、mac では起動画面の
 	// まま止まるか、頼みが黙って捨てられる。docs/plugin/tools.md「quit」）。
-	if (!context.started) {
-		args::failWithReason(status, kStarting,
-		                     "Vectorworks が起動を終えていないので終了しませんでした");
+	// 起動を終えた目印の通知を登録できていなければ、印はいつまでも立たないので、呼ぶ側が起動を待って
+	// 呼び直し続けないように detail と文言で分けて示す（reason は同じ starting）。
+	if (!context.startup.started) {
+		bool registered = context.startup.notificationRegistered;
+		std::string message = "Vectorworks が起動を終えていないので終了しませんでした";
+		if (!registered) {
+			message += "（起動を終えたことを知る通知を登録できていません）";
+		}
+		args::fail(status, ErrorCode::Internal, std::move(message),
+		           Json::object({{"reason", Json::string(std::string(kStarting))},
+		                         {"notification_registered", Json::boolean(registered)}}));
 		return Json();
 	}
 	// 3. 開いている図面。保存済みの図面の未保存の変更は読めないので、1 枚でも開いていれば断る

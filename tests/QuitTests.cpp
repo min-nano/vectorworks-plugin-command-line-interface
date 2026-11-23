@@ -81,7 +81,7 @@ FakeDocuments twoDocuments() {
 
 ToolContext started() {
 	ToolContext context;
-	context.started = true;
+	context.startup = {true, true};
 	return context;
 }
 
@@ -109,22 +109,43 @@ TEST(QuitQuitsWithoutDocuments) {
 	CHECK(docs.others.empty());
 }
 
+// stillStarting は起動の途中（通知は登録できた）の状態。
+ToolContext stillStarting() {
+	ToolContext context;
+	context.startup.notificationRegistered = true;
+	return context;
+}
+
 // 起動を終えるまでは、図面の有無によらず、図面の一覧を見ずに starting で断る（detail は
 // documents を持たない）。
 TEST(QuitRefusesBeforeStarting) {
 	for (bool withDocuments : {false, true}) {
 		FakeDocuments docs = withDocuments ? twoDocuments() : FakeDocuments();
 		ToolStatus status;
-		Json result = VwCli::core::quit(Json::object(), ToolContext{}, docs, status);
+		Json result = VwCli::core::quit(Json::object(), stillStarting(), docs, status);
 		CHECK(status.code == ErrorCode::Internal);
 		CHECK(!status.quit);
 		CHECK(result.isNull());
-		CHECK_EQ(status.detail, must(R"({"reason":"starting"})"));
-		CHECK(status.message.find("Vectorworks が起動を終えていないので終了しませんでした") !=
-		      std::string::npos);
+		CHECK_EQ(status.detail, must(R"({"reason":"starting","notification_registered":true})"));
+		CHECK_EQ(status.message,
+		         std::string("Vectorworks が起動を終えていないので終了しませんでした"));
 		CHECK_EQ(docs.lists, 0);
 		CHECK(docs.others.empty());
 	}
+}
+
+// 起動を終えた目印の通知を登録できていなければ、reason は starting のまま、detail と文言で分けて
+// 示す（印はいつまでも立たないので、呼ぶ側が起動を待って呼び直し続けないように）。
+TEST(QuitTellsThatTheNotificationIsNotRegistered) {
+	FakeDocuments docs;
+	ToolStatus status;
+	VwCli::core::quit(Json::object(), ToolContext{}, docs, status);
+	CHECK(status.code == ErrorCode::Internal);
+	CHECK(!status.quit);
+	CHECK_EQ(status.detail, must(R"({"reason":"starting","notification_registered":false})"));
+	CHECK(status.message.find("Vectorworks が起動を終えていないので終了しませんでした") == 0);
+	CHECK(status.message.find("通知を登録できていません") != std::string::npos);
+	CHECK_EQ(docs.lists, 0);
 }
 
 // 図面が開いていれば、終了を頼まずに documents_open で断り、一覧をその順のまま detail に載せる。
@@ -207,13 +228,19 @@ TEST(QuitRejectsArguments) {
 
 TEST(LifecycleStartsWhenMarked) {
 	Lifecycle lifecycle;
-	CHECK(!lifecycle.started());
+	CHECK(!lifecycle.startup().started);
+	CHECK(!lifecycle.startup().notificationRegistered);
+	CHECK(!lifecycle.notificationRegistered());
 	CHECK(lifecycle.activity() == Activity::Idle);
+	lifecycle.markNotificationRegistered();
+	CHECK(lifecycle.notificationRegistered());
+	CHECK(lifecycle.startup().notificationRegistered);
+	CHECK(!lifecycle.startup().started);
 	lifecycle.markStarted();
-	CHECK(lifecycle.started());
+	CHECK(lifecycle.startup().started);
 	// 通知は以後も届く。立ったまま。
 	lifecycle.markStarted();
-	CHECK(lifecycle.started());
+	CHECK(lifecycle.startup().started);
 	CHECK(lifecycle.activity() == Activity::Idle);
 }
 
@@ -339,15 +366,18 @@ TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	REQUIRE(!session.empty());
 	std::string quit = R"({"tool":"quit","session":")" + session + R"("})";
 
-	// 起動を終える前は、図面が開いていても starting。
+	// 起動を終える前は、図面が開いていても starting。通知を登録できたかも渡る。
 	caller.put("b1", quit);
 	VwCli::core::tick(server, kTools, kNow, lifecycle, noRequest);
 	CHECK_EQ(caller.code("b1"), std::string("internal"));
-	CHECK_EQ(caller.member("b1", "detail"), must(R"({"reason":"starting"})"));
+	CHECK_EQ(caller.member("b1", "detail"),
+	         must(R"({"reason":"starting","notification_registered":false})"));
+	lifecycle.markNotificationRegistered();
 	docs.open.clear();
 	caller.put("b2", quit);
 	VwCli::core::tick(server, kTools, kNow, lifecycle, noRequest);
-	CHECK_EQ(caller.member("b2", "detail"), must(R"({"reason":"starting"})"));
+	CHECK_EQ(caller.member("b2", "detail"),
+	         must(R"({"reason":"starting","notification_registered":true})"));
 	CHECK_EQ(requests, 0);
 
 	// 起動を終えたあと、図面が開いていれば documents_open で、占有は残る。

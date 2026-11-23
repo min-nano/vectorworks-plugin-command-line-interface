@@ -619,7 +619,8 @@ TEST(CloseDoesNotClearWhileDocumentsAreOpen) {
 	CHECK_EQ(docs.remnants, 1);
 }
 
-// 片付かなくても、名指した図面は閉じたので失敗にしない。CloseDocument を呼ぶ回数には上限がある。
+// 片付かなくても、名指した図面は閉じたので失敗にせず、結果に closed_documents_remain を載せる。
+// CloseDocument を呼ぶ回数には上限がある。
 TEST(CloseStopsClearingAtTheLimit) {
 	FakeDocuments docs;
 	docs.open = {{"/Users/me/plan.vwx", false, true, 11}};
@@ -628,7 +629,7 @@ TEST(CloseStopsClearingAtTheLimit) {
 	ToolStatus status;
 	Json result = VwCli::core::close(must(R"({"document":"/Users/me/plan.vwx"})"), docs, status);
 	CHECK(status.code == ErrorCode::None);
-	CHECK_EQ(result, must(R"({"closed":true})"));
+	CHECK_EQ(result, must(R"({"closed":true,"closed_documents_remain":true})"));
 	CHECK_EQ(std::count(docs.calls.begin(), docs.calls.end(), std::string("close")),
 	         std::ptrdiff_t{1 + VwCli::core::kMaxClosedRemnants});
 }

@@ -46,9 +46,13 @@ inline constexpr std::string_view kDocumentAmbiguous = "document_ambiguous";
 inline constexpr std::string_view kSaveFailed = "save_failed";
 inline constexpr std::string_view kNotClosed = "not_closed";
 
+// close の結果に、閉じた図面が中に残って片付けられなかったときだけ真で載せるフィールド
+// （docs/plugin/tools.md「close」）。
+inline constexpr std::string_view kClosedDocumentsRemainField = "closed_documents_remain";
+
 // kMaxClosedRemnants は clearClosedDocuments が CloseDocument を呼ぶ回数の上限。残った図面は 1 回で
-// 1 枚消える（1 回 0〜22 ms）ので、常駐のあいだに溜まりうる枚数より十分に大きく、受け付けを長く
-// 止めない数にする。
+// 1 枚消える（Findings「Documents」の「閉じた図面が残り、終了で保存の確認が出る」）ので、常駐の
+// あいだに溜まりうる枚数より十分に大きく、受け付けを長く止めない数にする。
 inline constexpr int kMaxClosedRemnants = 64;
 
 // OpenDocument は GetOpenFilesList の項目 1 つ。
@@ -89,13 +93,11 @@ struct SaveEnvironment {
 	save_target::Checks checks;
 };
 
-// clearClosedDocuments は、一覧が空なのに残った図面があれば（GetActiveDocument
-// が真）、CloseDocument で 1 枚ずつ消す（mac
-// で、先に開いた図面を後に開いた図面が開いている間に閉じると、閉じた図面が
-// 中に残り、終了で保存の確認を出す。#321）。図面が開いていれば何もしない（CloseDocument
-// はその図面を
-// 閉じてしまうので、回ごとに一覧を確かめる）。片付いた（図面が開いている・残った図面が無い）なら真、
-// kMaxClosedRemnants 回呼んでも残っていれば偽。
+// clearClosedDocuments は、一覧が空なのに残った図面があれば（GetActiveDocument が真）、
+// CloseDocument で 1 枚ずつ消す（先に開いた図面を後に開いた図面が開いている間に閉じると、
+// 閉じた図面が中に残り、終了で保存の確認を出す。SDK リファレンス #321）。図面が開いていれば
+// 何もしない（CloseDocument はその図面を閉じてしまうので、回ごとに一覧を確かめる）。片付いた
+// （図面が開いている・残った図面が無い）なら真、kMaxClosedRemnants 回呼んでも残っていれば偽。
 bool clearClosedDocuments(Documents &docs);
 
 // documentName は path の最後の区切り文字より後ろ（documents の name）。

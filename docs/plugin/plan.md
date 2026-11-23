@@ -149,20 +149,22 @@
   終了の依頼が返れば印を立てて終了の呼び出しを呼び、戻ったら（投げても）下ろす。印が立っていれば 2 度目を頼まない。
   `Clock` は通知の登録と `CloseAllFilesAndQuitVectorworks` を `tick` に渡すだけにし、保存の確認の間に刻みが入り直す
   こと（Windows）は、偽の終了の呼び出しの中から `tick` を呼んで無 SDK のテストで真似る（[ブリッジ「分け方」](bridge.md#分け方)）。
-- **起動を終えたかは `ToolContext::started` で道具に渡す**（`core::Server::serve` の引数で受ける。[ブリッジ「道具の表」](bridge.md#道具の表)）。
+- **起動の状態（起動を終えたか・その目印の通知を登録できたか）は `ToolContext::startup`（`core::Startup`）で道具に渡す**（`core::Server::serve` の引数で受ける。[ブリッジ「道具の表」](bridge.md#道具の表)）。
 - **`quit` の SDK に依らない部分は `src/core/Quit` に置き、開いている図面の一覧は `core::Documents` で受ける**（図面を
   扱う道具と同じ口。SDK の側は `src/tools/Documents.cpp` に置く）。確かめの順は、引数の形（`invalid_args`）→ 起動を
   終えたか（`starting`）→ 開いている図面（`documents_open`）（[道具「quit」](tools.md#quit)）。
-- **`close` で閉じた図面が中に残るのは、`close` と `quit` の両方で片付ける**（mac の実機の確認で、ほかの図面が開いている
-  間に `close` した図面について、図面が 0 枚のはずの `quit` で保存の確認が出て止まった。[SDK リファレンス #321](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/321) で、
-  `CloseDocument()` が閉じる順によって図面を中に残すと分かった）。`close` は最後の図面を閉じたとき（利用者がメニューで
-  終了しても確認が出ないように）、`quit` は終了を頼む前（`close` の片付けが届かない道への備え。ほかのプラグインの `CloseDocument()` が最後の図面を閉じた
-  場合など。実機では起こせていない。最後の図面を UI で閉じた形は、片付けの無い版でも確認が出なかった）に、一覧が空なのに
-  `GetActiveDocument` が真なら `CloseDocument()` を呼ぶ（`core::clearClosedDocuments`。上限 64 回）。片付かなければ `quit` は
-  `closed_documents_remain` で断る。閉じる順の工夫では避けない（並びは SDK から読めない）（[道具「quit」](tools.md#quit)・
-  [図面を扱う道具](tools.md#図面を扱う道具documentssaveclose)）。
-- **通知 `kNotifyBeforePendingUpdate` は、登録できるまで刻みごとに登録し直す**（登録できない間は `quit` が `starting`
-  で断り続けるので、黙って受け付けられなくなることはない）。
+- **`close` で閉じた図面が中に残るのは、`close` と `quit` の両方で片付ける**（`CloseDocument()` は閉じる順によって図面を
+  中に残し、終了で保存の確認を出す。[SDK リファレンス #321](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/321)）。`close` は最後の図面を閉じたとき（利用者がメニューで
+  終了しても確認が出ないように）、`quit` は終了を頼む前（`close` の片付けが届かない道への備え。ほかのプラグインの
+  `CloseDocument()` が最後の図面を閉じた場合など）に、一覧が空なのに `GetActiveDocument` が真なら `CloseDocument()` を呼ぶ
+  （`core::clearClosedDocuments`。上限 64 回）。片付かなければ、`close` は成功のまま結果に `closed_documents_remain` を
+  載せ、`quit` は `closed_documents_remain` で断る。閉じる順の工夫では避けない（並びは SDK から読めない）
+  （[道具「quit」](tools.md#quit)・[図面を扱う道具](tools.md#図面を扱う道具documentssaveclose)）。
+- **Windows も同じく片付ける**（利用者の判断。Windows の振る舞いは `Findings/` にまだ無い（[#323](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/323)）が、段 6 の
+  実機の確認で見てから入れた。CLAUDE.md の 7 の例外として [SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し) に書く）。
+- **通知 `kNotifyBeforePendingUpdate` は、登録できるまで刻みごとに登録し直す**（登録できない間は `quit` が `starting` で
+  断り、`detail` の `notification_registered` を偽にする。起動の途中と見分けられるので、呼ぶ側が起動を待って呼び直し
+  続けない）。
 
 その先（順序は未定）:
 

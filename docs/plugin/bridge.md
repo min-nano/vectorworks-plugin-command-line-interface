@@ -51,8 +51,8 @@
 ## 受け付け 1 回（`core::Server::serve`）
 
 `serve` は道具の表・時刻と、終了の依頼の最中か（`core::Activity`。`Idle`・`Quitting`。
-[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）と、Vectorworks が起動を終えたか（道具に
-`ToolContext::started` で渡す。[道具「quit」](tools.md#quit)）を受け取ります。どちらもタイマーが `core::Lifecycle` から渡します
+[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）と、起動の状態（`core::Startup`。Vectorworks が
+起動を終えたか・その目印の通知を登録できたか。道具に `ToolContext::startup` で渡す。[道具「quit」](tools.md#quit)）を受け取ります。どちらもタイマーが `core::Lifecycle` から渡します
 （`core::tick`）。
 
 0. **`serve` の途中にまた呼ばれたら（受け付けの入れ子）**、外の回の状態に触れず、取り出せる要求を
@@ -162,12 +162,19 @@ struct ToolStatus {
 	bool quit = false;
 };
 
+// 起動の状態（受け付けの外。quit が見る）。
+struct Startup {
+	// Vectorworks が起動を終えたか（最初の kNotifyBeforePendingUpdate で立つ）。
+	bool started = false;
+	// その通知を登録できたか。
+	bool notificationRegistered = false;
+};
+
 // 道具に渡す受け付けの状態。
 struct ToolContext {
 	// 占有の印を発行しているか（ping の session）。
 	bool session = false;
-	// Vectorworks が起動を終えたか（quit が見る。最初の kNotifyBeforePendingUpdate で立つ）。
-	bool started = false;
+	Startup startup;
 };
 
 // 失敗と終了の依頼は status に書き（戻り値は使わない）、例外は Server が internal で応える。
@@ -196,8 +203,8 @@ struct Tool {
 - 道具の結果は JSON のオブジェクトで返します（[通信規則「応答」](../protocol.md#応答idresjson)）。返す値が無ければ
   `Json()` でよく、`Server` が `{}` にします。オブジェクトでない値は道具の不具合として、`Server` が
   `internal` で応えます。
-- 道具が受け付けの状態を知るのは `ToolContext` からだけです（`ping` の `session`・`quit` が見る「起動を終えた」印の
-  `started`。[道具「quit」](tools.md#quit)）。
+- 道具が受け付けの状態を知るのは `ToolContext` からだけです（`ping` の `session`・`quit` が見る起動の状態の
+  `startup`。[道具「quit」](tools.md#quit)）。
 - 引数の検査は道具の中で行います（JSON Schema の検証器は持たない）。省略できる引数には
   既定値を設け（`inputSchema` の `default` にも書く）、知らない引数・知っている引数の未知の値は
   `invalid_args` で返します（[通信規則「互換性」](../protocol.md#互換性)）。

@@ -45,13 +45,20 @@ struct ToolStatus {
 	bool quit = false;
 };
 
+// 起動の状態（受け付けの外。タイマーが core/Lifecycle.h から渡し、quit が見る）。
+struct Startup {
+	// Vectorworks が起動を終えたか（最初の kNotifyBeforePendingUpdate で立つ）。
+	bool started = false;
+	// その通知を登録できたか（できない間は started が立たない。quit が「起動の途中」と
+	// 「登録できていない」を呼ぶ側に分けて示すため）。
+	bool notificationRegistered = false;
+};
+
 // 道具に渡す受け付けの状態。
 struct ToolContext {
 	// 占有の印を発行しているか（ping の session）。
 	bool session = false;
-	// Vectorworks が起動を終えたか（quit が見る。最初の kNotifyBeforePendingUpdate で立つ。
-	// core/Lifecycle.h）。
-	bool started = false;
+	Startup startup;
 };
 
 // 道具の中身。結果は JSON のオブジェクトで返す（返す値が無ければ Json() でよく、{} になる。
@@ -122,10 +129,10 @@ public:
 	// 入れ子）、外の回の状態に触れず、取り出せる要求をすべて busy で断って戻る。外の回がすでに
 	// 並べていた要求も断る（外の回の一覧を入れ子の側へ見せる状態を持たないため）。
 	//
-	// activity と started は受け付けの外の状態（タイマーが core/Lifecycle.h から渡す）。started は
+	// activity と startup は受け付けの外の状態（タイマーが core/Lifecycle.h から渡す）。startup は
 	// 道具に ToolContext で渡す。
 	ServeResult serve(std::span<const Tool> tools, std::int64_t nowNanos,
-	                  Activity activity = Activity::Idle, bool started = false);
+	                  Activity activity = Activity::Idle, Startup startup = {});
 
 	bool inSession() const { return !session_.empty(); }
 
@@ -141,7 +148,7 @@ private:
 	// answer は状態（占有の印・終了の依頼）を変えない。反映するのは serve で、応答を書けたときだけ
 	// （書けないと呼ぶ側は結果を受け取れないのに、占有だけが残る・消える、Vectorworks が終わる）。
 	Outcome answer(const std::string &text, std::span<const Tool> tools, std::int64_t nowNanos,
-	               Activity activity, bool started);
+	               Activity activity, Startup startup);
 
 	// held は要求を取り出し、呼ぶ側が待っていれば中身を返す（通信規則「待つ印」）。待つ者が
 	// 居なければ待つ印を消し、待つ印が無ければ no_wait で応えて、どちらも空を返す。

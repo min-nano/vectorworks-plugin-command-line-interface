@@ -20,8 +20,13 @@ public:
 	// 届くが、立ったままで下ろさない。docs/plugin/tools.md「quit」）。
 	void markStarted() { started_ = true; }
 
-	// started は起動を終えたか（道具 quit が ToolContext で見る）。
-	bool started() const { return started_; }
+	// markNotificationRegistered は、その通知を登録できたときに呼ぶ。
+	void markNotificationRegistered() { notificationRegistered_ = true; }
+
+	bool notificationRegistered() const { return notificationRegistered_; }
+
+	// startup は起動の状態（道具 quit が ToolContext で見る）。
+	Startup startup() const { return Startup{started_, notificationRegistered_}; }
 
 	// activity は受け付けに渡す状態。終了の依頼の最中なら Quitting。
 	Activity activity() const { return quitting_ ? Activity::Quitting : Activity::Idle; }
@@ -54,6 +59,7 @@ private:
 	};
 
 	bool started_ = false;
+	bool notificationRegistered_ = false;
 	bool quitting_ = false;
 };
 
@@ -64,7 +70,7 @@ private:
 template <typename Request>
 ServeResult tick(Server &server, std::span<const Tool> tools, std::int64_t nowNanos,
                  Lifecycle &lifecycle, Request &&request) {
-	ServeResult result = server.serve(tools, nowNanos, lifecycle.activity(), lifecycle.started());
+	ServeResult result = server.serve(tools, nowNanos, lifecycle.activity(), lifecycle.startup());
 	if (result.quit) {
 		(void)lifecycle.quit(std::forward<Request>(request));
 	}

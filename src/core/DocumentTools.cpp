@@ -236,11 +236,13 @@ Json close(const Json &args, Documents &docs, ToolStatus &status) {
 	}
 	// 最後の図面を閉じたら、閉じた順のために中に残った図面を片付ける（残すと、利用者がメニューで
 	// 終了したときにも、見えない図面の保存の確認が出る）。片付かなくても、名指した図面は閉じたので
-	// 失敗にしない（quit が終了を頼む前にもう一度片付け、片付かなければ断る）。
-	if (after.empty()) {
-		(void)clearClosedDocuments(docs);
+	// 失敗にせず、結果に載せて呼ぶ側に知らせる（quit は終了を頼む前にもう一度片付け、片付かなければ
+	// 断る）。
+	Json result = Json::object({{"closed", Json::boolean(true)}});
+	if (after.empty() && !clearClosedDocuments(docs)) {
+		result.set(std::string(kClosedDocumentsRemainField), Json::boolean(true));
 	}
-	return Json::object({{"closed", Json::boolean(true)}});
+	return result;
 }
 
 }

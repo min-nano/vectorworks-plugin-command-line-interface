@@ -46,14 +46,16 @@ void onNotify(StatusID id, StatusData /*data*/) {
 // registerNotify は onNotify を登録する。plugin_module_main ではなく刻みから呼ぶ（Windows の
 // Vectorworks は起動時にモジュールを一度降ろして読み込み直すので、留める前に渡した番地は残らない。
 // 刻みはモジュールを留めてから作ったタイマーから来る。docs/plugin/architecture.md「入口」）。
-// 登録できなければ次の刻みでやり直す（その間 quit は starting で断る）。
+// 登録できなければ次の刻みでやり直す（その間 quit は starting で断り、detail
+// に登録できていないことを 示す）。
 void registerNotify() {
-	static bool registered = false;
-	if (registered) {
+	if (gLifecycle.notificationRegistered()) {
 		return;
 	}
-	registered = gSDK->RegisterNotificationProcedure(
-	    &onNotify, static_cast<OSType>(kNotifyBeforePendingUpdate));
+	if (gSDK->RegisterNotificationProcedure(&onNotify,
+	                                        static_cast<OSType>(kNotifyBeforePendingUpdate))) {
+		gLifecycle.markNotificationRegistered();
+	}
 }
 
 // requestQuit は終了を頼む。保存の確認を出すかは図面しだい（quit は図面が 0 枚のときだけ終了の

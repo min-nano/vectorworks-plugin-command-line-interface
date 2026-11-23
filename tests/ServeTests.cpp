@@ -134,7 +134,7 @@ Json throwsInt(const Json &, const ToolContext &, ToolStatus &) {
 
 Json readContext(const Json &, const ToolContext &context, ToolStatus &) {
 	gSession = context.session;
-	gStarted = context.started;
+	gStarted = context.startup.started;
 	return record("context");
 }
 
@@ -279,7 +279,7 @@ TEST(ServeTellsToolsWhetherVectorworksHasStarted) {
 	server.serve(kTools, kNow);
 	CHECK(!gStarted);
 	caller.put("2", R"({"tool":"context"})");
-	server.serve(kTools, kNow, VwCli::core::Activity::Idle, true);
+	server.serve(kTools, kNow, VwCli::core::Activity::Idle, VwCli::core::Startup{true, true});
 	CHECK(gStarted);
 }
 
