@@ -299,11 +299,23 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 
   | フィールド | 値 |
   | --- | --- |
-  | `reason` | `documents_open`（`quit` の失敗の理由を表す固定の綴り。呼ぶ側はこれで分岐する。起動を終えていないときは上の `starting` で、`documents` を持たない） |
+  | `reason` | `documents_open`（`quit` の失敗の理由を表す固定の綴り。呼ぶ側はこれで分岐する。起動を終えていないときは上の `starting`、閉じた図面が中に残って片付けられなかったときは下の `closed_documents_remain` で、どちらも `documents` を持たない） |
   | `documents[].name` | 図面の名前 |
   | `documents[].path` | 図面のパス（`documents` と同じ。`untitled` が真の図面は「アプリケーションのフォルダ＋名前」（「名称未設定 N」・「<元の名前> コピー 1」など）でファイルとしては存在しない） |
   | `documents[].untitled` | ディスクのファイルに結び付いていない図面か（`documents` の `untitled` と同じ） |
-- **図面が 0 枚なら、保存の確認は出ません。** 応答を書いてから、受け付けの外で
+- **一覧が空でも、`close` で閉じた図面が Vectorworks の中に残っていれば、終了を頼む前に片付けます**（mac。
+  [Findings「閉じた図面が残り、終了で保存の確認が出る」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321macwindows-は未確認)。[SDK リファレンス #321](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/321)）。
+  - `CloseDocument()` は、先に開いた図面を後に開いた図面が開いている間に閉じると、閉じた図面を中に残します（以下「残った
+    図面」）。残った図面は `GetOpenFilesList` に出ず（`documents` も空）、一番上に残った図面が「変更あり」（無題なら変更が
+    無くても）なら、終了で保存の確認が出て、人が答えるまで止まりません。
+  - 一覧が空なのに `GetActiveDocument` が真なら残っています。`quit` は、一覧が空であることを回ごとに確かめながら
+    `CloseDocument()` を呼び、`GetActiveDocument` が偽になるまで 1 枚ずつ消します（確認は出ない。残った図面は `close` が
+    変更を捨てると指定されて閉じたものなので、変更を捨てる）。回数の上限（64 回）までに片付かなければ、終了を頼まずに
+    `internal` で失敗し、`detail` に `{"reason":"closed_documents_remain"}` を付けます。
+  - 利用者が UI で最後の図面を閉じたときは `close` が片付けていないので、`quit` の側でも片付けます（`close` の側は
+    [下記の `close`](#図面を扱う道具documentssaveclose)）。
+  - Windows は測っていません（[#323](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/323)）。Windows で図面が残らなければ、`GetActiveDocument` が偽なので何もしません。
+- **図面が 0 枚（残った図面も無い）なら、保存の確認は出ません。** 応答を書いてから、受け付けの外で
   `gSDK->CloseAllFilesAndQuitVectorworks(true, false)` を頼みます（[構成「受け付けの流れ」](architecture.md#受け付けの流れ)）。
   第 1 引数は常に真です（`quit` は図面を保存するか捨てるかを決めない。決めるのは呼ぶ側で、`save`（新しいパスへ）・`close`（変更を捨てる）で先に片付ける）。確かめてから頼むまでの間に利用者が
   図面を開くと、保存の確認が出うる競合が残りますが、`quit` は占有の中でだけ呼べ、呼ぶ側が図面を閉じた直後に
@@ -652,6 +664,20 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       （失敗とは限らない）ので、`documents` で確かめます。
     - **Windows では呼び出しが数秒を超えると、Vectorworks が「応答なし」と表示されます。** 図面は壊れていないので、失敗と
       読みません。
+  - **最後の図面を閉じたら（閉じたあとの一覧が空なら）、中に残った図面を片付けます**（mac。
+    [Findings「閉じた図面が残り、終了で保存の確認が出る」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321macwindows-は未確認)。[SDK リファレンス #321](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/321)）。
+    `CloseDocument()` は、先に開いた図面を後に開いた図面が開いている間に閉じると、閉じた図面を中に残し、一覧が空になった
+    あとの終了で、その図面の保存の確認を出します（`quit` だけでなく、利用者がメニューで終了したときも）。片付け方は
+    [`quit`](#quit) と同じで、一覧が空であることを回ごとに確かめながら、`GetActiveDocument` が偽になるまで `CloseDocument()`
+    を呼びます（上限 64 回）。片付かなくても、名指した図面は閉じたので失敗にしません（`quit` が終了を頼む前にもう一度
+    片付け、片付かなければ断る）。
+    - **図面が開いている間は片付けません**（`CloseDocument()` は開いている図面を閉じてしまう）。ほかの図面が開いている間に
+      `close` した図面が残り、そのあと利用者が UI で最後の図面を閉じてメニューで終了すると、確認が出ることがあります
+      （プラグインは勝手に片付けない。CLAUDE.md の 5）。`quit` で終了すれば、`quit` が片付けます。
+    - 閉じる順の工夫（後に開いたものから閉じる）では避けません。残るかを決める図面の並びは SDK から読めないためです。
+    - **残った図面の状態で `SaveActiveDocumentPath` を呼ぶと Vectorworks が落ちます**（同じ節）。`save` は一覧が空なら
+      `no_document` で断り、保存を呼ばないので当たりません。
+    - Windows は測っていません（[#323](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/323)）。
   - 閉じたあとに前面になるのは、最後に開いた図面です（mac も Windows も）。`close` の前の前面の図面が残っていれば、
     その `fileRef` へ `SwitchToOpenFile` で戻します（カレントレイヤも戻る。前面を閉じたときは戻せない。[Findings「Windows と、「閉じる」で確認が出る図面」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows-と閉じるで確認が出る図面305mac-も)）。
 - 図面を開く道具は[設計「決めたこと」](../design.md#決めたこと)の「対象の図面」にあります（未実装）。

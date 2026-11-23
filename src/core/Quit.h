@@ -24,10 +24,13 @@ inline constexpr ToolSpec kQuitSpec{
 // 失敗の detail の reason（docs/plugin/tools.md「quit」）。
 inline constexpr std::string_view kStarting = "starting";
 inline constexpr std::string_view kDocumentsOpen = "documents_open";
+inline constexpr std::string_view kClosedDocumentsRemain = "closed_documents_remain";
 
-// quit は、起動を終えていて（context.started）図面が 1 枚も開いていなければ、終了の依頼
-// （status.quit）を立てて {"quitting":true} を返す。起動を終えていなければ internal（starting）、
-// 図面が開いていれば internal（documents_open。detail に一覧）で失敗する。どちらも終了を頼まない。
+// quit は、起動を終えていて（context.started）図面が 1 枚も開いていなければ、閉じた図面が中に
+// 残っていれば片付けて（clearClosedDocuments）、終了の依頼（status.quit）を立てて {"quitting":true}
+// を返す。起動を終えていなければ internal（starting）、図面が開いていれば
+// internal（documents_open。 detail に一覧）、残った図面を片付けられなければ
+// internal（closed_documents_remain）で失敗する。 どれも終了を頼まない。
 Json quit(const Json &args, const ToolContext &context, Documents &docs, ToolStatus &status);
 
 }

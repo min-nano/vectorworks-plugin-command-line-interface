@@ -46,6 +46,11 @@ inline constexpr std::string_view kDocumentAmbiguous = "document_ambiguous";
 inline constexpr std::string_view kSaveFailed = "save_failed";
 inline constexpr std::string_view kNotClosed = "not_closed";
 
+// kMaxClosedRemnants は clearClosedDocuments が CloseDocument を呼ぶ回数の上限。残った図面は 1 回で
+// 1 枚消える（1 回 0〜22 ms）ので、常駐のあいだに溜まりうる枚数より十分に大きく、受け付けを長く
+// 止めない数にする。
+inline constexpr int kMaxClosedRemnants = 64;
+
 // OpenDocument は GetOpenFilesList の項目 1 つ。
 struct OpenDocument {
 	// fpFileID の GetFileFullPath（UTF-8。正規化しない）。
@@ -70,8 +75,11 @@ public:
 	// は成功）。
 	virtual std::uint32_t saveActive(const std::string &path) = 0;
 	// closeActive は前面の図面を、保存の確認を出さずに閉じる（CloseDocument。戻り値は当てに
-	// ならないので返さない）。
+	// ならないので返さない）。一覧が空のときに呼ぶと、閉じた図面が中に残ったもの（残った図面）を
+	// 1 枚消す（Findings「Documents」の「閉じた図面が残り、終了で保存の確認が出る」）。
 	virtual void closeActive() = 0;
+	// hasActive は GetActiveDocument が真か。一覧が空なのに真なら、残った図面がある（同じ節）。
+	virtual bool hasActive() = 0;
 };
 
 // SaveEnvironment は save の保存先の確かめに使う規則と関数（プラグインは to の形の規則に
@@ -80,6 +88,15 @@ struct SaveEnvironment {
 	save_target::FormCheck form = nullptr;
 	save_target::Checks checks;
 };
+
+// clearClosedDocuments は、一覧が空なのに残った図面があれば（GetActiveDocument
+// が真）、CloseDocument で 1 枚ずつ消す（mac
+// で、先に開いた図面を後に開いた図面が開いている間に閉じると、閉じた図面が
+// 中に残り、終了で保存の確認を出す。#321）。図面が開いていれば何もしない（CloseDocument
+// はその図面を
+// 閉じてしまうので、回ごとに一覧を確かめる）。片付いた（図面が開いている・残った図面が無い）なら真、
+// kMaxClosedRemnants 回呼んでも残っていれば偽。
+bool clearClosedDocuments(Documents &docs);
 
 // documentName は path の最後の区切り文字より後ろ（documents の name）。
 std::string documentName(std::string_view path);

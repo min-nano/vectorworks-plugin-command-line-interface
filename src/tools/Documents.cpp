@@ -64,6 +64,15 @@ public:
 	// あるので、成否は core が閉じたあとの一覧で決める（Findings「CloseDocument() は false を
 	// 返しながら閉じている」）。
 	void closeActive() override { (void)gSDK->CloseDocument(); }
+
+	// 一覧が空でも、CloseDocument で閉じた図面が中に残っていれば真を返す（core の
+	// clearClosedDocuments が使う。Findings「Documents」の「閉じた図面が残り、終了で保存の確認が
+	// 出る」）。パスは使わない。
+	bool hasActive() override {
+		VectorWorks::Filing::IFileIdentifierPtr file(VectorWorks::Filing::IID_FileIdentifier);
+		bool saved = false;
+		return gSDK->GetActiveDocument(&file, saved);
+	}
 };
 
 }

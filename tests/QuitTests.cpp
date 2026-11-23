@@ -46,6 +46,10 @@ public:
 	std::vector<OpenDocument> open;
 	int lists = 0;
 	std::vector<std::string> others;
+	// 閉じた図面が中に残った枚数（一覧には出ず、GetActiveDocument だけが真を返す）と、一覧が空の
+	// ときの CloseDocument でそれが消えないか。
+	int remnants = 0;
+	bool remnantsStick = false;
 
 	std::vector<OpenDocument> list() override {
 		++lists;
@@ -59,7 +63,13 @@ public:
 		others.push_back("save " + path);
 		return 0;
 	}
-	void closeActive() override { others.emplace_back("close"); }
+	void closeActive() override {
+		others.emplace_back("close");
+		if (open.empty() && remnants > 0 && !remnantsStick) {
+			--remnants;
+		}
+	}
+	bool hasActive() override { return remnants > 0 || !open.empty(); }
 };
 
 FakeDocuments twoDocuments() {
@@ -94,7 +104,8 @@ TEST(QuitQuitsWithoutDocuments) {
 	CHECK(status.code == ErrorCode::None);
 	CHECK(status.quit);
 	CHECK_EQ(result, must(R"({"quitting":true})"));
-	CHECK_EQ(docs.lists, 1);
+	// 開いている図面を確かめる 1 回と、残った図面を片付ける前に確かめる 1 回。
+	CHECK_EQ(docs.lists, 2);
 	CHECK(docs.others.empty());
 }
 
@@ -132,6 +143,49 @@ TEST(QuitRefusesWithDocumentsOpen) {
 	              R"({"name":"名称未設定 1","path":"/Applications/Vectorworks 2026/名称未設定 1",)"
 	              R"("untitled":true}]})"));
 	CHECK(docs.others.empty());
+}
+
+// 一覧が空でも閉じた図面が中に残っていれば、片付けてから終了を頼む（残すと終了で保存の確認が
+// 出る。#321）。
+TEST(QuitClearsClosedDocumentsBeforeQuitting) {
+	FakeDocuments docs;
+	docs.remnants = 2;
+	ToolStatus status;
+	Json result = VwCli::core::quit(Json::object(), started(), docs, status);
+	CHECK(status.code == ErrorCode::None);
+	CHECK(status.quit);
+	CHECK_EQ(result, must(R"({"quitting":true})"));
+	CHECK_EQ(docs.remnants, 0);
+	CHECK_EQ(docs.others, (std::vector<std::string>{"close", "close"}));
+}
+
+// 片付けられなければ、終了を頼まずに closed_documents_remain で断る。
+TEST(QuitRefusesWhenClosedDocumentsRemain) {
+	FakeDocuments docs;
+	docs.remnants = 1;
+	docs.remnantsStick = true;
+	ToolStatus status;
+	Json result = VwCli::core::quit(Json::object(), started(), docs, status);
+	CHECK(status.code == ErrorCode::Internal);
+	CHECK(!status.quit);
+	CHECK(result.isNull());
+	CHECK_EQ(status.detail, must(R"({"reason":"closed_documents_remain"})"));
+	CHECK_EQ(docs.others.size(), std::size_t(VwCli::core::kMaxClosedRemnants));
+}
+
+// 起動を終える前と、図面が開いている間は、残った図面に触れない。
+TEST(QuitDoesNotClearBeforeStartingOrWithDocumentsOpen) {
+	FakeDocuments before;
+	before.remnants = 1;
+	ToolStatus starting;
+	VwCli::core::quit(Json::object(), ToolContext{}, before, starting);
+	CHECK(before.others.empty());
+	FakeDocuments open = twoDocuments();
+	open.remnants = 1;
+	ToolStatus documentsOpen;
+	VwCli::core::quit(Json::object(), started(), open, documentsOpen);
+	CHECK(open.others.empty());
+	CHECK_EQ(open.remnants, 1);
 }
 
 // 引数の形は、起動を終えたかより先に確かめる（docs/plugin/tools.md「最初に提供する道具」の

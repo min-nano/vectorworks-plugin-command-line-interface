@@ -37,6 +37,16 @@ Json quit(const Json &args, const ToolContext &context, Documents &docs, ToolSta
 		                         {"documents", std::move(list)}}));
 		return Json();
 	}
+	// 4. 閉じた図面が中に残っていれば片付ける。一覧が空でも、残った図面が「変更あり」なら終了で
+	// 保存の確認が出る（mac。Findings「Documents」の「閉じた図面が残り、終了で保存の確認が出る」）。
+	// 残った図面は close（または CloseDocument を呼ぶほかのもの）が閉じたもので、変更は捨てる。
+	// 利用者が UI で最後の図面を閉じたときは close が片付けていないので、ここで片付ける。
+	if (!clearClosedDocuments(docs)) {
+		args::failWithReason(status, kClosedDocumentsRemain,
+		                     "閉じた図面が Vectorworks の中に残っていて片付けられなかったので"
+		                     "終了しませんでした");
+		return Json();
+	}
 	// 終了を頼むのは、応答を書いてから受け付けの外で（Server が応答を書けたときだけ ServeResult
 	// の quit を立てる）。
 	status.quit = true;
