@@ -156,7 +156,8 @@
 - **`close` で閉じた図面が中に残るのは、`close` と `quit` の両方で片付ける**（mac の実機の確認で、ほかの図面が開いている
   間に `close` した図面について、図面が 0 枚のはずの `quit` で保存の確認が出て止まった。[SDK リファレンス #321](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/321) で、
   `CloseDocument()` が閉じる順によって図面を中に残すと分かった）。`close` は最後の図面を閉じたとき（利用者がメニューで
-  終了しても確認が出ないように）、`quit` は終了を頼む前（利用者が UI で最後の図面を閉じた場合のため）に、一覧が空なのに
+  終了しても確認が出ないように）、`quit` は終了を頼む前（`close` の片付けが届かない道への備え。ほかのプラグインの `CloseDocument()` が最後の図面を閉じた
+  場合など。実機では起こせていない。最後の図面を UI で閉じた形は、片付けの無い版でも確認が出なかった）に、一覧が空なのに
   `GetActiveDocument` が真なら `CloseDocument()` を呼ぶ（`core::clearClosedDocuments`。上限 64 回）。片付かなければ `quit` は
   `closed_documents_remain` で断る。閉じる順の工夫では避けない（並びは SDK から読めない）（[道具「quit」](tools.md#quit)・
   [図面を扱う道具](tools.md#図面を扱う道具documentssaveclose)）。
