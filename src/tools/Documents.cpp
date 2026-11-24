@@ -2,6 +2,7 @@
 
 #include "core/DocumentTools.h"
 #include "core/PathCompare.h"
+#include "core/Quit.h"
 #include "core/SaveTarget.h"
 #include "tools/Text.h"
 #include "tools/Tools.h"
@@ -63,6 +64,15 @@ public:
 	// あるので、成否は core が閉じたあとの一覧で決める（Findings「CloseDocument() は false を
 	// 返しながら閉じている」）。
 	void closeActive() override { (void)gSDK->CloseDocument(); }
+
+	// 一覧が空でも、CloseDocument で閉じた図面が中に残っていれば真を返す（core の
+	// clearClosedDocuments が使う。Findings「Documents」の「閉じた図面が残り、終了で保存の確認が
+	// 出る」）。パスは使わない。
+	bool hasActive() override {
+		VectorWorks::Filing::IFileIdentifierPtr file(VectorWorks::Filing::IID_FileIdentifier);
+		bool saved = false;
+		return gSDK->GetActiveDocument(&file, saved);
+	}
 };
 
 }
@@ -89,6 +99,14 @@ core::Json close(const core::Json &args, const core::ToolContext & /*context*/,
                  core::ToolStatus &status) {
 	SdkDocuments docs;
 	return core::close(args, docs, status);
+}
+
+// quit は開いている図面の一覧（GetOpenFilesList）だけを読むので、図面を扱う道具と同じ口を使う。
+// 終了は頼まない（終了の依頼を返すだけで、頼むのは受け付けの外の Clock）。
+core::Json quit(const core::Json &args, const core::ToolContext &context,
+                core::ToolStatus &status) {
+	SdkDocuments docs;
+	return core::quit(args, context, docs, status);
 }
 
 }

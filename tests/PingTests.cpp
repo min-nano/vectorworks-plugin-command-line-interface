@@ -33,7 +33,7 @@ PingFacts facts(std::optional<std::string> layer) {
 
 TEST(PingReportsTheCurrentLayer) {
 	ToolStatus status;
-	Json result = VwCli::core::ping(Json::object(), ToolContext{false}, facts("1F"), status);
+	Json result = VwCli::core::ping(Json::object(), ToolContext{false, {}}, facts("1F"), status);
 	CHECK(status.code == ErrorCode::None);
 	CHECK_EQ(result,
 	         must(pingText(R"("session":false,"document_open":true,"current_layer":"1F"})")));
@@ -41,7 +41,8 @@ TEST(PingReportsTheCurrentLayer) {
 
 TEST(PingWithoutADocumentHasNoLayer) {
 	ToolStatus status;
-	Json result = VwCli::core::ping(Json::object(), ToolContext{true}, facts(std::nullopt), status);
+	Json result =
+	    VwCli::core::ping(Json::object(), ToolContext{true, {}}, facts(std::nullopt), status);
 	CHECK(status.code == ErrorCode::None);
 	CHECK_EQ(result,
 	         must(pingText(R"("session":true,"document_open":false,"current_layer":null})")));
@@ -50,7 +51,7 @@ TEST(PingWithoutADocumentHasNoLayer) {
 // 名前の空のレイヤも図面が開いている（null ではなく空の文字列）。
 TEST(PingKeepsAnEmptyLayerName) {
 	ToolStatus status;
-	Json result = VwCli::core::ping(Json::object(), ToolContext{false}, facts(""), status);
+	Json result = VwCli::core::ping(Json::object(), ToolContext{false, {}}, facts(""), status);
 	REQUIRE(result.isObject());
 	CHECK_EQ(*result.find("document_open"), Json::boolean(true));
 	CHECK_EQ(*result.find("current_layer"), Json::string(""));
@@ -59,7 +60,7 @@ TEST(PingKeepsAnEmptyLayerName) {
 // 版の表示は書いた順に並ぶ（docs/plugin/tools.md「ping」の例と同じ順）。
 TEST(PingWritesTheFieldsInTheDocumentedOrder) {
 	ToolStatus status;
-	Json result = VwCli::core::ping(Json::object(), ToolContext{false}, facts("1F"), status);
+	Json result = VwCli::core::ping(Json::object(), ToolContext{false, {}}, facts("1F"), status);
 	CHECK_EQ(result.dump(),
 	         pingText(R"("session":false,"document_open":true,"current_layer":"1F"})"));
 }
@@ -67,7 +68,7 @@ TEST(PingWritesTheFieldsInTheDocumentedOrder) {
 TEST(PingRejectsUnknownArguments) {
 	ToolStatus status;
 	Json result =
-	    VwCli::core::ping(must(R"({"verbose":true})"), ToolContext{false}, facts("1F"), status);
+	    VwCli::core::ping(must(R"({"verbose":true})"), ToolContext{false, {}}, facts("1F"), status);
 	CHECK(status.code == ErrorCode::InvalidArgs);
 	CHECK(status.message.find("verbose") != std::string::npos);
 	CHECK(result.isNull());

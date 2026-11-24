@@ -14,7 +14,7 @@ Vectorworks ──読み込む──▶ cli.vwlibrary / cli.vlb     … 起動�
 | 入口 | 処理 |
 | --- | --- |
 | `plugin_module_main`（起動時） | VCOM の初期化・SDK のコールバックを記憶・**OS タイマーの開始**（拡張機能は登録しない） |
-| OS タイマー（250 ms ごと） | 受け付け 1 回（`core::Server::serve`）→ `quit` が頼まれていたら終了を頼む。最初の刻みで下の通知を登録する |
+| OS タイマー（250 ms ごと） | 受け付け 1 回（`core::Server::serve`）→ `quit` が頼まれていたら終了を頼む（手順は `core::tick`）。最初の刻みで下の通知を登録する（登録できなければ次の刻みでやり直す） |
 | 通知 `kNotifyBeforePendingUpdate`（Vectorworks のアイドルから） | 最初の 1 回で「起動を終えた」印を立てるだけ（以後は何もしない。ここから終了を頼まない）。`quit` はこの印が立つまで断る（[道具「quit」](tools.md#quit)。[SDK リファレンス #317](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/317)） |
 
 OS タイマーは起動時に開始し、最初の刻みから受け付けます。通知は `plugin_module_main` ではなく最初の刻みで登録します
@@ -166,7 +166,7 @@ src/
 ├─ ModuleMain.cpp                          … 入口: VCOM の初期化・タイマーの開始
 ├─ Clock.{h,cpp}                           … OS タイマー・終了の依頼
 ├─ Module-Info.plist.in                    … mac のバンドルの Info.plist（版の鍵を持たない）
-├─ core/                                   … SDK に依らない（Protocol・Json・Files・Bridge・Serve・Ping）。プラグインとテストがリンク
+├─ core/                                   … SDK に依らない（Protocol・Json・Files・Bridge・Serve・Lifecycle・Ping・Quit など）。プラグインとテストがリンク
 └─ tools/                                  … 道具の表（ToolTable.cpp）と中身（Ping.cpp など。SDK 依存。SDK に依らない部分は core へ）
 scripts/                                   … 整形と検査（format.sh・lint.sh・powershell.ps1）・CI（fetch-vw-sdk.sh・vw-sdk-cache-key.sh・dev-tag.sh）・get-vw（.sh / .ps1。初回のスクリプトの雛形。リリースが get-vw2026・get-vw2025 を作る。CLI を取って install を走らせるだけ）・hooks/（cli のフック。PATH。zip の直下に入る）
 resources/                                 … cli.vwr（拡張機能を登録しないので最小限。Strings/cli.vwstrings に使わない文字列 1 つだけ）

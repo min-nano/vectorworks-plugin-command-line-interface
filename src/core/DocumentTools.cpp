@@ -96,6 +96,18 @@ bool bringForward(Documents &docs, const Target &target, ToolStatus &status) {
 
 }
 
+bool clearClosedDocuments(Documents &docs) {
+	for (int cleared = 0;; ++cleared) {
+		if (!docs.list().empty() || !docs.hasActive()) {
+			return true;
+		}
+		if (cleared == kMaxClosedRemnants) {
+			return false;
+		}
+		docs.closeActive();
+	}
+}
+
 std::string documentName(std::string_view path) {
 	for (std::size_t at = path.size(); at > 0; --at) {
 		if (files::isSeparator(path[at - 1])) {
@@ -222,7 +234,15 @@ Json close(const Json &args, Documents &docs, ToolStatus &status) {
 			return Json();
 		}
 	}
-	return Json::object({{"closed", Json::boolean(true)}});
+	// 最後の図面を閉じたら、閉じた順のために中に残った図面を片付ける（残すと、利用者がメニューで
+	// 終了したときにも、見えない図面の保存の確認が出る）。片付かなくても、名指した図面は閉じたので
+	// 失敗にせず、結果に載せて呼ぶ側に知らせる（quit は終了を頼む前にもう一度片付け、片付かなければ
+	// 断る）。
+	Json result = Json::object({{"closed", Json::boolean(true)}});
+	if (after.empty() && !clearClosedDocuments(docs)) {
+		result.set(std::string(kClosedDocumentsRemainField), Json::boolean(true));
+	}
+	return result;
 }
 
 }

@@ -6,6 +6,8 @@
 #include "core/SaveTarget.h"
 #include "core/Serve.h"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -49,6 +51,10 @@ public:
 	std::int32_t closeAlsoDrops = -1;
 	// 保存のあと、前面の図面の項目を一覧から消す（読み直せない場合を真似る）。
 	bool saveLosesFront = false;
+	// 閉じた図面が中に残った枚数（一覧には出ず、GetActiveDocument だけが真を返す）。
+	int remnants = 0;
+	// 一覧が空のときの CloseDocument で、残った図面が消えない。
+	bool remnantsStick = false;
 
 	std::vector<OpenDocument> list() override {
 		calls.emplace_back("list");
@@ -88,6 +94,13 @@ public:
 		if (closeKeeps) {
 			return;
 		}
+		// 一覧が空なら、残った図面を 1 枚消す。
+		if (open.empty()) {
+			if (remnants > 0 && !remnantsStick) {
+				--remnants;
+			}
+			return;
+		}
 		for (std::size_t i = 0; i < open.size(); ++i) {
 			if (open[i].active) {
 				open.erase(open.begin() + static_cast<std::ptrdiff_t>(i));
@@ -100,6 +113,12 @@ public:
 		if (!open.empty()) {
 			open.back().active = true;
 		}
+	}
+	bool hasActive() override {
+		calls.emplace_back("active");
+		return remnants > 0 ||
+		       std::any_of(open.begin(), open.end(),
+		                   [](const OpenDocument &document) { return document.active; });
 	}
 };
 
@@ -572,6 +591,57 @@ TEST(CloseReportsADocumentThatStaysOpen) {
 	CHECK(status.code == ErrorCode::Internal);
 	CHECK_EQ(status.detail, must(R"({"reason":"not_closed"})"));
 	CHECK(docs.calls == calls({"list", "switch 22", "list", "close", "list", "switch 11"}));
+}
+
+// 最後の図面を閉じたら、閉じた順のために中に残った図面を、一覧が空であることを確かめながら 1 枚
+// ずつ消す（#321）。
+TEST(CloseClearsClosedDocumentsLeftInsideAfterTheLast) {
+	FakeDocuments docs;
+	docs.open = {{"/Users/me/plan.vwx", false, true, 11}};
+	docs.remnants = 2;
+	ToolStatus status;
+	Json result = VwCli::core::close(must(R"({"document":"/Users/me/plan.vwx"})"), docs, status);
+	CHECK(status.code == ErrorCode::None);
+	CHECK_EQ(result, must(R"({"closed":true})"));
+	CHECK_EQ(docs.remnants, 0);
+	CHECK(docs.calls == calls({"list", "close", "list", "list", "active", "close", "list", "active",
+	                           "close", "list", "active"}));
+}
+
+// 図面が開いている間は、残った図面を片付けない（CloseDocument が開いている図面を閉じてしまう）。
+TEST(CloseDoesNotClearWhileDocumentsAreOpen) {
+	FakeDocuments docs = sample();
+	docs.remnants = 1;
+	ToolStatus status;
+	VwCli::core::close(must(R"({"document":"/Users/me/plan.vwx"})"), docs, status);
+	CHECK(status.code == ErrorCode::None);
+	CHECK(docs.calls == calls({"list", "close", "list"}));
+	CHECK_EQ(docs.remnants, 1);
+}
+
+// 片付かなくても、名指した図面は閉じたので失敗にせず、結果に closed_documents_remain を載せる。
+// CloseDocument を呼ぶ回数には上限がある。
+TEST(CloseStopsClearingAtTheLimit) {
+	FakeDocuments docs;
+	docs.open = {{"/Users/me/plan.vwx", false, true, 11}};
+	docs.remnants = 1;
+	docs.remnantsStick = true;
+	ToolStatus status;
+	Json result = VwCli::core::close(must(R"({"document":"/Users/me/plan.vwx"})"), docs, status);
+	CHECK(status.code == ErrorCode::None);
+	CHECK_EQ(result, must(R"({"closed":true,"closed_documents_remain":true})"));
+	CHECK_EQ(std::count(docs.calls.begin(), docs.calls.end(), std::string("close")),
+	         std::ptrdiff_t{1 + VwCli::core::kMaxClosedRemnants});
+}
+
+TEST(ClearClosedDocumentsDoesNothingWithoutRemnants) {
+	FakeDocuments docs;
+	CHECK(VwCli::core::clearClosedDocuments(docs));
+	CHECK(docs.calls == calls({"list", "active"}));
+	FakeDocuments open = sample();
+	open.remnants = 1;
+	CHECK(VwCli::core::clearClosedDocuments(open));
+	CHECK(open.calls == calls({"list"}));
 }
 
 TEST(CloseRejectsBadArguments) {
