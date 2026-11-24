@@ -146,6 +146,8 @@ CLI のコマンド（例 `vw2026 dialog list` / `vw2026 dialog press`）は、�
 | Windows の Vectorworks 2026 で閉じた図面が残るか・取り消した後に閉じる形・確認で「保存」を押したときに書かれるもの・Windows での `GetActiveDocument` の値の直読み | [#323](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/323) | Windows（Vectorworks 2025）と同じ片付けを入れてある（残っていなければ何もしない。[道具「閉じた図面の片付け」](plugin/tools.md#閉じた図面の片付け)） |
 | Windows の古い版のファイルを開いた図面・メニューの操作の後の取り消し・2 つ目の Vectorworks が開いているファイル | [#291](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/291)（調べた環境で測れなかった） | `untitled` は SDK の答えのまま返す（[道具「図面を扱う道具」](plugin/tools.md#図面を扱う道具documentssaveclose)） |
 | 実務の図面（参照・レンダリングしたビューポートなど）の保存と「閉じる」の所要 | [#290](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/290)（合成の図面で測った） | 長くかかる前提で使う |
+| mac で、利用者がメニューの「終了」で終える途中に届く刻み | なし（このプラグインの実機の確認で、落ちずに終わることだけを見た） | タイマーを止めない（[構成「受け付けの流れ」](plugin/architecture.md#受け付けの流れ)） |
+| 別々のフォルダにある同じ名前の古い版のファイルを開いた 2 枚の図面のパスが重なること（読み取り専用のファイルを開いたコピーは重ならない） | なし（このプラグインの mac の実機の確認で見ただけ） | 重なった図面は `document_ambiguous` で断る（[道具「図面を扱う道具」](plugin/tools.md#図面を扱う道具documentssaveclose)） |
 | 整数でない縮尺のレイヤの `GetLayerScaleN` | なし | 実数として返す（[道具「layers」](plugin/tools.md#layers)） |
 | `save` の `to` の制御文字 | なし | 調べずに断る（[保存先の確かめ](plugin/save-target.md#to-の形)） |
 | mac で開いていられる図面の数 | なし | 上記 3 |

@@ -61,8 +61,9 @@ OS タイマー（刻み 1 回。core::tick）
   1〜数回届きますが、`GetOpenFilesList()`・`GetCurrentLayer()` などは落ちずに返ります。Windows では呼び出しの
   あとに刻みは来ません。利用者がメニューの「終了」で終える道でも、Windows は `kNotifyBeforeApplicationQuit` の
   あとに刻みが来ず（同 4 の 9。[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・
-  [#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)）、mac は落ちずに終わることを
-  このプラグインの実機の確認で見ました。
+  [#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)）。mac のこの道は SDK リファレンスでは
+  測っておらず、このプラグインの実機の確認で落ちずに終わることを見ただけです
+  （[SDK の調査「残っているもの」](../sdk-research.md#残っているもの)）。
 - **図面のハンドル（レイヤなど）は刻みをまたいで持ちません。** 刻みのたびに引き直します。
   閉じた文書のレイヤと、後で開いた別の文書のレイヤが同じアドレスで返ることがあり、持ち越すと
   別の文書を指しうるためです（同 4 の 8）。
