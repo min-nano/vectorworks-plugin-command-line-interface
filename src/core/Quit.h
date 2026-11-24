@@ -1,7 +1,9 @@
 #pragma once
 
 // 道具 quit のうち SDK に依らない部分（docs/plugin/tools.md「quit」）。引数の検査・確かめの順
-// （引数の形 → 起動を終えたか → 開いている図面）・失敗の detail の形をここに置き、開いている図面の
+// （引数の形 → 起動を終えたか → 開いている図面 → 中に残った閉じた図面の片付け（片付かなければ
+// closed_documents_remain。片付けのあとに図面が開いていれば documents_open））・失敗の detail の
+// 形をここに置き、開いている図面の
 // 一覧は Documents（src/tools/Documents.cpp が SDK で作る）から受けるので、無 SDK でテストできる。
 // 終了を頼むのは道具ではなく、受け付けの外のタイマー（core/Lifecycle.h の tick）。
 

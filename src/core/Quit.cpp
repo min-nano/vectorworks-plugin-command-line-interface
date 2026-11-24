@@ -7,6 +7,24 @@
 
 namespace VwCli::core {
 
+namespace {
+
+// refuseOpen は、図面が開いているときの失敗（internal。documents_open。detail に一覧をその順で）。
+void refuseOpen(const std::vector<OpenDocument> &open, ToolStatus &status) {
+	Json list = Json::array();
+	for (const OpenDocument &document : open) {
+		list.push(Json::object({{"name", Json::string(documentName(document.path))},
+		                        {"path", Json::string(document.path)},
+		                        {"untitled", Json::boolean(document.untitled)}}));
+	}
+	args::fail(status, ErrorCode::Internal,
+	           "図面が開いているので終了しませんでした。先に図面を閉じてください",
+	           Json::object({{"reason", Json::string(std::string(kDocumentsOpen))},
+	                         {"documents", std::move(list)}}));
+}
+
+}
+
 Json quit(const Json &args, const ToolContext &context, Documents &docs, ToolStatus &status) {
 	// 1. 引数の形。
 	args::Reader reader(args, kQuitSpec.name, status);
@@ -33,16 +51,7 @@ Json quit(const Json &args, const ToolContext &context, Documents &docs, ToolSta
 	// （終了で保存の確認を出さないため）。
 	std::vector<OpenDocument> open = docs.list();
 	if (!open.empty()) {
-		Json list = Json::array();
-		for (const OpenDocument &document : open) {
-			list.push(Json::object({{"name", Json::string(documentName(document.path))},
-			                        {"path", Json::string(document.path)},
-			                        {"untitled", Json::boolean(document.untitled)}}));
-		}
-		args::fail(status, ErrorCode::Internal,
-		           "図面が開いているので終了しませんでした。先に図面を閉じてください",
-		           Json::object({{"reason", Json::string(std::string(kDocumentsOpen))},
-		                         {"documents", std::move(list)}}));
+		refuseOpen(open, status);
 		return Json();
 	}
 	// 4. 閉じた図面が中に残っていれば片付ける。一覧が空でも、残った図面が「変更あり」なら終了で
@@ -55,6 +64,14 @@ Json quit(const Json &args, const ToolContext &context, Documents &docs, ToolSta
 		args::failWithReason(status, kClosedDocumentsRemain,
 		                     "閉じた図面が Vectorworks の中に残っていて片付けられなかったので"
 		                     "終了しませんでした");
+		return Json();
+	}
+	// 片付けは一覧が空でなくなると止まる（片付いたと返す）ので、片付けのあとにもう一度一覧を見る。
+	// 片付けの間に図面が開いていれば、上と同じく断る（確かめから頼むまでの窓を片付けの分だけ
+	// 広げない）。
+	open = docs.list();
+	if (!open.empty()) {
+		refuseOpen(open, status);
 		return Json();
 	}
 	// 終了を頼むのは、応答を書いてから受け付けの外で（Server が応答を書けたときだけ ServeResult

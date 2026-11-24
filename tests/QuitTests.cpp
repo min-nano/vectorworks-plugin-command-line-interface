@@ -50,6 +50,8 @@ public:
 	// ときの CloseDocument でそれが消えないか。
 	int remnants = 0;
 	bool remnantsStick = false;
+	// 片付けの CloseDocument の間に、この図面が開く（片付けの最中に図面が開くことを真似る）。
+	std::optional<OpenDocument> opensWhileClearing;
 
 	std::vector<OpenDocument> list() override {
 		++lists;
@@ -67,6 +69,10 @@ public:
 		others.emplace_back("close");
 		if (open.empty() && remnants > 0 && !remnantsStick) {
 			--remnants;
+		}
+		if (open.empty() && opensWhileClearing) {
+			open.push_back(*opensWhileClearing);
+			opensWhileClearing.reset();
 		}
 	}
 	bool hasActive() override { return remnants > 0 || !open.empty(); }
@@ -104,8 +110,8 @@ TEST(QuitQuitsWithoutDocuments) {
 	CHECK(status.code == ErrorCode::None);
 	CHECK(status.quit);
 	CHECK_EQ(result, must(R"({"quitting":true})"));
-	// 開いている図面を確かめる 1 回と、残った図面を片付ける前に確かめる 1 回。
-	CHECK_EQ(docs.lists, 2);
+	// 開いている図面を確かめる 1 回・残った図面を片付ける前に確かめる 1 回・片付けのあとの 1 回。
+	CHECK_EQ(docs.lists, 3);
 	CHECK(docs.others.empty());
 }
 
@@ -192,6 +198,23 @@ TEST(QuitRefusesWhenClosedDocumentsRemain) {
 	CHECK(result.isNull());
 	CHECK_EQ(status.detail, must(R"({"reason":"closed_documents_remain"})"));
 	CHECK_EQ(docs.others.size(), std::size_t(VwCli::core::kMaxClosedRemnants));
+}
+
+// 片付けの間に図面が開けば、終了を頼まずに documents_open で断る（片付けは一覧が空でなくなると
+// 止まって「片付いた」と返すので、そのあとにもう一度一覧を見る）。
+TEST(QuitRefusesADocumentOpenedWhileClearing) {
+	FakeDocuments docs;
+	docs.remnants = 2;
+	docs.opensWhileClearing = OpenDocument{"/Users/me/new.vwx", false, true, 44};
+	ToolStatus status;
+	Json result = VwCli::core::quit(Json::object(), started(), docs, status);
+	CHECK(status.code == ErrorCode::Internal);
+	CHECK(!status.quit);
+	CHECK(result.isNull());
+	CHECK_EQ(status.detail,
+	         must(R"({"reason":"documents_open","documents":[)"
+	              R"({"name":"new.vwx","path":"/Users/me/new.vwx","untitled":false}]})"));
+	CHECK_EQ(docs.others, (std::vector<std::string>{"close"}));
 }
 
 // 起動を終える前と、図面が開いている間は、残った図面に触れない。

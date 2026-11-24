@@ -308,7 +308,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
   | `documents[].name` | 図面の名前 |
   | `documents[].path` | 図面のパス（`documents` と同じ。`untitled` が真の図面は「アプリケーションのフォルダ＋名前」（「名称未設定 N」・「<元の名前> コピー 1」など）でファイルとしては存在しない） |
   | `documents[].untitled` | ディスクのファイルに結び付いていない図面か（`documents` の `untitled` と同じ） |
-- **一覧が空でも、`close` で閉じた図面が Vectorworks の中に残っていれば、終了を頼む前に片付けます**（mac。
+- **一覧が空でも、`close` で閉じた図面が Vectorworks の中に残っていれば、終了を頼む前に片付けます**（
   [Findings「閉じた図面が残り、終了で保存の確認が出る」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321323macwindows)。[SDK リファレンス #321](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/321)）。
   - `CloseDocument()` は、先に開いた図面を後に開いた図面が開いている間に閉じると、閉じた図面を中に残します（以下「残った
     図面」）。残った図面は `GetOpenFilesList` に出ず（`documents` も空）、一番上に残った図面が「変更あり」（無題なら変更が
@@ -316,7 +316,8 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
   - 一覧が空なのに `GetActiveDocument` が真なら残っています。`quit` は、一覧が空であることを回ごとに確かめながら
     `CloseDocument()` を呼び、`GetActiveDocument` が偽になるまで 1 枚ずつ消します（確認は出ない。残った図面は `close` が
     変更を捨てると指定されて閉じたものなので、変更を捨てる）。回数の上限（64 回）までに片付かなければ、終了を頼まずに
-    `internal` で失敗し、`detail` に `{"reason":"closed_documents_remain"}` を付けます。
+    `internal` で失敗し、`detail` に `{"reason":"closed_documents_remain"}` を付けます。片付けのあとにもう一度一覧を見て、
+    図面が開いていれば（片付けの間に開いたもの）、終了を頼まずに `documents_open` で断ります。
   - **`quit` の側の片付けは、`close` の側の片付け（[下記の `close`](#図面を扱う道具documentssaveclose)）が届かない道への
     備えです。** ほかのプラグインやスクリプトの `CloseDocument()` が最後の図面を閉じた・`close` の片付けが上限で止まった、
     などで図面が残っていれば、ここで片付けます。外すと、`quit` が `{"quitting":true}` を返したあとに見えない図面の保存の
@@ -673,7 +674,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       （失敗とは限らない）ので、`documents` で確かめます。
     - **Windows では呼び出しが数秒を超えると、Vectorworks が「応答なし」と表示されます。** 図面は壊れていないので、失敗と
       読みません。
-  - **最後の図面を閉じたら（閉じたあとの一覧が空なら）、中に残った図面を片付けます**（mac。
+  - **最後の図面を閉じたら（閉じたあとの一覧が空なら）、中に残った図面を片付けます**（
     [Findings「閉じた図面が残り、終了で保存の確認が出る」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321323macwindows)。[SDK リファレンス #321](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/321)）。
     `CloseDocument()` は、先に開いた図面を後に開いた図面が開いている間に閉じると、閉じた図面を中に残し、一覧が空になった
     あとの終了で、その図面の保存の確認を出します（`quit` だけでなく、利用者がメニューで終了したときも）。片付け方は
