@@ -309,7 +309,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
   | `documents[].path` | 図面のパス（`documents` と同じ。`untitled` が真の図面は「アプリケーションのフォルダ＋名前」（「名称未設定 N」・「<元の名前> コピー 1」など）でファイルとしては存在しない） |
   | `documents[].untitled` | ディスクのファイルに結び付いていない図面か（`documents` の `untitled` と同じ） |
 - **一覧が空でも、`close` で閉じた図面が Vectorworks の中に残っていれば、終了を頼む前に片付けます**（mac。
-  [Findings「閉じた図面が残り、終了で保存の確認が出る」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321macwindows-は未確認)。[SDK リファレンス #321](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/321)）。
+  [Findings「閉じた図面が残り、終了で保存の確認が出る」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321323macwindows)。[SDK リファレンス #321](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/321)）。
   - `CloseDocument()` は、先に開いた図面を後に開いた図面が開いている間に閉じると、閉じた図面を中に残します（以下「残った
     図面」）。残った図面は `GetOpenFilesList` に出ず（`documents` も空）、一番上に残った図面が「変更あり」（無題なら変更が
     無くても）なら、終了で保存の確認が出て、人が答えるまで止まりません。
@@ -321,10 +321,9 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
     備えです。** ほかのプラグインやスクリプトの `CloseDocument()` が最後の図面を閉じた・`close` の片付けが上限で止まった、
     などで図面が残っていれば、ここで片付けます。外すと、`quit` が `{"quitting":true}` を返したあとに見えない図面の保存の
     確認が出て、人が答えるまで Vectorworks が止まります。残った図面が無ければ `GetActiveDocument` を 1 回呼ぶだけです。
-    最後の図面を利用者が UI で閉じたときに残った図面が消えるかは、SDK リファレンスで確かめていません。
-  - **Windows も同じく片付けます**（利用者の判断。Windows の振る舞いは `Findings/` にまだ無い（[#323](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/323)）が、段 6 の
-    実機の確認で、Windows でも図面が残ることと、この片付けで確認が出なくなることを見て、待たずに入れた。
-    [SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)）。
+    最後の図面を利用者が UI で閉じると、残った図面も消えます（Windows（Vectorworks 2025）。mac は推定。[同じ節](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321323macwindows)）。
+  - **Windows も同じく片付けます**（Vectorworks 2025 の Windows でも図面が残り、この片付けで確認が出なくなる。
+    [同じ節](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321323macwindows)。Vectorworks 2026 の Windows は測っていない。[#323](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/323)）。
 - **図面が 0 枚（残った図面も無い）なら、保存の確認は出ません。** 応答を書いてから、受け付けの外で
   `gSDK->CloseAllFilesAndQuitVectorworks(true, false)` を頼みます（[構成「受け付けの流れ」](architecture.md#受け付けの流れ)）。
   第 1 引数は常に真です（`quit` は図面を保存するか捨てるかを決めない。決めるのは呼ぶ側で、`save`（新しいパスへ）・`close`（変更を捨てる）で先に片付ける）。確かめてから頼むまでの間に利用者が
@@ -675,7 +674,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     - **Windows では呼び出しが数秒を超えると、Vectorworks が「応答なし」と表示されます。** 図面は壊れていないので、失敗と
       読みません。
   - **最後の図面を閉じたら（閉じたあとの一覧が空なら）、中に残った図面を片付けます**（mac。
-    [Findings「閉じた図面が残り、終了で保存の確認が出る」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321macwindows-は未確認)。[SDK リファレンス #321](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/321)）。
+    [Findings「閉じた図面が残り、終了で保存の確認が出る」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321323macwindows)。[SDK リファレンス #321](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/321)）。
     `CloseDocument()` は、先に開いた図面を後に開いた図面が開いている間に閉じると、閉じた図面を中に残し、一覧が空になった
     あとの終了で、その図面の保存の確認を出します（`quit` だけでなく、利用者がメニューで終了したときも）。片付け方は
     [`quit`](#quit) と同じで、一覧が空であることを回ごとに確かめながら、`GetActiveDocument` が偽になるまで `CloseDocument()`
@@ -690,7 +689,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     - 閉じる順の工夫（後に開いたものから閉じる）では避けません。残るかを決める図面の並びは SDK から読めないためです。
     - **残った図面の状態で `SaveActiveDocumentPath` を呼ぶと Vectorworks が落ちます**（同じ節）。`save` は一覧が空なら
       `no_document` で断り、保存を呼ばないので当たりません。
-    - Windows も同じく片付けます（利用者の判断。[`quit`](#quit) の同じ項）。
+    - Windows も同じく片付けます（[`quit`](#quit) の同じ項）。
   - 閉じたあとに前面になるのは、最後に開いた図面です（mac も Windows も）。`close` の前の前面の図面が残っていれば、
     その `fileRef` へ `SwitchToOpenFile` で戻します（カレントレイヤも戻る。前面を閉じたときは戻せない。[Findings「Windows と、「閉じる」で確認が出る図面」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows-と閉じるで確認が出る図面305mac-も)）。
 - 図面を開く道具は[設計「決めたこと」](../design.md#決めたこと)の「対象の図面」にあります（未実装）。

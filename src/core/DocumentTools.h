@@ -35,7 +35,10 @@ inline constexpr ToolSpec kSaveSpec{
     ToolKind::App};
 
 inline constexpr ToolSpec kCloseSpec{
-    "close", "名指した図面を、保存の確認を出さずに閉じる（保存せず、未保存の変更は捨てる）",
+    "close",
+    "名指した図面を、保存の確認を出さずに閉じる（保存せず、未保存の変更は捨てる）。最後の図面を"
+    "閉じたら、Vectorworks の中に残った閉じた図面も片付ける（変更は捨てる）。片付けきれなければ、"
+    "成功のまま結果に closed_documents_remain:true を載せる",
     R"({"type":"object","properties":{)"
     R"("document":{"type":"string","description":"図面のパス（documents の path）"}},)"
     R"("required":["document"],"additionalProperties":false})",
