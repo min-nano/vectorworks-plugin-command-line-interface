@@ -1,6 +1,6 @@
 #pragma once
 
-// save の保存先（to）の確かめ（docs/plugin/tools.md「図面を扱う道具」の save）。SDK に依らない。
+// save の保存先（to）の確かめ（docs/plugin/save-target.md）。SDK に依らない。
 //
 //   - to の形の規則は mac と Windows の 2 つの関数にし、どちらもどの OS でもビルドする（文字列の
 //     処理だけで OS の呼び出しを使わない）。プラグインが使う規則は kNativeForm（_WIN32 で選ぶのは

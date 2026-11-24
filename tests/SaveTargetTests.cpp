@@ -25,7 +25,7 @@
 #include <cstdlib>
 #endif
 
-// save の保存先の確かめ（docs/plugin/tools.md「図面を扱う道具」の save）。to の形の規則は mac と
+// save の保存先の確かめ（docs/plugin/save-target.md）。to の形の規則は mac と
 // Windows の両方を、どの OS でも名指しして呼ぶ。ファイルシステムに聞く関数は、この OS
 // の本物を呼ぶ。
 

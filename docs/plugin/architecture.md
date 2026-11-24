@@ -17,6 +17,8 @@ Vectorworks ──読み込む──▶ cli.vwlibrary / cli.vlb     … 起動�
 | OS タイマー（250 ms ごと） | 受け付け 1 回（`core::Server::serve`）→ `quit` が頼まれていたら終了を頼む（手順は `core::tick`）。最初の刻みで下の通知を登録する（登録できなければ次の刻みでやり直す） |
 | 通知 `kNotifyBeforePendingUpdate`（Vectorworks のアイドルから） | 最初の 1 回で「起動を終えた」印を立てるだけ（以後は何もしない。ここから終了を頼まない）。`quit` はこの印が立つまで断る（[道具「quit」](tools.md#quit)。[SDK リファレンス #317](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/317)） |
 
+**受け付けは OS タイマーが 1 回ずつ呼びます。** ISDK に周期的に呼ばれる口は無く、OS のタイマーからは `gSDK` を
+読み書きできます（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 1・4）。
 OS タイマーは起動時に開始し、最初の刻みから受け付けます。通知は `plugin_module_main` ではなく最初の刻みで登録します
 （Windows の Vectorworks は起動時にモジュールを一度降ろして読み込み直すので、留める前の `plugin_module_main` で渡した
 関数の番地は残らない。刻みはモジュールを留めてから作ったタイマーから来る。下記「Windows ではタイマーを作る前にモジュールを
@@ -25,21 +27,15 @@ OS タイマーは起動時に開始し、最初の刻みから受け付けま�
 ## 受け付けの流れ
 
 ```
-OS タイマー
+OS タイマー（刻み 1 回。core::tick）
   ├─ gSDK が無い → 何もしない
-  └─ core::Server::serve（受け付け 1 回。終了の依頼の最中なら Quitting、ほかは Idle を渡す）
-        ├─ 受け付けの入れ子（serve の途中にまた呼ばれた）→ 取り出せる要求をすべて busy で断って戻る
-        ├─ ロックを掴んでいない → 取ってみる。取れなければ何もしない（次の回に取り直す）
-        │                         取れたら前の回の残骸を消す
-        ├─ 要求を名前の昇順で読んで消す（回の始めに並べたものだけ。読めない・消せないものは飛ばす）
-        ├─ 呼ぶ側の待つ印（<id>.wait）を掴めたら、待つ者が居ないので実行しない
-        ├─ 種類 write・app と session_end は占有に照らす（tools・種類 read は誰にでも）
-        ├─ 表に無い道具は unknown_tool で応える（終了の依頼の最中も）
-        ├─ 終了の依頼の最中（Quitting）なら、表の道具を busy で断る（tools・session_start・session_end は応える）
-        └─ 道具を実行して応答を書く（quit は GetOpenFilesList で開いている図面を調べ、あれば
-           detail に一覧を付けて失敗で応える。無ければ応答を書いてから、終了の依頼を返す）
-     quit が頼まれていたら、終了の依頼の最中の印を立てて CloseAllFilesAndQuitVectorworks。戻ったら下ろす
+  ├─ core::Server::serve（受け付け 1 回。終了の依頼の最中なら Quitting、ほかは Idle を渡す）
+  │     回の始めに並べた要求を取り出し、道具を実行して応答を書く
+  └─ quit が終了を頼んでいたら、終了の依頼の最中の印を立てて CloseAllFilesAndQuitVectorworks。戻ったら下ろす
 ```
+
+`serve` の中の手順（ロック・取り出し・待つ印・占有・処理中の判定・道具の実行）は
+[ブリッジ「受け付け 1 回」](bridge.md#受け付け-1-回coreserverserve)にあります。
 
 - **SDK 呼び出しはメインスレッドからだけ**行います。受け付け用のスレッドは持ちません。
 - **受け付けの中で非同期の処理の完了を待ちません。** 同期の呼び出しが長くかかる道具は持ちます
@@ -61,6 +57,12 @@ OS タイマー
   の「【罠】Windows の VW は起動時にモジュールを一度降ろして読み込み直す」）。
 - **間隔は保証されません**（250 ms で登録しても、最大 3〜5 秒空く。同 4 の 2）。刻みの間隔に
   頼る処理（時間の計測など）は持たず、時刻は時計から読みます。
+- **終了の途中もタイマーは止めません。** 刻みから終了を頼んだあと、mac では呼び出しが戻ったあとに刻みが
+  1〜数回届きますが、`GetOpenFilesList()`・`GetCurrentLayer()` などは落ちずに返ります。Windows では呼び出しの
+  あとに刻みは来ません。利用者がメニューの「終了」で終える道でも、Windows は `kNotifyBeforeApplicationQuit` の
+  あとに刻みが来ず（同 4 の 9。[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・
+  [#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)）、mac は落ちずに終わることを
+  このプラグインの実機の確認で見ました。
 - **図面のハンドル（レイヤなど）は刻みをまたいで持ちません。** 刻みのたびに引き直します。
   閉じた文書のレイヤと、後で開いた別の文書のレイヤが同じアドレスで返ることがあり、持ち越すと
   別の文書を指しうるためです（同 4 の 8）。
@@ -82,44 +84,37 @@ OS タイマー
 
 ## Vectorworks が処理中
 
-次の間は、要求を `busy` で断ります（呼ぶ側から見た扱いは[通信規則「Vectorworks が処理中」](../protocol.md#vectorworks-が処理中)）。
+次の間は、要求を `busy` で断ります。**断る要求の範囲とその理由（呼ぶ側から見た規則）は
+[通信規則「Vectorworks が処理中」](../protocol.md#vectorworks-が処理中)が真実で、ここは判定の置き場所と SDK の側の根拠です。**
 
-| 場面 | 判定 | 断る要求 | 理由 |
-| --- | --- | --- | --- |
-| 終了の依頼の最中 | `CloseAllFilesAndQuitVectorworks` の前後で印を立てて下ろし、その間の刻みで `core::Server::serve` に `Quitting` を渡す（印の立て下ろしは `src/core` に置き、`Clock` は SDK を呼ぶだけ。Windows は保存の確認の間も刻む。mac は呼んだタイマーが確認の間は刻まないので、この判定が効くのは Windows だけ） | 道具の表の道具すべて（種類 `read`・`ping` も。SDK を呼ばない `tools`・`session_start`・`session_end` は応え、表に無い道具は `unknown_tool`） | 終了の呼び出しの途中で道具が SDK を呼ばない（保存しようとしている図面を読み書きしない）。終了の依頼を重ねない |
-| 受け付けの入れ子 | `core::Server` が `serve` の途中かを持つ | すべて | 外の回の状態（並べた要求・占有の印）を取り合わない。道具の SDK 呼び出しの途中で SDK を呼ばない |
+| 場面 | 判定 |
+| --- | --- |
+| 終了の依頼の最中 | `CloseAllFilesAndQuitVectorworks` の前後で印を立てて下ろし、その間の刻みで `core::Server::serve` に `Quitting` を渡す（印は `src/core` の `core::Lifecycle` が持ち、`Clock` は SDK を呼ぶだけ。[ブリッジ「分け方」](bridge.md#分け方)） |
+| 受け付けの入れ子 | `core::Server` が `serve` の途中かを持つ |
 
 - **受け付けの入れ子**は、道具の SDK 呼び出しが中でイベントを回したとき（モーダルダイアログ・進捗の
   `DoYield` など）に、そのループの中で次の刻みが届いて起きます（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4）。
-  入れ子の回は要求を解析せずに断ります。外の回がすでに並べていた要求も断り、外の回はそれを取り出せずに
-  飛ばします。段 5 の `close` は保存の確認を出さないので回しません（mac も Windows も、どの図面でも。
-  [SDK リファレンス #305](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/305)）
-  （[道具「図面を扱う道具」](tools.md#図面を扱う道具documentssaveclose)）。`save` は、保存先が別の図面で開いている
-  ファイルなら警告のダイアログでイベントを回しますが、そのときは呼ぶ前に断ります。ただし、保存先のフォルダに
-  `VW Backup` を作れないときの警告は前もって断らないので、`save` もイベントを回しえます（Windows では受け付けが入れ子になる。
-  [道具「`save`」](tools.md#図面を扱う道具documentssaveclose)）。
+  `close` は保存の確認を出さないので回しません。`save` は、保存先のフォルダに `VW Backup` を作れないときの警告で
+  回しえます（[道具「図面を扱う道具」](tools.md#図面を扱う道具documentssaveclose)）。ダイアログの出ない保存と
+  閉じるは、大きな図面でも最中にイベントを回しません
+  （[SDK リファレンス #290](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/290)）。
 - **このプラグインのタイマーは 1 本なので、受け付けの入れ子が起きるのは Windows だけです。** Windows はダイアログの
   メッセージループが `WM_TIMER` を配り、呼んだタイマー自身が入り直します。mac の `CFRunLoopTimer` は自分の処理の
   最中に同じタイマーを呼ばないので、道具の中のダイアログの間は刻まず、要求は応えられずにスプールに残ります
-  （同 4 の 9。呼ぶ側から見た扱いは[通信規則「生存の判定」](../protocol.md#生存の判定)）。ダイアログの出ない保存と
-  閉じるは、大きな図面でも最中にイベントを回さないので、Windows でも入れ子になりません
-  （[SDK リファレンス #290](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/290)）。
+  （同 4 の 9）。
 - **終了の依頼の最中の判定は、Findings が勧める「終了の呼び出しの最中」の旗に当たります。** 保存の確認の中で 2 つ目の
   `CloseAllFilesAndQuitVectorworks` を呼ぶと確認が重なって出て、Windows では呼んだタイマー自身が確認の最中に
-  入り直すと分かりました（[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)。[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9）。
-  Windows では入り直した刻みから 2 つ目を呼べてしまうので、判定をやめる道は採れません。
-  印は**呼び出しが戻ったら下ろします**。戻り値が無く、取り消されたか（Vectorworks が動き続けるか）を見分けられないので、
-  下ろさないと取り消したあとも断り続けるためです。mac では終わっていく途中にも刻みが届きますが、そこから 2 度目を
-  呼んでも何も起きないと分かっています（[SDK リファレンス #313](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/313)。
-  Windows は終わっていく回は戻ったあとに刻みが来ない）。
-- **終了の依頼の最中は、道具の表の道具をすべて断ります**（種類 `read`・`ping` も。表に無い道具は SDK を呼ばないので
-  ふだんどおり `unknown_tool` で応え、綴りの誤りを呼び直せば通るかのような `busy` で返さない）。終了の依頼は `serve` の外（タイマーが `serve` から戻ったあと）で行うので、保存の確認の間に入り直した
-  刻み（Windows）は受け付けの入れ子にはなりません。それでも `CloseAllFilesAndQuitVectorworks` という SDK 呼び出しの
-  途中なので、受け付けの入れ子と同じく道具に SDK を呼ばせません（確認の最中に読めると確かめてあるのは
-  `GetCurrentLayer()`・`GetOpenFilesList()` などに限られ、閉じようとしている図面を辿る読み方は測っていない）。
-  SDK を呼ばない 3 つの道具（`tools`・`session_start`・`session_end`）は応え、呼ぶ側が占有を解けるようにします（入れ子の回のように要求を
-  解析せずにすべて断ると、`session_end` も断られ、占有が起動し直すまで残る）。mac は確認の間は刻まないので、
-  何も応えません（[設計のレビュー A4](../design-review.md#a4-終了の依頼の最中に受け付けが入れ子になりうる)）。
+  入り直すと分かりました（[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)。同 4 の 9）。
+  Windows では入り直した刻みから 2 つ目を呼べてしまうので、判定をやめる道は採れません。mac は呼んだタイマーが
+  確認の間は刻まないので、この判定が効くのは Windows だけです（mac は確認の間、何も応えない）。
+  - 印は**呼び出しが戻ったら下ろします**。戻り値が無く、取り消されたか（Vectorworks が動き続けるか）を見分けられないので、
+    下ろさないと取り消したあとも断り続けるためです。mac では終わっていく途中にも刻みが届きますが、そこから 2 度目を
+    呼んでも何も起きないと分かっています（[SDK リファレンス #313](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/313)。
+    Windows は終わっていく回は戻ったあとに刻みが来ない）。
+  - 終了の依頼は `serve` の外（タイマーが `serve` から戻ったあと）で行うので、保存の確認の間に入り直した刻み（Windows）は
+    受け付けの入れ子にはなりません。それでも `CloseAllFilesAndQuitVectorworks` という SDK 呼び出しの途中なので、
+    受け付けの入れ子と同じく道具に SDK を呼ばせません（確認の最中に読めると確かめてあるのは
+    `GetCurrentLayer()`・`GetOpenFilesList()` などに限られ、閉じようとしている図面を辿る読み方は測っていない）。
 - **undo の記録が開いているかは見ません。** 刻みの中から記録が開いて見えた実測は、どれもプラグイン
   自身の呼び出しが開いて閉じずに戻した記録でした（Findings の 6 はプローブの `DeleteObject` が開いた
   記録、[Undo](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md) の PIO・`CreateLocus`・スクリプトエンジンもプローブが呼んだもの）。
@@ -134,7 +129,7 @@ OS タイマー
 （[インストール](install-and-update.md#インストールと更新vw2026-install)）ので、利用者の入口は要りません。
 
 - **拡張機能を 1 つも登録しなくても、Vectorworks は読み込み、`plugin_module_main` を呼びます**
-  （段 2 の実機確認。VW 2026。macOS も Windows も、起動の直後から `vw2026 status` が
+  （実機で確かめた。VW 2026。macOS も Windows も、起動の直後から `vw2026 status` が
   `running:true` になり `call ping` が応えた。Windows はタイマーの前にモジュールを留めた版で）。
 - **最初の起動で利用者の許可が要ることがあります（mac も Windows も）。** Vectorworks は開発元の
   分からないプラグインを既定では読み込まず、有効化の記録が無いときは、起動の途中で
@@ -143,7 +138,7 @@ OS タイマー
   更新では許可は要りません。ただし記録はダイアログを閉じるたびにそのとき居たプラグインだけで
   書き直されるので、`cli` が居ない状態で Vectorworks を起動してダイアログを閉じると、同じパスでも
   もう一度要ります
-  （[SDK の調査 0](../sdk-research.md#0-拡張機能を-1-つも登録しないプラグインの読み込み)）。
+  （[SDK の調査 0](../sdk-research.md#0-拡張機能を-1-つも登録しないプラグインの読み込み分かった)）。
 - **全部のプラグインが有効でも、ダイアログは約 24 時間おきに出ます。プラグインと CLI は、そのダイアログを
   勝手に閉じず、日時の書き換えで出なくすることもしません。** 呼ぶ側がダイアログのコマンド（未実装。
   [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302)）で押すことはできますが、「無効にする」を押すと次の起動から `cli` 自身が外れうるので、

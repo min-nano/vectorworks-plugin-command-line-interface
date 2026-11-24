@@ -11,7 +11,7 @@
 #include <system_error>
 
 // 整数の引数を値で読む口（Json::integerValue）と、道具の結果の実数を書き出す口（Json::real）。
-// 決まりは docs/plugin/tools.md「最初に提供する道具」の冒頭。
+// 決まりは docs/plugin/tools.md「共通の決まり」。
 
 using VwCli::core::IntegerCheck;
 using VwCli::core::IntegerValue;

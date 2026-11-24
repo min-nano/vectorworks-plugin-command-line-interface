@@ -1,6 +1,6 @@
 # ビルドとリリース
 
-1 から書きます。SDK のリンクとバンドルの形は、SDK リファレンスの実機確認プラグイン（[`plugin/`](https://github.com/min-nano/vectorworks-developer-sdk-reference/tree/main/plugin)）の `CMakeLists.txt` で実機に読み込まれている形を見本にします（[プラグインの設計「根拠」](README.md#根拠)）。
+SDK のリンクとバンドルの形は、SDK リファレンスの実機確認プラグイン（[`plugin/`](https://github.com/min-nano/vectorworks-developer-sdk-reference/tree/main/plugin)）の `CMakeLists.txt` で実機に読み込まれている形を見本にします（[プラグインの設計「根拠」](README.md#根拠)）。
 
 ## CMake
 
@@ -10,11 +10,11 @@
 | 選択肢 | `VW_BUILD_PLUGIN`（ON）・`VW_BUILD_TESTS`（OFF）・`VW_BUILD_FUZZERS`（OFF。clang の libFuzzer が要る）・`VW_ENABLE_SANITIZERS`（OFF。ASan と UBSan。MSVC は ASan だけ）・`VW_ENABLE_COVERAGE`（OFF。clang は source-based coverage、MSVC は `/PROFILE` を付けてリンクし Visual Studio の `Microsoft.CodeCoverage.Console` で測る。clang-cl は不可）・`VW_ENABLE_PCH`（ON）。`VW_BUILD_PLUGIN` が ON で `VW_SDK_DIR` が無ければ構成で止める（黙ってプラグインを外さない）。SDK の無いところ（テスト・検査・ファジング。ubuntu を含む）は `-DVW_BUILD_PLUGIN=OFF` を付ける |
 | SDK | `VW_SDK_DIR`（`SDKLib` を含む）。mac は `libVWSDK.a`＋VWMM・`BuildVWR`、Windows は x64 だけ（`VWSDK.lib`・`VWMM.lib`・`buildvwr.exe`）。どれかが無ければ構成で止める。配るプラグイン（CI）は Release でビルドする（`RELEASE_BLD`。Windows は `/MD`。SDK の Release のライブラリに合わせる。どちらも構成によらず付くので、[手元のビルド](#手元のビルド)の `RelWithDebInfo` でも SDK とずれない） |
 | 警告 | `/W4 /permissive-`・`-Wall -Wextra -Wpedantic` は SDK に依らないターゲット（共通部・テスト・ファジング）にだけ付ける。SDK のヘッダは `SYSTEM` で読み、`/permissive-` を通る保証が無いのでプラグインには付けない |
-| 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。プラグインとテストがリンク。OS ごとの呼び出しは `FilesPosix.cpp` / `FilesWindows.cpp` の片方と、段 5 から、保存先をファイルシステムに聞く包みの `SaveTargetPosix.cpp` / `SaveTargetWindows.cpp` の片方、Windows だけの `WindowsPath.cpp`（スプールと保存先の確かめが共有する `extended()`）、パスを比べる包みの `PathCompareMac.cpp`（`-framework CoreFoundation` をリンク）/ `PathCompareWindows.cpp`（`Normaliz.lib` をリンク）の片方。Linux ではパスを比べる包みを持たない） |
+| 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。プラグインとテストがリンク。OS ごとの呼び出しは `FilesPosix.cpp` / `FilesWindows.cpp` の片方と、保存先をファイルシステムに聞く包みの `SaveTargetPosix.cpp` / `SaveTargetWindows.cpp` の片方、Windows だけの `WindowsPath.cpp`（スプールと保存先の確かめが共有する `extended()`）、パスを比べる包みの `PathCompareMac.cpp`（`-framework CoreFoundation` をリンク）/ `PathCompareWindows.cpp`（`Normaliz.lib` をリンク）の片方。Linux ではパスを比べる包みを持たない。[保存先の確かめ「実装とテストの分け方」](save-target.md#実装とテストの分け方)） |
 | テスト | `VwCliTests`（`tests/*Tests.cpp`。外部のテストの枠組みに依らない）・`JsonFuzzer`（`tests/JsonFuzzer.cpp`）。テストは `protocol/fixtures` を読む |
 | プラグイン | `add_library(<target> MODULE)`。`VW_PLUGIN_SOURCES`（`src/*.cpp`・`src/tools/*`） |
 | 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH`。PR では、ブランチの head の sha とブランチの名前（[リリースの形](#リリースの形)）。CI では `meta` が決め、ビルドのジョブがその出力を `-D` で渡す。CMake は構成のたびに `<build>/generated/BuildStamp.h` へ C の文字列として書き（`"` と `\` を逃がす）、値をキャッシュに残さない（`-D` を付けずに構成し直せば `local` に戻る。古い sha が残らないように）。`ping` の結果に載る。ファイルとしての版の情報は `build.json` だけ（下記） |
-| mac | `Module-Info.plist.in`（版の鍵は持たない）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr`。arm64 だけ（`CMAKE_OSX_ARCHITECTURES`。SDK リファレンスの `plugin/` が実機で読み込まれている形）。配備の下限は macOS 14。ソースは Objective-C++ としてコンパイルする（SDK の mac のヘッダが CoreFoundation などを読むため） |
+| mac | `Module-Info.plist.in`（版の鍵は持たない）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr`。arm64 だけ（`CMAKE_OSX_ARCHITECTURES`。SDK リファレンスの `plugin/` が実機で読み込まれている形に合わせ、確かめていない形を配らない。CLI は universal。Intel の mac（`macos-x64`）は、実機で確かめる環境が無いので対応を見送る）。配備の下限は macOS 14。ソースは Objective-C++ としてコンパイルする（SDK の mac のヘッダが CoreFoundation などを読むため） |
 | Windows | `.vlb`・隣に `.vwr` |
 | ターゲット | `add_vw_plugin(VwCli "cli" io.github.min-nano.cli)` の 1 つだけ（安定版と開発版を区別しない） |
 
@@ -63,9 +63,7 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
   渡したいときも `"VW_SDK_DIR": "$env{VW_SDK_DIR}"` と `cacheVariables` に書きます。
 - `jobs` はマシンに合わせます（目安はコア数）。
 - プリセットはスキーマの `version: 2` なので、CMake 3.20 で足ります。
-- **Vectorworks 2025 のプラグインは手元でビルドしません。** CI の `build-mac-vw2025`・`build-windows-vw2025` だけで
-  ビルドします。手元の Command Line Tools（Apple clang 19 以降）では 2025 の SDK のヘッダで止まります
-  （[版「ビルド」](editions.md#ビルド)）。
+- **Vectorworks 2025 のプラグインは手元でビルドしません**（理由は[版「ビルド」](editions.md#ビルド)）。
 
 ## CI
 
@@ -73,23 +71,23 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
 | --- | --- | --- |
 | `go.yml`（既存） | push / PR・マージキュー | Go のテスト（macOS・Windows）と、配る 3 つのターゲットへのビルドの確かめ（出力は上げない）。テストとビルドは 2026 と 2025（`-tags vw2025`。[版](editions.md)）の両方で行う。両方の OS・両方の版のカバレッジを Codecov へ送る（どれもフラグ `go`）。ubuntu で `spool.NestingDepth` のファジングを 2 つの対象で 30 秒ずつ回す |
 | `format.yml`（既存） | push / PR・マージキュー | `scripts/format.sh`（[整形](../format.md)。gofmt・shfmt・clang-format・PSScriptAnalyzer） |
-| `cpp.yml` | push / PR・マージキュー | 無 SDK の単体テストと通信規則の見本の照合（macOS は ASan・UBSan 付き、Windows は MSVC で付けない）。macOS（clang の source-based coverage）と Windows（MSVC のビルドを `Microsoft.CodeCoverage.Console` で）の単体テストでカバレッジを測り、共通部（`src/core`）の分を Codecov へ送る（どちらもフラグ `cpp`。`FilesWindows.cpp` は Windows の分にだけ入る。段 5 から足すパスを比べる包みも、`PathCompareMac.cpp` は macOS の分に、`PathCompareWindows.cpp` は Windows の分にだけ入る（どちらも `VwCliTests` の中で走るので、いまの測り方のままでよい）。Windows の範囲は `tests/MsvcCoverage.xml`。Windows はテストを計測の下で 1 回だけ走らせる）。ubuntu の clang で同じテストを ASan・UBSan 付きで走らせ（ただし `save` の `to` を開いている図面と比べる OS の呼び出しの包み（`PathCompareMac.cpp`・`PathCompareWindows.cpp`）は mac と Windows でだけビルドし、そのテストは Linux では中身の無い翻訳単位になる。[道具「パスの一致の判定」](tools.md#図面を扱う道具documentssaveclose)）、`core/Json` のファジングを 120 秒回す |
+| `cpp.yml` | push / PR・マージキュー | 無 SDK の単体テストと通信規則の見本の照合（macOS は ASan・UBSan 付き、Windows は MSVC で付けない）。macOS（clang の source-based coverage）と Windows（MSVC のビルドを `Microsoft.CodeCoverage.Console` で）の単体テストでカバレッジを測り、共通部（`src/core`）の分を Codecov へ送る（どちらもフラグ `cpp`。`FilesWindows.cpp` は Windows の分にだけ入る。パスを比べる包みも、`PathCompareMac.cpp` は macOS の分に、`PathCompareWindows.cpp` は Windows の分にだけ入る（どちらも `VwCliTests` の中で走るので、いまの測り方のままでよい）。Windows の範囲は `tests/MsvcCoverage.xml`。Windows はテストを計測の下で 1 回だけ走らせる）。ubuntu の clang で同じテストを ASan・UBSan 付きで走らせ（ただし `save` の `to` を開いている図面と比べる OS の呼び出しの包み（`PathCompareMac.cpp`・`PathCompareWindows.cpp`）は mac と Windows でだけビルドし、そのテストは Linux では中身の無い翻訳単位になる。[道具「パスの一致の判定」](tools.md#図面を扱う道具documentssaveclose)）、`core/Json` のファジングを 120 秒回す |
 | `lint.yml`（既存） | push / PR・マージキュー | `scripts/lint.sh`（[検査](../lint.md)。go vet・actionlint・shellcheck・clang-tidy（無 SDK）・PSScriptAnalyzer） |
 | `build.yml` | push（main）/ PR・マージキュー / 手動 | mac と Windows のビルド・梱包・リリースと、公開した資産の確かめ（下記） |
 | `hooks.yml` | push / PR・マージキュー | `cli` のフック（`scripts/hooks/`）のテスト。macOS で `tests/hooks/hooks_test.sh`（`sh`）、Windows で `tests/hooks/Hooks.Tests.ps1`（Pester。版は `scripts/powershell.ps1` の `$pesterVersion` で、`-Mode Install` が入れ、`-Mode Test` が走らせる。Windows PowerShell 5.1）を走らせる（[インストール「テスト」](install-and-update.md#テスト)） |
-| `cleanup-dev-release.yml` | PR が閉じたとき | その PR のプレリリース（`dev-<slug>-<PR 番号>-<短い sha>`。タグの末尾の `-<PR 番号>-<短い sha>` で見分ける。ブランチの名前が変わって slug が違うものも含む。段 3b より前の形 `dev-<slug>-<PR 番号>` のものも、その頃から開いている PR のために当てる）をリリースとタグごとすべて消す。**その PR の下書きのリリースも、タグ名で見分けて消す**（push で止められた `release` の下書きは、まだタグが無いので、タグで探すだけでは漏れる）。`build.yml` と同じ `concurrency` のグループ（`build-<PR 番号>`。両方に同じ式を書く）で走り、その PR の走っているビルドを止めてから消す（消したあとに公開されないため）。グループは `github.ref` ではなく PR 番号で組む（マージで閉じた PR では `github.ref` が `refs/heads/main` になり、main の push のビルドを止めて main のリリースが作られないため）。`build.yml` は開き直し（`reopened`）では走っている片付けを止めずに待つ（途中で止めるとタグや消しかけのリリースが残るため） |
+| `cleanup-dev-release.yml` | PR が閉じたとき | その PR のプレリリース（`dev-<slug>-<PR 番号>-<短い sha>`。タグの末尾の `-<PR 番号>-<短い sha>` で見分ける。ブランチの名前が変わって slug が違うものも含む。短い sha の無い以前の形 `dev-<slug>-<PR 番号>` にも当たる）をリリースとタグごとすべて消す。**その PR の下書きのリリースも、タグ名で見分けて消す**（push で止められた `release` の下書きは、まだタグが無いので、タグで探すだけでは漏れる）。`build.yml` と同じ `concurrency` のグループ（`build-<PR 番号>`。両方に同じ式を書く）で走り、その PR の走っているビルドを止めてから消す（消したあとに公開されないため）。グループは `github.ref` ではなく PR 番号で組む（マージで閉じた PR では `github.ref` が `refs/heads/main` になり、main の push のビルドを止めて main のリリースが作られないため）。`build.yml` は開き直し（`reopened`）では走っている片付けを止めずに待つ（途中で止めるとタグや消しかけのリリースが残るため） |
 
 `build.yml` のジョブ:
 
 | ジョブ | 中身 |
 | --- | --- |
 | `meta` | ビルドする sha・刻印・公開先のタグ（`0.0.0-<短い sha>` / `dev-<slug>-<PR 番号>-<短い sha>` / 公開しない）を決め、`build.json` を書く（mac と Windows の zip に同じものを入れる）。ビルドのジョブは取り出すコミットを `meta` の出力に頼らず、同じ条件（同じリポジトリの PR だけ head）を自分の `checkout` に書き、取り出したものが `meta` の sha と同じかを確かめる（CodeQL が信頼できないコードの取り出しでないと読めるように。`meta` を変えても取り出すものが変わらないように） |
-| `build-mac` | `macos-15`・Xcode 16.2（SDK リファレンスの `plugin/` と同じ）。プラグインのビルドとアドホック署名、Go の arm64 と amd64 を `lipo` で universal に、zip。版の行列で走り、2026 は `build-mac`、2025 は `build-mac-vw2025`（2025 の SDK と `-tags vw2025`。[版「ビルド」](editions.md#ビルド)） |
-| `build-windows` | `windows-latest`・MSVC。プラグインのビルド、Go の amd64、zip（.NET の `ZipFile`。項目の名前の区切りを `/` にするため。Windows PowerShell 5.1 の `Compress-Archive` は `\` にする）。版の行列で走り、2026 は `build-windows`、2025 は `build-windows-vw2025` |
-| `release` | 公開するときだけ。版ごとに 2 つの zip の sha256 を求めてマニフェスト（`vw2026.json`・`vw2025.json`。[レジストリ「マニフェスト」](../registry.md#マニフェストvw2026json)）を書き、**下書きのリリース**を作って、zip・マニフェスト・初回のスクリプトを上げ終えてから公開する（下書きは利用者の URL から見えないので、資産が揃わない間を見せない。`latest` は公開した時点で進む）。**そのタグの公開済みのリリースが既にあれば、タグが指すコミットが今回の完全な sha と同じなら何もせず（同じ sha の実行し直し。タグを使い回さない）、違えば失敗にする**（短い sha が重なった。[リリースの形](#リリースの形)）。下書きのまま残ったもの（前の実行が途中で止まった）は消して作り直す。PR では、同じ PR の別のタグの下書き（push で止められた前の実行のもの）も消す |
+| `build-mac` | `macos-15`・Xcode 16.2（SDK リファレンスの `plugin/` と同じ）。プラグインのビルドとアドホック署名、Go の arm64 と amd64 を `lipo` で universal に、zip。版の行列で走る（ジョブの名前と版ごとの違いは[版「ビルド」](editions.md#ビルド)） |
+| `build-windows` | `windows-latest`・MSVC。プラグインのビルド、Go の amd64、zip（.NET の `ZipFile`。項目の名前の区切りを `/` にするため。Windows PowerShell 5.1 の `Compress-Archive` は `\` にする）。版の行列で走る（同上） |
+| `release` | 公開するときだけ。版ごとに 2 つの zip の sha256 を求めてマニフェスト（`vw2026.json`・`vw2025.json`。[レジストリ「マニフェスト」](../registry.md#マニフェストvw2026json)）を書き、**下書きのリリース**を作って、zip・マニフェスト・初回のスクリプトを上げ終えてから公開する（下書きは利用者の URL から見えないので、資産が揃わない間を見せない。下書きは `--target <sha>` で作り、タグは公開したときにできる。`latest` は公開した時点で進む）。**そのタグの公開済みのリリースが既にあれば、タグが指すコミットが今回の完全な sha と同じなら何もせず（同じ sha の実行し直し。タグを使い回さない）、違えば失敗にする**（短い sha が重なった。[リリースの形](#リリースの形)）。下書きのまま残ったもの（前の実行が途中で止まった）は消して作り直す。PR では、同じ PR の別のタグの下書き（push で止められた前の実行のもの）も消す |
 | `verify` | 公開した資産を利用者と同じ道筋（既定のレジストリの `cli` の規則が指すマニフェスト → その `asset`）で mac と Windows で、版ごとに取ってきて、マニフェストの `tag` が公開したタグで sha256 が zip と合うこと、zip の直下が `build.json`・`bin/`・`hooks/`・プラグインだけで `bin/` の中が CLI だけであること、`build.json` と `bin/vw2026 version` の版がビルドした sha であること（mac は署名と `.vwr` も）を確かめる。mac では、公開した初回のスクリプト（`get-vw2026.sh`・`get-vw2025.sh`）で一時の `<Plug-Ins>` に入れて外す（Windows の初回のスクリプトは `install-windows` が確かめる）。main で `--latest` を付けて公開したときは、`latest` の規則（`releases/latest/download/vw2026.json`）でも取り、公開したタグを指すことを確かめる |
 | `verify-result` | `verify` の結果を 1 つのチェックにまとめる（必須のチェックにするため）。公開するときは `release` と `verify` が成功したこと、公開しないときはどちらも飛ばされたことを確かめる。`verify` は行列のジョブで、公開しないときは行列を展開する前に飛ばされ、行列の値の入った名前（`verify (macos-latest, macos-arm64)` 等）のチェックを出さないので、`verify` そのものは必須にできない。前のジョブが失敗・中止しても飛ばされないよう `always()` で走らせる |
-| `install-windows` | PR のプレリリースを公開したときだけ（`needs: [meta, release]`。main では走らせない）。版の行列のジョブ `install-windows-editions`（2025 は `vw2025` と 2025 の `<Plug-Ins>`）で走らせ、`install-windows` がその結果を 1 つのチェックにまとめる（必須のチェック。`verify-result` と同じ理由で、行列のジョブは飛ばされると行列の値の入った名前のチェックを出さない。PR のプレリリースを公開したときは成功を、それ以外は飛ばされたことを確かめる）。`windows-latest` で、PR の CLI を `install cli@<その PR のタグ>` で `<Plug-Ins>\cli\` に入れ、**入った PR の CLI に**、タグの違う記録にしてからの `install` と `install cli@latest` を走らせて、PR の Go のコードに動いている自分をよけさせる（PR でよけ方を壊したら落ちるように）。入った CLI の `uninstall cli` が断って初回のスクリプトを示すことと、フォルダの外の PR の CLI（初回のスクリプトと同じ形）が何も残さずに外すことも確かめる。利用者の `Path` の型と既存の項目が保たれることも確かめる。**PR の CLI が `latest` を入れられないとき（段 3b の PR 自身で `latest` にマニフェストが無い・PR の CLI が `latest` の `manifest_version` を読めない）は、`install cli@latest` を飛ばす**（[インストール「テスト」](install-and-update.md#テスト)） |
+| `install-windows` | PR のプレリリースを公開したときだけ（`needs: [meta, release]`。main では走らせない）。`windows-latest` で、公開した PR のビルドを実物の exe とレジストリで入れ替え・外す（動いている CLI のよけ方・入った CLI の `uninstall cli` が断ること・利用者の `Path` の型と既存の項目が保たれること。手順は[インストール「テスト」](install-and-update.md#テスト)の「実物の exe の入れ替え」）。版の行列のジョブ `install-windows-editions` で走らせ、`install-windows` がその結果を 1 つのチェックにまとめる（必須のチェック。`verify-result` と同じ理由） |
 
 fork の PR・マージキュー・main 以外の手動の実行は、マージのためのコミット（fork の PR）またはその ref を
 ビルドするだけで、公開しません（`build.yml` も必須のチェックにできるよう、`merge_group` を付ける）。
@@ -123,11 +121,6 @@ fork の PR・マージキュー・main 以外の手動の実行は、マージ�
 - リリースは `GITHUB_TOKEN`（`contents: write`）で行います。
 - 自動レビューは差し当たり持ちません（持つなら Secrets に `CLAUDE_CODE_OAUTH_TOKEN` が要る）。
 - 署名はアドホック（`codesign --force --deep --sign -`）。Developer ID と公証はしません。
-
-### Vectorworks 2025
-
-2025 の `cli` も同じジョブで作り、同じリリースに上げます。名前と、2025 のプラグインを手元でビルドしない理由は
-[版](editions.md)にあります。
 
 ## 梱包
 
@@ -167,8 +160,8 @@ PATH だけを置きます（[インストール「CLI とスプールの置き�
   `latest`（`cli@latest`）はこれを指す。**`--latest` を付けるのは、ビルドしたコミットが公開する時点の
   `main` の先頭のときだけ**で、そうでなければ `--latest=false` で公開する（失敗した古い push の
   ワークフローを後から実行し直したときに、`latest` が古いコミットへ戻らないため）。`verify` の
-  `latest` の確かめも、`--latest` を付けたときだけ行う。形がある程度決まったら sha を外し、`0.0.1` から順に上げる
-  （[名前と識別子](identifiers.md)）。`install` はタグの大小を比べない（違えば入れる）ので、版の付け方を
+  `latest` の確かめも、`--latest` を付けたときだけ行う。タグの形と、これからの版の付け方は[名前と識別子](identifiers.md)。
+  `install` はタグの大小を比べない（違えば入れる）ので、版の付け方を
   変えても `install` は変わらない。
 - PR: 同じリポジトリの PR で、**変更後のコードでビルドしたもの**を push ごとに
   `dev-<slug>-<PR 番号>-<短い sha>`（slug は[名前と識別子](identifiers.md)）にプレリリースする。
@@ -190,7 +183,7 @@ PATH だけを置きます（[インストール「CLI とスプールの置き�
 - CI は `pull_request` のマージのためのコミットで走り、プレリリースは head でビルドするので、
   ブランチが main から遅れていると両者の中身は違う。ブランチを main に追いつかせることは
   求めない（並行して進める PR ごとに取り込みを強いないため）。扱いは
-  [実装の順序「実機の確かめ方」](plan.md#実機の確かめ方)。
+  [実機の確かめ方「確かめること」](verification.md#確かめること)。
 - head を取り出してプレリリースする手順は、同じリポジトリの PR
   （`github.event.pull_request.head.repo.full_name == github.repository`）でだけ走らせる。fork の
   head は信頼できないコードで、`github.head_ref` はどのリポジトリのブランチかを区別しない。
@@ -201,9 +194,6 @@ PATH だけを置きます（[インストール「CLI とスプールの置き�
   版に置き換えて上げる（どのリリースから取ったスクリプトも、そのリリースのその版の `cli` を入れる・外す。置き換えたかは `release` が確かめる。
   [インストール「初回のスクリプト」](install-and-update.md#初回のスクリプトget-vw2026sh--ps1)）。PowerShell のものは ASCII だけで書き、
   BOM を除いて上げる（Windows PowerShell 5.1 の `Invoke-RestMethod` は charset の無い本文を ISO-8859-1 で読むので、
-  BOM や ASCII の外の文字が `iex` に崩れて渡る。`release` が確かめる）。段 2 の `build.yml` は転がりタグ `stable` と
-  `dev-<slug>-<PR 番号>` を作り直して zip だけを上げていた。**`stable` のリリースとタグは、段 3b をマージしたあと、main の最初の
-  `0.0.0-<短い sha>` のリリースが公開されてから手で消します**（先に消すと、プレリリースでない
-  リリースが無くなり、`releases/latest/download/…` の初回のスクリプトと `cli@latest` が 404 になる）。本文に機械が読む情報は載せません
+  BOM や ASCII の外の文字が `iex` に崩れて渡る。`release` が確かめる）。本文に機械が読む情報は載せません
   （入れるのに要る情報はマニフェストが持つ）。CLI 単体の資産は持ちません（zip の `bin/` にあり、
   初回のスクリプトもそこから取り出す）。

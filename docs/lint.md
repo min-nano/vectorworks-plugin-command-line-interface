@@ -11,17 +11,17 @@
 
 `lint.yml` は ubuntu の 1 ジョブです。OS ごとの違いは、ツールに対象の OS を渡して見ます（`go vet` の
 `GOOS`）。テストは `go.yml`（Go）と `cpp.yml`（C++）が OS ごとに実行します。`lint.yml` は必須の
-チェックなので、変えたパスで絞らず、すべての push（main）・PR・マージキューで実行されます（[CI](plugin/build-and-release.md#ci)）。
+チェックです（走る条件は[ビルドとリリース「CI」](plugin/build-and-release.md#ci)）。
 
 ## 言語ごとのツール
 
-| 言語 | ツール | 版の固定 | 時期 |
-| --- | --- | --- | --- |
-| Go | `go vet`（`GOOS` を darwin・windows に替え、それぞれ 2026 と 2025（`-tags vw2025`。[版](plugin/editions.md)）で 4 回） | `cli/go.mod` の Go（ビルドと同じ検査ツール） | いま |
-| GitHub Actions | actionlint（`run:` の中も shellcheck で検査する） | `tools/go.mod` | いま |
-| sh | shellcheck（shfmt が整形するのと同じ、`scripts/` と `tests/hooks/` の下のシェルスクリプト） | `lint.yml` の `SHELLCHECK_VERSION`（リリースのバイナリを取り、`SHELLCHECK_SHA256` で照合する） | いま |
-| C++ | clang-tidy（SDK に依らない部分。`.clang-tidy` で既定の `clang-analyzer` に `bugprone` を足すだけにし、指摘は失敗にする。外す規則と規則の設定は、理由とともに `.clang-tidy` に書く。CMake が書き出すコンパイルの指定（`build/lint/compile_commands.json`。プラグインを外して `-DVW_BUILD_PLUGIN=OFF` で構成する）に載るファイルを検査するので、検査するのは**その構成のビルドに載るファイル**で、SDK に依るファイル（`src/*.cpp`・`src/tools/*`）は載らない。OS ごとの実装（`FilesWindows.cpp`・段 5 から足す `WindowsPath.cpp`・`SaveTargetWindows.cpp`・`PathCompareMac.cpp`・`PathCompareWindows.cpp`）は、その OS で構成したときだけ載る。CI の `lint.yml` は ubuntu で走るのでこれらを検査しない。手元の macOS で `lint.sh` を走らせると `PathCompareMac.cpp` も検査される（手元でだけ指摘が出ることがある）。Windows の `.cpp` はどこでも検査しない（`lint.sh` は sh のスクリプトで、生成器を指定しないので、Windows の既定の Visual Studio の生成器では `compile_commands.json` が書き出されない）） | `tools/requirements.txt`（clang-format と同じ版。`format.sh`・`lint.sh` は、2 つの版が違えば止める。Dependabot は版の出る時期の違いで片方だけを上げることがあるため。`lint.sh` は PATH の版が違っても止める） | いま |
-| PowerShell | PSScriptAnalyzer（既定の規則と、整形の規則。設定は `PSScriptAnalyzerSettings.psd1`） | `scripts/powershell.ps1` の `$version` | いま |
+| 言語 | ツール | 版の固定 |
+| --- | --- | --- |
+| Go | `go vet`（`GOOS` を darwin・windows に替え、それぞれ 2026 と 2025（`-tags vw2025`。[版](plugin/editions.md)）で 4 回） | `cli/go.mod` の Go（ビルドと同じ検査ツール） |
+| GitHub Actions | actionlint（`run:` の中も shellcheck で検査する） | `tools/go.mod` |
+| sh | shellcheck（shfmt が整形するのと同じ、`scripts/` と `tests/hooks/` の下のシェルスクリプト） | `lint.yml` の `SHELLCHECK_VERSION`（リリースのバイナリを取り、`SHELLCHECK_SHA256` で照合する） |
+| C++ | clang-tidy（SDK に依らない部分。`.clang-tidy` で既定の `clang-analyzer` に `bugprone` を足すだけにし、指摘は失敗にする。外す規則と規則の設定は、理由とともに `.clang-tidy` に書く。CMake が書き出すコンパイルの指定（`build/lint/compile_commands.json`。プラグインを外して `-DVW_BUILD_PLUGIN=OFF` で構成する）に載るファイルを検査するので、検査するのは**その構成のビルドに載るファイル**で、SDK に依るファイル（`src/*.cpp`・`src/tools/*`）は載らない。OS ごとの実装（`FilesWindows.cpp`・`WindowsPath.cpp`・`SaveTargetWindows.cpp`・`PathCompareMac.cpp`・`PathCompareWindows.cpp`）は、その OS で構成したときだけ載る。CI の `lint.yml` は ubuntu で走るのでこれらを検査しない。手元の macOS で `lint.sh` を走らせると `PathCompareMac.cpp` も検査される（手元でだけ指摘が出ることがある）。Windows の `.cpp` はどこでも検査しない（`lint.sh` は sh のスクリプトで、生成器を指定しないので、Windows の既定の Visual Studio の生成器では `compile_commands.json` が書き出されない）） | `tools/requirements.txt`（clang-format と同じ版。`format.sh`・`lint.sh` は、2 つの版が違えば止める。Dependabot は版の出る時期の違いで片方だけを上げることがあるため。`lint.sh` は PATH の版が違っても止める） |
+| PowerShell | PSScriptAnalyzer（既定の規則と、整形の規則。設定は `PSScriptAnalyzerSettings.psd1`） | `scripts/powershell.ps1` の `$version` |
 
 PSScriptAnalyzer は、同じファイルでもときどき解析器の中で落ちます（`NullReferenceException`、PowerShell の実行時の
 「An item with the same key has already been added」でプロセスごと終わるもの。指摘ではなく、走らせ直すと通る。
