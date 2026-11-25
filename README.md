@@ -131,6 +131,13 @@ vw2026 install cli@latest
 
 アンインストールは、インストールに使ったスクリプトに `uninstall` を渡して行います。インストールされている版に
 合ったスクリプトのコマンドは、`vw2026 uninstall cli` が表示します（このコマンド自体は何も変更しません）。
+表示された 1 つ目のコマンド（インストールされているタグのスクリプト）を実行します。`<タグ>` には、インストール
+されている版のタグが入ります。
+
+インストールされている版のリリースが無くなっているとき（プレリリースは、その PR を閉じると削除されます）だけ、
+表示された 2 つ目のコマンド（`latest` のスクリプト）を使います。
+
+macOS:
 
 ```bash
 vw2026 uninstall cli
@@ -139,24 +146,21 @@ vw2026 uninstall cli
 # If that release no longer exists (a prerelease is deleted when its pull request closes), use latest:
 #     curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.sh | sh -s -- uninstall
 # {"outcome":"failed","name":"cli","message":"…","command":"curl -fsSL …/download/<タグ>/get-vw2026.sh | sh -s -- uninstall"}
-```
 
-表示された 1 つ目のコマンド（インストールされているタグのスクリプト）を実行します。Windows では PowerShell の
-コマンドが表示されます。`<タグ>` には、インストールされている版のタグが入ります。
-
-インストールされている版のリリースが無くなっているとき（プレリリースは、その PR を閉じると削除されます）だけ、
-`latest` のスクリプトを使います。
-
-macOS:
-
-```bash
-curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.sh | sh -s -- uninstall
+curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/<タグ>/get-vw2026.sh | sh -s -- uninstall
 ```
 
 Windows:
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.ps1))) uninstall
+vw2026 uninstall cli
+# vw2026: vw2026 runs from the folder it would uninstall, <Plug-Ins>\cli; nothing is removed. vw2026 is not used once cli is uninstalled; run the first-time script of the installed tag instead:
+#     & ([scriptblock]::Create((irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/<タグ>/get-vw2026.ps1))) uninstall
+# If that release no longer exists (a prerelease is deleted when its pull request closes), use latest:
+#     & ([scriptblock]::Create((irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.ps1))) uninstall
+# {"outcome":"failed","name":"cli","message":"…","command":"& ([scriptblock]::Create((irm …/download/<タグ>/get-vw2026.ps1))) uninstall"}
+
+& ([scriptblock]::Create((irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/<タグ>/get-vw2026.ps1))) uninstall
 ```
 
 ## ドキュメント
