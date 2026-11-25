@@ -2,7 +2,7 @@
 
 [![codecov](https://codecov.io/gh/min-nano/vectorworks-plugin-command-line-interface/graph/badge.svg)](https://codecov.io/gh/min-nano/vectorworks-plugin-command-line-interface)
 
-**Vectorworks をコマンドラインから操作するコマンド `vw2026` と、Vectorworks がコマンドを受信するための Vectorworks 用プラグインです。**
+**Vectorworks をコマンドラインから操作するコマンドと、Vectorworks がコマンドを受信するための Vectorworks 用プラグインです。**
 シェルスクリプトや他のプログラム、AI エージェントから、次のことを実行できます。
 
 - **図面を読む**: レイヤとクラスの一覧、レイヤの中の図形（種別・名前・クラス・外形）、種別ごとの図形の数
