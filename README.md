@@ -2,13 +2,13 @@
 
 [![codecov](https://codecov.io/gh/min-nano/vectorworks-plugin-command-line-interface/graph/badge.svg)](https://codecov.io/gh/min-nano/vectorworks-plugin-command-line-interface)
 
-**Vectorworks をコマンドラインから操作するコマンド `vw2026` と、そのための Vectorworks 用プラグインです。**
-シェルスクリプトやほかのプログラム、AI エージェントから、動いている Vectorworks に次のことをさせられます。
+**Vectorworks をコマンドラインから操作するコマンド `vw2026` と、Vectorworks がコマンドを受信するための Vectorworks 用プラグインです。**
+シェルスクリプトや他のプログラム、AI エージェントから、次のことを実行できます。
 
 - **図面を読む**: レイヤとクラスの一覧、レイヤの中の図形（種別・名前・クラス・外形）、種別ごとの図形の数
 - **図面を扱う**: 開いている図面の一覧、新しいファイルへの保存、図面を閉じる
 - **Vectorworks を扱う**: 起動、終了、動いているかの確認
-- **プラグインを入れる**: このプラグイン自身と、対応するほかのプラグインのインストール・更新・アンインストール
+- **プラグインのインストール**: 対応するプラグインのインストール・更新・アンインストール
 
 結果は JSON で標準出力に返り、成否は終了コードで分かります。
 
@@ -85,8 +85,8 @@ vw2026 call documents
 
 ### 図面を保存する・閉じる、Vectorworks を終了する
 
-図面や Vectorworks に働く道具（`save`・`close`・`quit`）は、ほかのプログラムの操作と混ざらないように、
-**セッションの中で**呼びます。
+Vectorworks に指示する操作（`save`・`close`・`quit`）は、他のプログラムの操作と混ざらないように、
+**セッションを使って占有することができます**。
 
 ```bash
 # セッションを始める。{"session":"<ID>"} が返る
@@ -109,28 +109,43 @@ vw2026 call close '{"document":"/Users/me/plan-2.vwx"}'
 ```
 
 ```bash
-# セッションを終える
+# セッションを終了する
 vw2026 session end
 ```
 
-- **`close` は保存の確認を出さずに閉じ、保存していない変更を捨てます。** 残したい変更は、先に `save` で
+- **`close` は保存されていない変更を破棄します。確認ダイアログは表示されません。** 残したい変更は、先に `save` で
   新しいファイルへ保存します（`save` は既にあるファイルへは保存しません）。
 - `quit`（`vw2026 call quit`）は、図面をすべて閉じてから呼びます。図面が開いていれば終了せず、開いている図面の
-  一覧を返します。Vectorworks が終了すると、セッションも終わります。
+  一覧を返します。Vectorworks が終了すると、セッションも終了します。
 
 コマンドの指定・出力・終了コードは `vw2026 --help` と `vw2026 help <コマンド>` に、道具ごとの引数と結果は
 [docs/plugin/tools.md](docs/plugin/tools.md) にあります。
 
 ## 更新とアンインストール
 
-更新は、Vectorworks を終了してから行います（Vectorworks が動いている間は何も変えません）。
+更新は、Vectorworks を終了してから行います（Vectorworks の動作中は変更を加えません）。
 
 ```bash
 vw2026 install cli@latest
 ```
 
-アンインストールは、インストールに使ったスクリプトに `uninstall` を渡します。入っている版に合った
-コマンドは `vw2026 uninstall cli` が表示します。
+アンインストールは、インストールに使ったスクリプトに `uninstall` を渡して行います。インストールされている版に
+合ったスクリプトのコマンドは、`vw2026 uninstall cli` が表示します（このコマンド自体は何も変更しません）。
+
+```bash
+vw2026 uninstall cli
+# vw2026: vw2026 runs from the folder it would uninstall, <Plug-Ins>/cli; nothing is removed. vw2026 is not used once cli is uninstalled; run the first-time script of the installed tag instead:
+#     curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/<タグ>/get-vw2026.sh | sh -s -- uninstall
+# If that release no longer exists (a prerelease is deleted when its pull request closes), use latest:
+#     curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.sh | sh -s -- uninstall
+# {"outcome":"failed","name":"cli","message":"…","command":"curl -fsSL …/download/<タグ>/get-vw2026.sh | sh -s -- uninstall"}
+```
+
+表示された 1 つ目のコマンド（インストールされているタグのスクリプト）を実行します。Windows では PowerShell の
+コマンドが表示されます。`<タグ>` には、インストールされている版のタグが入ります。
+
+インストールされている版のリリースが無くなっているとき（プレリリースは、その PR を閉じると削除されます）だけ、
+`latest` のスクリプトを使います。
 
 macOS:
 
@@ -156,7 +171,7 @@ Windows:
 | [docs/fixtures.md](docs/fixtures.md) | 通信規則の見本（`protocol/fixtures`。C++ と Go のテストが同じものを読む） |
 | [docs/registry.md](docs/registry.md) | `vw2026 install` が読むレジストリとマニフェストの書き方・フック・プラグインの提供側に求めること |
 | `vw2026 --help` | `vw2026` のコマンド・指定・終了コード（定義は [cli/cmd/vw2026/](cli/cmd/vw2026/)。`vw2026 help <command>` で各コマンド） |
-| [docs/format.md](docs/format.md) | 整形の決まりとツール（`scripts/format.sh`） |
-| [docs/lint.md](docs/lint.md) | 検査のツール（`scripts/lint.sh`） |
+| [docs/format.md](docs/format.md) | 整形規則と整形ツール（`scripts/format.sh`） |
+| [docs/lint.md](docs/lint.md) | 検査ツール（`scripts/lint.sh`） |
 | [docs/sdk-research.md](docs/sdk-research.md) | SDK リファレンスでの調査の索引と、待っているもの |
 | [docs/design-review.md](docs/design-review.md) | 設計のレビューの指摘のうち、まだ決まっていないもの |
