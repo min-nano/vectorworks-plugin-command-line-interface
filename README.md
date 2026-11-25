@@ -25,12 +25,22 @@ macOS（ターミナル）:
 
 ```bash
 curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.sh | sh
+# {"outcome":"installed","name":"cli","requested":"latest","tag":"…",…}
+
+# 新しい端末を開き、Vectorworks を起動してから確かめる
+vw2026 status
+# {"running":true,"spool":"…"}
 ```
 
 Windows（PowerShell）:
 
 ```powershell
 irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.ps1 | iex
+# {"outcome":"installed","name":"cli","requested":"latest","tag":"…",…}
+
+# 新しい端末を開き、Vectorworks を起動してから確かめる
+vw2026 status
+# {"running":true,"spool":"…"}
 ```
 
 1. **新しい端末を開く**と、`vw2026` が使えます。macOS で `~/.local/bin` が PATH に無いときは、表示される案内に
@@ -43,74 +53,66 @@ Vectorworks 2025 に入れるときは、URL の `get-vw2026` を `get-vw2025` �
 
 ## 使い方
 
+結果は JSON で標準出力に返ります。
+
 ```bash
 # Vectorworks を起動する
 vw2026 launch
-```
+# {"launched":true,"command":[…]}
 
-```bash
-# 操作を受け付けているかを確かめる（起動を待つときは繰り返す）
+# 操作を受け付けているかを確かめる（起動を待つときは、running が true になるまで繰り返す）
 vw2026 status
-```
+# {"running":true,"spool":"…"}
 
-```bash
 # プラグインの版と、図面が開いているかを見る
 vw2026 call ping
-```
+# {"version":"abc1234","branch":"main","protocol":6,"pid":4242,"session":false,"document_open":true,"current_layer":"1F"}
 
-```bash
 # 使える道具の一覧を見る
 vw2026 call tools
+# {"protocol":6,"tools":[{"name":"layers","description":"…","inputSchema":{…},"kind":"read"},…]}
 ```
 
 道具は `vw2026 call <道具> ['<引数の JSON>']` で呼びます。
 
 ```bash
-vw2026 call layers
-```
-
-```bash
-vw2026 call layer_objects '{"layer":"1F","limit":10}'
-```
-
-```bash
+# 開いている図面の一覧を見る
 vw2026 call documents
-```
+# {"documents":[{"name":"plan.vwx","path":"/Users/me/plan.vwx","untitled":false,"active":true}],"count":1}
 
-`layers` の結果の例:
+# レイヤの一覧を見る
+vw2026 call layers
+# {"layers":[{"name":"1F","kind":"design","referenced":false,"scale":50,"objects":13,"current":true}],"count":1}
 
-```json
-{"layers":[{"name":"1F","kind":"design","referenced":false,"scale":50,"objects":13,"current":true}],"count":1}
+# レイヤ 1F の図形を 10 個まで見る
+vw2026 call layer_objects '{"layer":"1F","limit":10}'
+# {"layer":"1F","unit":"mm","objects":[{"index":0,"type":3,"type_name":"box","pio_name":null,"name":"","class":"…","bounds":{…}},…],"returned":10,"total":13}
 ```
 
 ### 図面を保存する・閉じる、Vectorworks を終了する
 
 Vectorworks に指示する操作（`save`・`close`・`quit`）は、他のプログラムの操作と混ざらないように、
-**セッションを使って占有した中でだけ**実行できます（占有していなければ `no_session` で断られます）。
+**セッションを使って占有した中でだけ**実行できます（占有していなければ `no_session`、ほかが占有していれば `occupied` で断られます）。
 
 ```bash
-# セッションを始める。{"session":"<ID>"} が返る
+# セッションを始める
 vw2026 session start
-```
+# {"session":"<ID>"}
 
-```bash
 # 以後の呼び出しにセッションを載せる（呼び出しごとに --session <ID> を付けてもよい）
 export VW2026_SESSION=<ID>
-```
 
-```bash
 # documents が返した path の図面を、新しいファイルへ保存する
 vw2026 call save '{"document":"/Users/me/plan.vwx","to":"/Users/me/plan-2.vwx"}'
-```
+# {"document":"/Users/me/plan.vwx","path":"/Users/me/plan-2.vwx"}
 
-```bash
 # 図面を閉じる
 vw2026 call close '{"document":"/Users/me/plan-2.vwx"}'
-```
+# {"closed":true}
 
-```bash
 # セッションを終了する
 vw2026 session end
+# {"ended":true}
 ```
 
 - **`close` は保存されていない変更を破棄します。確認ダイアログは表示されません。** 残したい変更は、先に `save` で
@@ -127,6 +129,7 @@ vw2026 session end
 
 ```bash
 vw2026 install cli@latest
+# {"outcome":"installed","name":"cli","requested":"latest","tag":"…",…}（新しい版が無ければ "outcome":"up_to_date"）
 ```
 
 アンインストールは、インストールに使ったスクリプトに `uninstall` を渡して行います。インストールされている版に
@@ -134,6 +137,8 @@ vw2026 install cli@latest
 表示された 1 つ目のコマンド（インストールされているタグのスクリプト）を、**表示されたとおりに**コピーして
 実行します。下の例のタグ `0.0.0-1a2b3c4` は例で、実際には、インストールされている版のタグが表示されます。
 既定と違うプラグインのフォルダにインストールしたときは、コマンドに `--plugins-dir` も付いて表示されます。
+出力の `<Plug-Ins>` には、実際のプラグインのフォルダの絶対パスが表示されます。出力の全文と終了コードは
+`vw2026 help uninstall` にあります。
 
 インストールされている版のリリースが無くなっているとき（プレリリースは、その PR を閉じると削除されます）だけ、
 表示された 2 つ目のコマンド（`latest` のスクリプト）を使います。
@@ -142,28 +147,34 @@ macOS:
 
 ```bash
 vw2026 uninstall cli
+# 標準エラー:
 # vw2026: vw2026 runs from the folder it would uninstall, <Plug-Ins>/cli; nothing is removed. vw2026 is not used once cli is uninstalled; run the first-time script of the installed tag instead:
 #     curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/0.0.0-1a2b3c4/get-vw2026.sh | sh -s -- uninstall
 # If that release no longer exists (a prerelease is deleted when its pull request closes), use latest:
 #     curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.sh | sh -s -- uninstall
+# 標準出力:
 # {"outcome":"failed","name":"cli","message":"…","command":"curl -fsSL …/download/0.0.0-1a2b3c4/get-vw2026.sh | sh -s -- uninstall"}
 
 # 表示された 1 つ目のコマンドを、表示されたとおりに実行する（タグは例）
 curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/0.0.0-1a2b3c4/get-vw2026.sh | sh -s -- uninstall
+# {"outcome":"uninstalled","name":"cli","hook":{…},"remaining":[],"left":[]}
 ```
 
 Windows:
 
 ```powershell
 vw2026 uninstall cli
+# 標準エラー:
 # vw2026: vw2026 runs from the folder it would uninstall, <Plug-Ins>\cli; nothing is removed. vw2026 is not used once cli is uninstalled; run the first-time script of the installed tag instead:
 #     & ([scriptblock]::Create((irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/0.0.0-1a2b3c4/get-vw2026.ps1))) uninstall
 # If that release no longer exists (a prerelease is deleted when its pull request closes), use latest:
 #     & ([scriptblock]::Create((irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.ps1))) uninstall
+# 標準出力:
 # {"outcome":"failed","name":"cli","message":"…","command":"& ([scriptblock]::Create((irm …/download/0.0.0-1a2b3c4/get-vw2026.ps1))) uninstall"}
 
 # 表示された 1 つ目のコマンドを、表示されたとおりに実行する（タグは例）
 & ([scriptblock]::Create((irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/0.0.0-1a2b3c4/get-vw2026.ps1))) uninstall
+# {"outcome":"uninstalled","name":"cli","hook":{…},"remaining":[],"left":[]}
 ```
 
 ## ドキュメント
