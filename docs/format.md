@@ -12,8 +12,7 @@
 
 既定は確かめるだけにし、書き換えるのは `--fix` と打ったときだけにします。これ以外の引数は使い方を
 出して 2 で終わります（打ち間違いで書き換えないため）。
-`format.yml` は必須のチェックなので、変えたパスで絞らず、すべての push（main）・PR・マージキューで
-走ります（[CI](plugin/build-and-release.md#ci)）。
+`format.yml` は必須のチェックです（走る条件は[ビルドとリリース「CI」](plugin/build-and-release.md#ci)）。
 
 手元と CI は同じスクリプトを走らせます。ツールの版は固定し（下記）、手元と CI で結果を食い違わせません。
 
@@ -40,12 +39,12 @@ PSScriptAnalyzer も選べるためです。これで YAML と Markdown を除�
 
 ## 言語ごとのツール
 
-| 言語 | ツール | 設定 | 版の固定 | 時期 |
-| --- | --- | --- | --- | --- |
-| Go | gofmt | なし（設定できない） | `tools/go.mod` の Go の gofmt（PATH のものは使わない） | いま |
-| sh | shfmt | `.editorconfig` を読む。フラグで上書きしない | `tools/go.mod` | いま |
-| C++ / Objective-C++ | clang-format | `.clang-format`（LLVM の既定に `UseTab: ForIndentation`・`IndentWidth`・`TabWidth`・`ColumnLimit: 100`・`AccessModifierOffset` だけを足す。ブレースは既定の `Attach`） | `tools/requirements.txt`（pip の `clang-format==X`。3 OS で同じ出力。clang-tidy と同じ版にする。`format.sh` は、PATH の版が違うときと、clang-tidy の版と違うときに止める。[検査](lint.md)） | いま |
-| PowerShell | `Invoke-Formatter`（PSScriptAnalyzer） | `PSScriptAnalyzerSettings.psd1`（`CodeFormatting` と同じ規則で、`PSUseConsistentIndentation` の `Kind = 'tab'`） | `scripts/powershell.ps1` の `$version`（`Install-Module -RequiredVersion`。`-Mode Install` で入る） | いま |
+| 言語 | ツール | 設定 | 版の固定 |
+| --- | --- | --- | --- |
+| Go | gofmt | なし（設定できない） | `tools/go.mod` の Go の gofmt（PATH のものは使わない） |
+| sh | shfmt | `.editorconfig` を読む。フラグで上書きしない | `tools/go.mod` |
+| C++ / Objective-C++ | clang-format | `.clang-format`（LLVM の既定に `UseTab: ForIndentation`・`IndentWidth`・`TabWidth`・`ColumnLimit: 100`・`AccessModifierOffset` だけを足す。ブレースは既定の `Attach`） | `tools/requirements.txt`（pip の `clang-format==X`。3 OS で同じ出力。clang-tidy と同じ版にする。`format.sh` は、PATH の版が違うときと、clang-tidy の版と違うときに止める。[検査](lint.md)） |
+| PowerShell | `Invoke-Formatter`（PSScriptAnalyzer） | `PSScriptAnalyzerSettings.psd1`（`CodeFormatting` と同じ規則で、`PSUseConsistentIndentation` の `Kind = 'tab'`） | `scripts/powershell.ps1` の `$version`（`Install-Module -RequiredVersion`。`-Mode Install` で入る） |
 
 対象は、Go は `cli/`、sh は `scripts/` と `tests/hooks/`、C++ と PowerShell は git が追う・無視しないファイル
 （`git ls-files -co --exclude-standard`。ビルドの出力や SDK の写しを含めない）です。PowerShell の
@@ -72,7 +71,7 @@ Go で書かれたツールは `tools/go.mod` に `tool` で書き、`go -C tool
 
 ## ツールを足すとき
 
-- 言語が入る段で、その言語のツールと設定を `scripts/format.sh` と上の表に足します。
+- 言語を足すときに、その言語のツールと設定を `scripts/format.sh` と上の表に足します。
 - 設定は既定から変える項目だけを書き、変える理由を先頭の注釈に書きます。上の「言語をまたぐ決まり」
   と食い違う設定は入れません。
 - ツールを Go のモジュールで足すときも、`CLAUDE.md` の依存の確認を行います（推移的な依存の数は問わない）。

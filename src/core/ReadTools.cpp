@@ -201,6 +201,8 @@ Json layerObjects(const Json &args, Drawing &drawing, ToolStatus &status) {
 	}
 	auto first = static_cast<std::size_t>(offset);
 	Json objects = Json::array();
+	// 名前・クラス・外形は、絞ったあとの頁に入る図形についてだけ SDK から読む（レイヤの全部の図形に
+	// ついては読まない。大きなレイヤでも 1 回の受け付けを長引かせないため）。
 	for (std::size_t i = first; i < members.size() && i - first < static_cast<std::size_t>(limit);
 	     ++i) {
 		std::int16_t memberType = types[members[i]];

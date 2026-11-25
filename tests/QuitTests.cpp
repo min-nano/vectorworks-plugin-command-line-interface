@@ -232,7 +232,7 @@ TEST(QuitDoesNotClearBeforeStartingOrWithDocumentsOpen) {
 	CHECK_EQ(open.remnants, 1);
 }
 
-// 引数の形は、起動を終えたかより先に確かめる（docs/plugin/tools.md「最初に提供する道具」の
+// 引数の形は、起動を終えたかより先に確かめる（docs/plugin/tools.md「共通の決まり」の
 // 確かめの順の 1）。
 TEST(QuitRejectsArguments) {
 	for (bool hasStarted : {false, true}) {

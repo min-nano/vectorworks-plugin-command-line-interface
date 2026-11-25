@@ -2,10 +2,7 @@
 
 名前と置き場所の真実はこのページです（ほかのページはここを参照する）。このページは 2026 の値で書き、
 2025 の `cli`（`vw2025`）の値は[版](editions.md)にあります。
-**スプールの場所・コマンド名・リンクの名前・インストール先は、`vw2026 install` で配る最初の版（段 3b）の
-あとは変えません**（変えると呼ぶ側や更新が見つけられなくなる）。段 2 は利用者が手で置いて確かめるための
-版で、段 3a・3b で入れ直す（[実装の順序](plan.md)の段 3a・3b）ので、段 3a でスプールの場所を、段 3b で CLI の
-置き場所を改めます。
+**スプールの場所・コマンド名・リンクの名前・インストール先は変えません**（変えると呼ぶ側や更新が見つけられなくなる）。
 
 **安定版と開発版を区別しません。** PR では変更後のコードでビルドしたものをプレリリースし、
 同じ名前のプラグインとして入れ替えます（`vw2026 install cli@<そのタグ>`。[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
@@ -38,18 +35,14 @@
 | よけた CLI（[インストール「動いている CLI のよけ方」](install-and-update.md#動いている-cli-のよけ方)） | `<Work>/old/vw2026.old-<時刻>` | `<Work>\old\vw2026.exe.old-<時刻>` |
 | PATH | `~/.local/bin/vw2026`（`<Plug-Ins>/cli/bin/vw2026` へのリンク） | 利用者の `Path` に `<Plug-Ins>\cli\bin` |
 
-上の表は段 3（3a・3b）からのものです。スプールの場所（`<Plug-Ins>/cli/spool/`）は段 3a、`<Work>` と
-その下・入れたときの記録・PATH は段 3b で実装しました。段 2 までの実装は、スプールを利用者の
-ホームの下（mac は `~/Library/Application Support/vectorworks2026-cli/spool/`、Windows は
-`%LOCALAPPDATA%\vectorworks2026-cli\spool\`）に置いていました。段 3b からは、持続する `vw2026` の場所を持ちません。
-
 - **場所の根は環境変数を読まずに求めます。** スプールは、プラグインは自分のモジュールの場所から、
   `vw2026` は自分の実行ファイルの場所から求めます（[通信規則「スプールの場所」](../protocol.md#スプールの場所)）。
   `<Work>` と既定の `<Plug-Ins>` は OS の決まった場所から求め、GUI アプリの Vectorworks と、ssh や別のアプリ
   から起動した `vw2026` とで食い違わないようにします。
-  - `<Work>`: Windows は `SHGetKnownFolderPath(FOLDERID_LocalAppData)` の下の `Temp`（環境変数 `TMP` /
+  - `<Work>`: Windows は `SHGetKnownFolderPath(FOLDERID_LocalAppData)` の下の `Temp`（`%TEMP%` の既定の場所。環境変数 `TMP` /
     `TEMP` は読まない。`vw2026` は `syscall` 経由）。mac は `/usr/bin/getconf DARWIN_USER_TEMP_DIR` の出力
-    （環境変数 `TMPDIR` は読まない）。その下の `vectorworks2026-cli-<鍵>`（`<Plug-Ins>` ごと。[インストール「作業の場所」](install-and-update.md#作業の場所)）。
+    （`confstr(_CS_DARWIN_USER_TEMP_DIR)`。利用者ごとの一時フォルダ。環境変数 `TMPDIR` は読まない。cgo を使わないので
+    `getconf` を走らせる）。その下の `vectorworks2026-cli-<鍵>`（`<Plug-Ins>` ごと。[インストール「作業の場所」](install-and-update.md#作業の場所)）。
   - 既定の `<Plug-Ins>`: Windows は `%APPDATA%` の指す場所を `SHGetKnownFolderPath(FOLDERID_RoamingAppData)` で求める
     （環境変数 `APPDATA` は読まない。`syscall` 経由）。mac はホームディレクトリの `Library/Application Support` の下で、
     ホームは利用者の passwd の項目（`getpwuid_r(getuid())` の `pw_dir`）から求める（環境変数 `HOME` は読まない。
@@ -63,12 +56,6 @@
   （`<name>` ごとに分ける）。CLI とスプールは置きません（`cli` のフォルダの中にある。
   [インストール「CLI とスプールの置き場所」](install-and-update.md#cli-とスプールの置き場所)）。
   PATH はこのプラグインのフックが置きます（[インストール「`cli` のフック」](install-and-update.md#cli-のフック)）。
-
-## 拡張機能
-
-**登録しません**（[構成](architecture.md#拡張機能を登録しない)）。拡張機能なしで読み込まれない
-ことが実機で分かったときだけ、メニューコマンドを 1 つ登録し、そのユニバーサル名と UUID を
-ここに足します。
 
 ## `src/BuildConfig.h`
 

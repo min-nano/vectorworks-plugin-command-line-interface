@@ -1,9 +1,30 @@
-# 最初に提供する道具
+# 道具
 
-図面を**読むだけ**の道具と、図面を保存して閉じる道具（`documents`・`save`・`close`）、Vectorworks を終わらせる 1 つ（`quit`）から始めます。最初の
-リリース（[実装の順序](plan.md)の段 2）に載せるのは `ping` だけで、共通部の変更は段 4、読む道具と図面を扱う道具は段 5、`quit` は段 6 で
-足します。更新は道具ではなく CLI の `vw2026 install` です（[インストール](install-and-update.md#インストールと更新vw2026-install)）。**SDK 呼び出しは、SDK リファレンスで
-挙動が確かめられているものだけを使います**（無いものはリファレンスで調べてから足す。[SDK の調査](../sdk-research.md)）。
+プラグインが提供する道具の仕様です。版と状態を返す `ping`、図面を**読むだけ**の道具（`layers`・`classes`・
+`layer_objects`・`object_counts`）、図面を保存して閉じる道具（`documents`・`save`・`close`）、Vectorworks を終わらせる
+`quit` があります。図面に書く道具と、ほかのプラグインの機能を呼ぶ道具は、まだありません
+（[設計「これから」](../design.md#これから)）。更新は道具ではなく CLI の `vw2026 install` です
+（[インストール](install-and-update.md#インストールと更新vw2026-install)）。
+
+**SDK 呼び出しは、SDK リファレンスで挙動が確かめられているものだけを使います**（無いものはリファレンスで
+調べてから足す。[SDK の調査](../sdk-research.md)）。
+
+## 一覧
+
+| 道具 | 種類 | 引数 | 結果 |
+| --- | --- | --- | --- |
+| `tools` | （予約） | なし | [通信規則「予約された道具」](../protocol.md#予約された道具) |
+| `ping` | read | なし | 下記 |
+| `layers` | read | `include_sheets`（既定 true） | `{"layers":[{"name","kind":"design"\|"sheet","referenced","scale","objects","current"}],"count"}`（[読む道具](#読む道具layersclasseslayer_objectsobject_counts)） |
+| `classes` | read | なし | `{"classes":[名前…],"count"}`（同上） |
+| `layer_objects` | read | `layer`（必須）・`limit`（既定 50）・`offset`（既定 0）・`type`（種別の番号。省略＝すべての種別） | `{"layer","unit":"mm","objects":[{"index","type","type_name","pio_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}`（同上） |
+| `object_counts` | read | `layer`（省略＝図面全体） | `{"layer"?,"types":[{"type","type_name","count"}],"total"}`（種別番号の昇順。同上） |
+| `documents` | read | なし | [図面を扱う道具](#図面を扱う道具documentssaveclose) |
+| `save` | app | `document`（必須）・`to`（必須） | 同上 |
+| `close` | app | `document`（必須） | 同上 |
+| `quit` | app | なし | `{"quitting":true}`。図面が開いていれば `internal` で失敗し、`detail` に一覧（下記） |
+
+## 共通の決まり
 
 引数は、省略できるものに既定値を設けます（表の「既定」）。知らない引数と、知っている引数の
 未知の値（型の違い・決まった綴り以外の値）は `invalid_args` で返します（[通信規則「互換性」](../protocol.md#互換性)）。
@@ -32,8 +53,11 @@
 
 **結果の実数（`scale`・`bounds` の値）の桁は、元の値に戻る最も短いものにし、書き方は Go の `encoding/json`
 に合わせます**（プラグインの綴りを決まった基準に揃え、その基準を見本で C++ と Go の両側から確かめるため）。
-- 桁は `std::to_chars` の精度を指定しない形で求めます。ただし `to_chars` の書き方はそのまま使いません（固定小数点より
-  指数のほうが短ければ指数を選ぶので、`100000` が `1e+05`、`0.0001` が `1e-04` になる）。
+- 桁は指数の形の `std::to_chars`（`std::chars_format::scientific`。精度は指定しない）から取り、書き方は下の決まりで
+  組み立てます。形を指定しない `to_chars` をそのまま使わないのは、固定小数点より指数のほうが短ければ指数を選ぶ
+  （`100000` が `1e+05`、`0.0001` が `1e-04` になる）のと、大きな整数の値を最も短い桁ではなく正確な値で書く実装が
+  ある（libstdc++ は `999999999999999900000` を `999999999999999868928` と書く。固定小数点の `to_chars` も同じ）ためです。
+  `core::Json` は数を綴りで持つので、実数は書き出す口の `core::Json::real` で作ります。
 - **0 と、`1e-6 ≤ |x| < 1e21` は固定小数点で書きます**（`0`・`100000`・`1500000`・`0.0001`・`0.000001`・`2366.025`）。整数の値は
   小数点を付けません（`50.0` は `50`）。上と同じく、呼ぶ側は書き方で整数と実数を区別しません。
 - それ以外は指数で書き、指数は符号を付けて先頭の 0 を付けません（`1e+21`・`1e-7`・`1.5e-7`）。
@@ -47,13 +71,9 @@
   `core::Json` の実数の口は「有限でなければ `null` を返す」1 つだけにし、道具の結果の実数はどれもそれで作ります。`bounds` は
   `GetObjectBounds` の戻り値（真偽）と外形の 4 つの値を受けて `bounds`（または `null`）を返す 1 つの関数で作ります
   （偽の場合も無 SDK のテストで確かめられるように）。
-- `core::Json` は数を綴りで持つので、実数は書き出す口の `core::Json::real` で作ります。桁は指数の形の
-  `to_chars`（`std::chars_format::scientific`。精度は指定しない）から取ります。形を指定しない `to_chars` も固定小数点の
-  `to_chars` も、大きな整数の値を最も短い桁ではなく正確な値で書く実装がある（libstdc++ は
-  `999999999999999900000` を `999999999999999868928` と書く）ためです。
 
 **引数の確かめは次の順に行い、最初に当たったもので返します**（どの `reason` を返すかを決めておくため）。
-1. 引数の形（知らない引数・型・値の範囲・必須の欠け・`save` の `to` の形）→ `invalid_args`。
+1. 引数の形（知らない引数・型・値の範囲・必須の欠け・`save` の `to` の形。[保存先の確かめ](save-target.md#to-の形)）→ `invalid_args`。
 2. 図面が無い → `internal`（`no_document`）。**「図面が無い」は、道具が使うものの有無で決めます。** 前面の図面を読む
    道具（`layers`・`classes`・`layer_objects`・`object_counts`）は `GetCurrentLayer()` が `nullptr` か（`ping` の
    `document_open` と同じ基準。`layers` は `current` のためにどのみち呼ぶ）、図面を名指す道具（`save`・`close`）は
@@ -64,7 +84,7 @@
 3. 引数が名指すもの（`document`・`layer`）が実在しない → `invalid_args`。名指すものが 1 つに決まらない
    （`document` に一致する図面が 2 枚以上 → `internal`（`document_ambiguous`）、`layer` に一致するレイヤが 2 枚以上 →
    `internal`（`layer_ambiguous`））。
-4. 道具ごとの状態（`save` は下記の順）→ `internal`。
+4. 道具ごとの状態（`save` は[保存先の確かめ「状態の確かめ」](save-target.md#状態の確かめ)の順）→ `internal`。
 
 **道具が返す失敗の `invalid_args` と `internal` は、次のように分けます**（[通信規則「応答」](../protocol.md#応答idresjson)）。
 
@@ -80,19 +100,6 @@
   `not_closed`）・SDK の失敗（`save` の `save_failed`）・道具の中の例外。
 
 呼ぶ側が理由で分岐するときは、`code` ではなく `detail` の `reason` を見ます（`reason` を返す失敗だけ）。
-
-| 道具 | 種類 | 引数 | 結果 |
-| --- | --- | --- | --- |
-| `tools` | （予約） | なし | [ブリッジ「道具の表」](bridge.md#道具の表) |
-| `ping` | read | なし | 下記 |
-| `layers` | read | `include_sheets`（既定 true） | `{"layers":[{"name","kind":"design"\|"sheet","referenced","scale","objects","current"}],"count"}`（[読む道具](#読む道具layersclasseslayer_objectsobject_counts)） |
-| `classes` | read | なし | `{"classes":[名前…],"count"}`（同上） |
-| `layer_objects` | read | `layer`（必須）・`limit`（既定 50）・`offset`（既定 0）・`type`（種別の番号。省略＝すべての種別） | `{"layer","unit":"mm","objects":[{"index","type","type_name","pio_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}`（同上） |
-| `object_counts` | read | `layer`（省略＝図面全体） | `{"layer"?,"types":[{"type","type_name","count"}],"total"}`（種別番号の昇順。同上） |
-| `documents` | read | なし | [図面を扱う道具](#図面を扱う道具documentssaveclose) |
-| `save` | app | `document`（必須）・`to`（必須） | 同上 |
-| `close` | app | `document`（必須） | 同上 |
-| `quit` | app | なし | `{"quitting":true}`。図面が開いていれば `internal` で失敗し、`detail` に一覧（下記） |
 
 ## `ping`
 
@@ -123,13 +130,13 @@
 
 ## 読む道具（`layers`・`classes`・`layer_objects`・`object_counts`）
 
-図面を読むだけの道具です（[実装の順序](plan.md)の段 5）。使う SDK 呼び出しと挙動は SDK リファレンスで
-確かめてあります（[SDK の調査 4](../sdk-research.md#4-最初の道具が使う-sdk-呼び出し)）。どれも前面の図面
+図面を読むだけの道具です。使う SDK 呼び出しと挙動は SDK リファレンスで
+確かめてあります（[SDK の調査 4](../sdk-research.md#4-道具が使う-sdk-呼び出し)）。どれも前面の図面
 （アクティブな図面）を読みます。
 
 **共通の決めごと:**
 
-- **図面が開かれていなければ（`GetCurrentLayer()` が `nullptr` か。[冒頭](#最初に提供する道具)の 2）`internal` で失敗し、`detail` に `{"reason":"no_document"}` を付けます。**
+- **図面が開かれていなければ（`GetCurrentLayer()` が `nullptr` か。[共通の決まり](#共通の決まり)の確かめの順の 2）`internal` で失敗し、`detail` に `{"reason":"no_document"}` を付けます。**
   SDK は図面が無くても落ちずに空の列を返します（[Findings「Layers and Stories」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)の「OS タイマーの刻みの中・図面 0 枚」・
   [Findings「Attributes and Classes」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Attributes%20and%20Classes.md)の「タイマーの刻みから呼べる。図面 0 枚でも落ちない」）が、
   空の結果（`object_counts` の `total:0` など）を「中身の無い図面」と見分けられなくなるので、失敗にします。
@@ -155,7 +162,7 @@
 | `name` | レイヤの名前（`GetObjectName`）。リソースの参照で入ってきたレイヤは `NNA#<n>_<元の名前>`、レイヤの参照で入ってきたレイヤは元の名前のまま（下記） |
 | `kind` | `design`（`ovLayerType` が 1 か 3）・`sheet`（2）。それ以外の値（Findings で確かめていない種類）は `null` |
 | `referenced` | 参照で入ってきたレイヤか（`IsObjectFromReferencedFile(layer)`。参照の方法によらず真。下記） |
-| `scale` | 縮尺の分母（`GetLayerScaleN`。1/50 なら `50`、1:1 なら `1`）。SDK は `double_gs` で返すので実数として書きます（[Findings「レイヤの縮尺」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md#レイヤの縮尺setlayerscalen-は黙って効かないことがある)。確かめた縮尺はどれも整数で、整数でない縮尺は確かめていない）。**シートレイヤは SDK の返すとおり常に `1`**。有限でなければ `null`（[冒頭](#最初に提供する道具)） |
+| `scale` | 縮尺の分母（`GetLayerScaleN`。1/50 なら `50`、1:1 なら `1`）。SDK は `double_gs` で返すので実数として書きます（[Findings「レイヤの縮尺」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md#レイヤの縮尺setlayerscalen-は黙って効かないことがある)。確かめた縮尺はどれも整数で、整数でない縮尺は確かめていない）。**シートレイヤは SDK の返すとおり常に `1`**。有限でなければ `null`（[共通の決まり](#共通の決まり)） |
 | `objects` | レイヤの直下の図形の数（下記「数え方」） |
 | `current` | 現在のレイヤか（`GetCurrentLayer()` とハンドルが一致するか） |
 
@@ -214,7 +221,7 @@
   配列の中の位置を足したもの）。消去・取り消し・並べ替えで変わるので、図形の識別子には使えません。レイヤ全体の
   前後関係が要るなら、`type` を省いて取ります。
 - **`limit` は 1〜1000、`offset` は 0 以上、`type` は 0 以上の整数です。** 範囲の外と、小数部のある値（`2.5`）は
-  `invalid_args` で断ります（数の受け方は[冒頭](#最初に提供する道具)）。`offset` が `total` 以上なら `objects` は空で
+  `invalid_args` で断ります（数の受け方は[共通の決まり](#共通の決まり)）。`offset` が `total` 以上なら `objects` は空で
   成功します。表に無い番号の `type` も断らず、合う図形が無ければ `total` は 0 です。`limit` に上限を設けるのは、
   1 回の受け付けと応答を大きくしすぎないためです。
 - **`type`** は `GetObjectTypeN` の番号です（引数の `type` も番号）。**`type_name`** は、番号から名前を引く口が
@@ -251,7 +258,7 @@
   区別が無い）。**`class`** はクラスの名前（`GetObjectClass` → `ClassIDToName`）です。
 - **`bounds`** は `GetObjectBounds` の外形で、**単位は常に mm**です。結果の **`unit`** は常に `"mm"` で、
   単位の取り違えを防ぐために置きます。値は図面の単位にもレイヤの縮尺にもよらない世界座標の実数です。`GetObjectBounds` が偽を
-  返した図形と、4 つの値のどれかが有限でない図形は `null` です（[冒頭](#最初に提供する道具)）。偽を返すと確かめたのは
+  返した図形と、4 つの値のどれかが有限でない図形は `null` です（[共通の決まり](#共通の決まり)）。偽を返すと確かめたのは
   undo の置き石だけで（[Findings「Layer Objects」の 2](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md#2-列に混ざる図形でないもの)）、置き石は数える図形から除いてあるので、
   列に残る図形で偽を返すものは確かめていません。返したときに備えて `null` にします。
   **有限かは、下の最小と最大をとる前に SDK の外形の 4 つの値で確かめます**（`std::min(a, b)` は `b` が NaN だと
@@ -289,8 +296,9 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
     刻みから終了を頼むとふつうに終わる。[SDK リファレンス #317](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/317)。同 4 の 9「起動を終えた目印」）。ダイアログの間は、
     利用者が「続ける」を押すまで `starting` で断られ続けます。呼び直すか・いつまで待つかは呼ぶ側が決めます
     （[設計「CLI はプリミティブに保つ」](../design.md#cli-はプリミティブに保つ)）。
-  - Windows は測っていません（[#316](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/316)。仮想環境で DirectX を有効にできない）。mac と同じ作りにし、起動を終えたあとに
-    `quit` が受け付けられること（通知が Windows でも届くこと）を段 6 の実機の確認で見ます。
+  - Windows の起動の途中の振る舞いは測っていません（[#316](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/316)。仮想環境で DirectX を有効にできない）。
+    mac と同じ作りにしてあり、起動を終えたあとに通知が届いて `quit` が受け付けられることは Windows の実機で確かめました
+    （起動の途中に `starting` で断られることは Windows では確かめられていない。[実機で確かめていないこと](#実機で確かめていないこと)）。
 - **図面が 1 枚でも開いていれば、終了を頼まずに `internal` で失敗します。** 受け付けの中で
   `GetOpenFilesList` の件数を読みます（図面が 0 枚のときも落ちない。[道具「ping」](#ping)）。
   `error` は「図面が開いているので終了しませんでした。先に図面を閉じてください」を含む固定の文言で、
@@ -308,23 +316,10 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
   | `documents[].name` | 図面の名前 |
   | `documents[].path` | 図面のパス（`documents` と同じ。`untitled` が真の図面は「アプリケーションのフォルダ＋名前」（「名称未設定 N」・「<元の名前> コピー 1」など）でファイルとしては存在しない） |
   | `documents[].untitled` | ディスクのファイルに結び付いていない図面か（`documents` の `untitled` と同じ） |
-- **一覧が空でも、`close` で閉じた図面が Vectorworks の中に残っていれば、終了を頼む前に片付けます**（
-  [Findings「閉じた図面が残り、終了で保存の確認が出る」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321323macwindows)。[SDK リファレンス #321](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/321)）。
-  - `CloseDocument()` は、先に開いた図面を後に開いた図面が開いている間に閉じると、閉じた図面を中に残します（以下「残った
-    図面」）。残った図面は `GetOpenFilesList` に出ず（`documents` も空）、一番上に残った図面が「変更あり」（無題なら変更が
-    無くても）なら、終了で保存の確認が出て、人が答えるまで止まりません。
-  - 一覧が空なのに `GetActiveDocument` が真なら残っています。`quit` は、一覧が空であることを回ごとに確かめながら
-    `CloseDocument()` を呼び、`GetActiveDocument` が偽になるまで 1 枚ずつ消します（確認は出ない。残った図面は `close` が
-    変更を捨てると指定されて閉じたものなので、変更を捨てる）。回数の上限（64 回）までに片付かなければ、終了を頼まずに
-    `internal` で失敗し、`detail` に `{"reason":"closed_documents_remain"}` を付けます。片付けのあとにもう一度一覧を見て、
-    図面が開いていれば（片付けの間に開いたもの）、終了を頼まずに `documents_open` で断ります。
-  - **`quit` の側の片付けは、`close` の側の片付け（[下記の `close`](#図面を扱う道具documentssaveclose)）が届かない道への
-    備えです。** ほかのプラグインやスクリプトの `CloseDocument()` が最後の図面を閉じた・`close` の片付けが上限で止まった、
-    などで図面が残っていれば、ここで片付けます。外すと、`quit` が `{"quitting":true}` を返したあとに見えない図面の保存の
-    確認が出て、人が答えるまで Vectorworks が止まります。残った図面が無ければ `GetActiveDocument` を 1 回呼ぶだけです。
-    最後の図面を利用者が UI で閉じると、残った図面も消えます（Windows（Vectorworks 2025）。mac は推定。[同じ節](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321323macwindows)）。
-  - **Windows も同じく片付けます**（Vectorworks 2025 の Windows でも図面が残り、この片付けで確認が出なくなる。
-    [同じ節](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321323macwindows)。Vectorworks 2026 の Windows は測っていない。[#323](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/323)）。
+- **一覧が空でも、`close` で閉じた図面が Vectorworks の中に残っていれば、終了を頼む前に片付けます**
+  （[閉じた図面の片付け](#閉じた図面の片付け)）。上限の回数までに片付かなければ、終了を頼まずに `internal` で失敗し、
+  `detail` に `{"reason":"closed_documents_remain"}` を付けます。片付けのあとにもう一度一覧を見て、図面が開いていれば
+  （片付けの間に開いたもの）、終了を頼まずに `documents_open` で断ります。
 - **図面が 0 枚（残った図面も無い）なら、保存の確認は出ません。** 応答を書いてから、受け付けの外で
   `gSDK->CloseAllFilesAndQuitVectorworks(true, false)` を頼みます（[構成「受け付けの流れ」](architecture.md#受け付けの流れ)）。
   第 1 引数は常に真です（`quit` は図面を保存するか捨てるかを決めない。決めるのは呼ぶ側で、`save`（新しいパスへ）・`close`（変更を捨てる）で先に片付ける）。確かめてから頼むまでの間に利用者が
@@ -352,7 +347,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 
 ## 図面を扱う道具（`documents`・`save`・`close`）
 
-`quit` の前に図面を片付ける（残したい図面を新しいパスへ保存する・図面を閉じる）ための道具です（[実装の順序](plan.md)の段 5）。使う SDK 呼び出しは SDK
+`quit` の前に図面を片付ける（残したい図面を新しいパスへ保存する・図面を閉じる）ための道具です。使う SDK 呼び出しは SDK
 リファレンスで確かめてあります（[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)。
 VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比べ方。[同「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・[SDK リファレンス #283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。**`close` は保存の確認を出さずに閉じ、未保存の変更を捨てます**（利用者の判断。下記）。保存は呼ぶ側の責任で、
 残したい図面は、`save` で新しいパスへ保存してから `close` します（`save` は上書き保存をしない）。要らない図面は、保存せずに `close` します。
@@ -377,7 +372,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
 上から `documents`・無題の図面を `to` へ保存した `save`・`close` の結果です。
 
 - **図面が 1 枚も開いていなければ、`save`・`close` は `internal` で失敗し、`detail` に `{"reason":"no_document"}` を
-  付けます**（`GetOpenFilesList` の件数で決める。[冒頭](#最初に提供する道具)の 2。`document` を確かめる前に返す）。
+  付けます**（`GetOpenFilesList` の件数で決める。[共通の決まり](#共通の決まり)の 2。`document` を確かめる前に返す）。
   `documents` は失敗にせず、空の一覧を返します。
 - **`documents`** は `GetOpenFilesList` の項目を、その順のまま並べます（並べ替えない）。**`count`** はその数です。
   順の意味（開いた順・前面からの順など）は確かめていないので、呼ぶ側は順に頼らず `active` と `path` で見分けます。
@@ -396,29 +391,31 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   ファイルを作れず、2 つ目の Vectorworks を起動できなかった）。`untitled` は `fIsInMemoryOnly` をそのまま返すので、
   プラグインはこれらの場面でも Vectorworks の答えに従います。古い版のファイルが Windows で `untitled` にならなくても、
   `save` は新しいパスへしか保存しない（下記）ので、`save` が利用者の古い版のファイルを置き換えることはありません。`close` も保存せずに閉じるので、置き換わりません。
-  段 5 の実機の確認で、mac で作った古い版のファイルを Windows で開いて `untitled` を見ます。
+  Windows の古い版のファイルは、実機でも見られていません（[実機で確かめていないこと](#実機で確かめていないこと)）。
   **`untitled` が真の図面の `path` は「アプリケーションのフォルダ＋名前」**で、ファイルとしては存在しません（名前は
   「名称未設定 N」・「<元の名前> コピー 1」・「<元の名前> v2026.vwx」など。N はセッション全体の連番で、開いている間は
   重ならない）。**`untitled` が真の図面は、`path` がほかの図面と重なることがあります**（下記。その図面は `save`・
   `close` で名指せない）。呼ぶ側は `path` を鍵にして一覧を扱うと項目を取りこぼします。
 - **`document`** は対象の図面のパスで、`documents` の `path` を渡します。ディスクのファイルに結び付いた図面どうしは、
-  パスで一意に決まります（同じファイル名を別のフォルダに保存した 2 枚も見分けられる）。開いている図面に一致しなければ
-  `invalid_args` で断ります。パスを読めなかった図面（`documents` の `path` が空）は名指せず、空の `document` は
+  パスで一意に決まります（同じファイル名を別のフォルダに保存した 2 枚も見分けられる）。`documents` が返した文字列と
+  **完全に一致**する図面を探し（呼ぶ側は `documents` の結果をそのまま渡す）、一致しなければ `invalid_args` で断ります。パスを読めなかった図面（`documents` の `path` が空）は名指せず、空の `document` は
   `invalid_args` で断ります（空の文字列でその図面を閉じない）。
-  - **`untitled` が真の図面のパスは、一意とは限りません**（確かめていない。Findings も、無題の図面を指すなら
+  - **`untitled` が真の図面のパスは、一意とは限りません**（Findings も、無題の図面を指すなら
     `fileRef` のほうが確かだとしている。[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)）。
     Vectorworks がアプリケーションのフォルダと名前から作るので、別々のフォルダにある同じ名前の古い版のファイルを開いた
-    2 枚は、同じ `<アプリ>/<名前> v2026.vwx` になりえます（「名称未設定 N」の N は重ならない）。利用者がアプリケーションの
+    2 枚は、同じ `<アプリ>/<名前> v2026.vwx` になりえます（「名称未設定 N」の N は重ならない）。SDK リファレンスでは
+    確かめておらず、このプラグインの mac の実機の確認で、古い版の 2 枚は重なり、読み取り専用のファイルを開いたコピー
+    （「コピー N」）は重ならないことを見ただけです（[SDK の調査「残っているもの」](../sdk-research.md#残っているもの)）。利用者がアプリケーションの
     フォルダに同じ名前のファイルを保存して開いていれば、`untitled` が偽の図面とも重なりえます。**`untitled` によらず、
     一致する図面が 2 枚以上あれば、どれも保存・閉じずに `internal` で失敗し、`detail` に `{"reason":"document_ambiguous"}`
-    を付けます**（名指すものは実在するので `invalid_args` にしない。[冒頭](#最初に提供する道具)の 3 で、名指すものの
+    を付けます**（名指すものは実在するので `invalid_args` にしない。[共通の決まり](#共通の決まり)の 3 で、名指すものの
     実在の直後に確かめる）。黙ってどれか 1 枚に効かせると、呼ぶ側の思っていない図面を閉じうるためです。
     呼ぶ側は、利用者に一方を閉じてもらうなどして見分けられるようにします。
   - **`path` は正規化しません。** SDK が返した文字列をそのまま返します。Windows では、保存したときに渡された
     文字列がそのまま残り、区切りだけが `\` に揃います（ドライブ文字の大小・名前の大小・8.3 の短い名前は直らない）。
     同じファイルでも、保存したときの渡し方しだいで別の文字列になります。
 - **`save`** は、名指した図面を `to` の新しいパスへ保存します。種類は `app` です（図面の中身は変えず、ファイルに書く。
-  [ブリッジ「道具の表」](bridge.md#道具の表)）。`to` は必須で（省くと `invalid_args`）、既にあるファイルは断ります（下記）。
+  [ブリッジ「道具の表」](bridge.md#道具の表)）。`to` は必須で（省くと `invalid_args`）、既にあるファイルは断ります（下記「`to` の確かめ」）。
   `untitled` によらず、どの図面にも使え、同じ図面に何度でも使えます（そのたびに新しいファイルができる）。
   - **上書き保存（図面自身のパスへの保存）は提供しません。** 上書き保存は、自分のファイルが移された・消された、開いた後で
     読み取り専用になったなどの場面で警告のダイアログを出し、人が押すまで戻りません
@@ -459,126 +456,20 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     一覧に残る。[Findings「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・
     [同「すでに開かれています」の比べ方（mac）](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#このファイルはすでに開かれていますの比べ方macwindows-と同じ文字列の完全一致)）。
     読み直すのは、保存の直後に前面になっている項目です（前面を戻す前に読む。`fileRef` が保存の前後で変わらないかには頼らない）。
-  - **`to` の形は、呼ぶ前に確かめて `invalid_args` で断ります。** Vectorworks は形を確かめずにその名前で保存し、
-    成功と見分けが付かないものがあるためです（#288）。
-    確かめは `src/core` に置き、**mac の規則と Windows の規則を別々の関数にして、どちらもどの OS でもビルドします。**
-    中身は文字列の処理だけで OS の呼び出しを使わないので、OS で分ける必要がありません。**プラグインがどちらを使うかは
-    `_WIN32` で選び、選ぶのはこの 1 か所だけです**（出荷するプラグインは OS ごとのビルドなので、各 OS のプラグインの
-    規則はビルドで決まる）。テストは、どの OS の CI でも両方の関数を名指しして呼びます。そのため Windows の規則にも、
-    ASan・UBSan（macOS のテストのジョブと ubuntu の fuzz のジョブ）と clang-tidy（ubuntu）が掛かります。
-    比べ方は、下の「パスの一致の判定」のとおり引数で受け取ります。
-    - **Windows では `/` を含む `to` を断ります**（直して渡さない）。Vectorworks に `/` 区切りのまま渡すと、別の名前で
-      黙って保存されます（[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)。#288）。呼ぶ側が `\` 区切りで渡します。
-      プラグインはパスを書き換えないので、渡した文字列のとおりに保存されます。
-    - 絶対パスでない・区切りで終わる（フォルダを指す）。**受ける絶対パスは、mac は `/` から始まるもの、Windows は
-      `X:\`（ドライブ文字・`:`・`\`。ドライブ文字は ASCII の `A`〜`Z`・`a`〜`z` で、ロケールに依る判定をしない）で始まる
-      ものと、UNC（`\\<サーバー>\<共有>\…`）です。** UNC はサーバー・共有・その下の 1 段以上（ファイル名）を要します
-      （`\\<サーバー>\<共有>\<名前>.vwx` が最小。`\\server\a.vwx` と `\\server\share` は断る）。Vectorworks は UNC へ
-      保存でき、渡した文字列がそのまま図面のパスになります（通常の共有へ保存できるかは段 5 の実機の確認で見る。[Findings「保存先のパスの形」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#保存先のパスの形unc相対-と-294)。#294）。
-      Windows のほかの形——`\\?\`（保存されない）・`\\.\`（図面のパスにデバイスの名前空間が残る）・ドライブ相対の
-      `C:a.vwx`・ルート相対の `\a.vwx`（保存されない）——は断ります（どれもダイアログは出ない。#294）。形ごとの判定は
-      持たず、`\\?\` と `\\.\` はサーバーの名前の段が下の「使えない文字」（`?`）と「`.` の段」の確かめで、ドライブ相対と
-      ルート相対は「`X:\` でも `\\` でも始まらない」で断られます。
-      UNC の綴りと別の綴りで同じファイルを指す場合の比較は、下の「パスの一致の判定」に書きます。
-    - `.`・`..` の段、空の段を含む（mac も Windows も）。空の段は、区切りが 2 つ以上続くところで、先頭も含めて断ります
-      （mac の `//a.vwx`・`/x//a.vwx`、Windows の `C:\x\\a.vwx`。Windows の UNC の先頭の `\\` はちょうど 2 つだけを除き、3 つ目からは空の段として断る——
-      `\\\server\share\a.vwx` も断る）。Vectorworks はこれらを字面で処理し（`..` と `//` を畳み、`.` を残す）、`x/./../a.vwx` は渡したパスと
-      別のフォルダへ黙って保存されます。`.` の段を含むパスは図面のパスに残って、開いている図面との比較から外れます。
-      `//` は同じフォルダへ畳まれますが、渡した文字列と図面のパスが食い違い、比べ方が単純でなくなるので、同じく断ります
-      （#294）。
-      **プラグインは正規化して渡さず、断ります。** これは Findings の勧め（[「CLI の `save` への帰結（パスの形）」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#cli-の-save-への帰結パスの形294):
-      `to` は字面で正規化してから渡す）と違う決めです。字面で畳むとシンボリックリンクを段に含むパスで OS の解決とずれるので、
-      正規化は呼ぶ側（自分の OS でパスを解決できる）に任せます。
-    - Windows では、途中の段（フォルダの名前）の末尾が `.` か空白のもの（`C:\x.\a.vwx`・`C:\x..\a.vwx`・`C:\x \a.vwx`）を含む。
-      Vectorworks は文字列を直さず OS に渡すので、`x.\` は Win32 の正規化で `x\` に入るのに図面のパスは `x.\…` のまま残り、
-      `.` の段と同じく開いている図面との比較から外れます。UNC ではサーバーの名前の段にも掛けます（末尾に `.` の付いた完全修飾のホスト名 `\\fs.example.\share\a.vwx` も断る。
-      `\\fs.\…` と `\\fs\…` が同じファイルを指して開いている図面との比較から外れるのを避けるため。呼ぶ側は末尾の `.` を外して渡す）。`x..\`・`x \` は実在する別のフォルダを指しえます
-      （[Findings「途中の段の末尾が `.` か空白の保存先」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#途中の段の末尾が--か空白の保存先windows299)。#299）。**正規化して渡さず、断ります。**
-      `GetFullPathNameW` では見分けられない（`x..\`・`x \` を変えない）ので、段の末尾の文字を字面で見ます。`.`・`..` の段は
-      上の確かめで断られるので、ここの対象はそれ以外の段です。ファイル名の末尾は下の拡張子の確かめで断られます。
-    - 拡張子が `.vwx` でない（大文字と小文字は区別しない）。Vectorworks は拡張子を足さず、`.txt`・`.dwg` でも中身は
-      Vectorworks の形式のまま、その名前で保存します。末尾が `.` の名前もここで断ります（Windows は点を落とした
-      ファイルを作り、図面のパスと食い違う）。
-    - Windows では、先頭（ドライブ名の `X:`、UNC の `\\`）の後のどの段にも——UNC のサーバーと共有の段を含めて——`< > : " | ? *` を含む（`GSError` が 0 のまま `%3F` などに化けた名前で
-      保存される）。
-    - Windows では、255 文字（UTF-16 の単位）を超える段か、全体が 260 文字（UTF-16 の単位。サロゲートペアは 2 つに数える）以上の `to`（段の上限はファイルシステムの名前の長さ。全体の境目は `MAX_PATH`）。SDK はこれを保存できないので、確かめの前に断ります
-      （[Findings「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)）。
-    - mac では、255 バイト（UTF-8）を超える段か、全体が 1024 バイト（`PATH_MAX`）以上の `to`。ファイルシステムの確かめが
-      `ENAMETOOLONG` で失敗し、`to_check_failed`（状態の失敗）に見えてしまうので、引数の誤りとして確かめの前に断ります。
-    - 制御文字（U+0000〜U+001F）を含む（mac も Windows も）。SDK がどう振る舞うかは確かめていないので、確かめずに断ります。
-      Windows の予約された名前（`CON.vwx` など）は、SDK がふつうに保存したので断りません
-      （[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)。`CON` 以外は確かめていない）。
-      保存の前の「既にあるか」の確かめは、Windows では `\\?\`（UNC は `\\?\UNC\`）を付けて聞く（スプールと同じ
-      `extended()` を通す。`extended()` は `src/core` の
-      内部用のヘッダー `WindowsPath.h`（実装は `WindowsPath.cpp`。WIN32 のときだけビルドする）にあり、スプール（`FilesWindows.cpp`）と
-      保存先の確かめ（`SaveTargetWindows.cpp`。下の「OS で分けてビルドするのは」）の両方から使う。処理は 1 つのまま、
-      `\\?\` を付ける処理を書き写さず、道具の確かめとその表・テストをスプールのコードに混ぜない。`extended()` が空の文字列を返すのは受け付けない形のときだけで、それは形の確かめで先に
-      断っているので起きない）ので、どの版の Windows でもこれらを装置ではなくファイルの名前として
-      聞きます（`MAX_PATH` で失敗することもない）。`\\?\` は `.`・`..`・段の末尾の `.` と空白を解きませんが、どれも形の確かめで
-      先に断っているので、聞く先は Vectorworks が保存する先と同じです。ただし、予約された名前を拡張子付きでも装置として
-      扱う古い Windows（Windows 10 まで）では、`\\?\` を付けて聞いた確かめは「無い」で通るのに、Vectorworks は装置へ書いて
-      成功を返します。Vectorworks 2026 が対応する Windows は Windows 11 だけ
-      （[動作環境](https://www.vectorworks.co.jp/Support/sysreq/vw2026.html)）なので、この場合は扱いません（利用者の判断）。
-  - **ネットワークの場所（ネットワークのドライブ・共有）の保存先では、サーバーが届かないと Vectorworks が止まります。**
-    `save` の状態の確かめ（`file_exists`・`parent_missing`）と保存
-    そのものはメインスレッドで行うので、サーバーが止まっている・ネットワークが切れているときは、OS が失敗を返すまで
-    待ち、その間は画面の操作にも CLI のほかの要求にも応えません。段 5 では扱わず、この振る舞いを認めます。
-    OS が失敗を返すまでの待ちは、呼ぶ側の既定の待つ上限（`vw2026 call` の 30 秒）を超えうるので、そのときは `call` が
-    「実行されたかもしれない」（終了コード 4）で終わり、下の `to_check_failed` を読めません。ネットワークの場所へ保存する
-    ときは長い `--timeout` を付け、終了コード 4 で終わったら、Vectorworks が応えるようになってから `documents` で確かめます。
-    UNC のサーバーの名前を綴り誤ったときも、名前の解決を待ってから 53 が返るので同じ扱いになり、終了コード 4 か
-    `to_check_failed` で終わります（サーバーが止まっているときと見分けられない）。
-    - **待ったあとの失敗は「無い」と分けます。** 「無い」に数えるのは、mac は `ENOENT`・`ENOTDIR`、Windows は
-      2 `ERROR_FILE_NOT_FOUND`・3 `ERROR_PATH_NOT_FOUND`・67 `ERROR_BAD_NET_NAME`（サーバーに共有が無い）・
-      267 `ERROR_DIRECTORY`（途中の段がファイル）だけです。
-      `to` の確かめで OS の呼び出しがそれ以外の理由（ネットワークの失敗など。Windows の 53 `ERROR_BAD_NETPATH`・
-      64 `ERROR_NETNAME_DELETED` など）で失敗したときは、`file_exists`・`parent_missing` ではなく `internal`（`to_check_failed`）で断り、`detail` に OS の
-      エラーの番号を整数で載せます（`{"reason":"to_check_failed","check":<段>,"os_error":<値>}`。`check` は失敗した確かめで、
-      `"to"`（`to` そのもの）か `"parent"`（親のフォルダ）。`os_error` は mac では `errno`、Windows では `GetLastError()` の値で、
-      鍵は OS によらず同じ。どれも必ず付ける）。`to` はリンクをたどらずに聞く（mac の `lstat`。Windows の `GetFileAttributesW` もリパースポイントを
-      たどらない）ので、壊れたシンボリックリンクがある `to` も `file_exists` になります（OS で揃う）。親のフォルダはリンクをたどって
-      聞く（mac の `stat`。Windows は `FILE_FLAG_BACKUP_SEMANTICS` を付けた `CreateFileW` で開いて `GetFileInformationByHandle`。開くときは
-      望むアクセスを 0、共有を `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE` にし、ほかのプロセスが開いている親で
-      32・5 を返さないようにする）ので、
-      先の無いシンボリックリンクやジャンクションの親は、OS によらず `parent_missing` になります。呼ぶ側がファイルやフォルダが消えたと読み違え
-      ないためです。ネットワークの場所そのものが外れているとき（mac の `/Volumes` の下のマウントが外れた、割り当てた
-      ドライブ文字が無い）は、OS がパスの無いときと同じ番号（`ENOENT`・3）を返すので見分けられず、「無い」になります。ただし mac で、外れたあとも
-      `/Volumes` の下にマウント先の空のフォルダが残っていると、その直下の `to`（`/Volumes/share/a.vwx`）は親のフォルダが
-      あると見えて、起動ディスクの上のそのフォルダへ保存されます（プラグインからはマウントが外れたことを見分けない）。強制的に外したあとにしか起きないまれな場面なので、`VW Backup` の
-      警告と同じく、前もって確かめずに認めます。結果は成功で返るので、呼ぶ側からも見分けられません。
-      逆に、UNC のサーバーの名前が存在しない（綴りの誤り・名前の解決の失敗）ときも、Windows は届かないときと同じ 53 を
-      返すので、`parent_missing` ではなく `to_check_failed` になります（名前の解決を待ってから返る）。
-      **この「無い」の表は OS の振る舞いで、SDK リファレンスに根拠の節はありません。** 段 5 で、mac と Windows の `VwCliTests`
-      が本物の呼び出しで確かめます（ファイルが無い・親のフォルダが無い・途中の段がファイル。途中の段がファイルのとき
-      Windows が 3 と 267 のどちらを返すかもここで決まる）。共有が無い（67）は CI の環境に共有のサービスがあるとは限らない
-      ので、差し替えの聞く関数で手順を確かめ、本物の 67 は段 5 の実機の確認で見ます。表に無い番号が「無い」の場面で返れば、表に足します。
-    - **保存そのものの途中でつながりが切れたとき**に Vectorworks がエラーのダイアログを出すかは、確かめていません。
-      出たときは、ほかのダイアログと同じく、呼ぶ側がダイアログのコマンドで読んで押します（[設計「本番で常駐させる
-      前提」](../design.md#本番で常駐させる前提安全)。コマンドは [SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める）。
-    **止まることは SDK リファレンスでは調べません**（OS の呼び出しがネットワークを待つことは SDK の挙動ではなく、止まるのは
-    明らかなので、利用者の判断で CLAUDE.md の 7 の例外とした。例外は [SDK の調査](../sdk-research.md)にも書く。SDK リファレンスに根拠の節は無い。
-    保存の途中で切れたときのダイアログも同じ例外で、出ればダイアログのコマンドで扱うので、出るかどうかで実装は変わらない）。
-  - **`to` の親のフォルダが無ければ（ファイルであれば）、`internal` で断ります（`parent_missing`）。** SDK もダイアログを
-    出さずに断り（50331649）、フォルダは作りませんが、理由を分かりやすくするために先に確かめます。親のフォルダは、
-    `to` の最後の区切りまでで作ります。ルートの直下の `to` では、区切りを含めたルートの形にします（`C:\a.vwx` は `C:\`、
-    `/a.vwx` は `/`、`\\server\share\a.vwx` は `\\server\share\`。`C:` はドライブ相対、空の文字列は「無い」になるため）。
-  - **`save` の状態の確かめ（`internal`）は、`to_is_open` → `file_exists` → `parent_missing` の順に行います**（OS の呼び出しが「無い」以外の理由で失敗すれば、その段で `to_check_failed`。[冒頭](#最初に提供する道具)の 4）。開いている図面と
-    一致する `to` は、そのフォルダが消されていても `to_is_open` を返します。
-  - **`to` に既にあるファイルを渡しても保存できません**（SDK が `GSError` 50331649 を返し、何も起きない。
-    mac・Windows とも、どの形で渡しても）。**保存先が別の図面で開いているファイルなら、SDK が警告のダイアログを
-    出して人が OK を押すまで戻りません**（mac も Windows も、開いている図面のパスと文字列が完全に一致するときだけ出る）。
-    そこで、呼ぶ前に次の順に確かめて `internal` で断ります。
-    1. `to` が開いている図面のパスと一致する（比べ方は下記「パスの一致の判定」）。保存先が開いている図面だと
-       示すため（`to_is_open`）、先に確かめます。
-    2. `to` がディスクにある（ファイルシステムに聞く）。大文字と小文字・8.3 の短い名前の違いは
-       ファイルシステムが吸収するので、文字列の比べ方に依らずに防げます。
-
-    上書きしたければ、呼ぶ側が先にファイルを消します。**呼ぶ側が機械的に見分けられるよう、失敗の `detail` に
-    `reason` を付けます:** `to_is_open`（保存先が開いている図面）・`file_exists`（保存先が既にある）。どちらも
-    `internal` です（`invalid_args` と `internal` の分け方は[冒頭](#最初に提供する道具)）。
-    確かめてから保存するまでの間にファイルができた場合は、SDK のエラーを `internal` で返します
-    （開いている図面でなければダイアログは出ない）。これらの `reason`（`parent_missing`・`to_check_failed` を含む）を保存を呼ぶ前に返すことは、段 5 で無 SDK のテストで確かめます
-    （[実装の順序](plan.md)の段 5）。
+  - **`to` は、保存を呼ぶ前に形と状態を確かめます**（規則と理由は[保存先の確かめ](save-target.md)が真実）。
+    Vectorworks は形を確かめずにその名前で保存するものがあり、開いている図面のパスへの保存は警告のダイアログを出して
+    人が押すまで戻らないためです。
+    - **形**（`invalid_args`）: 絶対パス（mac は `/` から始まるもの、Windows は `X:\` で始まるものと UNC。Windows は
+      `/` を含むものを断る）で、拡張子が `.vwx` であること。`.`・`..`・空の段・制御文字と、OS ごとの使えない文字・
+      長さの上限を超えるものは断ります。プラグインは正規化して渡さず、断ります。
+    - **状態**（`internal`）: 次の順に確かめ、最初に当たったものの `reason` を `detail` に付けます。
+      1. `to_is_open`: `to` が開いている図面のパスと一致する（NFC に正規化し、大文字と小文字を区別せずに比べる）。
+      2. `file_exists`: `to` が既にディスクにある（上書きしたければ、呼ぶ側が先にファイルを消す）。
+      3. `parent_missing`: `to` の親のフォルダが無い（フォルダでない）。
+      - 2・3 で OS の呼び出しが「無い」以外の理由で失敗したら `to_check_failed`
+        （`{"reason":"to_check_failed","check":"to"|"parent","os_error":<OS のエラーの番号>}`）。
+    - **ネットワークの場所の保存先では、サーバーが届かないと、OS が失敗を返すまで Vectorworks が止まります。**
+      そうした保存先には長い `--timeout` を付けます（[保存先の確かめ「ネットワークの場所」](save-target.md#ネットワークの場所)）。
   - **`SaveActiveDocumentPath` が 0 以外を返したら、`internal` で失敗し、`detail` に
     `{"reason":"save_failed","gs_error":<値>}` を付けます。** `GSError` は SDK のエラーの番号（`Uint32`）で、値ごとの
     意味は SDK に書かれていません（実測で出たのは 50331649＝`0x03000001` だけで、保存先が既にあるときも長すぎるときも
@@ -599,55 +490,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     （[Findings「指定した図面を保存する・閉じる」の手順](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#手順getopenfileslist-で引きswitchtoopenfile-で前へ出し前面を戻す)）。
     `invalid_args` と、保存を呼ぶ前に返す `internal`（`no_document`・`to_is_open`・`file_exists`・
     `parent_missing`・`to_check_failed`）は、前面を切り替える前に断るので、前面は動きません。
-- **パスの一致の判定。** `document` は `documents` が返した文字列と**完全に一致**するものを探します（呼ぶ側は
-  `documents` の結果をそのまま渡す）。`to` は新しいパスで、開いている図面の保存先との衝突を**見逃さない側**に倒して
-  比べます: 絶対パスを要し（相対パスは `invalid_args`）、Unicode を正規化（NFC。macOS のファイル名は
-  NFD で返ることがある）し、**大文字と小文字を区別せず**に比べます。大文字と小文字だけが違う別のファイルも断る
-  ことになりますが、警告のダイアログが出るより安全です（ダイアログが出るのは文字列が完全に一致するときだけなので、
-  緩く比べて断れば必ずその手前で止まる）。ディスクにあるファイルはこの比べ方によらず 2 つ目の確かめで断るので、
-  この比べ方は、開いている図面との衝突を `to_is_open` として示すためのものです（8.3 の短い名前と長い名前の違いは
-  ここでは見分けず、`file_exists` で断る）。
-  - **警告が出るのは、mac も Windows も文字列が完全に一致するときだけです**（ファイルが無くても出る。#288）。それでも
-    緩く比べるのは、開いている図面のファイルを移したあとに、大文字と小文字・NFC と NFD だけが違う `to` で同じファイルを
-    指す 2 枚目ができるのと、Windows で NFD の別のファイル（NTFS は区別する）に見た目が同じ図面ができるのを防ぐためです。
-  - **NFC への正規化と、大文字と小文字を区別しない比較は OS の呼び出しで行います**（mac は CoreFoundation の
-    `CFStringNormalize`・`CFStringCompare`、Windows は `NormalizeString`・`CompareStringOrdinal`）。外部のライブラリは
-    足しません。
-    - **畳み方は OS の呼び出しのとおりで、mac と Windows で一部の文字が違いえます**（`CFStringCompare` の
-      `kCFCompareCaseInsensitive` は Unicode の case folding、`CompareStringOrdinal` の大文字と小文字の無視は OS の表での
-      単純な大文字への写し。どの文字で違うかは確かめていない）。同じ `to` が一方の OS でだけ `to_is_open` になりえますが、
-      この比べ方は開いている図面との衝突を示すためのもので、ディスクにあるファイルは `file_exists` で断り、警告が出るのは
-      文字列が完全に一致するときだけなので、違いを認めます。ただし、開いている図面のファイルがディスクから移されて
-      いると、一方の OS でだけ一致する文字だけが違う `to` は、もう一方の OS では `to_is_open` にも `file_exists` にも
-      当たらずに保存され、見た目の近い図面がもう 1 枚できえます。同じファイルを別の綴りで指す場合も、同じく見逃し
-      えます。例えば、UNC から開いた図面とその共有に割り当てたドライブ文字の `to`、8.3 の短い名前と長い名前、`subst` の
-      ドライブ、ジャンクション・シンボリックリンクを通る綴り、mac の `/var` と `/private/var` です（どれも、開いている
-      図面のファイルがディスクから移されているときだけ。ファイルがあれば `file_exists` で断られる）。
-    - **OS で分けてビルドするのは、比べ方の薄い包みと、ファイルシステムに聞く関数の包み（mac は `to` に `lstat`・親のフォルダに `stat`、
-      Windows は `extended()` を通したパスで `to` に `GetFileAttributesW`・親のフォルダに `CreateFileW` と `GetFileInformationByHandle` を呼び、OS のエラーの番号を「無い」とそれ以外に分ける表を持つ）の 2 つです。** 聞く関数の包みは `src/core/SaveTarget.h` に宣言し、
-      `SaveTargetPosix.cpp`・`SaveTargetWindows.cpp` に分けて置きます（`FilesPosix.cpp`・`FilesWindows.cpp` と同じ分け方で、
-      スプールのファイルとは別にする。Windows の `\\?\` を付ける処理はスプールと共有の `WindowsPath.h` から使う）。`to` の形の規則は、両方の OS の分をどの OS でもビルドし、
-      `_WIN32` で選ぶのはプラグインが使う規則の 1 か所だけです（上の「`to` の形」）。
-      保存先の確かめの手順（`to_is_open` → `file_exists` → `parent_missing` の順）は比べる関数と、ファイルシステムに
-      聞く関数（「ファイルがある」「フォルダがある」「無い」「確かめられない（OS のエラーの番号）」を返す。親のフォルダがファイルの
-      ときを `parent_missing` にするため、ファイルかフォルダかを分ける）を引数で受け取り、
-      `src/core` に置いてどの OS でもビルド・テストします。手順のテストでは差し替えの比べ方と、53 などの失敗を返す
-      差し替えの聞く関数を渡します（手順を確かめるためのもので、
-      出荷する比べ方を確かめるものではない）。**プラグインの `save` が本物の比べ方を渡していることは CI では確かめられない**
-      （結び付けは SDK に依る `src/tools` の側）ので、段 5 の実機の確認で、開いている図面と大文字と小文字だけが違う `to` が
-      `to_is_open` になることを見ます。
-    - **比べ方の包み**（NFC への正規化と大文字小文字を区別しない比較）は、`src/core/PathCompare.h` に宣言し、
-      `PathCompareMac.cpp`・`PathCompareWindows.cpp` に分けて置き（`FilesPosix.cpp`・`FilesWindows.cpp` と同じ分け方）、
-      APPLE と WIN32 のときだけビルドします。mac は `VwCliCore` に
-      `-framework CoreFoundation` を、Windows は `Normaliz.lib`（`NormalizeString`）をリンクします。Linux 用の代わりの
-      実装は置きません（出荷しない実装をテストしても、出荷するものについて何も分からないため）。
-    - **包みのテスト**は、ほかの無 SDK のテストと同じ `VwCliTests` の中に置きます（別の実行ファイルにしないので、macOS と
-      Windows のカバレッジにそのまま入る）。テストのファイル（`tests/PathCompareTests.cpp`）は**どの OS でも**
-      `VwCliTests` のソースに並べ、中身を印のマクロ `VWCLI_HAS_PATH_COMPARE` で囲みます。印は、包みをビルドするときに CMake が
-      `VwCliCore` に `PUBLIC` で定義し（`VwCliTests` にも届く）、OS で分ける条件は包みの側の 1 か所だけにします。Linux では
-      空の翻訳単位になり、skip の分岐は持ちません。**テストのファイルは `__APPLE__` か `_WIN32` なのに印が無ければ `#error` で
-      止めます**（包みの側の条件を書き誤ると、テストが黙って抜けて CI が緑のままになるのではなく、コンパイルで落ちる。
-      テストのファイルを OS で分けて足すと、そちらの条件の誤りはこの歯止めに届かないので、分けない）。
+    保存を呼ぶ口が例外を投げたときも、前面を戻してから `internal` で応えます。
 - **`close`** は対象の図面を閉じます。**保存はせず、未保存の変更は確認なしに捨てます。** 種類は `app` です。
   対象の図面を `SwitchToOpenFile` で前面にしてから `CloseDocument()` を呼びます（前面の図面に効く。
   [Findings「`CloseDocument()` は `false` を返しながら閉じている」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#closedocument-は-false-を返しながら閉じている未保存の変更も黙って捨てる)）。
@@ -674,31 +517,59 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
       （失敗とは限らない）ので、`documents` で確かめます。
     - **Windows では呼び出しが数秒を超えると、Vectorworks が「応答なし」と表示されます。** 図面は壊れていないので、失敗と
       読みません。
-  - **最後の図面を閉じたら（閉じたあとの一覧が空なら）、中に残った図面を片付けます**（
-    [Findings「閉じた図面が残り、終了で保存の確認が出る」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321323macwindows)。[SDK リファレンス #321](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/321)）。
-    `CloseDocument()` は、先に開いた図面を後に開いた図面が開いている間に閉じると、閉じた図面を中に残し、一覧が空になった
-    あとの終了で、その図面の保存の確認を出します（`quit` だけでなく、利用者がメニューで終了したときも）。片付け方は
-    [`quit`](#quit) と同じで、一覧が空であることを回ごとに確かめながら、`GetActiveDocument` が偽になるまで `CloseDocument()`
-    を呼びます（上限 64 回）。片付かなくても、名指した図面は閉じたので失敗にせず、結果に
+  - **最後の図面を閉じたら（閉じたあとの一覧が空なら）、中に残った図面を片付けます**
+    （[閉じた図面の片付け](#閉じた図面の片付け)）。片付かなくても、名指した図面は閉じたので失敗にせず、結果に
     `"closed_documents_remain":true` を足して知らせます（`{"closed":true,"closed_documents_remain":true}`。片付いたとき・
     片付けが要らなかったときは載せない）。呼ぶ側は、利用者がメニューで終了する前に `quit` で終了するか、人に知らせます
     （`quit` は終了を頼む前にもう一度片付け、片付かなければ断る）。
-    - **図面が開いている間は片付けません**（`CloseDocument()` は開いている図面を閉じてしまう）。ほかの図面が開いている間に
-      `close` した図面は、最後の図面が閉じるまで中に残ります。最後の図面を `close` 以外（利用者の UI・ほかのプラグイン）で
-      閉じたときは、プラグインは片付けません（勝手に動かない。CLAUDE.md の 5）。残っていても、`quit` で終了すれば `quit` が
-      片付けます。
-    - 閉じる順の工夫（後に開いたものから閉じる）では避けません。残るかを決める図面の並びは SDK から読めないためです。
-    - **残った図面の状態で `SaveActiveDocumentPath` を呼ぶと Vectorworks が落ちます**（同じ節）。`save` は一覧が空なら
-      `no_document` で断り、保存を呼ばないので当たりません。
-    - Windows も同じく片付けます（[`quit`](#quit) の同じ項）。
   - 閉じたあとに前面になるのは、最後に開いた図面です（mac も Windows も）。`close` の前の前面の図面が残っていれば、
     その `fileRef` へ `SwitchToOpenFile` で戻します（カレントレイヤも戻る。前面を閉じたときは戻せない。[Findings「Windows と、「閉じる」で確認が出る図面」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows-と閉じるで確認が出る図面305mac-も)）。
-- 図面を開く道具は[設計「決めたこと」](../design.md#決めたこと)の「対象の図面」にあります（未実装）。
+- **図面を開く道具はまだありません**（[設計「これから」](../design.md#これから)）。
   `OpenDocumentPath` で開いた図面は、残すなら `save` で新しいパスへ保存してから `close` します（`close` は変更を捨てる）。開いたあとは Vectorworks の最初の描画が刻みを
   止め、次の要求が長く待たされます（上限は無い。[#290](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/290)）。開く道具を足すときは、
   呼ぶ側の待つ上限を過ぎることを前提にします。
 
-## 他のプラグインの機能
+## 閉じた図面の片付け
 
-手段は `CallPluginLibrary` です（[設計「他のプラグインの道具」](../design.md#他のプラグインの道具)）。
-道具の形は[未決 3](open-questions.md#3-ほかのプラグインの機能の呼び出しの形)で決めます。
+`CloseDocument()` は、先に開いた図面を後に開いた図面が開いている間に閉じると、閉じた図面を Vectorworks の中に
+残します（以下「残った図面」。[Findings「閉じた図面が残り、終了で保存の確認が出る」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321323macwindows)。
+[SDK リファレンス #321](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/321)）。残った図面は `GetOpenFilesList` に出ず（`documents` も空）、一覧が空になった
+あとの終了（`quit` も、利用者のメニューの「終了」も）で、一番上に残った図面が「変更あり」（無題なら変更が無くても）なら
+保存の確認が出て、人が答えるまで止まります。`close` と `quit` は、これを次のように片付けます。
+
+- **見分け方と片付け方。** 一覧が空なのに `GetActiveDocument` が真なら残っています。一覧が空であることを回ごとに
+  確かめながら `CloseDocument()` を呼び、`GetActiveDocument` が偽になるまで 1 枚ずつ消します（`core::clearClosedDocuments`。
+  確認は出ない。残った図面は `close` が変更を捨てると指定されて閉じたものなので、変更を捨てる）。回数の上限は 64 回です。
+- **`close` は、最後の図面を閉じたとき（閉じたあとの一覧が空のとき）に片付けます**（利用者がメニューで終了しても
+  確認が出ないように）。片付かなければ、成功のまま結果で知らせます（[`close`](#図面を扱う道具documentssaveclose)）。
+- **`quit` は、終了を頼む前に片付けます。** `close` の側の片付けが届かない道への備えです（ほかのプラグインやスクリプトの
+  `CloseDocument()` が最後の図面を閉じた・`close` の片付けが上限で止まった、など）。外すと、`quit` が
+  `{"quitting":true}` を返したあとに見えない図面の保存の確認が出て、人が答えるまで Vectorworks が止まります。残った
+  図面が無ければ `GetActiveDocument` を 1 回呼ぶだけです。片付かなければ断ります（[`quit`](#quit)）。
+- **図面が開いている間は片付けません**（`CloseDocument()` は開いている図面を閉じてしまう）。ほかの図面が開いている間に
+  `close` した図面は、最後の図面が閉じるまで中に残ります。最後の図面を `close` 以外（利用者の UI・ほかのプラグイン）で
+  閉じたときは、プラグインは片付けません（勝手に動かない。CLAUDE.md の 5）。残っていても、`quit` で終了すれば `quit` が
+  片付けます。最後の図面を利用者が UI で閉じると、残った図面も消えます（Windows（Vectorworks 2025）。mac は推定。同じ節）。
+- **閉じる順の工夫（後に開いたものから閉じる）では避けません。** 残るかを決める図面の並びは SDK から読めないためです。
+- **残った図面の状態で `SaveActiveDocumentPath` を呼ぶと Vectorworks が落ちます**（同じ節）。`save` は一覧が空なら
+  `no_document` で断り、保存を呼ばないので当たりません。
+- **Windows も同じく片付けます**（Vectorworks 2025 の Windows でも図面が残り、この片付けで確認が出なくなる。同じ節。
+  Vectorworks 2026 の Windows は測っていない。[#323](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/323)）。
+
+## 実機で確かめていないこと
+
+道具は mac と Windows の実機で確かめてから出しましたが、次のものは実機で見られていません（Windows の確認に使った
+仮想環境で Vectorworks がメモリの不足で落ち続けた・必要な状況を起こせなかった。実機の確かめ方は
+[実機の確かめ方](verification.md)）。関わるところを変えるときは、見られるようになっていれば先に確かめます。
+
+| 見られていないもの | 分かっていること |
+| --- | --- |
+| Windows の参照で入ったレイヤ（`layers` の `referenced`・`objects`） | SDK の振る舞いは Windows でも測ってある（[SDK リファレンス #310](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/310)）。mac の実機では 2 通りとも確かめた |
+| Windows の古い版のファイルを開いた図面の `untitled` と、同じ名前の 2 枚の `path` の重なり | SDK リファレンスでも測れなかった（[#291](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/291)）。`untitled` が偽でも、`save` は新しいパスへしか保存せず `close` は保存しないので、利用者のファイルは置き換わらない。mac の実機では `untitled` が真で、`path` が重なり、`save`・`close` が `document_ambiguous` で断った |
+| Windows の読み取り専用のファイルを開いたコピーの `close` と、同じ名前の 2 枚の `path` | `close` で確認が出ないことは SDK リファレンスで分かっている（[#305](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/305)）。mac の実機では確認なしに閉じ、`path` は重ならなかった |
+| Windows の、前もって作った共有（UNC）への `save` | 管理共有（`\\localhost\C$`。確認に使った環境では Vectorworks が昇格して動いていた）への保存は確かめた |
+| Windows のシートレイヤなどの、情報パレットの数・外形との比較の一部 | 数は見本の図面を作ったスクリプトの数と一致した。mac の実機では情報パレットと一致した |
+| 前面を確かめてから保存・閉じること・`layer_ambiguous`・`layer` を渡したときにそのレイヤだけを辿ること | 実機の確認のあとに入れた。無 SDK のテストで確かめてある |
+| `quit` の側の[閉じた図面の片付け](#閉じた図面の片付け) | 要る状況を実機で起こせていない（最後の図面を UI で閉じた形は、片付けの無い版でも確認が出なかった）。無 SDK のテストで確かめてある |
+| Windows の起動の途中の `quit`（`starting` で断ること） | ふつうの起動では `session start` が応える前に起動を終えていて当てられない。mac の実機では確かめた。起動を終えた目印の通知が Windows でも届くことは確かめた |
+| Windows の Vectorworks 2026 での `quit` と閉じた図面の片付け | Windows の確認は Vectorworks 2025 で行った（[#323](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/323)） |

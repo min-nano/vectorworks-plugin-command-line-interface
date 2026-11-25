@@ -12,7 +12,7 @@
 //   - オブジェクトの同じキーは、後のものを使う。
 //   - 数は綴りのまま持つ（丸めず、書き出しも同じ綴り）。整数の引数は綴りではなく値で読み
 //     （integerValue）、道具の結果の実数は Go の encoding/json と同じ綴りで作る（real）。決まりは
-//     docs/plugin/tools.md「最初に提供する道具」の冒頭。
+//     docs/plugin/tools.md「共通の決まり」。
 
 #include <cstdint>
 #include <optional>
@@ -25,7 +25,7 @@
 namespace VwCli::core {
 
 // 整数の引数が受ける最大の値（int32 の最大）。道具ごとに範囲を決めていなくても、整数の引数は
-// 0 以上この値以下に限る（docs/plugin/tools.md「最初に提供する道具」の冒頭）。
+// 0 以上この値以下に限る（docs/plugin/tools.md「共通の決まり」）。
 inline constexpr std::int64_t kMaxIntegerArg = 2147483647;
 
 // IntegerCheck は数を整数の引数として読んだ結果。

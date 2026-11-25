@@ -20,7 +20,7 @@
 | `serve/*.json` | 受け付けの見本（1 ファイル 1 件） |
 
 道具の結果の決まり（実数の綴り）は通信規則ではないので、ここではなく `tests/fixtures/` に置きます
-（C++ は `tests/NumberTests.cpp`、Go は `cli/internal/toolfixtures`。[道具](plugin/tools.md#最初に提供する道具)の冒頭）。
+（C++ は `tests/NumberTests.cpp`、Go は `cli/internal/toolfixtures`。[道具「共通の決まり」](plugin/tools.md#共通の決まり)）。
 
 見本の中身は整形も検査もせず（[整形](format.md#整形しないもの)）、git にも改行を変えさせません
 （`.gitattributes` の `-text`）。

@@ -1,8 +1,8 @@
 #include "TestSupport.h"
 
-// save の to の比べ方の包み（docs/plugin/tools.md「パスの一致の判定」）。包みは mac と Windows
-// でだけ ビルドし、CMake がそのとき VWCLI_HAS_PATH_COMPARE を定義する。このファイルはどの OS
-// でもテストの ソースに並べ、Linux では空になる。
+// save の to の比べ方の包み（docs/plugin/save-target.md「パスの一致の判定」）。包みは mac と
+// Windows でだけビルドし、CMake がそのとき VWCLI_HAS_PATH_COMPARE を定義する。このファイルは
+// どの OS でもテストのソースに並べ、Linux では空になる。
 
 #if (defined(__APPLE__) || defined(_WIN32)) && !defined(VWCLI_HAS_PATH_COMPARE)
 #error "the path comparison wrapper must be built on macOS and Windows (CMakeLists.txt)"
