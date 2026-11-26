@@ -28,10 +28,6 @@ macOS（ターミナル）:
 ```bash
 curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.sh | sh
 # {"outcome":"installed","name":"cli","requested":"<タグ>","tag":"<タグ>",…}
-
-# 新しい端末を開き、Vectorworks を起動してから確かめる
-vw2026 status
-# {"running":true,"spool":"…"}
 ```
 
 Windows（PowerShell）:
@@ -39,17 +35,18 @@ Windows（PowerShell）:
 ```powershell
 irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.ps1 | iex
 # {"outcome":"installed","name":"cli","requested":"<タグ>","tag":"<タグ>",…}
-
-# 新しい端末を開き、Vectorworks を起動してから確かめる
-vw2026 status
-# {"running":true,"spool":"…"}
 ```
 
 1. **新しい端末を開く**と、`vw2026` が使えます。macOS で `~/.local/bin` が PATH に無いときは、表示される案内に
    従って PATH に足します。
 2. **Vectorworks を起動します。** 起動の途中に「開発元不明のプラグイン」のダイアログが出て `cli` が「無効」と
    示されたら、`cli` を選んで「有効化」し、Vectorworks を起動し直します。
-3. `vw2026 status` が `{"running":true,…}` を返せば使えます。
+3. 新しい端末で、次の結果が返れば使えます。
+
+   ```bash
+   vw2026 status
+   # {"running":true,"spool":"…"}
+   ```
 
 Vectorworks 2025 に入れるときは、URL の `get-vw2026` を `get-vw2025` に替えます（コマンドは `vw2025`）。
 
@@ -94,7 +91,7 @@ vw2026 call layer_objects '{"layer":"1F","limit":10}'
 ### 図面を保存する・閉じる、Vectorworks を終了する
 
 Vectorworks に指示する操作（`save`・`close`・`quit`）は、他のプログラムの操作と混ざらないように、
-**セッションを使って占有した中でだけ**実行できます（占有していなければ `no_session`、ほかが占有していれば `occupied` で断られます）。
+**セッションを使って占有した中でだけ**実行できます（占有していないとき・ほかが占有しているときは、標準出力に何も返さず終了コード 23 で断られます。理由は標準エラーに出ます）。
 
 ```bash
 # セッションを始める
@@ -137,7 +134,8 @@ vw2026 install cli@latest
 アンインストールは、インストールに使ったスクリプトに `uninstall` を渡して行います。インストールされている版に
 合ったスクリプトのコマンドは、`vw2026 uninstall cli` が表示します（このコマンド自体は何も変更しません）。
 表示された 1 つ目のコマンド（インストールされているタグのスクリプト）を、**表示されたとおりに**コピーして
-実行します。下の例のタグ `0.0.0-1a2b3c4` は例で、実際には、インストールされている版のタグが表示されます。
+実行します。下の出力のタグ `0.0.0-1a2b3c4` は例で、実際には、インストールされている版のタグが表示されます。
+実行するコマンドの `<タグ>` は、表示されたタグに置き換えます（そのままでは実行できません）。
 既定と違うプラグインのフォルダにインストールしたときは、コマンドに `--plugins-dir` も付いて表示されます。
 出力の `<Plug-Ins>` には、実際のプラグインのフォルダの絶対パスが表示されます。JSON の出力と終了コード
 （この場合は 2）は `vw2026 help uninstall` にあります。
@@ -157,8 +155,8 @@ vw2026 uninstall cli
 # 標準出力:
 # {"outcome":"failed","name":"cli","message":"…","command":"curl -fsSL …/download/0.0.0-1a2b3c4/get-vw2026.sh | sh -s -- uninstall"}
 
-# 表示された 1 つ目のコマンドを、表示されたとおりに実行する（タグは例）
-curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/0.0.0-1a2b3c4/get-vw2026.sh | sh -s -- uninstall
+# 表示された 1 つ目のコマンドを、表示されたとおりに実行する（<タグ> は表示されたタグ。このままでは実行できない）
+curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/<タグ>/get-vw2026.sh | sh -s -- uninstall
 # {"outcome":"uninstalled","name":"cli","hook":{…},"remaining":[],"left":[]}
 ```
 
@@ -174,8 +172,8 @@ vw2026 uninstall cli
 # 標準出力:
 # {"outcome":"failed","name":"cli","message":"…","command":"& ([scriptblock]::Create((irm …/download/0.0.0-1a2b3c4/get-vw2026.ps1))) uninstall"}
 
-# 表示された 1 つ目のコマンドを、表示されたとおりに実行する（タグは例）
-& ([scriptblock]::Create((irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/0.0.0-1a2b3c4/get-vw2026.ps1))) uninstall
+# 表示された 1 つ目のコマンドを、表示されたとおりに実行する（<タグ> は表示されたタグ。このままでは実行できない）
+& ([scriptblock]::Create((irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/download/<タグ>/get-vw2026.ps1))) uninstall
 # {"outcome":"uninstalled","name":"cli","hook":{…},"remaining":[],"left":[]}
 ```
 
