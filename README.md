@@ -3,8 +3,8 @@
 [![codecov](https://codecov.io/gh/min-nano/vectorworks-plugin-command-line-interface/graph/badge.svg)](https://codecov.io/gh/min-nano/vectorworks-plugin-command-line-interface)
 
 **Vectorworks をコマンドラインから操作するコマンドと、Vectorworks がコマンドを受信するための Vectorworks 用プラグインです。**
-操作できるのは、インストールしてライセンス認証を済ませた Vectorworks です。Vectorworks を起動し、プラグインの
-動作中のみ操作可能です。
+操作できるのは、インストールしてライセンス認証を済ませた Vectorworks です。`vw2026 call` の実行は、Vectorworks を起動し、
+プラグインの動作中のみ操作可能です。
 シェルスクリプトや他のプログラム、AI エージェントから、次のことを実行できます。
 
 - **図面を読む**: レイヤとクラスの一覧、レイヤの中の図形（種別・名前・クラス・外形）、種別ごとの図形の数
@@ -68,11 +68,11 @@ vw2026 status
 
 # プラグインの版と、図面が開いているかを見る
 vw2026 call ping
-# {"version":"abc1234","branch":"main","protocol":6,"pid":4242,"session":false,"document_open":true,"current_layer":"1F"}
+# {"version":"abc1234","branch":"main","protocol":…,"pid":4242,"session":false,"document_open":true,"current_layer":"1F"}
 
 # 使える道具の一覧を見る
 vw2026 call tools
-# {"protocol":6,"tools":[{"name":"layers","description":"…","inputSchema":{…},"kind":"read"},…]}
+# {"protocol":…,"tools":[{"name":"layers","description":"…","inputSchema":{…},"kind":"read"},…]}
 ```
 
 道具は `vw2026 call <道具> ['<引数の JSON>']` で呼びます。
