@@ -27,7 +27,7 @@ macOS（ターミナル）:
 
 ```bash
 curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.sh | sh
-# {"outcome":"installed","name":"cli","requested":"latest","tag":"…",…}
+# {"outcome":"installed","name":"cli","requested":"<タグ>","tag":"<タグ>",…}
 
 # 新しい端末を開き、Vectorworks を起動してから確かめる
 vw2026 status
@@ -38,7 +38,7 @@ Windows（PowerShell）:
 
 ```powershell
 irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.ps1 | iex
-# {"outcome":"installed","name":"cli","requested":"latest","tag":"…",…}
+# {"outcome":"installed","name":"cli","requested":"<タグ>","tag":"<タグ>",…}
 
 # 新しい端末を開き、Vectorworks を起動してから確かめる
 vw2026 status
@@ -139,8 +139,8 @@ vw2026 install cli@latest
 表示された 1 つ目のコマンド（インストールされているタグのスクリプト）を、**表示されたとおりに**コピーして
 実行します。下の例のタグ `0.0.0-1a2b3c4` は例で、実際には、インストールされている版のタグが表示されます。
 既定と違うプラグインのフォルダにインストールしたときは、コマンドに `--plugins-dir` も付いて表示されます。
-出力の `<Plug-Ins>` には、実際のプラグインのフォルダの絶対パスが表示されます。出力の全文と終了コードは
-`vw2026 help uninstall` にあります。
+出力の `<Plug-Ins>` には、実際のプラグインのフォルダの絶対パスが表示されます。JSON の出力と終了コード
+（この場合は 2）は `vw2026 help uninstall` にあります。
 
 インストールされている版のリリースが無くなっているとき（プレリリースは、その PR を閉じると削除されます）だけ、
 表示された 2 つ目のコマンド（`latest` のスクリプト）を使います。
