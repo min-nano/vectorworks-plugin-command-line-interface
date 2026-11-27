@@ -14,7 +14,7 @@
 # 戻し、プラグインは残るのにリンクだけが消えた状態になる）。~/.local/bin は消さない。
 set -u
 
-# shellcheck source=scripts/hooks/lib.sh
+# shellcheck source=SCRIPTDIR/lib.sh
 . "$(dirname "$0")/lib.sh"
 
 hook_init
