@@ -19,7 +19,8 @@ runs:
         python3 -m venv "$RUNNER_TEMP/venv"
         "$RUNNER_TEMP/venv/bin/pip" install -r tools/requirements.txt
         echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
-    # PSScriptAnalyzer は scripts/powershell.ps1 が固定した版を入れる（pwsh はランナーにある）。
+    # PSScriptAnalyzer は scripts/powershell.ps1 が固定した版を入れる（pwsh はランナーにある）。整形と検査は
+    # Pester を使わないので入れない。
     - name: PSScriptAnalyzer
       shell: bash
-      run: pwsh -NoProfile -File scripts/powershell.ps1 -Mode Install
+      run: pwsh -NoProfile -File scripts/powershell.ps1 -Mode Install -Module PSScriptAnalyzer

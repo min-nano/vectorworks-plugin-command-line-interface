@@ -102,9 +102,11 @@ jobs:
           - name: build-mac
             year: "2026"
             zip: cli-macos-arm64.zip
+            go-tags: ""
           - name: build-mac-vw2025
             year: "2025"
             zip: cli-vw2025-macos-arm64.zip
+            go-tags: vw2025
     runs-on: macos-15
     env:
       VW_SDK_URL: https://release.vectorworks.net/latest/Vectorworks/${{ matrix.year }}-NNA-eng-mac-SDK.zip
@@ -112,6 +114,7 @@ jobs:
       VERSION: ${{ needs.meta.outputs.version }}
       YEAR: ${{ matrix.year }}
       ARCHIVE: ${{ matrix.zip }}
+      GO_TAGS: ${{ matrix.go-tags }}
     steps:
       # 取り出すものは meta の出力に頼らず、ここに条件を書く（同じリポジトリの PR だけ head。fork の
       # PR はマージのためのコミット）。CodeQL が安全だと読めるようにし、meta を変えたときに信頼
@@ -141,16 +144,12 @@ jobs:
           test -e build/cli.vwlibrary/Contents/Resources/cli.vwr
           ditto build/cli.vwlibrary stage/cli.vwlibrary
       # Go は arm64 のバイナリをリンクのときにアドホック署名する。lipo は各アーキテクチャの署名を保つ。
-      # 2025 はビルドタグ vw2025 を付ける（コマンド名・環境変数・置き場所・既定のレジストリが 2025 になる）。
+      # 2025 はビルドタグ vw2025 を付ける（マトリクスの go-tags。コマンド名・環境変数・置き場所・既定のレジストリが 2025 になる）。
       - name: cli
         run: |
           set -eu
-          tags=""
-          if [ "$YEAR" != 2026 ]; then
-            tags="vw$YEAR"
-          fi
           for arch in arm64 amd64; do
-            CGO_ENABLED=0 GOOS=darwin GOARCH="$arch" go -C cli build -trimpath -tags "$tags" \
+            CGO_ENABLED=0 GOOS=darwin GOARCH="$arch" go -C cli build -trimpath -tags "$GO_TAGS" \
               -ldflags "-s -w -X main.version=$VERSION" -o "$RUNNER_TEMP/vw$YEAR-$arch" ./cmd/vw2026
           done
           mkdir -p stage/bin
@@ -189,9 +188,11 @@ jobs:
           - name: build-windows
             year: "2026"
             zip: cli-windows-x64.zip
+            go-tags: ""
           - name: build-windows-vw2025
             year: "2025"
             zip: cli-vw2025-windows-x64.zip
+            go-tags: vw2025
     runs-on: windows-latest
     defaults:
       run:
@@ -202,6 +203,7 @@ jobs:
       VERSION: ${{ needs.meta.outputs.version }}
       YEAR: ${{ matrix.year }}
       ARCHIVE: ${{ matrix.zip }}
+      GO_TAGS: ${{ matrix.go-tags }}
     steps:
       # 取り出すものは meta の出力に頼らず、ここに条件を書く（同じリポジトリの PR だけ head。fork の
       # PR はマージのためのコミット）。CodeQL が安全だと読めるようにし、meta を変えたときに信頼
@@ -225,12 +227,8 @@ jobs:
       - name: cli
         run: |
           set -eu
-          tags=""
-          if [ "$YEAR" != 2026 ]; then
-            tags="vw$YEAR"
-          fi
           mkdir -p stage/bin
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go -C cli build -trimpath -tags "$tags" \
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go -C cli build -trimpath -tags "$GO_TAGS" \
             -ldflags "-s -w -X main.version=$VERSION" -o "../stage/bin/vw$YEAR.exe" ./cmd/vw2026
           "stage/bin/vw$YEAR.exe" version
           "stage/bin/vw$YEAR.exe" --help | head -1 | grep -q "^Usage: vw$YEAR "
@@ -395,8 +393,12 @@ jobs:
           # 404 になる）。載るまで引き直し、載らなければ失敗にする。
           id=""
           for _ in $(seq 10); do
-            id="$(gh api --paginate "$api/releases?per_page=100" |
-              jq -s -r --arg tag "$TAG" 'add | map(select(.draft and .tag_name == $tag)) | .[0].id // empty')"
+            # 頁ごとに絞り、最初の 1 行を取る（head で切ると gh が SIGPIPE で落ちうるので、シェルで切る）。
+            # $ENV は jq の式で、シェルに展開させない。
+            # shellcheck disable=SC2016
+            id="$(gh api --paginate "$api/releases?per_page=100" \
+              --jq '.[] | select(.draft and .tag_name == $ENV.TAG) | .id')"
+            id=${id%%$'\n'*}
             [ -n "$id" ] && break
             sleep 3
           done
