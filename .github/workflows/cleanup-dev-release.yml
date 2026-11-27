@@ -36,16 +36,20 @@ jobs:
       - run: |
           set -eu
           api="repos/$GH_REPO"
-          pattern="^dev-(.*-)?$PR_NUMBER-[0-9a-f]{7}\$"
+          # 頁ごとに絞るので、頁を合わせない（gh の --jq。値は環境変数で渡す）。$ENV は jq の式で、
+          # シェルに展開させない。
+          export PATTERN="^dev-(.*-)?$PR_NUMBER-[0-9a-f]{7}\$"
           # 下書きを含むリリース。消してもタグは残るので、タグは次で消す。
-          gh api --paginate "$api/releases?per_page=100" | jq -s 'add // []' |
-            jq -r --arg pattern "$pattern" '.[] | select(.tag_name | test($pattern)) | "\(.id) \(.tag_name)"' |
+          # shellcheck disable=SC2016
+          gh api --paginate "$api/releases?per_page=100" \
+            --jq '.[] | select(.tag_name | test($ENV.PATTERN)) | "\(.id) \(.tag_name)"' |
             while read -r id tag; do
               gh api -X DELETE "$api/releases/$id"
               echo "removed the release $tag"
             done
-          gh api --paginate "$api/git/matching-refs/tags/dev-" | jq -s 'add // []' |
-            jq -r --arg pattern "$pattern" '.[] | .ref | ltrimstr("refs/tags/") | select(test($pattern))' |
+          # shellcheck disable=SC2016
+          gh api --paginate "$api/git/matching-refs/tags/dev-" \
+            --jq '.[] | .ref | ltrimstr("refs/tags/") | select(test($ENV.PATTERN))' |
             while read -r tag; do
               gh api -X DELETE "$api/git/refs/tags/$tag"
               echo "removed the tag $tag"
