@@ -116,7 +116,11 @@ func Parse(data []byte, remote bool) (*Registry, error) {
 
 // Select は @ の後ろの文字列に最初に合った規則を返す。合わなければ false。取れなくても次の
 // 規則へは進まない（どの場所を使うかが文字列だけで決まり、ネットワークの状態で変わらないため）。
+// タグの綴り（ValidTag）を満たさない文字列にはどの規則も合わない（match の前提）。
 func (e Entry) Select(requested string) (Rule, bool) {
+	if !ValidTag(requested) {
+		return Rule{}, false
+	}
 	for _, rule := range e.Manifests {
 		if match(rule.Match, requested) {
 			return rule, true
@@ -137,8 +141,9 @@ func (r Rule) ByTag() bool {
 }
 
 // match はパターン（* は 0 文字以上に合う）が s 全体に合うか。path.Match の * は / に合わず、
-// ? [ ] \ も特別に扱うが、パターンは matchPattern が、s（タグ）は ValidTag がそれらを含まないことを
-// 確かめているので、ここでは * だけの照合と同じになる（壊れたパターンの誤りも起きない）。
+// ? [ ] \ も特別に扱うが、パターンは matchPattern が、s（タグ）は ValidTag（Select が確かめる）が
+// それらを含まないことを確かめているので、ここでは * だけの照合と同じになる（壊れたパターンの誤りも
+// 起きない）。
 func match(pattern, s string) bool {
 	ok, _ := path.Match(pattern, s)
 	return ok

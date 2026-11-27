@@ -74,8 +74,8 @@ inline bool isTrue(const core::Json &value) { return value.isBool() && value.asB
 // kNow は受け付けに渡す、決まった今の時刻（ナノ秒）。
 inline constexpr std::int64_t kNow = 1760000000000000000;
 
-// kMaxResponseBytes
-// は応答のファイルを読む上限。通信規則は応答の大きさを決めないので、要求の上限より 大きく取る。
+// kMaxResponseBytes は応答のファイルを読む上限。通信規則は応答の大きさを決めないので、
+// 要求の上限より大きく取る。
 inline constexpr std::size_t kMaxResponseBytes = core::protocol::kMaxRequestBytes * 2;
 
 // reasonOf は失敗の詳細（detail）の reason。無ければ空。
