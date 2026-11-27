@@ -73,8 +73,6 @@ Opened openRegular(const std::string &path, int flags, mode_t mode = 0) {
 
 }
 
-bool isSeparator(char c) { return c == '/'; }
-
 std::optional<std::string> modulePathOf(const void *address) {
 	// リンクは解かない。バンドル（cli.vwlibrary）だけをほかの場所へのリンクにしても、そのバンドルの
 	// あるフォルダ（<Plug-Ins>/cli）を指すため。呼ぶ側は実行ファイルのリンクを解くが、その親の bin

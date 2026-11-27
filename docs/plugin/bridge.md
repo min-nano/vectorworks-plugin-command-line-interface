@@ -25,7 +25,8 @@
 
 **OS ごとのファイル（`FilesPosix.cpp`・`FilesWindows.cpp`）には OS の呼び出しだけを置き、
 OS に依らない部分は `Files.cpp` に置きます。** OS ごとの違いが値だけのもの（パスをつなぐ区切りの
-文字 `kSeparator`）は `Files.h` の定数で表し、それを使う処理（`join`）は `Files.cpp` に 1 つだけ
+文字 `kSeparator`）は `Files.h` の定数で表し、区切りとみなす文字の違い（Windows は `/` も区切り）は
+`Files.cpp` の `isSeparator` の中で分けます。これらを使う処理（`join`）は `Files.cpp` に 1 つだけ
 書きます。パスを文字列として組み立てる・分ける処理（親のフォルダ・ファイル名を求めるなど）を
 足すときも `Files.cpp` に置き、OS ごとのファイルに書き写しません。
 

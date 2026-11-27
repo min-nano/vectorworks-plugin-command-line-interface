@@ -1,8 +1,8 @@
 #pragma once
 
 // スプールに使う OS の呼び出し（docs/protocol.md「ロック」「待つ印」）。SDK に依らない。
-// 実装は OS ごとのファイル（FilesPosix.cpp・FilesWindows.cpp）。OS に依らない部分（join・
-// Lock::~Lock）は Files.cpp に置き、OS ごとの違いはこのヘッダーの定数で表す。
+// 実装は OS ごとのファイル（FilesPosix.cpp・FilesWindows.cpp）。OS に依らない部分（isSeparator・
+// join・Lock::~Lock）は Files.cpp に置き、OS ごとの違いは kSeparator と isSeparator の中で分ける。
 //
 // パスは UTF-8。開くファイルは子プロセスに受け継がせない（POSIX は O_CLOEXEC、Windows は
 // 継承できないハンドル）。受け継がれると、Vectorworks が終わってもロックが放されないため。

@@ -98,8 +98,6 @@ Opened openFile(const std::string &path, DWORD access, DWORD share, DWORD dispos
 
 }
 
-bool isSeparator(char c) { return c == '\\' || c == '/'; }
-
 std::optional<std::string> modulePathOf(const void *address) {
 	// 参照の数は変えない（留めるのは Clock.cpp の startClock の受け持ち）。
 	HMODULE module = nullptr;
