@@ -1,6 +1,7 @@
 #include "core/Json.h"
 
 #include <algorithm>
+#include <cassert>
 #include <charconv>
 #include <cmath>
 #include <system_error>
@@ -485,6 +486,9 @@ Json Json::real(double value) {
 	char buffer[64];
 	auto [end, ec] =
 	    std::to_chars(buffer, buffer + sizeof buffer, value, std::chars_format::scientific);
+	// double の指数の形は 64 文字に収まるので失敗しない。下の取り出しはこれと、指数の 'e' が
+	// あることを前提にする（無ければ指数を仮数の先頭から読み、誤りにならずに違う数を返す）。
+	assert(ec == std::errc{});
 	(void)ec;
 	std::string_view shortest(buffer, static_cast<std::size_t>(end - buffer));
 	bool negative = shortest.starts_with('-');
@@ -496,6 +500,7 @@ Json Json::real(double value) {
 	// 1 桁で、値が 0 でなければ 0 ではない）なので、小数点の前は常に 1 桁で、仮数の末尾に 0 は
 	// 付かない（付けば文字数が最も短くない）。先頭と末尾の 0 を除く処理は要らない。
 	const std::size_t e = shortest.find('e');
+	assert(e != std::string_view::npos);
 	std::string digits(1, shortest[0]);
 	if (e > 1) {
 		digits.append(shortest.substr(2, e - 2));
