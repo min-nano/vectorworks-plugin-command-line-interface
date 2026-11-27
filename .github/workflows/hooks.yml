@@ -28,5 +28,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # Windows に入っている Pester 3.4 ではなく、scripts/powershell.ps1 が固定した版を入れて使う。
-      - run: powershell -NoProfile -File scripts/powershell.ps1 -Mode Install
+      # 使わない PSScriptAnalyzer は入れない。
+      - run: powershell -NoProfile -File scripts/powershell.ps1 -Mode Install -Module Pester
       - run: powershell -NoProfile -File scripts/powershell.ps1 -Mode Test tests/hooks/Hooks.Tests.ps1

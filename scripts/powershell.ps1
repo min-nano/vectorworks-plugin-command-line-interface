@@ -7,14 +7,20 @@
 #   pwsh scripts/powershell.ps1 -Mode Lint <files>   検査の指摘を並べて、あれば 1 で終わる
 #   pwsh scripts/powershell.ps1 -Mode Test <files>   Pester でテストし、失敗があれば 1 で終わる
 #   pwsh scripts/powershell.ps1 -Mode Install        固定した版の PSScriptAnalyzer と Pester を入れる
+#   pwsh scripts/powershell.ps1 -Mode Install -Module Pester   渡したモジュールだけを入れる
 #
 # -Mode LintFile <file> は -Mode Lint が子のプロセスで使う（指摘があれば 1、解析器が落ちたら 3 で終わる）。
 param(
-	[Parameter(Mandatory)]
+	[Parameter(Mandatory, Position = 0)]
 	[ValidateSet('Check', 'Fix', 'Lint', 'LintFile', 'Test', 'Install')]
 	[string] $Mode,
-	[Parameter(ValueFromRemainingArguments)]
-	[string[]] $Path = @()
+	[Parameter(Position = 1, ValueFromRemainingArguments)]
+	[string[]] $Path = @(),
+	# -Mode Install で入れるモジュール。整形と検査は PSScriptAnalyzer だけ、フックのテストは Pester だけを使う。
+	# $Mode と $Path に Position を書き、これを名前でだけ渡せるようにする（Position を書かないと宣言の順に
+	# 位置が割り当てられ、ファイルの名前を受け取ってしまう）。
+	[ValidateSet('PSScriptAnalyzer', 'Pester')]
+	[string[]] $Module = @('PSScriptAnalyzer', 'Pester')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -25,9 +31,13 @@ $version = '1.25.0'
 $pesterVersion = '5.7.1'
 
 if ($Mode -eq 'Install') {
-	Install-Module PSScriptAnalyzer -RequiredVersion $version -Scope CurrentUser -Force
-	# Windows に入っている Pester 3.4 と発行元が違うので、発行元の確かめを飛ばして横に入れる。
-	Install-Module Pester -RequiredVersion $pesterVersion -Scope CurrentUser -Force -SkipPublisherCheck
+	if ($Module -contains 'PSScriptAnalyzer') {
+		Install-Module PSScriptAnalyzer -RequiredVersion $version -Scope CurrentUser -Force
+	}
+	if ($Module -contains 'Pester') {
+		# Windows に入っている Pester 3.4 と発行元が違うので、発行元の確かめを飛ばして横に入れる。
+		Install-Module Pester -RequiredVersion $pesterVersion -Scope CurrentUser -Force -SkipPublisherCheck
+	}
 	exit 0
 }
 
