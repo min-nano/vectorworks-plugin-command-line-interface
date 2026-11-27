@@ -245,7 +245,7 @@ if(VW_BUILD_TESTS)
 	enable_testing()
 	# PathCompareTests.cpp はどの OS でも並べる（中身は VWCLI_HAS_PATH_COMPARE で囲み、Linux では空。
 	# mac と Windows で印が無ければコンパイルで止まる）。
-	add_executable(VwCliTests tests/BridgeTests.cpp tests/DocumentToolsTests.cpp
+	add_executable(VwCliTests tests/ArgsTests.cpp tests/BridgeTests.cpp tests/DocumentToolsTests.cpp
 							  tests/FixtureTests.cpp tests/JsonTests.cpp tests/NumberTests.cpp
 							  tests/PathCompareTests.cpp tests/PingTests.cpp tests/QuitTests.cpp
 							  tests/ReadToolsTests.cpp tests/SaveTargetTests.cpp
