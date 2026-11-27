@@ -438,7 +438,7 @@ func (h *harness) hookSignals() (signal, await string) {
 }
 
 // lockWhenHookStarts は、lockingHook のフックの合図を待ってスプール dir のロックを掴み、フックに知らせる。done は
-// 終えたら閉じる。unlock はロックを放す（Vectorworks の終了。done のあとで呼ぶ。呼ばなければテストの終わりに放す）。
+// 終えたら閉じる。unlock はロックを放す（Vectorworks の終了。done の後で呼ぶ。呼ばなければテストの終わりに放す）。
 //
 // 前の回の合図のファイルは先に消す（残っていると、フックを待たずに掴んでしまう）。10 秒待っても合図が無ければ
 // （フックが走らなかった）、掴まずにテストを失敗にする。ロックを掴めなければ、テストを失敗にする（ゴルーチンの

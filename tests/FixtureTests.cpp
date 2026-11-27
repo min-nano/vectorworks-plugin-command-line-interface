@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-// 通信規則の見本（protocol/fixtures。形は docs/fixtures.md）を読み、共通部がそのとおりに
+// 通信規則の見本（protocol/fixtures。形は docs/fixtures.md）を読み、共通部がその通りに
 // 振る舞うかを確かめる。CLI 側（cli/internal/spool・cli/internal/fakeplugin）のテストも
 // 同じ見本を読む。
 
@@ -63,7 +63,7 @@ std::string text(const Json &object, const char *key) {
 	return value.isString() ? value.asString() : "";
 }
 
-// Key は見本のオブジェクトに書いてよいキーと、その値の型（空なら型を問わない）。
+// Key は見本のオブジェクトに書いて良いキーと、その値の型（空なら型を問わない）。
 struct Key {
 	std::string_view name;
 	std::optional<Json::Type> type;
@@ -95,7 +95,7 @@ bool shaped(const Json &value, std::initializer_list<Key> keys, const std::strin
 	return good;
 }
 
-// strings は配列の要素かオブジェクトの値が、すべて文字列かを確かめる。
+// strings は配列の要素かオブジェクトの値が、全て文字列かを確かめる。
 bool strings(const Json &value, const std::string &where) {
 	bool good = true;
 	auto check = [&](const Json &item) {
@@ -510,7 +510,7 @@ private:
 	}
 
 	// checkResponses は応答を確かめ、確かめた id を返す。この回より前に置いたファイルを除き、
-	// スプールにある応答はすべて期待に載っていなければならない。
+	// スプールにある応答は全て期待に載っていなければならない。
 	std::vector<std::string> checkResponses(const Json &expected,
 	                                        const std::set<std::string> &put) {
 		std::string suffix(protocol::kResponseSuffix);

@@ -199,7 +199,7 @@ func TestScript(t *testing.T) {
 			t.Errorf("%s: %q %v", argv, got, err)
 		}
 	}
-	// powershell の .ps1 は大文字でもよい。
+	// powershell の .ps1 は大文字でも良い。
 	if got, err := Script([]string{"powershell", "hooks/install.PS1"}); err != nil || got != "hooks/install.PS1" {
 		t.Errorf("upper case .PS1: %q %v", got, err)
 	}
@@ -222,7 +222,7 @@ func TestCheckRelative(t *testing.T) {
 			t.Errorf("%q should be refused", path)
 		}
 	}
-	// zip の項目の名前は - で始まってもよい。
+	// zip の項目の名前は - で始まっても良い。
 	if err := CheckInside("-a"); err != nil {
 		t.Error(err)
 	}

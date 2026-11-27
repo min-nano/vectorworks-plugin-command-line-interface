@@ -34,7 +34,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		return nil, err
 	}
 	// install と同じ precheck で、cli の記録を Vectorworks が動いているかより先に確かめる。ErrRunning（何も
-	// していない）を返すのはここだけで、あとで分かったときは何かを変えたあとなので失敗にする。
+	// していない）を返すのはここだけで、後で分かったときは何かを変えた後なので失敗にする。
 	if err := precheck(p, name, true); errors.Is(err, ErrRunning) {
 		return &UninstallResult{Outcome: outcomeRunning, Name: name, Remaining: []string{}, Left: []string{}}, err
 	} else if err != nil {
@@ -90,7 +90,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 }
 
 // takeOut は <Plug-Ins>/<name>/ を確かめて、印を書いてから <Work>/old/<name>/ へ移し（手順 2・3）、その記録を返す。
-// 前の uninstall が移したあとで止まっていれば、移さずに old の記録を返し、2 つ目を真にする（手順 4 から続ける）。
+// 前の uninstall が移した後で止まっていれば、移さずに old の記録を返し、2 つ目を真にする（手順 4 から続ける）。
 // どちらも無ければ record は nil（入っていない）。
 func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 	// install と同じ pluginFolder で決める（リンク・ファイルは断り、調べられなければ入っていないとみなさない）。
@@ -126,7 +126,7 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 				"Run install %s@%s again (from the registry %s, into %s) to finish that install (it cleans this up), "+
 				"or delete it, then run uninstall again", p.oldDir, name, record.Tag, record.Registry, p.plugins)
 		}
-		// 印を書いてからフォルダを移す（移したあとで止まっても、次の uninstall が続きから走れる）。
+		// 印を書いてからフォルダを移す（移した後で止まっても、次の uninstall が続きから走れる）。
 		if err := writeFile(p.marker, nil, 0o600); err != nil {
 			return nil, false, err
 		}
@@ -136,7 +136,7 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 		}
 		return record, false, nil
 	case exists(p.oldDir):
-		// 前の uninstall が、フォルダを移したあとで止まった。印が無ければ、install が付け替えの
+		// 前の uninstall が、フォルダを移した後で止まった。印が無ければ、install が付け替えの
 		// 途中で止まったのと見分けられない（old が唯一の版かもしれない）。
 		record, ok := checkedRecord(p.oldDir, name)
 		if !exists(p.marker) || !ok {

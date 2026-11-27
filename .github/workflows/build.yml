@@ -389,7 +389,7 @@ jobs:
             dist/vw2025.json dist/cli-vw2025-macos-arm64.zip dist/cli-vw2025-windows-x64.zip \
             dist/get-vw2025.sh dist/get-vw2025.ps1 \
             --draft --target "$SHA" --title "$TITLE" --notes "Built from $SHA." "${kind[@]}"
-          # 作ったばかりの下書きは、一覧に載るまで少しかかることがある（載る前に引くと id が無く、公開が
+          # 作ったばかりの下書きは、一覧に載るまで少し掛かることがある（載る前に引くと id が無く、公開が
           # 404 になる）。載るまで引き直し、載らなければ失敗にする。
           id=""
           for _ in $(seq 10); do
@@ -462,7 +462,7 @@ jobs:
       - name: manifest
         run: |
           set -eu
-          # 既定のレジストリの cli の規則のうち、最初に合ったものの path（docs/registry.md「規則の選び方」）。
+          # 既定のレジストリの cli の規則の内、最初に合ったものの path（docs/registry.md「規則の選び方」）。
           manifest_url() {
             jq -r --arg tag "$1" '.plugins.cli.manifests
               | map(select(.match as $m | $tag | test("^" + ($m | gsub("\\."; "\\.") | gsub("\\*"; ".*")) + "$")))

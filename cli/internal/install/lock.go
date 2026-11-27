@@ -29,7 +29,7 @@ func lockState(p places) (bool, error) {
 }
 
 // stopped は、何かを変える前の確かめ（始め・同じタグのフックの前・付け替えの前・前の版を片付ける前）。Vectorworks が
-// 居れば ErrRunning（終了コード 6）、ロックを調べられなければその誤り（終了コード 1）を返す。フックが通ったあとに
+// 居れば ErrRunning（終了コード 6）、ロックを調べられなければその誤り（終了コード 1）を返す。フックが通った後に
 // 前の版を片付ける前（finishInstall の settleOld）にも使うが、そこで返った誤りは知らせるだけで、install の結果は
 // 変えない（新しい版は入っている）。
 func stopped(p places) error {
@@ -40,14 +40,14 @@ func stopped(p places) error {
 	return err
 }
 
-// running は、Vectorworks が居るとみなすか。ロックを調べられないときも居るとみなす（付け替えやフックのあとの
+// running は、Vectorworks が居るとみなすか。ロックを調べられないときも居るとみなす（付け替えやフックの後の
 // 確かめで、動いているかもしれない Vectorworks の下でフォルダを動かさない）。何も変えていないときは stopped を使う。
 func running(p places) bool {
 	held, err := lockState(p)
 	return held || err != nil
 }
 
-// startedMeanwhile は、フックの間（始めの確かめのあと）に Vectorworks が起動したとみなしたときの文言（running が
+// startedMeanwhile は、フックの間（始めの確かめの後）に Vectorworks が起動したとみなしたときの文言（running が
 // 真。install と uninstall で同じに書く）。
 const startedMeanwhile = "Vectorworks started meanwhile (or its lock cannot be read)"
 

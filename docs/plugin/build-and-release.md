@@ -24,14 +24,14 @@ SDK のリンクとバンドルの形は、SDK リファレンスの実機確認
 
 ### CMake の版
 
-`cmake_minimum_required(VERSION 3.24)` にしています。理由は `CMakeLists.txt` の先頭の注釈のとおりで、
+`cmake_minimum_required(VERSION 3.24)` にしています。理由は `CMakeLists.txt` の先頭の注釈の通りで、
 3.23 以下で構成すると最初の行で止まります。
 
-最小版はポリシーの既定も決めます。3.21〜3.24 で入ったポリシー（CMP0121〜CMP0139）のうち、
+最小版はポリシーの既定も決めます。3.21〜3.24 で入ったポリシー（CMP0121〜CMP0139）の内、
 `CMakeLists.txt` が使う書き方に関わるのは次のものだけで、どれも構成の結果を変えません。
-ほかは `CMakeLists.txt` が使わないコマンドとモジュールと書き方（`list()`・`find_*()`・`while()`・
+他は `CMakeLists.txt` が使わないコマンドとモジュールと書き方（`list()`・`find_*()`・`while()`・
 `cmake_dependent_option()`・project の形の `try_compile()`・`if()` の `PATH_EQUAL`・`ExternalProject`・
-`CheckIPOSupported`・`CPack`・`UseSWIG` など）か、ほかのコンパイラー（ARMClang・MCST LCC・Watcom）のものです。
+`CheckIPOSupported`・`CPack`・`UseSWIG` など）か、他のコンパイラー（ARMClang・MCST LCC・Watcom）のものです。
 
 | ポリシー | NEW の振る舞い | このリポジトリ |
 | --- | --- | --- |
@@ -75,7 +75,7 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
 ```
 
 - **mac だけの手順です。** Windows は Visual Studio の生成器（`-A x64`）で、`CMAKE_BUILD_TYPE` が
-  効かないので、このプリセットは使いません（`CMakeLists.txt` の先頭の注釈のとおり `--config Release`）。
+  効かないので、このプリセットは使いません（`CMakeLists.txt` の先頭の注釈の通り `--config Release`）。
 - `RelWithDebInfo` は、Vectorworks が落ちたとき lldb で場所を追えるようにデバッグ情報を付けた
   ものです。clang では `Release` と最適化の段（`-O2` / `-O3`）とデバッグ情報が違います。
   最適化の違いで出方の変わる不具合は再現しないことがあるので、そのときは
@@ -99,7 +99,7 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
 | `lint.yml` | push / PR・マージキュー | `scripts/lint.sh`（[検査](../lint.md)） |
 | `build.yml` | push（main）/ PR・マージキュー / 手動 | mac と Windows のビルド・梱包・リリースと、公開した資産の確かめ（下記） |
 | `hooks.yml` | push / PR・マージキュー | `cli` のフック（`scripts/hooks/`）のテスト。mac で `tests/hooks/hooks_test.sh`（`sh`）、Windows で `tests/hooks/Hooks.Tests.ps1`（Pester。Windows PowerShell 5.1）を走らせる（[インストール「テスト」](install-and-update.md#テスト)） |
-| `cleanup-dev-release.yml` | PR が閉じたとき | その PR のプレリリース（`dev-<slug>-<PR 番号>-<短い sha>`）と下書きのリリースを、リリースとタグごとすべて消す。`build.yml` と同じ `concurrency` のグループで走り、その PR の走っているビルドを止めてから消す（消したあとに公開されないため）。グループの組み方と開き直し（`reopened`）の扱いは、両方のワークフローの注釈 |
+| `cleanup-dev-release.yml` | PR が閉じたとき | その PR のプレリリース（`dev-<slug>-<PR 番号>-<短い sha>`）と下書きのリリースを、リリースとタグごと全て消す。`build.yml` と同じ `concurrency` のグループで走り、その PR の走っているビルドを止めてから消す（消した後に公開されないため）。グループの組み方と開き直し（`reopened`）の扱いは、両方のワークフローの注釈 |
 
 `build.yml` のジョブ:
 
@@ -116,7 +116,7 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
 各ジョブの確かめることの細目は `build.yml` の注釈にあります。
 
 必須のチェックになるワークフローには `merge_group` を付けます（付けないとキューの中で
-チェックが始まらず、マージが進まないため）。また `paths` で絞りません。必須のチェックはパスごとに
+チェックが始まらず、マージが進まないため）。又 `paths` で絞りません。必須のチェックはパスごとに
 必須かどうかを分けられないため、絞ると対象外の変更だけの PR（文書だけ等）でチェックが報告されず、
 マージできなくなります。
 
@@ -179,7 +179,7 @@ PATH だけを置きます（[インストール「CLI とスプールの置き�
   `dev-<slug>-<PR 番号>-<短い sha>`（slug は[名前と識別子](identifiers.md)）にプレリリースします。
   タイトルは **`Dev: <branch> (<sha>)`**、`--prerelease`（`latest` を動かさない）です。中身は main のものと
   **同じ名前のプラグイン**で、入れると入れ替わります（`vw2026 install cli@<そのタグ>`）。戻すときは
-  `vw2026 install cli@latest`（main の最新）です。PR を閉じると、その PR のプレリリースはすべて消えます。
+  `vw2026 install cli@latest`（main の最新）です。PR を閉じると、その PR のプレリリースは全て消えます。
   fork の PR・マージキュー・main 以外の手動の実行は、ビルドするだけで公開しません。
 - **既に同じタグの公開済みのリリースがあれば、そのリリースのタグが指すコミットが今回ビルドした
   完全な sha と同じかを確かめます。** 同じなら何もせず（同じ sha の実行し直し）、違えば（短い sha が

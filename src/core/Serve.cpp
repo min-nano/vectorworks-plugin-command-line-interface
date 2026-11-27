@@ -27,14 +27,14 @@ Json failure(std::string_view code, std::string message, Json detail = Json()) {
 	return response;
 }
 
-// staleSession は、載せた占有の印がいまの占有のものでないときの応答。
+// staleSession は、載せた占有の印が今の占有のものでないときの応答。
 Json staleSession() {
 	return failure(protocol::kCodeNoSession,
 	               "載せた印はいまの占有のものではありません（占有は終わったか、"
 	               "Vectorworks を起動し直しました）");
 }
 
-// occupied は、ほかの呼ぶ側が占有しているときの応答。
+// occupied は、他の呼ぶ側が占有しているときの応答。
 Json occupied() { return failure(protocol::kCodeOccupied, "ほかの呼ぶ側が占有しています"); }
 
 // toolDefect は、道具の定義か返した値が通信規則に合わないときの文言
@@ -128,7 +128,7 @@ std::optional<Json> toolsList(std::span<const Tool> tools, std::string &reason) 
 	    {{"protocol", Json::integer(protocol::kVersion)}, {"tools", std::move(list)}});
 }
 
-// refuseOutsideSession は、占有の中でだけ呼べる要求（session_end・種類 Write と App）を、いまの占有
+// refuseOutsideSession は、占有の中でだけ呼べる要求（session_end・種類 Write と App）を、今の占有
 // current に照らす（通信規則「占有」の表）。断るなら応答を返す。
 std::optional<Json> refuseOutsideSession(const std::string &current, const Request &request) {
 	if (current.empty()) {
@@ -232,7 +232,7 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos, Ac
 			return result;
 		}
 	}
-	// 道具の中で Vectorworks がイベントを回すと、この回の途中でまた serve が呼ばれうる。戻るとき
+	// 道具の中で Vectorworks がイベントを回すと、この回の途中で又 serve が呼ばれうる。戻るとき
 	// （例外で抜けるときも）に下ろす。
 	ScopedFlag serving(serving_);
 	for (const std::string &id : bridge_.poll()) {
@@ -300,7 +300,7 @@ void Server::refuseAll() {
 			}
 		}
 	} catch (...) {
-		// 取り出す前の要求は、外の回か次の刻みが扱う。取り出したあとに投げたら（応答を書くパスを
+		// 取り出す前の要求は、外の回か次の刻みが扱う。取り出した後に投げたら（応答を書くパスを
 		// 組み立てられないなど）その要求には応えず、呼ぶ側は待ちきれずに終わる（実行はしていない）。
 		return;
 	}
@@ -362,7 +362,7 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 	if (!tool) {
 		return respond(failure(protocol::kCodeUnknownTool, "知らない道具です: " + name));
 	}
-	// 終了の依頼の最中は、表の道具をすべて断る（種類 Read と ping も）。終了の呼び出しの途中で、
+	// 終了の依頼の最中は、表の道具を全て断る（種類 Read と ping も）。終了の呼び出しの途中で、
 	// 道具に SDK を呼ばせないため。SDK を呼ばない 3 つの道具（上の tools・session_start・
 	// session_end）は応える。占有に照らすのが先。
 	if (activity == Activity::Quitting) {

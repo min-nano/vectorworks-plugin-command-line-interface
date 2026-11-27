@@ -120,7 +120,7 @@ std::optional<std::string> modulePathOf(const void *address) {
 
 bool makeDirectories(const std::string &path, std::string &error) {
 	// 既にあれば何もしない。無ければ、ルート（\\?\C:\ か \\?\UNC\server\share\）の後から、
-	// 区切りごとに作り、ルートには作りに行かない。prepare は受け付けのたびに呼ばれうるので、毎回
+	// 区切りごとに作り、ルートには作りに行かない。prepare は受け付けの度に呼ばれうるので、毎回
 	// 失敗する呼び出しをメインスレッドに載せないため（UNC ではネットワークに触れることもある）。
 	// 途中で既にあるものは失敗するが、構わない。最後に path がディレクトリかで成否を決める。
 	// 区切りは extended が \ に揃えてある。
@@ -245,7 +245,7 @@ Lock::Result Lock::take(const std::string &path, std::string &error) {
 	if (opened.refused != Refusal::None && !recreated_) {
 		// ロックのファイルはプラグインのもので中身を持たないので、断ったら消して作り直す
 		// （重複除去・WOF の圧縮・同期が外れていれば、それで直る）。断れたのは共有なしで
-		// 開けたからで、ほかの Vectorworks は掴んでいない。消すのは名前だけで、reparse point は
+		// 開けたからで、他の Vectorworks は掴んでいない。消すのは名前だけで、reparse point は
 		// たどらない（クラウドのファイルなら、消すときに同期のサービスを待つことがある）。
 		// 作り直すのは 1 度だけ（Files.h）。
 		recreated_ = true;

@@ -1,7 +1,7 @@
 #pragma once
 
 // SDK の文字列を UTF-8 の std::string にする（src/tools の道具が共に使う。変換を 1 か所にする）。
-// PluginPrefix.h のあとに読む。
+// PluginPrefix.h の後に読む。
 
 #include <string>
 

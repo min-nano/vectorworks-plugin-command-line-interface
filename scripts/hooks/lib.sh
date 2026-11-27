@@ -70,7 +70,7 @@ absolute_dir() {
 	esac
 }
 
-# json_string は $1 を JSON の文字列にして書く。" と \ と制御文字を逃がし、ほかのバイト（UTF-8 の
+# json_string は $1 を JSON の文字列にして書く。" と \ と制御文字を逃がし、他のバイト（UTF-8 の
 # 日本語を含む）はそのまま書く。末尾の改行も保つように、x を足して渡し、awk の中で落とす。
 json_string() {
 	printf '%sx' "$1" | LC_ALL=C awk '
@@ -129,7 +129,7 @@ nearest_dir() {
 # same_place は、絶対パス $1 と $2 が同じ場所を指すか。それぞれの、在るいちばん近いディレクトリ（nearest_dir）
 # どうしを同一性（-ef。i ノードで比べる）で比べ、その下の在らない部分は名前の文字列で比べる。同じディレクトリを
 # 別の書き方（シンボリックリンク・大文字と小文字・--plugins-dir の書き方）で指しても同じとみなすため
-# （CLI の within と同じ考え方）。uninstall のフックはフォルダを移したあとで走り、<Plug-Ins>/cli/ はもう
+# （CLI の within と同じ考え方）。uninstall のフックはフォルダを移した後で走り、<Plug-Ins>/cli/ はもう
 # 無いので、在る親までさかのぼる。相対パスは同じとみなさない。
 same_place() {
 	case $1 in /*) ;; *) return 1 ;; esac

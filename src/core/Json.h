@@ -85,7 +85,7 @@ public:
 	const std::string &numberText() const;
 	// 数が整数の綴り（小数部と指数部が無い）で、std::int64_t に収まるときだけ値を返す。
 	std::optional<std::int64_t> asInt64() const;
-	// integerValue は数の値を、書かれた 10 進のとおりに正確に読む（浮動小数点数に直さない）。
+	// integerValue は数の値を、書かれた 10 進の通りに正確に読む（浮動小数点数に直さない）。
 	// 値が整数なら書き方によらず受ける（2・2.0・2e0・-0・0e99999999）。指数は飽和させて数えるので、
 	// 長い指数でも溢れず、長く掛からない。
 	IntegerValue integerValue() const;

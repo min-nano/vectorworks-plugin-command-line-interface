@@ -19,10 +19,10 @@ const (
 	ToolSessionEnd = "session_end"
 )
 
-// ErrOccupied は、ほかの呼ぶ側がブリッジを占有している（要求は実行されていない）。
+// ErrOccupied は、他の呼ぶ側がブリッジを占有している（要求は実行されていない）。
 var ErrOccupied = errors.New("the bridge is occupied by another session")
 
-// ErrNoSession は、要求に載せた印がいまの占有のものではない（占有を終えた・Vectorworks を起動
+// ErrNoSession は、要求に載せた印が今の占有のものではない（占有を終えた・Vectorworks を起動
 // し直した）か、占有の中でしか呼べない道具（session_end・種類 write と app）を占有せずに呼んだ。
 // 要求は実行されていない。
 // 文言は両方を言う（印を渡していない呼ぶ側に、印の誤りと読ませないように）。

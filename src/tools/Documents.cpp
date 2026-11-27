@@ -61,7 +61,7 @@ public:
 	}
 
 	// CloseDocument は保存の確認を出さずに閉じ、未保存の変更を捨てる。閉じても false を返すことが
-	// あるので、成否は core が閉じたあとの一覧で決める（Findings「CloseDocument() は false を
+	// あるので、成否は core が閉じた後の一覧で決める（Findings「CloseDocument() は false を
 	// 返しながら閉じている」）。
 	void closeActive() override { (void)gSDK->CloseDocument(); }
 

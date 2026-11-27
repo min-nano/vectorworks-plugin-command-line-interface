@@ -128,7 +128,7 @@ func (c *uninstallCmd) run(e *env) int {
 // releases は、初回のスクリプトを置くリリースの場所。
 const releases = "https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/"
 
-// powershellQuote は、PowerShell の単一引用符の文字列の中身にする。PowerShell は ' のほかに活字の引用符
+// powershellQuote は、PowerShell の単一引用符の文字列の中身にする。PowerShell は ' の他に活字の引用符
 // （U+2018・U+2019・U+201A・U+201B）も単一引用符の区切りとして扱うので、どれも同じ文字を 2 つ重ねて逃がす。
 var powershellQuote = strings.NewReplacer("'", "''", "\u2018", "\u2018\u2018", "\u2019", "\u2019\u2019",
 	"\u201a", "\u201a\u201a", "\u201b", "\u201b\u201b")

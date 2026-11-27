@@ -43,7 +43,7 @@ func TestCallRoundTrip(t *testing.T) {
 	if got.Tool != "layers" || got.Args["include_sheets"] != false {
 		t.Fatalf("unexpected result: %s", response.Result)
 	}
-	// 応答と .wait は読んだあと消す。
+	// 応答と .wait は読んだ後消す。
 	assertNoFiles(t, dir, ResponseSuffix)
 	assertNoFiles(t, dir, WaitSuffix)
 }
@@ -118,7 +118,7 @@ func TestCallNoWaitBeforeDeadline(t *testing.T) {
 	}
 }
 
-// ロックファイルがあっても、掴まれていなければ（異常終了のあと）止まっている。
+// ロックファイルがあっても、掴まれていなければ（異常終了の後）止まっている。
 func TestLockFileWithoutHolderIsDown(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	if err := os.WriteFile(filepath.Join(dir, LockFile), nil, 0o600); err != nil {
@@ -185,7 +185,7 @@ func TestReleasedLockIsDown(t *testing.T) {
 func TestCallIsServedWhenServingResumes(t *testing.T) {
 	dir, release := fakeplugin.NewHeldDir(t)
 	bridge := Open(dir)
-	// ダイアログが閉じて受け付けが戻るのを真似る: 要求を置いたあとで応え始める。
+	// ダイアログが閉じて受け付けが戻るのを真似る: 要求を置いた後で応え始める。
 	go func() {
 		time.Sleep(300 * time.Millisecond)
 		release()
@@ -236,7 +236,7 @@ func assertNoFiles(t *testing.T, dir, suffix string) {
 }
 
 // 読めない（まだ無い・開けない）応答は「まだ無い」とみなして読み直す（docs/protocol.md「ファイル」）。
-// 応答の名前に開けないもの（ディレクトリ）がある間も壊れた応答とせず、あとから公開された応答を返す。
+// 応答の名前に開けないもの（ディレクトリ）がある間も壊れた応答とせず、後から公開された応答を返す。
 func TestCallRereadsUnreadableResponse(t *testing.T) {
 	dir, _ := fakeplugin.NewHeldDir(t)
 	taken := takeRequest(t, dir)
@@ -318,7 +318,7 @@ func TestCallTakenWithoutResponse(t *testing.T) {
 	assertNoFiles(t, dir, WaitSuffix)
 }
 
-// 受け取られた要求の応答が締切のあと猶予の内に届けば、その応答で終わる（ErrNoResponse ではない）。
+// 受け取られた要求の応答が締切の後猶予の内に届けば、その応答で終わる（ErrNoResponse ではない）。
 // 届いた応答が壊れていれば ErrMalformedResponse（応答は届いていて、書き手の不具合なので）。
 //
 // 時間に依らないよう、要求を受け取ってから、Call が待つのをやめた（.wait を消した）のを見て

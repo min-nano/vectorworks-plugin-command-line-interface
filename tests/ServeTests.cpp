@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-// 受け付け 1 回のうち、通信規則の見本（FixtureTests.cpp）で表しにくいもの。
+// 受け付け 1 回の内、通信規則の見本（FixtureTests.cpp）で表しにくいもの。
 
 using VwCli::core::ErrorCode;
 using VwCli::core::Json;
@@ -45,14 +45,14 @@ Json record(const char *name) {
 
 Json first(const Json &, const ToolContext &, ToolStatus &) { return record("first"); }
 
-// putLater は回の途中で要求を置く（並べたあとに置かれた要求は次の回に回る）。
+// putLater は回の途中で要求を置く（並べた後に置かれた要求は次の回に回る）。
 Json putLater(const Json &, const ToolContext &, ToolStatus &) {
 	gCaller->put("zzz", R"({"tool":"first"})");
 	return record("put_later");
 }
 
 // nests は道具の中で Vectorworks
-// がイベントを回し、刻みがまた届いたことを真似る（受け付けの入れ子）。
+// がイベントを回し、刻みが又届いたことを真似る（受け付けの入れ子）。
 Json nests(const Json &, const ToolContext &, ToolStatus &) {
 	gCaller->put("c", R"({"tool":"first"})");
 	gServer->serve(gTools, kNow);
@@ -189,7 +189,7 @@ TEST(ServeRefusesEveryRequestWhileNested) {
 	CHECK_EQ(caller.code("c"), std::string("busy"));
 	CHECK_EQ(caller.code("s"), std::string("busy"));
 	CHECK(!server.inSession());
-	// 入れ子から戻ったあとは、ふつうに受け付ける。
+	// 入れ子から戻った後は、普通に受け付ける。
 	caller.put("d", R"({"tool":"first"})");
 	server.serve(kTools, kNow);
 	CHECK(caller.ok("d"));
@@ -223,7 +223,7 @@ TEST(ServeTellsToolsWhetherASessionIsIssued) {
 	CHECK(gSession);
 }
 
-// 起動を終えたか（受け付けの外の状態）は、serve に渡したとおりに道具へ渡す（quit が見る）。
+// 起動を終えたか（受け付けの外の状態）は、serve に渡した通りに道具へ渡す（quit が見る）。
 TEST(ServeTellsToolsWhetherVectorworksHasStarted) {
 	TempDir dir;
 	Server server(dir.utf8Path());

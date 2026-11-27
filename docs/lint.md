@@ -7,7 +7,7 @@
 
 | 使い方 | 中身 |
 | --- | --- |
-| `scripts/lint.sh` | 指摘の有無に関わらずすべての検査を実行し、指摘があればコード 1 で終了する。CI（`lint.yml`）はこれを実行する |
+| `scripts/lint.sh` | 指摘の有無に関わらず全ての検査を実行し、指摘があればコード 1 で終了する。CI（`lint.yml`）はこれを実行する |
 
 `lint.yml` は ubuntu の 1 ジョブです。OS ごとの違いは、ツールに対象の OS を渡して見ます（`go vet` の
 `GOOS`）。テストは `go.yml`（Go）と `cpp.yml`（C++）が OS ごとに実行します。`lint.yml` は必須の
@@ -25,11 +25,11 @@
 
 PSScriptAnalyzer は、同じファイルでもときどき解析器の中で落ちます（[PSScriptAnalyzer #1351](https://github.com/PowerShell/PSScriptAnalyzer/issues/1351)・[#1511](https://github.com/PowerShell/PSScriptAnalyzer/issues/1511)）。
 そのため `scripts/powershell.ps1` の `-Mode Lint` は、ファイルごとに子の `pwsh` で検査し、解析器が落ちたときだけ
-3 回まで走らせ直します（指摘は走らせ直しません）。また、いちばんよく落ちる `PSUseCorrectCasing` は検査から外し、
+3 回まで走らせ直します（指摘は走らせ直しません）。又、いちばんよく落ちる `PSUseCorrectCasing` は検査から外し、
 整形の確かめ（`format.sh`）に任せます。どちらも細目は `scripts/powershell.ps1` の注釈にあります。
 
 依存を足すときの `govulncheck` は `CLAUDE.md` の手順で行い、ここには入れません（依存を足すときだけ
-実行すればよいため）。
+実行すれば良いため）。
 
 ## 検査しないもの
 
@@ -37,7 +37,7 @@ CMake・Markdown・JSON の見本は検査しません。見本は C++ と Go �
 
 ## 手元で実行する
 
-Go のほかに次が要ります。版は CI のものに合わせます。
+Go の他に次が要ります。版は CI のものに合わせます。
 
 | 要るもの | 入れ方 |
 | --- | --- |

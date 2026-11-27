@@ -52,7 +52,7 @@ func TestInstallHookEnvironment(t *testing.T) {
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	hooks := registry.Hooks{Install: []string{"sh", "hooks/install.hook", "a b", "--x"}, Uninstall: []string{"sh", "hooks/uninstall.hook"}}
 	t.Setenv(edition.EnvPrefix+"HOOK_TAG", "from the caller")
-	// ほかの版の名前も渡さない（cli のフックは渡された名前で版を決め、両方あると断る）。
+	// 他の版の名前も渡さない（cli のフックは渡された名前で版を決め、両方あると断る）。
 	other := "VW2025_HOOK_INSTALL_DIR"
 	if edition.Year == "2025" {
 		other = "VW2026_HOOK_INSTALL_DIR"
@@ -247,7 +247,7 @@ func TestInstallWhileRunning(t *testing.T) {
 	}
 }
 
-// 手順 2 で見たあと、zip を取る間に起動した Vectorworks も、付け替えの直前に見つけて何も変えない。
+// 手順 2 で見た後、zip を取る間に起動した Vectorworks も、付け替えの直前に見つけて何も変えない。
 func TestInstallLockTakenWhileDownloading(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})

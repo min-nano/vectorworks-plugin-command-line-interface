@@ -24,15 +24,15 @@
 | 項目 | 決まり | 例外 |
 | --- | --- | --- |
 | 文字コード | UTF-8（BOM なし） | `.vwstrings` は UTF-16LE（BOM 付き）。PowerShell（`.ps1`・`.psm1`・`.psd1`）は UTF-8（BOM 付き。Windows PowerShell 5.1 は BOM の無いファイルを ANSI のコードページで読み、日本語を読み崩すため） |
-| 改行 | LF。`.gitattributes` でも LF にそろえる | `.vwstrings` は CRLF。git に変換させない（`-text`） |
+| 改行 | LF。`.gitattributes` でも LF に揃える | `.vwstrings` は CRLF。git に変換させない（`-text`） |
 | 末尾 | 改行で終える。行末の空白を残さない | |
 | インデント | **タブ（表示幅 4）** | YAML（タブを使えない）と Markdown はスペース 2 |
 | 1 行の長さ | 100 桁を目安にする。強制するのは C++（clang-format）だけ | Markdown は制限しない |
 
 インデントをタブにするのは、Go（gofmt）が必須とし、shfmt の既定でもあり、clang-format と
-PSScriptAnalyzer も選べるためです。これで YAML と Markdown を除くすべての言語がそろいます。
+PSScriptAnalyzer も選べるためです。これで YAML と Markdown を除く全ての言語がそろいます。
 
-`.editorconfig` で表せない決まりは次のとおりです。
+`.editorconfig` で表せない決まりは次の通りです。
 
 - **ブレース**: 開き括弧を同じ行に置きます（gofmt・shfmt の形）。C++ は `.clang-format` で同じ形にします。
 - **コメントの位置**: 真実は `CLAUDE.md`「整形と検査」です。ツールでは強制できないので、レビューで確かめます。
@@ -51,12 +51,12 @@ PSScriptAnalyzer も選べるためです。これで YAML と Markdown を除�
 行います（`format.sh` と `lint.sh` が呼ぶ。フックのテストの Pester の版もここに置く）。
 
 Go で書かれたツールは `tools/go.mod` に `tool` で書き、`go -C tools tool <名前>` で呼びます。Go は
-すでに要るので、ほかのパッケージ管理を足さずに済みます。CLI の `go.mod` とは分けるので、
+すでに要るので、他のパッケージ管理を足さずに済みます。CLI の `go.mod` とは分けるので、
 `vw2026` には入りません。版は dependabot が上げます。
 
 `tools/go.mod` が求める Go が手元や CI の Go より新しければ、`go` がその版を取ってきて切り替えます
-（`GOTOOLCHAIN=auto`。CI でも同じ指定で動かす）。手元の Go のほうが新しければ手元の版で動きます。
-新しい版のほうが厳しくなる向きなので、版を下げてそろえることはしません。
+（`GOTOOLCHAIN=auto`。CI でも同じ指定で動かす）。手元の Go の方が新しければ手元の版で動きます。
+新しい版の方が厳しくなる向きなので、版を下げて揃えることはしません。
 
 ## 整形しないもの
 

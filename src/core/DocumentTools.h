@@ -1,6 +1,6 @@
 #pragma once
 
-// 図面を扱う道具（documents・save・close）のうち SDK に依らない部分（docs/plugin/tools.md「図面を
+// 図面を扱う道具（documents・save・close）の内 SDK に依らない部分（docs/plugin/tools.md「図面を
 // 扱う道具」）。引数の検査・確かめの順（引数の形 → no_document → 名指す図面 → 状態）・save の
 // 保存先の確かめ・前面を戻す手順・結果の形をここに置き、SDK の呼び出しは
 // Documents（src/tools/Documents.cpp が SDK で作る）から受けるので、無 SDK でテストできる。
@@ -55,7 +55,7 @@ inline constexpr std::string_view kClosedDocumentsRemainField = "closed_document
 
 // kMaxClosedRemnants は clearClosedDocuments が CloseDocument を呼ぶ回数の上限。残った図面は 1 回で
 // 1 枚消える（Findings「Documents」の「閉じた図面が残り、終了で保存の確認が出る」）ので、常駐の
-// あいだに溜まりうる枚数より十分に大きく、受け付けを長く止めない数にする。
+// 間に溜まりうる枚数より十分に大きく、受け付けを長く止めない数にする。
 inline constexpr int kMaxClosedRemnants = 64;
 
 // OpenDocument は GetOpenFilesList の項目 1 つ。

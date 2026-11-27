@@ -257,7 +257,7 @@ TEST(BridgeDoesNotWaitOnFifos) {
 }
 
 // bridge.lock が通常のファイルでなければ、開いて待たずに、消して作り直してから掴む。作り直すのは
-// 1 つの Lock につき 1 度だけで、2 度目は断った理由を返す（受け付けのたびに繰り返さない）。
+// 1 つの Lock につき 1 度だけで、2 度目は断った理由を返す（受け付けの度に繰り返さない）。
 TEST(BridgeLockRecreatesAFifoOnce) {
 	TempDir dir;
 	std::string lockPath = dir.sub("bridge.lock");
@@ -494,7 +494,7 @@ TEST(FilesModulePathOfAddressOutsideModules) {
 }
 
 #ifndef _WIN32
-// 相対パスはいまの作業ディレクトリの下にする（Linux の実行ファイルでは dladdr が argv[0] を返す）。
+// 相対パスは今の作業ディレクトリの下にする（Linux の実行ファイルでは dladdr が argv[0] を返す）。
 TEST(FilesAbsoluteResolvesAgainstTheWorkingDirectory) {
 	CHECK_EQ(files::absolute("/a/b").value_or(""), std::string("/a/b"));
 	CHECK(!files::absolute(""));

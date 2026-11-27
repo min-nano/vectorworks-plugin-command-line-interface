@@ -66,7 +66,7 @@ void restoreFront(Documents &docs, const Target &target, const std::vector<OpenD
 }
 
 // bringForward は名指した図面を前面にする（前面なら何もしない）。SwitchToOpenFile の戻り値だけを
-// 信じず、切り替えたあとの一覧で前面が名指した図面になったことを確かめる（前面が変わらないまま
+// 信じず、切り替えた後の一覧で前面が名指した図面になったことを確かめる（前面が変わらないまま
 // 保存・閉じるを呼ぶと、利用者の別の図面に効いてしまう。CLAUDE.md の 5）。前面にできなければ、
 // 前面を戻してから internal で失敗する。
 bool bringForward(Documents &docs, const Target &target, ToolStatus &status) {
@@ -216,7 +216,7 @@ Json close(const Json &args, Documents &docs, ToolStatus &status) {
 		return Json();
 	}
 	docs.closeActive();
-	// 戻り値では成否が分からないので、閉じたあとの一覧で決める。
+	// 戻り値では成否が分からないので、閉じた後の一覧で決める。
 	std::vector<OpenDocument> after = docs.list();
 	restoreFront(docs, target, after);
 	if (std::ranges::find(after, document, &OpenDocument::path) != after.end()) {

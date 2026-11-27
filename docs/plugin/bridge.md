@@ -16,10 +16,10 @@
 | `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つの操作と、モジュールのパスからスプールの場所を求める処理（[スプールの用意](#スプールの用意)） |
 | `src/core/Serve.{h,cpp}` | 依らない | 受け付け 1 回の手順と占有の印（[受け付け 1 回](#受け付け-1-回coreserverserve)） |
 | `src/core/Args.{h,cpp}` | 依らない | 道具の引数の読み方と、失敗の `detail` の `reason` を付ける口（[道具「共通の決まり」](tools.md#共通の決まり)） |
-| `src/core/Ping`・`ReadTools`・`DocumentTools`・`Quit`（`.{h,cpp}`） | 依らない | 道具の中身のうち SDK に依らない部分（表の行 `ToolSpec`・引数の検査・確かめの順・結果の形）。SDK から読む値と SDK の呼び出しは、道具ごとの口（`Drawing`・`Documents`）で受ける |
+| `src/core/Ping`・`ReadTools`・`DocumentTools`・`Quit`（`.{h,cpp}`） | 依らない | 道具の中身の内 SDK に依らない部分（表の行 `ToolSpec`・引数の検査・確かめの順・結果の形）。SDK から読む値と SDK の呼び出しは、道具ごとの口（`Drawing`・`Documents`）で受ける |
 | `src/core/Lifecycle.h` | 依らない | 起動を終えた印と終了の依頼の最中の印（`core::Lifecycle`）と、刻み 1 回の手順（`core::tick`） |
 | `src/tools/ToolTable.cpp` | 依る | 道具の表 |
-| `src/tools/<道具>.cpp`・`Text.h` | 依る | 道具の中身のうち SDK を呼ぶ部分（`Drawing`・`Documents` を SDK で作る）と、`TXString` を UTF-8 にする `utf8` |
+| `src/tools/<道具>.cpp`・`Text.h` | 依る | 道具の中身の内 SDK を呼ぶ部分（`Drawing`・`Documents` を SDK で作る）と、`TXString` を UTF-8 にする `utf8` |
 | `src/Clock.cpp` | 依る | OS タイマー・通知の登録・終了の呼び出し（[構成「入口」](architecture.md#入口)） |
 
 - **SDK を呼ぶ処理と、その前後の手順を分けます。** 手順は `src/core` に置き、SDK の呼び出しは
@@ -50,8 +50,8 @@
 と、起動の状態（`core::Startup`。道具に `ToolContext::startup` で渡す。[道具「quit」](tools.md#quit)）を
 受け取ります。どちらもタイマーが `core::Lifecycle` から渡します（`core::tick`）。
 
-0. **`serve` の途中にまた呼ばれたら（受け付けの入れ子）**、外の回の状態に触れず、取り出せる要求を
-   すべて `busy` で断って戻ります。解析も道具の実行もしません（[通信規則「Vectorworks が処理中」](../protocol.md#vectorworks-が処理中)）。
+0. **`serve` の途中に又呼ばれたら（受け付けの入れ子）**、外の回の状態に触れず、取り出せる要求を
+   全て `busy` で断って戻ります。解析も道具の実行もしません（[通信規則「Vectorworks が処理中」](../protocol.md#vectorworks-が処理中)）。
 1. ロックを掴んでいなければ用意（`prepare` → `lock` → `sweep`）をします。**ロックを取れなければ
    何もせずに戻ります**（結果は `waiting`）。
 2. 回の始めに並べた要求を名前の昇順で取り出し、読めたら消し、消せたものについて待つ印を試します
@@ -96,7 +96,7 @@ Windows では Vectorworks 2026 を 2 つ起動でき、どちらのプラグイ
   名前・説明・`inputSchema`・種類は `src/core` の `ToolSpec`（`Ping.h`・`ReadTools.h`・`DocumentTools.h`・`Quit.h`）に置き、表は
   `core::toolOf(spec, &中身)` で組み立てます（種類を無 SDK のテストで確かめるため）。
 - `tools` の結果の形と `kind` の意味は[通信規則「予約された道具」](../protocol.md#予約された道具)にあります。
-  予約された道具のうち `tools`・`session_start`・`session_end` は表に載せず、`ping` と `quit` は表に載せます。
+  予約された道具の内 `tools`・`session_start`・`session_end` は表に載せず、`ping` と `quit` は表に載せます。
 - 道具の結果は JSON のオブジェクトで返します（[通信規則「応答」](../protocol.md#応答idresjson)）。
   返す値が無ければ `Json()` でよく、`Server` が `{}` にします。
 - 道具が受け付けの状態を知るのは `ToolContext` からだけです（`ping` の `session`・`quit` が見る起動の状態の
@@ -105,11 +105,11 @@ Windows では Vectorworks 2026 を 2 つ起動でき、どちらのプラグイ
   既定値を設け（`inputSchema` の `default` にも書く）、知らない引数・知っている引数の未知の値は
   `invalid_args` で返します（[通信規則「互換性」](../protocol.md#互換性)）。
 - 道具が返す失敗の種別は `invalid_args` と `internal` だけです（分け方は[道具「共通の決まり」](tools.md#共通の決まり)）。
-  ほかの `code` は `core::Server::serve` が付けます。呼ぶ側が機械的に読む原因は `ToolStatus::detail` に
+  他の `code` は `core::Server::serve` が付けます。呼ぶ側が機械的に読む原因は `ToolStatus::detail` に
   書きます（載せ方の決まりは[通信規則「応答」](../protocol.md#応答idresjson)）。
 - **種類 `write` の道具は、undo の手順に対応するまで表に載せません。**
 - **種類 `write` の道具は、自分で undo の記録を開き、受け付けから戻る前に必ず閉じます**（要求 1 件で
   undo 1 つ）。閉じずに戻ると記録が数十秒開いたままになり、その間の書き込みがそこへ入るためです
   （[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 7「落とし穴」）。自分で閉じる限り、
-  ほかの記録と混ざらないので、受け付けは undo の記録が開いているかを見ません
+  他の記録と混ざらないので、受け付けは undo の記録が開いているかを見ません
   （[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。

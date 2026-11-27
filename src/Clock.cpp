@@ -59,7 +59,7 @@ void registerNotify() {
 }
 
 // requestQuit は終了を頼む。保存の確認を出すかは図面しだい（quit は図面が 0 枚のときだけ終了の
-// 依頼を返すので、ふつうは出ない）で、再起動はしない（docs/plugin/tools.md「quit」）。保存の確認が
+// 依頼を返すので、普通は出ない）で、再起動はしない（docs/plugin/tools.md「quit」）。保存の確認が
 // 開くと、取り消されるか終えるまで戻らない（Windows はその間も刻み、tick に入り直す）。
 void requestQuit() { gSDK->CloseAllFilesAndQuitVectorworks(true, false); }
 
@@ -104,7 +104,7 @@ void startClock() {
 		return;
 	}
 #if GS_MAC
-	// 共通のモードに登録する。既定のモードだけでは、ふつうの操作でも十数秒から数分、レンダリング
+	// 共通のモードに登録する。既定のモードだけでは、普通の操作でも十数秒から数分、レンダリング
 	// 中は 6 分近く刻みが止まる（Findings「Timers and Notifications」の 4 の 7）。起動の途中の
 	// 「開発元不明のプラグイン」のダイアログ（モーダル）の間も、既定のモードでは 1 度も刻まない
 	// （Findings「Plug-in Modules」の「mac も、共通モードの刻みからなら扱える」）。Vectorworks が
@@ -117,13 +117,13 @@ void startClock() {
 	CFRunLoopAddTimer(CFRunLoopGetMain(), timer, kCFRunLoopCommonModes);
 #else
 	// タイマーより先に自分を留める。Windows の Vectorworks は起動時にこのモジュールを読み込んで
-	// kPluginModuleInit を送ったあと、kPluginModuleDeinit を送らずに一度降ろし、別の番地へ読み込み
+	// kPluginModuleInit を送った後、kPluginModuleDeinit を送らずに一度降ろし、別の番地へ読み込み
 	// 直す。留めずにタイマーを作ると、もう無いモジュールの onTick の番地へ WM_TIMER が配られ続け、
 	// そこへ後から読み込まれた別のモジュールのコードを踏んで起動の途中で落ちる。留めたモジュールは
 	// 降ろされず、読み込み直しも同じモジュールを返す（Findings「Plug-in Modules」の「【罠】Windows
 	// の VW は起動時にモジュールを一度降ろして読み込み直す」）。留められなければタイマーを作らない
-	// （受け付けないだけで、落ちるよりよい）。mac は読み込み直さないので留めない（同）。留めるのは
-	// 何度でもよい（降ろされなくなるだけ）ので、やり直しで重ねて留めても構わない。
+	// （受け付けないだけで、落ちるより良い）。mac は読み込み直さないので留めない（同）。留めるのは
+	// 何度でも良い（降ろされなくなるだけ）ので、やり直しで重ねて留めても構わない。
 	constexpr DWORD kPinSelf =
 	    GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN;
 	HMODULE self = nullptr;
