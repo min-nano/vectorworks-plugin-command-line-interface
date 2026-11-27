@@ -166,6 +166,7 @@ void checkEq(const A &actual, const B &expected, const char *file, int line, con
 	} while (false)
 
 // CHECK_EQ は両辺を checkEq の引数として渡す。引数は式の終わりまで生きるので、写さずに比べても
-// 一時の値の中を指す参照（must(...).asString() など）も寿命の内で読める。
+// 一時の値の中を指す参照（must(...).asString() など）も寿命の内で読める。両辺を求める順は
+// 決まらない（関数の引数の評価順）ので、両辺に副作用のある式を書かない。
 #define CHECK_EQ(actual, expected)                                                                 \
 	::VwCli::test::checkEq((actual), (expected), __FILE__, __LINE__, #actual " == " #expected)

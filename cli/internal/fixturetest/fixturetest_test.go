@@ -2,6 +2,7 @@ package fixturetest
 
 import (
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -85,5 +86,21 @@ func TestDecodeStrictRejectsUnknownFields(t *testing.T) {
 	})
 	if !strings.HasPrefix(message, "where: ") || !strings.Contains(message, `"b"`) {
 		t.Errorf("Fatal = %q, want where and the unknown field", message)
+	}
+}
+
+// TestCommandDoesNotDependOnTesting は、配る実行ファイル（cmd）の依存に testing が無いことを
+// 確かめる。testing を取り込むパッケージ（fixturetest・fakeplugin）をテスト以外から取り込むと落ちる。
+func TestCommandDoesNotDependOnTesting(t *testing.T) {
+	for _, tags := range []string{"", "vw2025"} {
+		out, err := exec.Command("go", "list", "-deps", "-tags", tags, "../../cmd/...").CombinedOutput()
+		if err != nil {
+			t.Fatalf("go list -tags %q: %v\n%s", tags, err, out)
+		}
+		for _, pkg := range strings.Fields(string(out)) {
+			if pkg == "testing" {
+				t.Errorf("cmd depends on testing (tags %q)", tags)
+			}
+		}
 	}
 }

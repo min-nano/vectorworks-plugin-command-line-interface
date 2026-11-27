@@ -35,8 +35,7 @@ public:
 	int remnants = 0;
 	// 一覧が空のときの CloseDocument で、残った図面が消えない。
 	bool remnantsStick = false;
-	// 一覧が空のときの CloseDocument
-	// の間に、この図面が開く（片付けの最中に図面が開くことを真似る）。
+	// 片付けの最中に開く図面。一覧が空のときの CloseDocument の間に、一覧へ加わる。
 	std::optional<core::OpenDocument> opensWhileClearing;
 
 	// count は name の呼び出しの回数（"list" など）。
@@ -118,6 +117,9 @@ public:
 			open.back().active = true;
 		}
 	}
+	// hasActive は、残った図面があるか、active の印の付いた図面があれば真（GetActiveDocument を
+	// 真似る）。開いている図面を入れるときは、前面の 1 枚に active を付ける。付けないと、図面が
+	// 開いていても偽になり、片付け（clearClosedDocuments）が確かめたい道筋を通らずに止まる。
 	bool hasActive() override {
 		calls.emplace_back("active");
 		return remnants > 0 ||

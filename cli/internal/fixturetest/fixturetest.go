@@ -1,5 +1,9 @@
 // Package fixturetest は、テストが見本（通信規則の見本 protocol/fixtures と、道具の結果の決まりの
-// 見本 tests/fixtures）を読むための小さな助け。テストの中からだけ使う。
+// 見本 tests/fixtures）を読むための小さな助け。
+//
+// テスト（_test.go）からだけ取り込む。testing を取り込むので、cmd から取り込むと配る実行ファイルに
+// testing が入り、見本の相対のパスも実行時の作業ディレクトリから解決されてしまう。
+// TestCommandDoesNotDependOnTesting が、実行ファイルの依存に testing が無いことを確かめる。
 package fixturetest
 
 import (
