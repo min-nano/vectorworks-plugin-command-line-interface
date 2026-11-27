@@ -73,17 +73,6 @@ Opened openRegular(const std::string &path, int flags, mode_t mode = 0) {
 
 }
 
-bool isSeparator(char c) { return c == '/'; }
-
-std::string join(const std::string &dir, std::string_view name) {
-	std::string path = dir;
-	if (!path.empty() && !isSeparator(path.back())) {
-		path += '/';
-	}
-	path.append(name);
-	return path;
-}
-
 std::optional<std::string> modulePathOf(const void *address) {
 	// リンクは解かない。バンドル（cli.vwlibrary）だけをほかの場所へのリンクにしても、そのバンドルの
 	// あるフォルダ（<Plug-Ins>/cli）を指すため。呼ぶ側は実行ファイルのリンクを解くが、その親の bin
@@ -213,8 +202,6 @@ WaitState probe(const std::string &path) {
 	closeQuietly(fd);
 	return state;
 }
-
-Lock::~Lock() { release(); }
 
 Lock::Result Lock::take(const std::string &path, std::string &error) {
 	release();

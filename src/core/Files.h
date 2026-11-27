@@ -1,7 +1,8 @@
 #pragma once
 
 // スプールに使う OS の呼び出し（docs/protocol.md「ロック」「待つ印」）。SDK に依らない。
-// 実装は OS ごとのファイル（FilesPosix.cpp・FilesWindows.cpp）。
+// 実装は OS ごとのファイル（FilesPosix.cpp・FilesWindows.cpp）。OS に依らない部分（isSeparator・
+// join・Lock::~Lock）は Files.cpp に置き、OS ごとの違いは kSeparator と isSeparator の中で分ける。
 //
 // パスは UTF-8。開くファイルは子プロセスに受け継がせない（POSIX は O_CLOEXEC、Windows は
 // 継承できないハンドル）。受け継がれると、Vectorworks が終わってもロックが放されないため。
@@ -23,10 +24,19 @@
 
 namespace VwCli::core::files {
 
+#ifdef _WIN32
+// kSeparator はパスをつなぐときに足す区切り（isSeparator は / も区切りとして読む）。
+inline constexpr char kSeparator = '\\';
+#else
+// kSeparator はパスをつなぐときに足す区切り。
+inline constexpr char kSeparator = '/';
+#endif
+
 // isSeparator は c がパスの区切りか（POSIX は /、Windows は \ と /）。
 bool isSeparator(char c);
 
-// join は dir と name を OS の区切りでつなぐ（dir が区切りで終わっていれば足さない）。
+// join は dir と name を OS の区切り（kSeparator）でつなぐ（dir が区切りで終わっていれば
+// 足さない）。
 std::string join(const std::string &dir, std::string_view name);
 
 // modulePathOf は、address を含むモジュール（プラグインでは cli.vlb か、cli.vwlibrary の中の
