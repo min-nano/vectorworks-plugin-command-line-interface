@@ -488,48 +488,34 @@ Json Json::real(double value) {
 	(void)ec;
 	std::string_view shortest(buffer, static_cast<std::size_t>(end - buffer));
 	bool negative = shortest.starts_with('-');
-	// 仮数の数字・小数点の前の桁数・指数に分ける（d.ddde±XX）。
-	std::string digits;
-	std::int64_t point = 0;
-	std::int64_t exponent = 0;
-	bool afterPoint = false;
-	std::size_t at = negative ? 1 : 0;
-	for (; at < shortest.size() && shortest[at] != 'e'; ++at) {
-		if (shortest[at] == '.') {
-			afterPoint = true;
-			continue;
-		}
-		digits += shortest[at];
-		if (!afterPoint) {
-			++point;
-		}
+	if (negative) {
+		shortest.remove_prefix(1);
 	}
-	if (at < shortest.size()) {
-		++at;
-		bool negativeExponent = shortest[at] == '-';
-		if (shortest[at] == '-' || shortest[at] == '+') {
-			++at;
-		}
-		for (; at < shortest.size(); ++at) {
-			exponent = exponent * 10 + (shortest[at] - '0');
-		}
-		if (negativeExponent) {
-			exponent = -exponent;
-		}
+	// 仮数の数字と指数に分ける（d[.ddd]e±XX）。精度を指定しない to_chars は元の値に戻る最も
+	// 短い文字数を選び（[charconv.to.chars]）、scientific は printf の %e の形（小数点の前は
+	// 1 桁で、値が 0 でなければ 0 ではない）なので、小数点の前は常に 1 桁で、仮数の末尾に 0 は
+	// 付かない（付けば文字数が最も短くない）。先頭と末尾の 0 を除く処理は要らない。
+	const std::size_t e = shortest.find('e');
+	std::string digits(1, shortest[0]);
+	if (e > 1) {
+		digits.append(shortest.substr(2, e - 2));
 	}
 	std::string out = negative ? "-" : "";
-	std::size_t lead = digits.find_first_not_of('0');
-	if (lead == std::string::npos) {
+	if (digits == "0") {
 		// 0 と -0（Go と同じく符号を残す）。
 		out += '0';
 		return Json(Value(Number{std::move(out)}));
 	}
-	digits.erase(0, lead);
-	point -= static_cast<std::int64_t>(lead);
-	digits.erase(digits.find_last_not_of('0') + 1);
+	// from_chars は指数の '+' を受け付けないので除いて読む。
+	std::string_view exponentText = shortest.substr(e + 1);
+	if (exponentText.starts_with('+')) {
+		exponentText.remove_prefix(1);
+	}
+	std::int64_t exponent = 0;
+	(void)std::from_chars(exponentText.data(), exponentText.data() + exponentText.size(), exponent);
 	// 値は 0.<digits> × 10^decimalPoint、指数で書くときの指数は decimalPoint - 1。
-	const std::int64_t decimalPoint = point + exponent;
-	const std::int64_t scientific = decimalPoint - 1;
+	const std::int64_t scientific = exponent;
+	const std::int64_t decimalPoint = scientific + 1;
 	const auto length = static_cast<std::int64_t>(digits.size());
 	if (scientific >= -6 && scientific < 21) {
 		if (decimalPoint <= 0) {
