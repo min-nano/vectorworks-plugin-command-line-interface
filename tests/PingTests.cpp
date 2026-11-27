@@ -74,6 +74,7 @@ TEST(PingRejectsUnknownArguments) {
 	Json result =
 	    VwCli::core::ping(must(R"({"verbose":true})"), ToolContext{false, {}}, facts("1F"), status);
 	CHECK(status.code == ErrorCode::InvalidArgs);
-	CHECK(status.message.find("verbose") != std::string::npos);
+	// 文言はほかの道具と同じ args::Reader の形（docs/plugin/tools.md「共通の決まり」）。
+	CHECK_EQ(status.message, std::string("ping の引数が誤っています: 知らない引数 verbose"));
 	CHECK(result.isNull());
 }
