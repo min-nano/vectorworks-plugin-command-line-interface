@@ -6,7 +6,7 @@ SDK のリンクとバンドルの形は、SDK リファレンスの実機確認
 
 | 項目 | 内容 |
 | --- | --- |
-| プロジェクト | `project(VwCli CXX)`（Apple では OBJCXX も） |
+| プロジェクト | `project(VwCli CXX)`（Apple では OBJCXX も）。CMake は 3.24 以上（`cmake_minimum_required(VERSION 3.24)`。[CMake の版](#cmake-の版)） |
 | 選択肢 | `VW_BUILD_PLUGIN`（ON）・`VW_BUILD_TESTS`（OFF）・`VW_BUILD_FUZZERS`（OFF。clang の libFuzzer が要る）・`VW_ENABLE_SANITIZERS`（OFF。ASan と UBSan。MSVC は ASan だけ）・`VW_ENABLE_COVERAGE`（OFF。clang は source-based coverage、MSVC は `/PROFILE` を付けてリンクし Visual Studio の `Microsoft.CodeCoverage.Console` で測る。clang-cl は不可）・`VW_ENABLE_PCH`（ON）。`VW_BUILD_PLUGIN` が ON で `VW_SDK_DIR` が無ければ構成で止める（黙ってプラグインを外さない）。SDK の無いところ（テスト・検査・ファジング。ubuntu を含む）は `-DVW_BUILD_PLUGIN=OFF` を付ける |
 | SDK | `VW_SDK_DIR`（`SDKLib` を含む）。mac は `libVWSDK.a`＋VWMM・`BuildVWR`、Windows は x64 だけ（`VWSDK.lib`・`VWMM.lib`・`buildvwr.exe`）。どれかが無ければ構成で止める。配るプラグイン（CI）は Release でビルドする（`RELEASE_BLD`。Windows は `/MD`。SDK の Release のライブラリに合わせる。どちらも構成によらず付くので、[手元のビルド](#手元のビルド)の `RelWithDebInfo` でも SDK とずれない） |
 | 警告 | `/W4 /permissive-`・`-Wall -Wextra -Wpedantic` は SDK に依らないターゲット（共通部・テスト・ファジング）にだけ付ける。SDK のヘッダは `SYSTEM` で読み、`/permissive-` を通る保証が無いのでプラグインには付けない |
@@ -20,6 +20,31 @@ SDK のリンクとバンドルの形は、SDK リファレンスの実機確認
 
 `add_vw_plugin` は、見本にある殻と本体の分割・同梱スクリプト・版のファイル（plist の版の鍵など）を
 持ちません。版の情報が `build.json` とコンパイル時の定義の 2 つ以外に散らばらないようにするためです。
+
+### CMake の版
+
+`cmake_minimum_required(VERSION 3.24)` にしています。CI と手元のテストが警告をエラーにする
+`CMAKE_COMPILE_WARNING_AS_ERROR` は CMake 3.24 から効く変数で、3.20〜3.23 では黙って無視され、
+警告があってもビルドが通るためです。3.23 以下で構成すると、最初の行で止まります。
+
+最小版はポリシーの既定も決めます。3.21〜3.24 で入ったポリシー（CMP0121〜CMP0139）のうち、
+`CMakeLists.txt` が使う書き方に関わるのは次のものだけで、どれも構成の結果を変えません。
+ほかは `CMakeLists.txt` が使わないコマンドとモジュールと書き方（`list()`・`find_*()`・`while()`・
+`cmake_dependent_option()`・project の形の `try_compile()`・`if()` の `PATH_EQUAL`・`ExternalProject`・
+`CheckIPOSupported`・`CPack`・`UseSWIG` など）か、ほかのコンパイラー（ARMClang・MCST LCC・Watcom）のものです。
+
+| ポリシー | NEW の振る舞い | このリポジトリ |
+| --- | --- | --- |
+| CMP0124（3.21） | `foreach()` のループ変数をループの外へ残さない | ループ変数（`stamp`・`required`・`test`）をループの後で読まない |
+| CMP0126（3.21） | `set(CACHE)` が同じ名前の通常の変数を消さない | キャッシュに書く `CMAKE_OSX_ARCHITECTURES`・`CMAKE_OSX_DEPLOYMENT_TARGET` は `if(NOT DEFINED ...)` の中で書き、同じ名前の通常の変数が無い |
+| CMP0128（3.22） | `<LANG>_EXTENSIONS` の既定をコンパイラーの既定から取り、要らない言語の版の指定を付けない | `CXX_STANDARD 20`・`CXX_STANDARD_REQUIRED ON`・`CXX_EXTENSIONS OFF` を明示している。`CXX_EXTENSIONS OFF` は GCC・clang の既定（GNU の拡張あり）と違うので、既定の版が C++20 のコンパイラー（GCC 16 など）でも `-std=c++20` が要る指定として付く（MSVC は既定が C++14 なので `/std:c++20` が付く）。mac のプラグインの Objective-C++ も、`OBJCXX_EXTENSIONS` を決めていないので `CXX_EXTENSIONS` に従い、どちらの既定でも `-std=c++20` |
+| CMP0131（3.24） | `LINK_LIBRARIES` で `$<LINK_ONLY:...>` を使える | `$<LINK_ONLY>` を書かない |
+| CMP0132（3.24） | 初めての構成で `CC`・`CXX` などの環境変数を設定しない | `execute_process()` などで、環境変数のコンパイラーを読む子のプロセスを構成の中で走らせない |
+
+ubuntu（CMake 3.28・clang 18）で、テストの構成（`-DVW_BUILD_PLUGIN=OFF`）の
+`compile_commands.json` とリンクの指定が 3.20 と 3.24 の既定で同じであること、OBJCXX を有効にした
+最小の構成で上の版の指定が同じであることを確かめています。プラグインの構成（SDK が要る）は
+CI の `build.yml` と実機で確かめます。
 
 ### 手元のビルド
 
@@ -62,7 +87,7 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
   写らないためです。`CMakeLists.txt` は環境変数 `VW_SDK_DIR` を読まないので、環境変数で
   渡したいときも `"VW_SDK_DIR": "$env{VW_SDK_DIR}"` と `cacheVariables` に書きます。
 - `jobs` はマシンに合わせます（目安はコア数）。
-- プリセットはスキーマの `version: 2` なので、CMake 3.20 で足ります。
+- プリセットはスキーマの `version: 2`（CMake 3.20 から読める）ですが、`CMakeLists.txt` が CMake 3.24 以上を求めます（[CMake の版](#cmake-の版)）。
 - **Vectorworks 2025 のプラグインは手元でビルドしません**（理由は[版「ビルド」](editions.md#ビルド)）。
 
 ## CI
