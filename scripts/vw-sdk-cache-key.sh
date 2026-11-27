@@ -27,7 +27,7 @@ if headers="$(curl -fsSIL --max-time 30 --retry 2 --retry-delay 3 "$url")"; then
 	[ -n "$version" ] || version="$(header last-modified)"
 fi
 # キーに使えない文字を落とし、長さを抑える。
-version="$(printf '%s' "$version" | tr -c 'A-Za-z0-9._-' '-' | sed 's/--*/-/g; s/^-//; s/-$//' | cut -c1-64)"
+version="$(printf '%s' "$version" | tr -cs 'A-Za-z0-9._-' '-' | sed 's/^-//; s/-$//' | cut -c1-64)"
 restore=""
 if [ -z "$version" ]; then
 	echo "::warning::could not read the SDK version from $url; using the latest cache"
