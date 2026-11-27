@@ -23,6 +23,13 @@
 | `src/tools/<道具>.cpp`・`Text.h` | 依る | 道具の中身（`Ping.cpp`・`ReadTools.cpp`・`Documents.cpp`）と、`TXString` を UTF-8 にする `utf8`（`Text.h`。1 か所にまとめる）。SDK から値を読み、SDK に依らない部分は `src/core` の関数に渡す（`Drawing`・`Documents` を SDK で作る。無 SDK でテストするため） |
 | `src/Clock.cpp` | 依る | OS タイマーから `core::tick` を呼び、終了の呼び出しとして `CloseAllFilesAndQuitVectorworks(true, false)` を渡す。最初の刻みで通知 `kNotifyBeforePendingUpdate` を登録し（登録できるまで刻みごとにやり直す）、届いたら `core::Lifecycle` の「起動を終えた」印を立てるだけにする。印の扱いは `src/core/Lifecycle.h` に置き、`Clock` は SDK を呼ぶだけ（保存の確認が開く競合は実機の確認で起こせないので、無 SDK のテストで確かめる） |
 
+**OS ごとのファイル（`FilesPosix.cpp`・`FilesWindows.cpp`）には、OS に依らない数行が両方に
+あっても、それぞれに書きます。** `join`（区切りの文字 `/` と `\` だけが違う）と `Lock::~Lock`
+（`release()` を呼ぶだけ）がそれです。共通にするには、`Files.h` に区切りの定数を置いて
+ヘッダーか新しい `Files.cpp` へ移すことになりますが、どちらも数行で、1 つの関数の中身を 1 つの
+OS のファイルだけで読める今の形のほうが読みやすいためです。OS に依らない部分が数行で
+収まらなくなったら、そのときに置き場所（`Files.cpp` を足すか）を決めて移します。
+
 **受け付けの手順は SDK に依らない `core/Serve` に置き、偽の道具の表でテストします**（終了の依頼の
 返し方・壊れた要求・ロックを取れたときに 1 度だけ残骸を消すこと・ロックを取れないときに何も
 しないこと・無くなっていた要求を飛ばすこと・待つ者の居ない要求と待つ印の無い要求を実行しないこと・失敗の `code`・
