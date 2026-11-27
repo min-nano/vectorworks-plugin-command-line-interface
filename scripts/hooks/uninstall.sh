@@ -14,13 +14,10 @@
 # 戻し、プラグインは残るのにリンクだけが消えた状態になる）。~/.local/bin は消さない。
 set -u
 
-# shellcheck source=scripts/hooks/lib.sh
+# shellcheck source=SCRIPTDIR/lib.sh
 . "$(dirname "$0")/lib.sh"
 
-year="$(hook_year)" || exit 1
-install_dir="$(hook_install_dir "$year")" || exit 1
-command="vw$year"
-home="$(absolute_dir HOME "${HOME-}")" || exit 1
+hook_init
 link="$home/.local/bin/$command"
 
 state=none

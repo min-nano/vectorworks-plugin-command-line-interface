@@ -15,15 +15,11 @@ $ProgressPreference = 'SilentlyContinue'
 . (Join-Path $PSScriptRoot 'lib.ps1')
 Initialize-HookConsole
 
-$year = Get-HookYear
-if ($null -eq $year) {
+$target = Get-HookTarget
+if ($null -eq $target) {
 	exit 1
 }
-$installDir = Get-HookInstallDir $year
-if ($null -eq $installDir) {
-	exit 1
-}
-$bin = $installDir + '\bin'
+$bin = $target.Bin
 if ($null -eq $Store) {
 	$Store = Get-RegistryPathStore
 }

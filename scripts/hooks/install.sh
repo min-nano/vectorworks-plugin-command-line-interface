@@ -13,13 +13,10 @@
 # するのは、何も変える前の確かめ（環境変数・CLI があること）だけ。シェルの設定ファイルは書き換えない。
 set -u
 
-# shellcheck source=scripts/hooks/lib.sh
+# shellcheck source=SCRIPTDIR/lib.sh
 . "$(dirname "$0")/lib.sh"
 
-year="$(hook_year)" || exit 1
-install_dir="$(hook_install_dir "$year")" || exit 1
-command="vw$year"
-home="$(absolute_dir HOME "${HOME-}")" || exit 1
+hook_init
 target="$install_dir/bin/$command"
 if [ ! -f "$target" ]; then
 	hook_fail "the CLI is missing: $target"
