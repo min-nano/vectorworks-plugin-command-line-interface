@@ -26,12 +26,12 @@ const cliName = "cli"
 
 // 出力の outcome。
 const (
-	outcomeInstalled   = "installed"
-	outcomeUpToDate    = "up_to_date"
-	outcomeAvailable   = "available"
-	outcomeRunning     = "vectorworks_running"
-	outcomeUninstalled = "uninstalled"
-	outcomeNotInstall  = "not_installed"
+	outcomeInstalled    = "installed"
+	outcomeUpToDate     = "up_to_date"
+	outcomeAvailable    = "available"
+	outcomeRunning      = "vectorworks_running"
+	outcomeUninstalled  = "uninstalled"
+	outcomeNotInstalled = "not_installed"
 )
 
 // Options は配置に要る外の世界。
@@ -316,4 +316,14 @@ func pluginFolder(dest string) (bool, error) {
 		return false, fmt.Errorf("%s is not a folder that "+edition.Command+" installed (not a plain folder); "+edition.Command+" does not touch it", dest)
 	}
 	return true, nil
+}
+
+// installCommand と uninstallCommand は、利用者にもう一度走らせるよう示すコマンド（edition.Command の後ろ）。
+// 示す箇所ごとに書き方が食い違わないように 1 か所で組み立てる。
+func installCommand(name, tag string) string {
+	return fmt.Sprintf("install %s@%s", name, tag)
+}
+
+func uninstallCommand(name string) string {
+	return "uninstall " + name
 }

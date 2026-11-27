@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
@@ -68,8 +70,8 @@ type Entry struct {
 
 // Rule はマニフェストの場所の規則 1 つ。
 type Rule struct {
-	Match string
-	Path  string
+	Match string `json:"match"`
+	Path  string `json:"path"`
 }
 
 // Parse はレジストリを読む。remote は https:// で取ったものか（そうなら path は https:// だけ。
@@ -79,10 +81,7 @@ func Parse(data []byte, remote bool) (*Registry, error) {
 	var raw struct {
 		RegistryVersion *int `json:"registry_version"`
 		Plugins         map[string]struct {
-			Manifests []struct {
-				Match string `json:"match"`
-				Path  string `json:"path"`
-			} `json:"manifests"`
+			Manifests []Rule `json:"manifests"`
 		} `json:"plugins"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -102,7 +101,6 @@ func Parse(data []byte, remote bool) (*Registry, error) {
 		if len(plugin.Manifests) == 0 {
 			return nil, fmt.Errorf("%s: no manifests", name)
 		}
-		var entry Entry
 		for i, rule := range plugin.Manifests {
 			if !matchPattern.MatchString(rule.Match) {
 				return nil, fmt.Errorf("%s: manifests[%d]: invalid match %q", name, i, rule.Match)
@@ -110,9 +108,8 @@ func Parse(data []byte, remote bool) (*Registry, error) {
 			if err := CheckRef(strings.ReplaceAll(rule.Path, tagPlaceholder, "tag"), remote); err != nil {
 				return nil, fmt.Errorf("%s: manifests[%d]: path: %w", name, i, err)
 			}
-			entry.Manifests = append(entry.Manifests, Rule{Match: rule.Match, Path: rule.Path})
 		}
-		registry.Plugins[name] = entry
+		registry.Plugins[name] = Entry{Manifests: plugin.Manifests}
 	}
 	return registry, nil
 }
@@ -139,25 +136,12 @@ func (r Rule) ByTag() bool {
 	return strings.Contains(r.Path, tagPlaceholder)
 }
 
-// Match はパターン（* は 0 文字以上に合う）が s 全体に合うか。
+// match はパターン（* は 0 文字以上に合う）が s 全体に合うか。path.Match の * は / に合わず、
+// ? [ ] \ も特別に扱うが、パターンは matchPattern が、s（タグ）は ValidTag がそれらを含まないことを
+// 確かめているので、ここでは * だけの照合と同じになる（壊れたパターンの誤りも起きない）。
 func match(pattern, s string) bool {
-	parts := strings.Split(pattern, "*")
-	if len(parts) == 1 {
-		return pattern == s
-	}
-	if !strings.HasPrefix(s, parts[0]) {
-		return false
-	}
-	s = s[len(parts[0]):]
-	last := parts[len(parts)-1]
-	for _, part := range parts[1 : len(parts)-1] {
-		i := strings.Index(s, part)
-		if i < 0 {
-			return false
-		}
-		s = s[i+len(part):]
-	}
-	return len(s) >= len(last) && strings.HasSuffix(s, last)
+	ok, _ := path.Match(pattern, s)
+	return ok
 }
 
 // IsURL は参照が https:// の URL か（遠くのもの）。
@@ -266,10 +250,7 @@ func ParseManifest(data []byte, remote bool) (*Manifest, error) {
 		Targets         map[string]struct {
 			Asset  string `json:"asset"`
 			SHA256 string `json:"sha256"`
-			Hooks  *struct {
-				Install   []string `json:"install"`
-				Uninstall []string `json:"uninstall"`
-			} `json:"hooks"`
+			Hooks  Hooks  `json:"hooks"`
 		} `json:"targets"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -293,14 +274,10 @@ func ParseManifest(data []byte, remote bool) (*Manifest, error) {
 		if !sha256Hex.MatchString(asset.SHA256) {
 			return nil, fmt.Errorf("%s: sha256 must be 64 lowercase hexadecimal digits", target)
 		}
-		var hooks Hooks
-		if asset.Hooks != nil {
-			hooks = Hooks{Install: asset.Hooks.Install, Uninstall: asset.Hooks.Uninstall}
-		}
-		if err := hooks.Check(); err != nil {
+		if err := asset.Hooks.Check(); err != nil {
 			return nil, fmt.Errorf("%s: %w", target, err)
 		}
-		manifest.Targets[target] = Asset{URL: asset.Asset, SHA256: asset.SHA256, Hooks: hooks}
+		manifest.Targets[target] = Asset{URL: asset.Asset, SHA256: asset.SHA256, Hooks: asset.Hooks}
 	}
 	return manifest, nil
 }
@@ -322,8 +299,14 @@ func (h Hooks) Check() error {
 	return nil
 }
 
-// Interpreters はフックの 1 つ目に書ける、zip の外のもの。
-var Interpreters = []string{"sh", "powershell"}
+// interpreters はフックの 1 つ目に書ける、zip の外のもの。
+var interpreters = []string{"sh", "powershell"}
+
+// ViaInterpreter は、フックの argv の 1 つ目が zip の外のインタプリタ（interpreters）か。そうなら 2 つ目が
+// zip の中のスクリプト。フックの書き方を確かめる側（Script）と走らせる側（install）が同じこの関数で決める。
+func ViaInterpreter(argv []string) bool {
+	return len(argv) > 0 && slices.Contains(interpreters, argv[0])
+}
 
 // Script はフックの argv から、zip の中のファイルの相対パス（/ 区切り）を返す。1 つ目が sh・powershell
 // なら 2 つ目、それ以外なら 1 つ目。絶対パス・..・- で始まるもの（sh -c のような指定）・\ は断る。powershell の
@@ -333,13 +316,11 @@ func Script(argv []string) (string, error) {
 		return "", errors.New("empty")
 	}
 	script := argv[0]
-	for _, interpreter := range Interpreters {
-		if argv[0] == interpreter {
-			if len(argv) < 2 {
-				return "", fmt.Errorf("%s needs the path of a script in the zip", interpreter)
-			}
-			script = argv[1]
+	if ViaInterpreter(argv) {
+		if len(argv) < 2 {
+			return "", fmt.Errorf("%s needs the path of a script in the zip", argv[0])
 		}
+		script = argv[1]
 	}
 	if argv[0] == "powershell" && !strings.EqualFold(filepath.Ext(script), ".ps1") {
 		return "", fmt.Errorf("powershell runs only a .ps1 script, not %q", script)
