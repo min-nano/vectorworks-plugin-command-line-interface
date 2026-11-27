@@ -100,15 +100,6 @@ Opened openFile(const std::string &path, DWORD access, DWORD share, DWORD dispos
 
 bool isSeparator(char c) { return c == '\\' || c == '/'; }
 
-std::string join(const std::string &dir, std::string_view name) {
-	std::string path = dir;
-	if (!path.empty() && !isSeparator(path.back())) {
-		path += '\\';
-	}
-	path.append(name);
-	return path;
-}
-
 std::optional<std::string> modulePathOf(const void *address) {
 	// 参照の数は変えない（留めるのは Clock.cpp の startClock の受け持ち）。
 	HMODULE module = nullptr;
@@ -249,8 +240,6 @@ WaitState probe(const std::string &path) {
 	}
 	return opened.error == ERROR_SHARING_VIOLATION ? WaitState::Held : WaitState::Missing;
 }
-
-Lock::~Lock() { release(); }
 
 Lock::Result Lock::take(const std::string &path, std::string &error) {
 	release();

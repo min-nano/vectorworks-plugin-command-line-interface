@@ -97,7 +97,7 @@ endif()
 
 # --- 共通部（SDK に依らない。プラグインとテストがリンクする） ---------------------------------
 add_library(VwCliCore STATIC src/core/Args.cpp src/core/Bridge.cpp src/core/DocumentTools.cpp
-						   src/core/Json.cpp src/core/Ping.cpp src/core/Quit.cpp
+						   src/core/Files.cpp src/core/Json.cpp src/core/Ping.cpp src/core/Quit.cpp
 						   src/core/ReadTools.cpp src/core/SaveTarget.cpp src/core/Serve.cpp)
 if(WIN32)
 	# WindowsPath は \\?\ を付ける処理で、スプールと保存先の確かめが共に使う。
