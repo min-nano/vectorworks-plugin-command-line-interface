@@ -16,8 +16,7 @@ constexpr std::int64_t kMaxLimit = 1000;
 constexpr std::int64_t kDefaultLimit = 50;
 
 std::size_t countOf(const LayerFacts &layer) {
-	return static_cast<std::size_t>(
-	    std::count_if(layer.memberTypes.begin(), layer.memberTypes.end(), counted));
+	return static_cast<std::size_t>(std::ranges::count_if(layer.memberTypes, counted));
 }
 
 Json typeNameJson(std::int16_t type) {

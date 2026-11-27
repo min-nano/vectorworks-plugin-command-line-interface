@@ -36,7 +36,7 @@ func TestUninstall(t *testing.T) {
 		t.Fatalf("%+v", last)
 	}
 	again, err := Uninstall(h.options(), "demo")
-	if err != nil || again.Outcome != outcomeNotInstall {
+	if err != nil || again.Outcome != outcomeNotInstalled {
 		t.Fatalf("%+v %v", again, err)
 	}
 }
@@ -213,7 +213,7 @@ func TestUninstallStaleMarker(t *testing.T) {
 	os.MkdirAll(filepath.Dir(marker), 0o700)
 	os.WriteFile(marker, nil, 0o600)
 	result, err := Uninstall(h.options(), "demo")
-	if err != nil || result.Outcome != outcomeNotInstall || !reflect.DeepEqual(result.Remaining, []string{"cli"}) || exists(marker) {
+	if err != nil || result.Outcome != outcomeNotInstalled || !reflect.DeepEqual(result.Remaining, []string{"cli"}) || exists(marker) {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
@@ -226,7 +226,7 @@ func TestUninstallNotInstalledCleansUp(t *testing.T) {
 	os.WriteFile(moved, nil, 0o700)
 	os.MkdirAll(filepath.Join(h.work, "staging", "cli"), 0o700)
 	result, err := Uninstall(h.options(), "cli")
-	if err != nil || result.Outcome != outcomeNotInstall || len(result.Left) != 0 || exists(moved) || exists(h.work) {
+	if err != nil || result.Outcome != outcomeNotInstalled || len(result.Left) != 0 || exists(moved) || exists(h.work) {
 		t.Fatalf("%+v %v", result, err)
 	}
 }

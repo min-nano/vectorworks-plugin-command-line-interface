@@ -14,7 +14,7 @@
 | `src/core/PathCompare.h`・`PathCompareMac.cpp`・`PathCompareWindows.cpp` | 依らない | `save` の `to` を開いている図面のパスと比べる、NFC への正規化と大文字小文字を区別しない比較の OS の呼び出し（mac は CoreFoundation、Windows は `NormalizeString`・`CompareStringOrdinal`）。APPLE と WIN32 のときだけビルドし、保存先の確かめは比べる関数を引数で受ける（[保存先の確かめ「パスの一致の判定」](save-target.md#パスの一致の判定)） |
 | `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つ（`prepare` / `lock` / `sweep` / `poll` / `take` / `waitState` / `reply`）と、スプールの場所（モジュールのパスから求める `spoolDirOf` と、自分のモジュールに当てる `defaultSpoolDir`）。`Bridge` は場所を引数で受ける（テストは一時ディレクトリを渡す） |
 | `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（`core::Server::serve`。下記）と、占有の印（`Server` が発行した 1 つをメモリに持つ）。道具の表と時刻を引数で受けるので無 SDK でテストできる |
-| `src/core/Ping.{h,cpp}` | 依らない | 道具 `ping` の中身のうち SDK に依らない部分（引数の検査と結果の形）。SDK から読む値（現在のレイヤの名前）は引数で受ける |
+| `src/core/Ping.{h,cpp}` | 依らない | 道具 `ping` の中身のうち SDK に依らない部分（表の行 `kPingSpec`・引数の検査と結果の形）。SDK から読む値（現在のレイヤの名前）は引数で受ける |
 | `src/core/Args.{h,cpp}` | 依らない | 道具の引数の読み方（知らない引数・型・範囲・小数部・必須の欠けを `invalid_args` にする `Reader`）と、失敗の `detail` の `reason` を付ける口 |
 | `src/core/ReadTools.{h,cpp}`・`DocumentTools.{h,cpp}` | 依らない | 読む道具と図面を扱う道具の中身のうち SDK に依らない部分（道具の表の行 `ToolSpec`（名前・説明・`inputSchema`・種類。`src/tools/ToolTable.cpp` はこの定数を使い、種類を無 SDK のテストで確かめる）・引数の検査・確かめの順・結果の形・`type_name` の表・`layer_objects` の絞り込みと頁送り・`no_document` の判定・`save` の保存先の確かめと前面を戻す手順・`close` で閉じた図面が中に残ったものの片付け（`clearClosedDocuments`。`close` と `quit` が使う））。SDK から読む値と SDK の呼び出しは、道具ごとの口（`Drawing`・`Documents`）で受ける。`ToolSpec` はヘッダーの `inline constexpr` で、表は定数で初期化される |
 | `src/core/Quit.{h,cpp}` | 依らない | 道具 `quit` の中身のうち SDK に依らない部分（表の行 `kQuitSpec`・引数の検査・確かめの順（引数の形 → 起動を終えたか → 開いている図面 → 中に残った閉じた図面の片付け（片付かなければ `closed_documents_remain`。片付けのあとに図面が開いていれば `documents_open`））・失敗の `detail`）。開いている図面の一覧は `core::Documents` で受ける |
@@ -164,7 +164,7 @@ struct ToolContext {
 // 失敗と終了の依頼は status に書き（戻り値は使わない）、例外は Server が internal で応える。
 using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolStatus &status);
 
-struct Tool {
+struct ToolSpec {
 	// [a-z0-9_]+(\.[a-z0-9_]+)*（通信規則の綴りの std::string_view をそのまま使える）
 	std::string_view name;
 	// 日本語。呼ぶ側がそのまま読む。
@@ -172,12 +172,15 @@ struct Tool {
 	// JSON Schema（文字列）。tools の結果にそのまま載る。
 	const char *inputSchema;
 	ToolKind kind;
+};
+
+struct Tool : ToolSpec {
 	ToolFn run;
 };
 ```
 
 - **道具を足すときに触るのは表の 1 行と中身 1 つだけ**です。CLI は道具を知らないので直しません。
-  名前・説明・`inputSchema`・種類は `src/core` の `ToolSpec`（`ReadTools.h`・`DocumentTools.h`）に置き、表は
+  名前・説明・`inputSchema`・種類は `src/core` の `ToolSpec`（`Ping.h`・`ReadTools.h`・`DocumentTools.h`・`Quit.h`）に置き、表は
   `core::toolOf(spec, &中身)` で組み立てます（種類を無 SDK のテストで確かめるため）。
 - `tools` の結果の形と `kind` の意味は[通信規則「予約された道具」](../protocol.md#予約された道具)にあります。
   予約された道具のうち `tools`・`session_start`・`session_end` は表に載せず、`ping` と `quit` は表に載せます。

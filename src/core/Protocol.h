@@ -4,6 +4,7 @@
 // 照らし合わせる（CLI 側の cli/internal/spool も同じ見本に照らす）。通信規則を変えたら、
 // 文書と見本と両側の実装を直す。
 
+#include <algorithm>
 #include <cstddef>
 #include <string_view>
 
@@ -54,17 +55,10 @@ inline constexpr std::string_view kCodeInternal = "internal";
 // validId は id の綴りが [0-9A-Za-z_-]{1,64} を満たすか。ファイル名に使うので、満たさない要求は
 // 受け付けない（../ を混ぜてスプールの外へ書かせないための関門）。
 constexpr bool validId(std::string_view id) {
-	if (id.empty() || id.size() > kMaxIdLength) {
-		return false;
-	}
-	for (char c : id) {
-		bool ok = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-		          c == '_' || c == '-';
-		if (!ok) {
-			return false;
-		}
-	}
-	return true;
+	return !id.empty() && id.size() <= kMaxIdLength && std::ranges::all_of(id, [](char c) {
+		return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+		       c == '_' || c == '-';
+	});
 }
 
 }

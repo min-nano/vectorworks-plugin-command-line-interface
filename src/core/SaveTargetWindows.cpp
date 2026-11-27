@@ -26,8 +26,8 @@ Probe failure(DWORD error) {
 }
 
 bool isMissing(std::int64_t osError) {
-	// 2 ERROR_FILE_NOT_FOUND・3 ERROR_PATH_NOT_FOUND・67
-	// ERROR_BAD_NET_NAME（サーバーに共有が無い）・ 267 ERROR_DIRECTORY（途中の段がファイル）。
+	// 2 ERROR_FILE_NOT_FOUND・3 ERROR_PATH_NOT_FOUND・67 ERROR_BAD_NET_NAME（サーバーに共有が
+	// 無い）・267 ERROR_DIRECTORY（途中の段がファイル）。
 	return osError == ERROR_FILE_NOT_FOUND || osError == ERROR_PATH_NOT_FOUND ||
 	       osError == ERROR_BAD_NET_NAME || osError == ERROR_DIRECTORY;
 }

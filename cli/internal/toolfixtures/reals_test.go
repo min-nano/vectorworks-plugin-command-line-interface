@@ -4,35 +4,24 @@
 package toolfixtures_test
 
 import (
-	"bytes"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
-)
 
-// fixtures は道具の結果の見本の場所（go test はパッケージのディレクトリで走る）。
-const fixtures = "../../../tests/fixtures"
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fixturetest"
+)
 
 // TestRealsMatchEncodingJSON は、見本の実数と綴りの組が json.Marshal の綴りと一致することを
 // 確かめる（プラグインの結果の実数の綴りを Go の encoding/json に合わせる決まり）。
 func TestRealsMatchEncodingJSON(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(fixtures, "reals.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	var fixture struct {
 		Reals []struct {
 			Value string `json:"value"`
 			Text  string `json:"text"`
 		} `json:"reals"`
 	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&fixture); err != nil {
-		t.Fatal(err)
-	}
+	fixturetest.ReadStrict(t, filepath.Join(fixturetest.ToolDir, "reals.json"), &fixture)
 	if len(fixture.Reals) == 0 {
 		t.Fatal("reals.json has no reals")
 	}

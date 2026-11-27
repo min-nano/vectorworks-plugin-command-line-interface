@@ -17,7 +17,7 @@ command="vw$year"
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 hooks="$root/scripts/hooks"
-# shellcheck source=/dev/null
+# shellcheck source=scripts/hooks/lib.sh
 . "$hooks/lib.sh"
 
 work="$(mktemp -d)"

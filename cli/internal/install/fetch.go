@@ -1,6 +1,7 @@
 package install
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -90,10 +91,7 @@ func (o *Options) open(ref string) (io.ReadCloser, int64, error) {
 		file, err := os.Open(path)
 		return file, -1, err
 	}
-	client := http.DefaultClient
-	if o.Client != nil {
-		client = o.Client
-	}
+	client := cmp.Or(o.Client, http.DefaultClient)
 	// 転送（releases/latest/download/… など）は追うが、行き先も https:// に限る。
 	safe := *client
 	safe.CheckRedirect = func(req *http.Request, via []*http.Request) error {

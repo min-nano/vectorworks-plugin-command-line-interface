@@ -1,3 +1,4 @@
+#include "FakeDocuments.h"
 #include "TestSupport.h"
 
 #include "core/DocumentTools.h"
@@ -6,7 +7,6 @@
 #include "core/SaveTarget.h"
 #include "core/Serve.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -24,103 +24,17 @@
 namespace save_target = VwCli::core::save_target;
 using save_target::Entry;
 using save_target::Probe;
-using VwCli::core::Documents;
 using VwCli::core::ErrorCode;
 using VwCli::core::Json;
 using VwCli::core::OpenDocument;
 using VwCli::core::SaveEnvironment;
 using VwCli::core::ToolKind;
 using VwCli::core::ToolStatus;
+using VwCli::test::FakeDocuments;
 using VwCli::test::must;
+using VwCli::test::reasonOf;
 
 namespace {
-
-// FakeDocuments は開いている図面の一覧を持ち、SDK の呼び出しを真似て、呼んだ順を覚える。
-class FakeDocuments : public Documents {
-public:
-	std::vector<OpenDocument> open;
-	std::vector<std::string> calls;
-	std::uint32_t saveError = 0;
-	bool switchFails = false;
-	// SwitchToOpenFile が真を返すのに前面が変わらない
-	// （前面を確かめずに保存・閉じると、別の図面に効く）。
-	bool switchIgnored = false;
-	// 閉じても残る（not_closed を真似る）。
-	bool closeKeeps = false;
-	// 閉じると、この ref の図面も一覧から消える（前面へ戻せない場合を真似る）。
-	std::int32_t closeAlsoDrops = -1;
-	// 保存のあと、前面の図面の項目を一覧から消す（読み直せない場合を真似る）。
-	bool saveLosesFront = false;
-	// 閉じた図面が中に残った枚数（一覧には出ず、GetActiveDocument だけが真を返す）。
-	int remnants = 0;
-	// 一覧が空のときの CloseDocument で、残った図面が消えない。
-	bool remnantsStick = false;
-
-	std::vector<OpenDocument> list() override {
-		calls.emplace_back("list");
-		return open;
-	}
-	bool switchTo(std::int32_t ref) override {
-		calls.push_back("switch " + std::to_string(ref));
-		if (switchFails) {
-			return false;
-		}
-		if (switchIgnored) {
-			return true;
-		}
-		for (OpenDocument &document : open) {
-			document.active = document.ref == ref;
-		}
-		return true;
-	}
-	std::uint32_t saveActive(const std::string &path) override {
-		calls.push_back("save " + path);
-		if (saveError == 0) {
-			for (std::size_t i = 0; i < open.size(); ++i) {
-				if (open[i].active) {
-					if (saveLosesFront) {
-						open.erase(open.begin() + static_cast<std::ptrdiff_t>(i));
-						break;
-					}
-					open[i].path = path;
-					open[i].untitled = false;
-				}
-			}
-		}
-		return saveError;
-	}
-	void closeActive() override {
-		calls.emplace_back("close");
-		if (closeKeeps) {
-			return;
-		}
-		// 一覧が空なら、残った図面を 1 枚消す。
-		if (open.empty()) {
-			if (remnants > 0 && !remnantsStick) {
-				--remnants;
-			}
-			return;
-		}
-		for (std::size_t i = 0; i < open.size(); ++i) {
-			if (open[i].active) {
-				open.erase(open.begin() + static_cast<std::ptrdiff_t>(i));
-				break;
-			}
-		}
-		std::erase_if(
-		    open, [this](const OpenDocument &document) { return document.ref == closeAlsoDrops; });
-		// 閉じたあとに前面になるのは最後に開いた図面（ここでは一覧の末尾）。
-		if (!open.empty()) {
-			open.back().active = true;
-		}
-	}
-	bool hasActive() override {
-		calls.emplace_back("active");
-		return remnants > 0 ||
-		       std::any_of(open.begin(), open.end(),
-		                   [](const OpenDocument &document) { return document.active; });
-	}
-};
 
 constexpr std::string_view kUntitled = "/Applications/Vectorworks 2026/名称未設定 1";
 
@@ -189,11 +103,6 @@ struct Fs {
 Json saveArgs(std::string_view document, std::string_view to) {
 	return Json::object(
 	    {{"document", Json::string(std::string(document))}, {"to", Json::string(std::string(to))}});
-}
-
-std::string reasonOf(const ToolStatus &status) {
-	const Json *reason = status.detail.find("reason");
-	return reason && reason->isString() ? reason->asString() : "";
 }
 
 std::vector<std::string> calls(std::initializer_list<const char *> names) {
@@ -630,8 +539,7 @@ TEST(CloseStopsClearingAtTheLimit) {
 	Json result = VwCli::core::close(must(R"({"document":"/Users/me/plan.vwx"})"), docs, status);
 	CHECK(status.code == ErrorCode::None);
 	CHECK_EQ(result, must(R"({"closed":true,"closed_documents_remain":true})"));
-	CHECK_EQ(std::count(docs.calls.begin(), docs.calls.end(), std::string("close")),
-	         std::ptrdiff_t{1 + VwCli::core::kMaxClosedRemnants});
+	CHECK_EQ(docs.count("close"), 1 + VwCli::core::kMaxClosedRemnants);
 }
 
 TEST(ClearClosedDocumentsDoesNothingWithoutRemnants) {
@@ -661,6 +569,7 @@ namespace files = VwCli::core::files;
 using VwCli::core::Server;
 using VwCli::core::Tool;
 using VwCli::core::ToolContext;
+using VwCli::test::Caller;
 using VwCli::test::kNow;
 using VwCli::test::TempDir;
 
@@ -671,18 +580,14 @@ Json counts(const Json &, const ToolContext &, ToolStatus &) {
 	return Json::object();
 }
 
-// serveOnce は要求 1 つを置いて受け付けを 1 回走らせ、応答を返す（待つ印を掴んでおく）。
-Json serveOnce(Server &server, const TempDir &dir, std::span<const Tool> tools,
-               const std::string &id, const std::string &request) {
-	std::string error;
-	files::Lock wait;
-	CHECK(wait.take(dir.sub(id + ".wait"), error) == files::Lock::Result::Taken);
-	CHECK(files::write(dir.sub(id + ".req.json"), request));
+// serveOnce は要求 1 つを置いて受け付けを 1 回走らせ、応答を返す。
+Json serveOnce(Server &server, Caller &caller, std::span<const Tool> tools, const std::string &id,
+               const std::string &request) {
+	caller.put(id, request);
 	server.serve(tools, kNow);
-	std::optional<std::string> text =
-	    files::read(dir.sub(id + ".res.json"), VwCli::core::protocol::kMaxRequestBytes);
-	CHECK(text);
-	return text ? must(*text) : Json();
+	Json response = caller.response(id);
+	CHECK(!response.isNull());
+	return response;
 }
 
 }
@@ -693,27 +598,28 @@ TEST(ServeRefusesSaveAndCloseOutsideTheSession) {
 	const Tool tools[] = {VwCli::core::toolOf(VwCli::core::kSaveSpec, &counts),
 	                      VwCli::core::toolOf(VwCli::core::kCloseSpec, &counts)};
 	TempDir dir;
+	Caller caller(dir);
 	Server server(dir.utf8Path());
 	gRuns = 0;
 	for (const char *tool : {"save", "close"}) {
-		Json refused = serveOnce(server, dir, tools, std::string("a") + tool,
+		Json refused = serveOnce(server, caller, tools, std::string("a") + tool,
 		                         std::string(R"({"tool":")") + tool + "\"}");
 		CHECK_EQ(*refused.find("code"), Json::string("no_session"));
 	}
-	Json started = serveOnce(server, dir, tools, "b", R"({"tool":"session_start"})");
+	Json started = serveOnce(server, caller, tools, "b", R"({"tool":"session_start"})");
 	REQUIRE(started.find("result"));
 	std::string session = started.find("result")->find("session")->asString();
 	for (const char *tool : {"save", "close"}) {
-		Json other = serveOnce(server, dir, tools, std::string("c") + tool,
+		Json other = serveOnce(server, caller, tools, std::string("c") + tool,
 		                       std::string(R"({"tool":")") + tool + R"(","session":"other"})");
 		CHECK_EQ(*other.find("code"), Json::string("occupied"));
-		Json none = serveOnce(server, dir, tools, std::string("d") + tool,
+		Json none = serveOnce(server, caller, tools, std::string("d") + tool,
 		                      std::string(R"({"tool":")") + tool + "\"}");
 		CHECK_EQ(*none.find("code"), Json::string("occupied"));
 	}
 	CHECK_EQ(gRuns, 0);
 	Json allowed =
-	    serveOnce(server, dir, tools, "e", R"({"tool":"save","session":")" + session + "\"}");
+	    serveOnce(server, caller, tools, "e", R"({"tool":"save","session":")" + session + "\"}");
 	CHECK_EQ(*allowed.find("ok"), Json::boolean(true));
 	CHECK_EQ(gRuns, 1);
 }

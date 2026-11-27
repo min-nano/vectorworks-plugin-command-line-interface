@@ -106,12 +106,8 @@ std::string newSession(std::int64_t nowNanos) {
 }
 
 const Tool *findTool(std::span<const Tool> tools, const std::string &name) {
-	for (const Tool &tool : tools) {
-		if (name == tool.name) {
-			return &tool;
-		}
-	}
-	return nullptr;
+	auto found = std::ranges::find(tools, std::string_view(name), &Tool::name);
+	return found == tools.end() ? nullptr : &*found;
 }
 
 // toolsList は予約された道具 tools の結果（通信規則「予約された道具」）。
@@ -238,13 +234,7 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos, Ac
 	}
 	// 道具の中で Vectorworks がイベントを回すと、この回の途中でまた serve が呼ばれうる。戻るとき
 	// （例外で抜けるときも）に下ろす。
-	struct Serving {
-		bool &flag;
-		explicit Serving(bool &serving) : flag(serving) { flag = true; }
-		~Serving() { flag = false; }
-		Serving(const Serving &) = delete;
-		Serving &operator=(const Serving &) = delete;
-	} serving(serving_);
+	ScopedFlag serving(serving_);
 	for (const std::string &id : bridge_.poll()) {
 		std::optional<std::string> text = held(id);
 		if (!text) {

@@ -84,7 +84,7 @@ func scriptIn(dir string, argv []string) (string, error) {
 		return "", fmt.Errorf("the hook %q is not a file in the zip", script)
 	}
 	switch {
-	case slices.Contains(registry.Interpreters, argv[0]):
+	case registry.ViaInterpreter(argv):
 	// Windows は権限では決まらず、拡張子で決まる。PATHEXT は読まない（.vbs・.js なども載るが、それらは
 	// CreateProcess では走らない）。
 	case runtime.GOOS == "windows":
@@ -114,15 +114,15 @@ func (o *Options) runHook(kind string, argv []string, env hookEnv) (json.RawMess
 		return nil, fmt.Errorf("the %s hook: %w", kind, err)
 	}
 	var command []string
-	// 1 つ目が zip の外のインタプリタなら、2 つ目が zip の中のスクリプト（scriptIn・registry.Script と同じ一覧で決める）。
-	if slices.Contains(registry.Interpreters, argv[0]) {
+	// 1 つ目が zip の外のインタプリタなら、2 つ目が zip の中のスクリプト。
+	if registry.ViaInterpreter(argv) {
 		head, err := o.interpreter(argv[0])
 		if err != nil {
 			return nil, fmt.Errorf("the %s hook: %w", kind, err)
 		}
-		command = append(append(append(command, head...), path), argv[2:]...)
+		command = slices.Concat(head, []string{path}, argv[2:])
 	} else {
-		command = append([]string{path}, argv[1:]...)
+		command = slices.Concat([]string{path}, argv[1:])
 	}
 	// 受けるのは小さな JSON のオブジェクト 1 つなので、レジストリと同じ上限までだけを溜める（超えた分は
 	// 捨てて読み続け、フックを止めない。終わったあとで失敗にする）。
@@ -140,15 +140,16 @@ func (o *Options) runHook(kind string, argv []string, env hookEnv) (json.RawMess
 		fmt.Fprintf(o.stderr(), edition.Command+": the %s hook left a process that keeps its output open; "+edition.Command+" stopped waiting for it\n", kind)
 		err = nil
 	}
+	shown := strings.Join(argv, " ")
 	if err != nil {
-		return nil, fmt.Errorf("the %s hook %q failed: %w", kind, strings.Join(argv, " "), err)
+		return nil, fmt.Errorf("the %s hook %q failed: %w", kind, shown, err)
 	}
 	if stdout.over {
-		return nil, fmt.Errorf("the %s hook %q printed more than %d bytes", kind, strings.Join(argv, " "), maxDocument)
+		return nil, fmt.Errorf("the %s hook %q printed more than %d bytes", kind, shown, maxDocument)
 	}
 	out, err := hookOutput(stdout.buf.Bytes())
 	if err != nil {
-		return nil, fmt.Errorf("the %s hook %q printed %w", kind, strings.Join(argv, " "), err)
+		return nil, fmt.Errorf("the %s hook %q printed %w", kind, shown, err)
 	}
 	return out, nil
 }

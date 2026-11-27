@@ -22,7 +22,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 	// 前回の残りの old を片付けてから、組み立ての場所（名前をそのまま組み立てたパスだけ）を消す。
 	// settleOld が消すものは組み立ての場所を通るので、この順にすると、消しきれなかったものがあれば
 	// removeStaging が失敗し、前の版のファイルを新しい版に混ぜて組み立てない。
-	again := fmt.Sprintf("install %s@%s", name, tag)
+	again := installCommand(name, tag)
 	stillOld := "nothing is changed; quit Vectorworks, then run " + again + " again"
 	if _, err := o.settleOld(p, name, again, stillOld); err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func (o *Options) finishInstall(p places, name, tag string, moved *movedCLI, had
 	// かもしれない）。
 	var kept error
 	keptDir := ""
-	again := fmt.Sprintf("install %s@%s", name, tag)
+	again := installCommand(name, tag)
 	if err := clearHookPending(p.dest); err != nil {
 		kept = fmt.Errorf("cannot record that the install hook succeeded (%v); run %s again",
 			err, again)

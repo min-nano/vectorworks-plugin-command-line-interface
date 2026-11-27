@@ -222,10 +222,15 @@ func deployRunning(e *env, err error, result any) int {
 	return exitRunning
 }
 
+// failedJSON は install / uninstall の失敗の出力（outcome が failed）。
+func failedJSON(name string, err error) map[string]any {
+	return map[string]any{"outcome": "failed", "name": name, "message": err.Error()}
+}
+
 // deployFailed は失敗を標準出力の JSON（message）と標準エラーに書き、終了コードを返す。
 func deployFailed(e *env, name string, err error) int {
 	fmt.Fprintf(e.stderr, edition.Command+": %v\n", err)
-	emit(e, map[string]any{"outcome": "failed", "name": name, "message": err.Error()})
+	emit(e, failedJSON(name, err))
 	if install.IsUsage(err) {
 		return exitUsage
 	}

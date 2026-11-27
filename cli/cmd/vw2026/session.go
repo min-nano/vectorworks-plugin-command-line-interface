@@ -37,8 +37,13 @@ one. With the old one, a tool of kind write or app and "session end" exit with
 `)
 }
 
-type sessionStartCmd struct {
+// sessionTimeout は session start と session end が共有する待つ上限（環境変数も同じ VW2026_SESSION_TIMEOUT）。
+type sessionTimeout struct {
 	Timeout float64 `env:"${prefix}SESSION_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
+}
+
+type sessionStartCmd struct {
+	sessionTimeout `embed:""`
 }
 
 func (sessionStartCmd) Help() string {
@@ -55,8 +60,9 @@ func (c *sessionStartCmd) run(e *env) int {
 }
 
 type sessionEndCmd struct {
-	Session string  `env:"${prefix}SESSION" placeholder:"ID" help:"Session to end (required)."`
-	Timeout float64 `env:"${prefix}SESSION_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
+	Session string `env:"${prefix}SESSION" placeholder:"ID" help:"Session to end (required)."`
+
+	sessionTimeout `embed:""`
 }
 
 func (sessionEndCmd) Help() string {

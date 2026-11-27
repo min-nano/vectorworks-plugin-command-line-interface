@@ -68,7 +68,6 @@ func Start(argv []string) error {
 		return nil
 	}
 	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, nil, nil
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
 		return err

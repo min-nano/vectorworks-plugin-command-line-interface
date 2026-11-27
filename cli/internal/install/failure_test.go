@@ -575,7 +575,7 @@ func TestUninstallLeavesWhatCannotBeDeletedInStaging(t *testing.T) {
 		t.Fatalf("should leave only the staging folder and say so: %s", stderr.String())
 	}
 	restore()
-	if result, err := Uninstall(h.options(), "cli"); err != nil || result.Outcome != outcomeNotInstall || exists(stage) {
+	if result, err := Uninstall(h.options(), "cli"); err != nil || result.Outcome != outcomeNotInstalled || exists(stage) {
 		t.Fatalf("%+v %v", result, err)
 	}
 }

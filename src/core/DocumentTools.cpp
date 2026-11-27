@@ -4,6 +4,7 @@
 #include "core/Files.h"
 
 #include <algorithm>
+#include <iterator>
 #include <optional>
 
 namespace VwCli::core {
@@ -56,10 +57,7 @@ void restoreFront(Documents &docs, const Target &target, const std::vector<OpenD
 	if (!target.hasFront) {
 		return;
 	}
-	bool stillOpen = std::any_of(after.begin(), after.end(), [&](const OpenDocument &open) {
-		return open.ref == target.front;
-	});
-	if (stillOpen) {
+	if (std::ranges::find(after, target.front, &OpenDocument::ref) != after.end()) {
 		(void)docs.switchTo(target.front);
 	}
 }
@@ -161,9 +159,7 @@ Json save(const Json &args, Documents &docs, const SaveEnvironment &environment,
 	}
 	// 4. 保存先の状態（前面を切り替える前に断る）。
 	std::vector<std::string> openPaths;
-	for (const OpenDocument &open : before) {
-		openPaths.push_back(open.path);
-	}
+	std::ranges::transform(before, std::back_inserter(openPaths), &OpenDocument::path);
 	if (!save_target::check(to, parent, openPaths, environment.checks, status) ||
 	    !bringForward(docs, target, status)) {
 		return Json();
@@ -179,14 +175,9 @@ Json save(const Json &args, Documents &docs, const SaveEnvironment &environment,
 	}
 	// 結果の path は、保存の直後に前面になっている項目から、前面を戻す前に読む。
 	std::vector<OpenDocument> after = docs.list();
-	const OpenDocument *saved = nullptr;
-	for (const OpenDocument &open : after) {
-		if (open.active) {
-			saved = &open;
-			break;
-		}
-	}
-	std::string path = saved ? saved->path : std::string();
+	auto active = std::ranges::find_if(after, &OpenDocument::active);
+	const bool saved = active != after.end();
+	std::string path = saved ? active->path : std::string();
 	// 成否によらず前面を戻す。
 	restoreFront(docs, target, after);
 	if (error != 0) {
@@ -225,11 +216,9 @@ Json close(const Json &args, Documents &docs, ToolStatus &status) {
 	// 戻り値では成否が分からないので、閉じたあとの一覧で決める。
 	std::vector<OpenDocument> after = docs.list();
 	restoreFront(docs, target, after);
-	for (const OpenDocument &open : after) {
-		if (open.path == document) {
-			args::failWithReason(status, kNotClosed, "図面 " + document + " が閉じませんでした");
-			return Json();
-		}
+	if (std::ranges::find(after, document, &OpenDocument::path) != after.end()) {
+		args::failWithReason(status, kNotClosed, "図面 " + document + " が閉じませんでした");
+		return Json();
 	}
 	// 最後の図面を閉じたら、閉じた順のために中に残った図面を片付ける（残すと、利用者がメニューで
 	// 終了したときにも、見えない図面の保存の確認が出る）。片付かなくても、名指した図面は閉じたので

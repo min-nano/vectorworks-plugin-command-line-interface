@@ -11,14 +11,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fixturetest"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
 // 通信規則の見本（protocol/fixtures。形は docs/fixtures.md）を読み、偽のプラグインがプラグイン
 // （src/core の Server。同じ見本を読む）と同じに振る舞うかを確かめる。
 
-// fixtures は通信規則の見本の場所（go test はパッケージのディレクトリで走る）。
-const fixtures = "../../../protocol/fixtures"
+// fixtures は通信規則の見本の場所。
+const fixtures = fixturetest.ProtocolDir
 
 // sessionMark は、要求の見本では発行された印に置き換え、期待する応答では id の綴りを満たす
 // 文字列に合わせてその値を覚える印。
@@ -72,25 +73,10 @@ type expectedResponse struct {
 	Detail json.RawMessage `json:"detail"`
 }
 
-// readFixture は見本のファイルを読む。
+// readFixture は見本のファイルを、知らないキーを誤りとして読む。
 func readFixture(t *testing.T, name string, v any) {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(fixtures, name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	strictDecode(t, name, data, v)
-}
-
-// strictDecode は知らないキーを誤りとして読む。見本のキーの綴りを誤ると、その確かめが黙って
-// 省かれるため。
-func strictDecode(t *testing.T, where string, data []byte, v any) {
-	t.Helper()
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(v); err != nil {
-		t.Fatalf("%s: %v", where, err)
-	}
+	fixturetest.ReadStrict(t, filepath.Join(fixtures, name), v)
 }
 
 // decode は数を綴りのまま読む（見本とプラグインは数を丸めない）。
@@ -235,7 +221,7 @@ func (r *caseRunner) request(spec json.RawMessage) []byte {
 			Size int    `json:"size"`
 		} `json:"fill"`
 	}
-	strictDecode(r.t, r.name, spec, &fill)
+	fixturetest.DecodeStrict(r.t, r.name, spec, &fill)
 	f := fill.Fill
 	if len(f.Pad) != 1 || f.Size < len(f.Head)+len(f.Tail) {
 		r.t.Fatalf("%s: bad fill %s", r.name, spec)
