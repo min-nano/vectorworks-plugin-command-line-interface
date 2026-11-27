@@ -149,7 +149,7 @@ struct ToolReply {
 	bool quit = false;
 };
 
-// runTool は道具を実行して応答を返す（通信規則「応答」）。道具 1 つの失敗で橋を止めないよう、
+// runTool は道具を実行して応答を返す（通信規則「応答」）。道具 1 つの失敗でブリッジを止めないよう、
 // 例外はここで受ける。
 ToolReply runTool(const Tool &tool, const Json &args, const ToolContext &context) {
 	ToolStatus status;

@@ -43,6 +43,9 @@
 | 初回のスクリプト | `get-vw2026.sh`・`get-vw2026.ps1` | `get-vw2025.sh`・`get-vw2025.ps1` |
 | SDK | `2026-NNA-eng-{mac,win}-SDK.zip` | `2025-NNA-eng-{mac,win}-SDK.zip` |
 
+mac の 2025 の `<Plug-Ins>` は、確かめた計算機では `Plug-ins`（`i` が小文字）でした。mac の既定のボリュームは
+大文字と小文字を区別しないので、表の `Plug-Ins` と同じフォルダを指します。
+
 プラグインの名前（`cli`）・モジュール・リソース・バンドル ID・スプール（`<Plug-Ins>/cli/spool/`）・通信規則は、
 版に依らず同じです。`<Plug-Ins>` が版ごとに違うので、スプールも混ざりません。
 
@@ -66,5 +69,3 @@ curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface
   テンプレートの定義の時点でこれを誤りとする clang 19 以降ではヘッダを読むだけで止まります（2026 の SDK では
   この関数が無い）。CI は 2026 と同じ Xcode 16.2 でビルドします。SDK のヘッダは書き換えません。
 - CLI（Go）は手元でも両方の版をビルド・テストできます（`go test ./...` と `go test -tags vw2025 ./...`）。
-- mac の 2025 の `<Plug-Ins>` は、確かめた計算機では `Plug-ins`（`i` が小文字）でした。mac の既定のボリュームは
-  大文字と小文字を区別しないので、同じフォルダを指します。

@@ -11,7 +11,7 @@
 | `scripts/format.sh --fix` | 対象のファイルを書き換えて整形する |
 
 既定は確かめるだけにし、書き換えるのは `--fix` と打ったときだけにします。これ以外の引数は使い方を
-出して 2 で終わります（打ち間違いで書き換えないため）。
+出して 2 で終わります。
 `format.yml` は必須のチェックです（走る条件は[ビルドとリリース「CI」](plugin/build-and-release.md#ci)）。
 
 手元と CI は同じスクリプトを走らせます。ツールの版は固定し（下記）、手元と CI で結果を食い違わせません。
@@ -43,13 +43,12 @@ PSScriptAnalyzer も選べるためです。これで YAML と Markdown を除�
 | --- | --- | --- | --- |
 | Go | gofmt | なし（設定できない） | `tools/go.mod` の Go の gofmt（PATH のものは使わない） |
 | sh | shfmt | `.editorconfig` を読む。フラグで上書きしない | `tools/go.mod` |
-| C++ / Objective-C++ | clang-format | `.clang-format`（LLVM の既定に `UseTab: ForIndentation`・`IndentWidth`・`TabWidth`・`ColumnLimit: 100`・`AccessModifierOffset` だけを足す。ブレースは既定の `Attach`） | `tools/requirements.txt`（pip の `clang-format==X`。3 OS で同じ出力。clang-tidy と同じ版にする。`format.sh` は、PATH の版が違うときと、clang-tidy の版と違うときに止める。[検査](lint.md)） |
-| PowerShell | `Invoke-Formatter`（PSScriptAnalyzer） | `PSScriptAnalyzerSettings.psd1`（`CodeFormatting` と同じ規則で、`PSUseConsistentIndentation` の `Kind = 'tab'`） | `scripts/powershell.ps1` の `$version`（`Install-Module -RequiredVersion`。`-Mode Install` で入る） |
+| C++ / Objective-C++ | clang-format | `.clang-format`（LLVM の既定から変える項目と理由は、その先頭の注釈。ブレースは既定の `Attach`） | `tools/requirements.txt`（pip の `clang-format==X`。3 OS で同じ出力。clang-tidy と同じ版にする。[検査](lint.md)） |
+| PowerShell | `Invoke-Formatter`（PSScriptAnalyzer） | `PSScriptAnalyzerSettings.psd1`（`CodeFormatting` と同じ規則で、インデントだけタブ） | `scripts/powershell.ps1` の `$version`（`-Mode Install` で入る） |
 
 対象は、Go は `cli/`、sh は `scripts/` と `tests/hooks/`、C++ と PowerShell は git が追う・無視しないファイル
-（`git ls-files -co --exclude-standard`。ビルドの出力や SDK の写しを含めない）です。PowerShell の
-整形と検査は `scripts/powershell.ps1` を通して行います（PSScriptAnalyzer を呼ぶための入口で、
-`format.sh` と `lint.sh` が呼ぶ。フックのテストの Pester の版もここに置き、`hooks.yml` が呼ぶ）。
+（ビルドの出力や SDK の写しを含めない）です。PowerShell の整形と検査は `scripts/powershell.ps1` を通して
+行います（`format.sh` と `lint.sh` が呼ぶ。フックのテストの Pester の版もここに置く）。
 
 Go で書かれたツールは `tools/go.mod` に `tool` で書き、`go -C tools tool <名前>` で呼びます。Go は
 すでに要るので、ほかのパッケージ管理を足さずに済みます。CLI の `go.mod` とは分けるので、
@@ -57,7 +56,7 @@ Go で書かれたツールは `tools/go.mod` に `tool` で書き、`go -C tool
 
 `tools/go.mod` が求める Go が手元や CI の Go より新しければ、`go` がその版を取ってきて切り替えます
 （`GOTOOLCHAIN=auto`。CI でも同じ指定で動かす）。手元の Go のほうが新しければ手元の版で動きます。
-新しい版のほうが厳しくなる向きなので、版を下げて揃えることはしません。
+新しい版のほうが厳しくなる向きなので、版を下げてそろえることはしません。
 
 ## 整形しないもの
 
@@ -74,4 +73,4 @@ Go で書かれたツールは `tools/go.mod` に `tool` で書き、`go -C tool
 - 言語を足すときに、その言語のツールと設定を `scripts/format.sh` と上の表に足します。
 - 設定は既定から変える項目だけを書き、変える理由を先頭の注釈に書きます。上の「言語をまたぐ決まり」
   と食い違う設定は入れません。
-- ツールを Go のモジュールで足すときも、`CLAUDE.md` の依存の確認を行います（推移的な依存の数は問わない）。
+- ツールを Go のモジュールで足すときも、`CLAUDE.md`「Go」の手順で依存を確かめます（推移的な依存の数は問わない）。

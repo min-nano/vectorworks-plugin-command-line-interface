@@ -138,7 +138,7 @@ func sweep(dir string) {
 	}
 }
 
-// server は受け付ける橋 1 つ。占有の印（session）はメモリだけに持つ（docs/protocol.md「占有」）。
+// server は受け付けるブリッジ 1 つ。占有の印（session）はメモリだけに持つ（docs/protocol.md「占有」）。
 type server struct {
 	dir    string
 	handle Handler
