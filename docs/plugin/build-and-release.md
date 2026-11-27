@@ -14,7 +14,7 @@ SDK のリンクとバンドルの形は、SDK リファレンスの実機確認
 | テスト | `VwCliTests`（`tests/*Tests.cpp`。外部のテストの枠組みに依らない）・`JsonFuzzer`（`tests/JsonFuzzer.cpp`）。テストは `protocol/fixtures` を読む |
 | プラグイン | `add_library(<target> MODULE)`。`VW_PLUGIN_SOURCES`（`src/*.cpp`・`src/tools/*`） |
 | 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH`。PR では、ブランチの head の sha とブランチの名前（[リリースの形](#リリースの形)）。CI では `meta` が決め、ビルドのジョブがその出力を `-D` で渡す。CMake は構成のたびに `<build>/generated/BuildStamp.h` へ C の文字列として書き（`"` と `\` を逃がす）、値をキャッシュに残さない（`-D` を付けずに構成し直せば `local` に戻る。古い sha が残らないように）。`ping` の結果に載る。ファイルとしての版の情報は `build.json` だけ（下記） |
-| mac | `Module-Info.plist.in`（版の鍵は持たない）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr`。arm64 だけ（`CMAKE_OSX_ARCHITECTURES`。SDK リファレンスの `plugin/` が実機で読み込まれている形に合わせ、確かめていない形を配らない。CLI は universal。Intel の mac（`macos-x64`）は、実機で確かめる環境が無いので対応を見送る）。配備の下限は macOS 14。ソースは Objective-C++ としてコンパイルする（SDK の mac のヘッダが CoreFoundation などを読むため） |
+| mac | `Module-Info.plist.in`（版の鍵は持たない）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr`。arm64 だけ（`CMAKE_OSX_ARCHITECTURES`。SDK リファレンスの `plugin/` が実機で読み込まれている形に合わせ、確かめていない形を配らない。CLI は universal。Intel の mac（`macos-x64`）は、実機で確かめる環境が無いので対応を見送る）。配備の下限は mac 14。ソースは Objective-C++ としてコンパイルする（SDK の mac のヘッダが CoreFoundation などを読むため） |
 | Windows | `.vlb`・隣に `.vwr` |
 | ターゲット | `add_vw_plugin(VwCli "cli" io.github.min-nano.cli)` の 1 つだけ（安定版と開発版を区別しない） |
 
@@ -94,12 +94,12 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
 
 | ワークフロー | 起動 | 中身 |
 | --- | --- | --- |
-| `go.yml`（既存） | push / PR・マージキュー | Go のテスト（macOS・Windows）と、配る 3 つのターゲットへのビルドの確かめ（出力は上げない）。テストとビルドは 2026 と 2025（`-tags vw2025`。[版](editions.md)）の両方で行う。両方の OS・両方の版のカバレッジを Codecov へ送る（どれもフラグ `go`）。ubuntu で `spool.NestingDepth` のファジングを 2 つの対象で 30 秒ずつ回す |
+| `go.yml`（既存） | push / PR・マージキュー | Go のテスト（mac・Windows）と、配る 3 つのターゲットへのビルドの確かめ（出力は上げない）。テストとビルドは 2026 と 2025（`-tags vw2025`。[版](editions.md)）の両方で行う。両方の OS・両方の版のカバレッジを Codecov へ送る（どれもフラグ `go`）。ubuntu で `spool.NestingDepth` のファジングを 2 つの対象で 30 秒ずつ回す |
 | `format.yml`（既存） | push / PR・マージキュー | `scripts/format.sh`（[整形](../format.md)。gofmt・shfmt・clang-format・PSScriptAnalyzer） |
-| `cpp.yml` | push / PR・マージキュー | 無 SDK の単体テストと通信規則の見本の照合（macOS は ASan・UBSan 付き、Windows は MSVC で付けない）。macOS（clang の source-based coverage）と Windows（MSVC のビルドを `Microsoft.CodeCoverage.Console` で）の単体テストでカバレッジを測り、共通部（`src/core`）の分を Codecov へ送る（どちらもフラグ `cpp`。`FilesWindows.cpp` は Windows の分にだけ入る。パスを比べる包みも、`PathCompareMac.cpp` は macOS の分に、`PathCompareWindows.cpp` は Windows の分にだけ入る（どちらも `VwCliTests` の中で走るので、いまの測り方のままでよい）。Windows の範囲は `tests/MsvcCoverage.xml`。Windows はテストを計測の下で 1 回だけ走らせる）。ubuntu の clang で同じテストを ASan・UBSan 付きで走らせ（ただし `save` の `to` を開いている図面と比べる OS の呼び出しの包み（`PathCompareMac.cpp`・`PathCompareWindows.cpp`）は mac と Windows でだけビルドし、そのテストは Linux では中身の無い翻訳単位になる。[道具「パスの一致の判定」](tools.md#図面を扱う道具documentssaveclose)）、`core/Json` のファジングを 120 秒回す |
+| `cpp.yml` | push / PR・マージキュー | 無 SDK の単体テストと通信規則の見本の照合（mac は ASan・UBSan 付き、Windows は MSVC で付けない）。mac（clang の source-based coverage）と Windows（MSVC のビルドを `Microsoft.CodeCoverage.Console` で）の単体テストでカバレッジを測り、共通部（`src/core`）の分を Codecov へ送る（どちらもフラグ `cpp`。`FilesWindows.cpp` は Windows の分にだけ入る。パスを比べる包みも、`PathCompareMac.cpp` は mac の分に、`PathCompareWindows.cpp` は Windows の分にだけ入る（どちらも `VwCliTests` の中で走るので、いまの測り方のままでよい）。Windows の範囲は `tests/MsvcCoverage.xml`。Windows はテストを計測の下で 1 回だけ走らせる）。ubuntu の clang で同じテストを ASan・UBSan 付きで走らせ（ただし `save` の `to` を開いている図面と比べる OS の呼び出しの包み（`PathCompareMac.cpp`・`PathCompareWindows.cpp`）は mac と Windows でだけビルドし、そのテストは Linux では中身の無い翻訳単位になる。[道具「パスの一致の判定」](tools.md#図面を扱う道具documentssaveclose)）、`core/Json` のファジングを 120 秒回す |
 | `lint.yml`（既存） | push / PR・マージキュー | `scripts/lint.sh`（[検査](../lint.md)。go vet・actionlint・shellcheck・clang-tidy（無 SDK）・PSScriptAnalyzer） |
 | `build.yml` | push（main）/ PR・マージキュー / 手動 | mac と Windows のビルド・梱包・リリースと、公開した資産の確かめ（下記） |
-| `hooks.yml` | push / PR・マージキュー | `cli` のフック（`scripts/hooks/`）のテスト。macOS で `tests/hooks/hooks_test.sh`（`sh`）、Windows で `tests/hooks/Hooks.Tests.ps1`（Pester。版は `scripts/powershell.ps1` の `$pesterVersion` で、`-Mode Install -Module Pester` が入れ、`-Mode Test` が走らせる。Windows PowerShell 5.1）を走らせる（[インストール「テスト」](install-and-update.md#テスト)） |
+| `hooks.yml` | push / PR・マージキュー | `cli` のフック（`scripts/hooks/`）のテスト。mac で `tests/hooks/hooks_test.sh`（`sh`）、Windows で `tests/hooks/Hooks.Tests.ps1`（Pester。版は `scripts/powershell.ps1` の `$pesterVersion` で、`-Mode Install -Module Pester` が入れ、`-Mode Test` が走らせる。Windows PowerShell 5.1）を走らせる（[インストール「テスト」](install-and-update.md#テスト)） |
 | `cleanup-dev-release.yml` | PR が閉じたとき | その PR のプレリリース（`dev-<slug>-<PR 番号>-<短い sha>`。タグの末尾の `-<PR 番号>-<短い sha>` で見分ける。ブランチの名前が変わって slug が違うものも含む）をリリースとタグごとすべて消す。**その PR の下書きのリリースも、タグ名で見分けて消す**（push で止められた `release` の下書きは、まだタグが無いので、タグで探すだけでは漏れる）。`build.yml` と同じ `concurrency` のグループ（`build-<PR 番号>`。両方に同じ式を書く）で走り、その PR の走っているビルドを止めてから消す（消したあとに公開されないため）。グループは `github.ref` ではなく PR 番号で組む（マージで閉じた PR では `github.ref` が `refs/heads/main` になり、main の push のビルドを止めて main のリリースが作られないため）。`build.yml` は開き直し（`reopened`）では走っている片付けを止めずに待つ（途中で止めるとタグや消しかけのリリースが残るため） |
 
 `build.yml` のジョブ:
@@ -127,7 +127,7 @@ fork の PR・マージキュー・main 以外の手動の実行は、マージ�
   イメージに従い、使った版はジョブのログ（`--version` の出力）で確かめる。イメージの更新で
   Codecov の `cpp` の数値が、このリポジトリのコミット無しに動くことがある。
 - **Codecov は、1 つのコミットの結果が 4 つそろってから判定する**（`codecov.yml` の
-  `after_n_builds`。`go.yml` と `cpp.yml` を、それぞれ macOS と Windows で）。片方の OS でだけ通る行が
+  `after_n_builds`。`go.yml` と `cpp.yml` を、それぞれ mac と Windows で）。片方の OS でだけ通る行が
   あるので、途中の値で判定すると必須の `codecov/patch` が失敗になり、マージキューがその最初の失敗で
   PR を外すため。カバレッジを送るワークフローや OS を足し引きしたら、この数を合わせる（多すぎると
   判定が出ず、マージキューが時間切れで外す）。

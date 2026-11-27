@@ -47,9 +47,3 @@ Windows の Vectorworks の起動・終了と、プラグインの有無によ�
 | 新しい図面の最初の描画中に `MaxonDocumentBuilder.vlb` の中で落ちた 1 回 | 同じページの「新しい図面の最初の描画——30 回で 1 度も落ちなかった」（[#270](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/270)） |
 | VM ごとの停止（`viogpudo.sys` のバグチェック `0xD1`） | 同じページの「【罠】Windows の VW は起動時にモジュールを一度降ろして読み込み直す」の「読み違えやすいところ」 |
 | 開発元不明のプラグイン | 同じページの「開発元不明のプラグイン」のダイアログ（[#258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)・[#264](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/264)）。このプラグインでの扱いは[構成「拡張機能を登録しない」](architecture.md#拡張機能を登録しない) |
-
-## 分かっていないこと
-
-- **この VM（ARM64 上の x64 エミュレーション・WARP の描画・UTM の GPU のドライバ）に固有のことかどうか。**
-  このページの実測も、移った先の SDK リファレンスの実測（#257・#269・#270）も、上の環境の VM で測った。x64 の実機では
-  測っていない。終了までの時間や落ち方が実機で違っても、それは測っていないことによる。

@@ -66,11 +66,5 @@ curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface
   テンプレートの定義の時点でこれを誤りとする clang 19 以降ではヘッダを読むだけで止まります（2026 の SDK では
   この関数が無い）。CI は 2026 と同じ Xcode 16.2 でビルドします。SDK のヘッダは書き換えません。
 - CLI（Go）は手元でも両方の版をビルド・テストできます（`go test ./...` と `go test -tags vw2025 ./...`）。
-
-## 実機で確かめていないこと
-
-- **Windows の 2025 の既定の場所**（`%APPDATA%\Nemetschek\Vectorworks\2025\Plug-Ins`・
-  `%ProgramFiles%\Vectorworks 2025\Vectorworks2025.exe`）は、2026 と同じ形とみなしたものです。違えば
-  `--plugins-dir`（初回のスクリプト）・`--app`（`launch`）で渡せますが、既定を直します。
 - mac の 2025 の `<Plug-Ins>` は、確かめた計算機では `Plug-ins`（`i` が小文字）でした。mac の既定のボリュームは
   大文字と小文字を区別しないので、同じフォルダを指します。

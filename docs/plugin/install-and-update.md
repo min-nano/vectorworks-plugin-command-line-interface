@@ -19,7 +19,7 @@
 | `cli` のアンインストール | 入っているタグのリリースの初回のスクリプトに `uninstall` を渡す | そのタグの CLI を一時フォルダに取り出し、`vw2026 uninstall cli` を走らせる（入っている CLI の `uninstall cli` は断り、このコマンドを示す） |
 
 ```sh
-# macOS
+# mac
 curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.sh | sh
 curl -fsSL …/releases/download/<tag>/get-vw2026.sh | sh                  # そのタグを入れる
 curl -fsSL …/get-vw2026.sh | sh -s -- --plugins-dir <Plug-Ins>           # 既定以外の場所へ
@@ -829,7 +829,7 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
   `mkdirAll`・`writeFile`・`openFile` を差し替えて起こします。到達できないコード（文字列だけの構造体の
   `json.MarshalIndent` の失敗・確かめたばかりの記録を読み直す失敗など）は書きません。**`install` / `uninstall` の
   コードは、どの分岐もテストで通します。** テストから通せないのは、`main()` と、走らせる OS でしか通らない分岐
-  （`places_*.go`・`powershell` のフック）だけで、後者は macOS と Windows の `go.yml` で通ります。`-race` を付けた
+  （`places_*.go`・`powershell` のフック）だけで、後者は mac と Windows の `go.yml` で通ります。`-race` を付けた
   子のプロセス（偽のフック）が終わる前に待たないよう、テストは `GORACE=atexit_sleep_ms=0` を渡します。押さえること:
   - レジストリの順と規則の選び方（先に見つかった名前・最初に合った規則・取れなければ次へ進まない・
     `{tag}` のある規則でのタグの照合・知らない版と項目）
@@ -888,7 +888,7 @@ curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall   # cli（CLI �
     - 本番では `main()` だけがそれぞれを求める関数（`install.WorkDir`・`install.DefaultPluginsDir`・
       `os.Executable`。求め方は[名前と識別子「置き場所」](identifiers.md#置き場所)）を入れる。
     - テストの `invoke` は、どれも既定で一時ディレクトリ（`env.executable` はその中の偽のファイル）を返す
-      関数を入れる（`env.spool` はすでにそうしている）。テストが場所を渡し忘れても、開発者のマシンの本物の
+      関数を入れる（`env.spool` はすでにそうしている）。テストが場所を渡し忘れても、開発者の計算機の本物の
       `<Plug-Ins>`・`<Work>`・スプールに触れないためです。入った CLI として振る舞わせる
       テストは、`env.executable` を一時ディレクトリの `<Plug-Ins>/cli/bin/vw2026` にします。`--plugins-dir` は、
       フォルダの外の CLI に初回のスクリプトが場所を渡す振る舞いを確かめるテストだけが付けます。

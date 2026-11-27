@@ -62,8 +62,7 @@ OS タイマー（刻み 1 回。core::tick）
   あとに刻みは来ません。利用者がメニューの「終了」で終える道でも、Windows は `kNotifyBeforeApplicationQuit` の
   あとに刻みが来ず（同 4 の 9。[SDK リファレンス #230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・
   [#269](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/269)）。mac のこの道は SDK リファレンスでは
-  測っておらず、このプラグインの実機の確認で落ちずに終わることを見ただけです
-  （[SDK の調査「残っているもの」](../sdk-research.md#残っているもの)）。
+  測っておらず、このプラグインの実機の確認で落ちずに終わることを見ただけです。
 - **図面のハンドル（レイヤなど）は刻みをまたいで持ちません。** 刻みのたびに引き直します。
   閉じた文書のレイヤと、後で開いた別の文書のレイヤが同じアドレスで返ることがあり、持ち越すと
   別の文書を指しうるためです（同 4 の 8）。
@@ -130,7 +129,7 @@ OS タイマー（刻み 1 回。core::tick）
 （[インストール](install-and-update.md#インストールと更新vw2026-install)）ので、利用者の入口は要りません。
 
 - **拡張機能を 1 つも登録しなくても、Vectorworks は読み込み、`plugin_module_main` を呼びます**
-  （実機で確かめた。VW 2026。macOS も Windows も、起動の直後から `vw2026 status` が
+  （実機で確かめた。Vectorworks 2026。mac も Windows も、起動の直後から `vw2026 status` が
   `running:true` になり `call ping` が応えた。Windows はタイマーの前にモジュールを留めた版で）。
 - **最初の起動で利用者の許可が要ることがあります（mac も Windows も）。** Vectorworks は開発元の
   分からないプラグインを既定では読み込まず、有効化の記録が無いときは、起動の途中で

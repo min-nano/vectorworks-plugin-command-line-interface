@@ -148,7 +148,7 @@ UNC のサーバーの名前を綴り誤ったときも、名前の解決を待�
 文字列との完全な一致）とは別です。
 
 `to` は新しいパスで、開いている図面の保存先との衝突を**見逃さない側**に倒して
-比べます: 絶対パスを要し（相対パスは `invalid_args`）、Unicode を正規化（NFC。macOS のファイル名は
+比べます: 絶対パスを要し（相対パスは `invalid_args`）、Unicode を正規化（NFC。mac のファイル名は
 NFD で返ることがある）し、**大文字と小文字を区別せず**に比べます。大文字と小文字だけが違う別のファイルも断る
 ことになりますが、警告のダイアログが出るより安全です（ダイアログが出るのは文字列が完全に一致するときだけなので、
 緩く比べて断れば必ずその手前で止まる）。ディスクにあるファイルはこの比べ方によらず 2 つ目の確かめで断るので、
@@ -178,7 +178,7 @@ NFD で返ることがある）し、**大文字と小文字を区別せず**に
 中身は文字列の処理だけで OS の呼び出しを使わないので、OS で分ける必要がありません。**プラグインがどちらを使うかは
 `_WIN32` で選び、選ぶのはこの 1 か所だけです**（`kNativeForm`。出荷するプラグインは OS ごとのビルドなので、各 OS のプラグインの
 規則はビルドで決まる）。テストは、どの OS の CI でも両方の関数を名指しして呼びます。そのため Windows の規則にも、
-ASan・UBSan（macOS のテストのジョブと ubuntu の fuzz のジョブ）と clang-tidy（ubuntu）が掛かります。
+ASan・UBSan（mac のテストのジョブと ubuntu の fuzz のジョブ）と clang-tidy（ubuntu）が掛かります。
 
 - **OS で分けてビルドするのは、比べ方の薄い包みと、ファイルシステムに聞く関数の包み（mac は `to` に `lstat`・親のフォルダに `stat`、
   Windows は `extended()` を通したパスで `to` に `GetFileAttributesW`・親のフォルダに `CreateFileW` と `GetFileInformationByHandle` を呼び、OS のエラーの番号を「無い」とそれ以外に分ける表を持つ）の 2 つです。** 聞く関数の包みは `src/core/SaveTarget.h` に宣言し、
@@ -199,7 +199,7 @@ ASan・UBSan（macOS のテストのジョブと ubuntu の fuzz のジョブ）
   APPLE と WIN32 のときだけビルドします。mac は `VwCliCore` に
   `-framework CoreFoundation` を、Windows は `Normaliz.lib`（`NormalizeString`）をリンクします。Linux 用の代わりの
   実装は置きません（出荷しない実装をテストしても、出荷するものについて何も分からないため）。
-- **包みのテスト**は、ほかの無 SDK のテストと同じ `VwCliTests` の中に置きます（別の実行ファイルにしないので、macOS と
+- **包みのテスト**は、ほかの無 SDK のテストと同じ `VwCliTests` の中に置きます（別の実行ファイルにしないので、mac と
   Windows のカバレッジにそのまま入る）。テストのファイル（`tests/PathCompareTests.cpp`）は**どの OS でも**
   `VwCliTests` のソースに並べ、中身を印のマクロ `VWCLI_HAS_PATH_COMPARE` で囲みます。印は、包みをビルドするときに CMake が
   `VwCliCore` に `PUBLIC` で定義し（`VwCliTests` にも届く）、OS で分ける条件は包みの側の 1 か所だけにします。Linux では

@@ -34,7 +34,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
    参考にしたときは文書にその節を示す（`docs/plugin/README.md「根拠」`）。
 7. **SDK の調査はリファレンス側で行う。** 「この API はあるか・どう振る舞うか」が分からない
    まま実装に入らない。[SDK リファレンス](https://github.com/min-nano/vectorworks-developer-sdk-reference)で
-   issue を立て、`Findings/` に反映されてから実装する。待っているものは `docs/sdk-research.md`。
+   issue を立て、`Findings/` に反映されてから実装する。待っているものは、このリポジトリの issue で追う。
    利用者の判断で調べないと決めたもの（ネットワークの場所でサーバーが届かないときに止まること、保存の途中でつながりが切れたときに
    ダイアログが出るか）は例外とし、
    `docs/sdk-research.md` に書く。
@@ -86,7 +86,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   場所は、本番では実行ファイルの場所から求め（`spool.Dir`）、テストでは `env.spool` を差し替えて渡す。
   `install` / `uninstall` の場所も同じで、本番では `main()` だけが `env.workDir`（`install.WorkDir`）・
   `env.pluginsDir`（`install.DefaultPluginsDir`）・`env.executable`（`os.Executable`）を入れ、テストの
-  `invoke` はどれも既定で一時ディレクトリを返す（開発者のマシンの本物の `<Plug-Ins>`・`<Work>` に触れない）。
+  `invoke` はどれも既定で一時ディレクトリを返す（開発者の計算機の本物の `<Plug-Ins>`・`<Work>` に触れない）。
   配置の手順は `cli/internal/install` で、場所と既定のレジストリを `install.Options` で受け取り、偽の
   HTTPS サーバー（`httptest`）と、テストの実行ファイルを偽のフックとして走らせる `Options.Interpreters` で確かめる。
   場所を変える指定（引数・環境変数）は足さない（プラグインは自分のモジュールの場所から求めた
@@ -141,7 +141,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   見本のディレクトリを汚さない）。
   カバレッジは clang（Apple の clang も可）で `-DVW_ENABLE_COVERAGE=ON` を足してテストを走らせ、
   `llvm-profdata merge -sparse build/coverage/*.profraw -o build/coverage.profdata && llvm-cov report build/VwCliTests -instr-profile=build/coverage.profdata src/core`
-  で見る（macOS は `xcrun` を前に付ける。CI は同じものを lcov にして Codecov へ送る）。
+  で見る（mac は `xcrun` を前に付ける。CI は同じものを lcov にして Codecov へ送る）。
   `llvm-profdata`・`llvm-cov` はビルドに使った clang と同じ版を使う（版が違うと結果を読めない
   ことがある。Linux では `llvm-profdata-18` のように版の付いた名前で入っていることが多い）。
   Windows（MSVC）は `-DVW_ENABLE_COVERAGE=ON`（`/PROFILE` を付けてリンクする。
@@ -165,7 +165,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 
 - `main` へは直接 push せず、ブランチを切って PR で進める。
 - コミットメッセージには Claude セッションの URL を入れる。
-- **プラグインは、まとまり（道具・機能）ごとに 1 PR で進める。** これから作るものは `docs/design.md「これから」`。
+- **プラグインは、まとまり（道具・機能）ごとに 1 PR で進める。** これから作るものは issue で追う。
   PR には、確かめ方と、確かめた結果（実機で見られなかった項目を含む）を書く。
 - **実機でしか確かめられない変更（プラグイン・スクリプト）は、利用者が実機で「確認できた」と言うまで
   マージしない。** CI が通ることも、道具が応えることも、実機の確認の代わりにはならない。実機の

@@ -95,7 +95,7 @@ OS に依らない部分は `Files.cpp` に置きます。** OS ごとの違い�
      種類では決めない（`quit` だけが立てる。`save`・`close` などの種類 `app` の道具は立てない）。
      道具が失敗した・結果がオブジェクトでない（`internal` で応える）・応答を書けなかったら、終了を
      頼まずに続ける（失敗の応答を受け取った呼ぶ側が、終了していく Vectorworks に向かって動かないように）。
-   - **道具 1 つの例外はここで受けて `internal` の応答にする**（橋を止めない）。道具の外（占有の印を
+   - **道具 1 つの例外はここで受けて `internal` の応答にする**（ブリッジを止めない）。道具の外（占有の印を
      作るときなど）で要求 1 件の処理の中で起きた例外も、`serve` が受けて `internal` で応える。
 5. 結果（終了の依頼の有無と、受け付けの状態）を返す。
 
@@ -204,7 +204,7 @@ struct Tool : ToolSpec {
   （`occupied`・`no_session` は占有に照らした結果、`busy` は終了の依頼の最中か・受け付けの入れ子かに照らした結果）。
   呼ぶ側が機械的に読む原因は `ToolStatus::detail` に書きます（載せ方の決まりは
   [通信規則「応答」](../protocol.md#応答idresjson)）。
-- **種類 `write` の道具は、undo の手順に対応するまで表に載せません**（[未決 1](open-questions.md#1-図面に書く道具の振る舞い)）。
+- **種類 `write` の道具は、undo の手順に対応するまで表に載せません。**
 - **種類 `write` の道具は、自分で undo の記録を開き、受け付けから戻る前に必ず閉じます**（要求 1 件で
   undo 1 つ）。閉じずに戻ると記録が数十秒開いたままになり、その間の書き込みがそこへ入る
   （[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 7「落とし穴」）。自分で閉じる限り、

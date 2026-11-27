@@ -2,8 +2,7 @@
 
 プラグインが提供する道具の仕様です。版と状態を返す `ping`、図面を**読むだけ**の道具（`layers`・`classes`・
 `layer_objects`・`object_counts`）、図面を保存して閉じる道具（`documents`・`save`・`close`）、Vectorworks を終わらせる
-`quit` があります。図面に書く道具と、ほかのプラグインの機能を呼ぶ道具は、まだありません
-（[設計「これから」](../design.md#これから)）。更新は道具ではなく CLI の `vw2026 install` です
+`quit` があります。更新は道具ではなく CLI の `vw2026 install` です
 （[インストール](install-and-update.md#インストールと更新vw2026-install)）。
 
 **SDK 呼び出しは、SDK リファレンスで挙動が確かめられているものだけを使います**（無いものはリファレンスで
@@ -301,7 +300,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
     （[設計「CLI はプリミティブに保つ」](../design.md#cli-はプリミティブに保つ)）。
   - Windows の起動の途中の振る舞いは測っていません（[#316](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/316)。仮想環境で DirectX を有効にできない）。
     mac と同じ作りにしてあり、起動を終えたあとに通知が届いて `quit` が受け付けられることは Windows の実機で確かめました
-    （起動の途中に `starting` で断られることは Windows では確かめられていない。[実機で確かめていないこと](#実機で確かめていないこと)）。
+    （起動の途中に `starting` で断られることは Windows では確かめられていない）。
 - **図面が 1 枚でも開いていれば、終了を頼まずに `internal` で失敗します。** 受け付けの中で
   `GetOpenFilesList` の件数を読みます（図面が 0 枚のときも落ちない。[道具「ping」](#ping)）。
   `error` は「図面が開いているので終了しませんでした。先に図面を閉じてください」を含む固定の文言で、
@@ -334,8 +333,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 - **`close` で名指せない図面が開いていると、CLI だけでは終了できません。** パスを読めなかった図面（`path` が空）と、
   `path` がほかの図面と重なる図面（`document_ambiguous`。別々のフォルダにある同じ名前の古い版のファイルを開いたものなど）は
   `close` で閉じられないので、開いている間 `quit` は `documents_open` で断られ続けます。その図面は利用者が Vectorworks で閉じます
-  （呼ぶ側が人に頼む）。CLI から扱えるようにするのは、名指し方（`fileRef` など）を SDK リファレンスで確かめてからにします
-  （[下記「`document`」](#図面を扱う道具documentssaveclose)）。
+  （呼ぶ側が人に頼む）。
 - **占有の中でだけ呼べます**（[通信規則「占有」](../protocol.md#占有セッション)。占有していなければ
   `no_session`、ほかが占有していれば `occupied` で断られる）。Vectorworks が終われば占有も消えます。
 - **終了の依頼の最中は断られます**（`busy`。[通信規則「Vectorworks が処理中」](../protocol.md#vectorworks-が処理中)）。
@@ -352,7 +350,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
 
 `quit` の前に図面を片付ける（残したい図面を新しいパスへ保存する・図面を閉じる）ための道具です。使う SDK 呼び出しは SDK
 リファレンスで確かめてあります（[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)。
-VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比べ方。[同「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・[SDK リファレンス #283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。**`close` は保存の確認を出さずに閉じ、未保存の変更を捨てます**（利用者の判断。下記）。保存は呼ぶ側の責任で、
+Vectorworks 2026 / mac。Windows も振る舞いは同じで、違うのはパスの比べ方。[同「Windows」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows振る舞いは-mac-と同じ違うのはパスの比べ方と開ける図面は-8-枚まで)・[SDK リファレンス #283](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/283)）。**`close` は保存の確認を出さずに閉じ、未保存の変更を捨てます**（利用者の判断。下記）。保存は呼ぶ側の責任で、
 残したい図面は、`save` で新しいパスへ保存してから `close` します（`save` は上書き保存をしない）。要らない図面は、保存せずに `close` します。
 利用者の環境設定によっては、保存するたびに保存先の隣の `VW Backup/` に図面と同じ大きさのコピーもできます
 （大きな図面を繰り返し保存する使い方ではディスクを食います）。
@@ -394,7 +392,6 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
   ファイルを作れず、2 つ目の Vectorworks を起動できなかった）。`untitled` は `fIsInMemoryOnly` をそのまま返すので、
   プラグインはこれらの場面でも Vectorworks の答えに従います。古い版のファイルが Windows で `untitled` にならなくても、
   `save` は新しいパスへしか保存しない（下記）ので、`save` が利用者の古い版のファイルを置き換えることはありません。`close` も保存せずに閉じるので、置き換わりません。
-  Windows の古い版のファイルは、実機でも見られていません（[実機で確かめていないこと](#実機で確かめていないこと)）。
   **`untitled` が真の図面の `path` は「アプリケーションのフォルダ＋名前」**で、ファイルとしては存在しません（名前は
   「名称未設定 N」・「<元の名前> コピー 1」・「<元の名前> v2026.vwx」など。N はセッション全体の連番で、開いている間は
   重ならない）。**`untitled` が真の図面は、`path` がほかの図面と重なることがあります**（下記。その図面は `save`・
@@ -408,7 +405,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     Vectorworks がアプリケーションのフォルダと名前から作るので、別々のフォルダにある同じ名前の古い版のファイルを開いた
     2 枚は、同じ `<アプリ>/<名前> v2026.vwx` になりえます（「名称未設定 N」の N は重ならない）。SDK リファレンスでは
     確かめておらず、このプラグインの mac の実機の確認で、古い版の 2 枚は重なり、読み取り専用のファイルを開いたコピー
-    （「コピー N」）は重ならないことを見ただけです（[SDK の調査「残っているもの」](../sdk-research.md#残っているもの)）。利用者がアプリケーションの
+    （「コピー N」）は重ならないことを見ただけです。利用者がアプリケーションの
     フォルダに同じ名前のファイルを保存して開いていれば、`untitled` が偽の図面とも重なりえます。**`untitled` によらず、
     一致する図面が 2 枚以上あれば、どれも保存・閉じずに `internal` で失敗し、`detail` に `{"reason":"document_ambiguous"}`
     を付けます**（名指すものは実在するので `invalid_args` にしない。[共通の決まり](#共通の決まり)の 3 で、名指すものの
@@ -443,8 +440,7 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     OK だけの警告（「バックアップフォルダを作成することができませんでした」）が出て、押すまで戻りません**（保存のたびに出る。
     サブフォルダの作成だけが拒まれている、同じ名前のファイルがある、など）。**プラグインは前もって確かめず、この警告を認めます**
     （利用者の判断）。バックアップを作るか・どこへ作るかは利用者が環境設定（自動保存）で変えられるので、プラグインが
-    判断すると設定と食い違うためです。通常の保存先では起きません。出たときは、呼ぶ側がダイアログのコマンドで OK を押します
-    （[SDK リファレンス #302](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/302) の結果で決める。それまでは人が押す）。警告が出ても `GSError` は 0 で、保存は成功として返ります。
+    判断すると設定と食い違うためです。通常の保存先では起きません。出たときは、人が OK を押します。警告が出ても `GSError` は 0 で、保存は成功として返ります。
     - **上書き保存をやめた理由（警告のダイアログで止まる）との違い:** 上書き保存の警告は、利用者が図面のファイルを
       動かした・読み取り専用にしたなど、ふつうに起きうる場面で出て、保存も通らないことがありました。この警告は保存は通り、
       バックアップのフォルダを作れない特別な保存先でだけ出て、出るかどうかは利用者の環境設定で変わります。
@@ -527,10 +523,6 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
     （`quit` は終了を頼む前にもう一度片付け、片付かなければ断る）。
   - 閉じたあとに前面になるのは、最後に開いた図面です（mac も Windows も）。`close` の前の前面の図面が残っていれば、
     その `fileRef` へ `SwitchToOpenFile` で戻します（カレントレイヤも戻る。前面を閉じたときは戻せない。[Findings「Windows と、「閉じる」で確認が出る図面」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows-と閉じるで確認が出る図面305mac-も)）。
-- **図面を開く道具はまだありません**（[設計「これから」](../design.md#これから)）。
-  `OpenDocumentPath` で開いた図面は、残すなら `save` で新しいパスへ保存してから `close` します（`close` は変更を捨てる）。開いたあとは Vectorworks の最初の描画が刻みを
-  止め、次の要求が長く待たされます（上限は無い。[#290](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/290)）。開く道具を足すときは、
-  呼ぶ側の待つ上限を過ぎることを前提にします。
 
 ## 閉じた図面の片付け
 
@@ -559,20 +551,3 @@ VW 2026 / macOS。Windows も振る舞いは同じで、違うのはパスの比
 - **Windows も同じく片付けます**（Vectorworks 2025 の Windows でも図面が残り、この片付けで確認が出なくなる。同じ節。
   Vectorworks 2026 の Windows は測っていない。[#323](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/323)）。
 
-## 実機で確かめていないこと
-
-道具は mac と Windows の実機で確かめてから出しましたが、次のものは実機で見られていません（Windows の確認に使った
-仮想環境で Vectorworks がメモリの不足で落ち続けた・必要な状況を起こせなかった。実機の確かめ方は
-[実機の確かめ方](verification.md)）。関わるところを変えるときは、見られるようになっていれば先に確かめます。
-
-| 見られていないもの | 分かっていること |
-| --- | --- |
-| Windows の参照で入ったレイヤ（`layers` の `referenced`・`objects`） | SDK の振る舞いは Windows でも測ってある（[SDK リファレンス #310](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/310)）。mac の実機では 2 通りとも確かめた |
-| Windows の古い版のファイルを開いた図面の `untitled` と、同じ名前の 2 枚の `path` の重なり | SDK リファレンスでも測れなかった（[#291](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/291)）。`untitled` が偽でも、`save` は新しいパスへしか保存せず `close` は保存しないので、利用者のファイルは置き換わらない。mac の実機では `untitled` が真で、`path` が重なり、`save`・`close` が `document_ambiguous` で断った |
-| Windows の読み取り専用のファイルを開いたコピーの `close` と、同じ名前の 2 枚の `path` | `close` で確認が出ないことは SDK リファレンスで分かっている（[#305](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/305)）。mac の実機では確認なしに閉じ、`path` は重ならなかった |
-| Windows の、前もって作った共有（UNC）への `save` | 管理共有（`\\localhost\C$`。確認に使った環境では Vectorworks が昇格して動いていた）への保存は確かめた |
-| Windows のシートレイヤなどの、情報パレットの数・外形との比較の一部 | 数は見本の図面を作ったスクリプトの数と一致した。mac の実機では情報パレットと一致した |
-| 前面を確かめてから保存・閉じること・`layer_ambiguous`・`layer` を渡したときにそのレイヤだけを辿ること | 実機の確認のあとに入れた。無 SDK のテストで確かめてある |
-| `quit` の側の[閉じた図面の片付け](#閉じた図面の片付け) | 要る状況を実機で起こせていない（最後の図面を UI で閉じた形は、片付けの無い版でも確認が出なかった）。無 SDK のテストで確かめてある |
-| Windows の起動の途中の `quit`（`starting` で断ること） | ふつうの起動では `session start` が応える前に起動を終えていて当てられない。mac の実機では確かめた。起動を終えた目印の通知が Windows でも届くことは確かめた |
-| Windows の Vectorworks 2026 での `quit` と閉じた図面の片付け | Windows の確認は Vectorworks 2025 で行った（[#323](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/323)） |

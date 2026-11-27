@@ -5,7 +5,7 @@
 **Vectorworks をコマンドラインから操作するコマンドと、Vectorworks がコマンドを受信するための Vectorworks 用プラグインです。**
 操作できるのは、インストールしてライセンス認証を済ませた Vectorworks です。`vw2026 call` の実行は、Vectorworks を起動し、
 プラグインの動作中のみ操作可能です。
-シェルスクリプトや他のプログラム、AI エージェントから、次のことを実行できます。
+シェルスクリプトやほかのプログラム、AI エージェントから、次のことを実行できます。
 
 - **図面を読む**: レイヤとクラスの一覧、レイヤの中の図形（種別・名前・クラス・外形）、種別ごとの図形の数
 - **図面を扱う**: 開いている図面の一覧、新しいファイルへの保存、図面を閉じる
@@ -16,14 +16,14 @@
 
 | 対応する Vectorworks | OS | コマンド |
 | --- | --- | --- |
-| Vectorworks 2026 | macOS（Apple シリコン）・Windows（x64） | `vw2026` |
+| Vectorworks 2026 | mac（Apple シリコン）・Windows（x64） | `vw2026` |
 | Vectorworks 2025 | 同上 | `vw2025` |
 
 ## インストール
 
 Vectorworks を終了してから、次を実行します。
 
-macOS（ターミナル）:
+mac（ターミナル）:
 
 ```bash
 curl -fsSL https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/latest/download/get-vw2026.sh | sh
@@ -37,7 +37,7 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
 # {"outcome":"installed","name":"cli","requested":"<タグ>","tag":"<タグ>",…}
 ```
 
-1. **新しい端末を開く**と、`vw2026` が使えます。macOS で `~/.local/bin` が PATH に無いときは、表示される案内に
+1. **新しい端末を開く**と、`vw2026` が使えます。mac で `~/.local/bin` が PATH に無いときは、表示される案内に
    従って PATH に足します。
 2. **Vectorworks を起動します。** 起動の途中に「開発元不明のプラグイン」のダイアログが出て `cli` が「無効」と
    示されたら、`cli` を選んで「有効化」し、Vectorworks を起動し直します。
@@ -90,7 +90,7 @@ vw2026 call layer_objects '{"layer":"1F","limit":10}'
 
 ### 図面を保存する・閉じる、Vectorworks を終了する
 
-Vectorworks に指示する操作（`save`・`close`・`quit`）は、他のプログラムの操作と混ざらないように、
+Vectorworks に指示する操作（`save`・`close`・`quit`）は、ほかのプログラムの操作と混ざらないように、
 **セッションを使って占有した中でだけ**実行できます（占有していないとき・ほかが占有しているときは、標準出力に何も返さず終了コード 23 で断られます。理由は標準エラーに出ます）。
 
 ```bash
@@ -144,7 +144,7 @@ vw2026 install cli@latest
 インストールされている版のリリースが無くなっているとき（プレリリースは、その PR を閉じると削除されます）だけ、
 表示された 2 つ目のコマンド（`latest` のスクリプト）を使います。
 
-macOS:
+mac:
 
 ```bash
 vw2026 uninstall cli
@@ -184,13 +184,14 @@ vw2026 uninstall cli
 
 | ファイル | 中身 |
 | --- | --- |
-| [docs/design.md](docs/design.md) | 目的・決めたこと・構成・安全の前提・これから作るもの |
-| [docs/plugin/](docs/plugin/README.md) | プラグインの設計（構成・ブリッジ・道具・識別子・ビルド・配布・実機の確かめ方・根拠・未決） |
+| [docs/design.md](docs/design.md) | 目的・決めたこと・構成・安全の前提 |
+| [docs/plugin/](docs/plugin/README.md) | プラグインの設計（構成・ブリッジ・道具・識別子・ビルド・配布・実機の確かめ方・根拠） |
 | [docs/protocol.md](docs/protocol.md) | 通信規則（プラグインと呼ぶ側の約束。真実はここ） |
 | [docs/fixtures.md](docs/fixtures.md) | 通信規則の見本（`protocol/fixtures`。C++ と Go のテストが同じものを読む） |
 | [docs/registry.md](docs/registry.md) | `vw2026 install` が読むレジストリとマニフェストの書き方・フック・プラグインの提供側に求めること |
 | `vw2026 --help` | `vw2026` のコマンド・指定・終了コード（定義は [cli/cmd/vw2026/](cli/cmd/vw2026/)。`vw2026 help <command>` で各コマンド） |
 | [docs/format.md](docs/format.md) | 整形規則と整形ツール（`scripts/format.sh`） |
 | [docs/lint.md](docs/lint.md) | 検査ツール（`scripts/lint.sh`） |
-| [docs/sdk-research.md](docs/sdk-research.md) | SDK リファレンスでの調査の索引と、待っているもの |
-| [docs/design-review.md](docs/design-review.md) | 設計のレビューの指摘のうち、まだ決まっていないもの |
+| [docs/sdk-research.md](docs/sdk-research.md) | SDK リファレンスでの調査の索引と、調べないと決めたもの |
+
+これから作るもの・決まっていないこと・確かめ残しは [issue](https://github.com/min-nano/vectorworks-plugin-command-line-interface/issues) にあります。
