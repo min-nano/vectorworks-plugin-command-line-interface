@@ -12,8 +12,8 @@ runs:
         cache-dependency-path: |
           tools/go.sum
           cli/go.sum
-    # clang-format と clang-tidy は tools/requirements.txt の版を pip で入れる（ランナーの版は決まらない）。
-    - name: clang
+    # clang-format・clang-tidy・shellcheck は tools/requirements.txt の版を pip で入れる（ランナーの版は決まらない）。
+    - name: pip
       shell: bash
       run: |
         python3 -m venv "$RUNNER_TEMP/venv"
