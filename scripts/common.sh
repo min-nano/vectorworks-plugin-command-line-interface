@@ -37,6 +37,7 @@ require_clang() {
 # require_shellcheck は、PATH の shellcheck が tools/requirements.txt の shellcheck-py の版でなければ止める（版で
 # 指摘が変わるため。actionlint も PATH の shellcheck で run: の中を検査する）。shellcheck-py の版は
 # <shellcheck の版>.<包み直しの番号> なので、最後の番号を除いたものを、shellcheck --version の版と全体で比べる。
+# Windows では shellcheck の出力の行末が CRLF になり、版の行を $ で固定して読むので、CR を除いてから読む。
 require_shellcheck() {
 	requirements_pin shellcheck-py
 	common_want="$(printf '%s\n' "$common_pin" | sed -n 's/^\([0-9]*\.[0-9]*\.[0-9]*\)\.[0-9]*$/\1/p')"
@@ -45,7 +46,7 @@ require_shellcheck() {
 			"write it as <shellcheck version>.<build> (four numbers)" >&2
 		exit 1
 	fi
-	common_found="$(shellcheck --version 2>/dev/null |
+	common_found="$(shellcheck --version 2>/dev/null | tr -d '\r' |
 		sed -n 's/^version: \([0-9][0-9.]*\)$/\1/p' | head -n 1)"
 	if [ "$common_found" != "$common_want" ]; then
 		echo "shellcheck $common_want is required (found ${common_found:-none}):" \
