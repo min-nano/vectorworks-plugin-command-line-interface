@@ -63,7 +63,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 - 言語をまたぐ決まり（UTF-8・LF・タブ・100 桁の目安）は `.editorconfig` に
   だけ書く。各言語の設定には、その言語にしかない項目だけを書く（`docs/format.md`）。
 - ツールは言語ごとに標準のもの 1 つを、ほぼ既定のまま使い、版を固定する。Go で書かれたツールは
-  `tools/go.mod`、pip のツール（clang-format・clang-tidy）は `tools/requirements.txt`、
+  `tools/go.mod`、pip のツール（clang-format・clang-tidy・shellcheck）は `tools/requirements.txt`、
   PSScriptAnalyzer と Pester（`cli` のフックのテスト。`hooks.yml`）は `scripts/powershell.ps1` に版を置く。ツールと対象は `docs/format.md`・`docs/lint.md`。
 - **コメントは対象のコードの直前の行に置き、コードと同じ行の末尾には書かない**（どの言語でも。
   1 行で足りるものも同じ。複数行と 1 行で置き場所が混ざると読みにくいため）。

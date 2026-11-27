@@ -19,6 +19,9 @@ for goos in darwin windows; do
 	GOOS="$goos" go -C cli vet -tags vw2025 ./... || status=1
 done
 
+# actionlint と、下の shellcheck の検査が使う shellcheck の版を確かめる。
+require_shellcheck
+
 # 検査ツールは go.mod の無いリポジトリのルートでは動かないので、tools/ で実行する。
 # actionlint は .github/workflows を上へたどって見つけ、run: の内容も shellcheck で検査する。
 go -C tools tool actionlint || status=1
