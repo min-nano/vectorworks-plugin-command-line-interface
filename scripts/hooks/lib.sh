@@ -36,6 +36,18 @@ hook_install_dir() {
 	esac
 }
 
+# hook_init は、フックの冒頭で決める 4 つの変数を置く。year（hook_year）・install_dir（hook_install_dir。
+# <Plug-Ins>/cli）・command（vw<版>）・home（絶対パスにした HOME）。決められなければ、理由は呼んだ関数が
+# 書いているので、そのまま 1 で終わる（何も変える前に終わる）。$(...) の中では呼ばない（変数を置けないため）。
+# 変数は install.sh・uninstall.sh が使う（このファイルだけを検査すると使われていないように見える）。
+# shellcheck disable=SC2034
+hook_init() {
+	year="$(hook_year)" || exit 1
+	install_dir="$(hook_install_dir "$year")" || exit 1
+	command="vw$year"
+	home="$(absolute_dir HOME "${HOME-}")" || exit 1
+}
+
 # strip_slashes は末尾の / を除いて書く（根の / は残す）。
 strip_slashes() {
 	strip_slashes_s="$1"
@@ -102,31 +114,33 @@ dir_in_path() {
 	return 1
 }
 
-# same_place は、絶対パス $1 と $2 が同じ場所を指すか。それぞれの、在るいちばん近いディレクトリどうしを
-# 同一性（-ef。i ノードで比べる）で比べ、その下の在らない部分は名前の文字列で比べる。同じディレクトリを
+# nearest_dir は、絶対パス $1（末尾の / を除いたもの）から、在るいちばん近いディレクトリまでさかのぼり、
+# そのディレクトリを nearest_dir_dir、その下の在らない部分（/ で始まる。在れば空）を nearest_dir_rest に置く。
+nearest_dir() {
+	nearest_dir_dir="$1"
+	nearest_dir_rest=""
+	while [ ! -d "$nearest_dir_dir" ]; do
+		nearest_dir_rest="/${nearest_dir_dir##*/}$nearest_dir_rest"
+		nearest_dir_dir="${nearest_dir_dir%/*}"
+		[ -n "$nearest_dir_dir" ] || nearest_dir_dir=/
+	done
+}
+
+# same_place は、絶対パス $1 と $2 が同じ場所を指すか。それぞれの、在るいちばん近いディレクトリ（nearest_dir）
+# どうしを同一性（-ef。i ノードで比べる）で比べ、その下の在らない部分は名前の文字列で比べる。同じディレクトリを
 # 別の書き方（シンボリックリンク・大文字と小文字・--plugins-dir の書き方）で指しても同じとみなすため
 # （CLI の within と同じ考え方）。uninstall のフックはフォルダを移したあとで走り、<Plug-Ins>/cli/ はもう
 # 無いので、在る親までさかのぼる。相対パスは同じとみなさない。
 same_place() {
 	case $1 in /*) ;; *) return 1 ;; esac
 	case $2 in /*) ;; *) return 1 ;; esac
-	same_place_a="$(strip_slashes "$1")"
-	same_place_b="$(strip_slashes "$2")"
-	same_place_rest_a=""
-	same_place_rest_b=""
-	while [ ! -d "$same_place_a" ]; do
-		same_place_rest_a="/${same_place_a##*/}$same_place_rest_a"
-		same_place_a="${same_place_a%/*}"
-		[ -n "$same_place_a" ] || same_place_a=/
-	done
-	while [ ! -d "$same_place_b" ]; do
-		same_place_rest_b="/${same_place_b##*/}$same_place_rest_b"
-		same_place_b="${same_place_b%/*}"
-		[ -n "$same_place_b" ] || same_place_b=/
-	done
+	nearest_dir "$(strip_slashes "$1")"
+	same_place_a="$nearest_dir_dir"
+	same_place_rest_a="$nearest_dir_rest"
+	nearest_dir "$(strip_slashes "$2")"
 	# -ef は POSIX に無いが、mac の /bin/sh（と bash・dash・zsh）は持つ。
 	# shellcheck disable=SC3013
-	[ "$same_place_rest_a" = "$same_place_rest_b" ] && [ "$same_place_a" -ef "$same_place_b" ]
+	[ "$same_place_rest_a" = "$nearest_dir_rest" ] && [ "$same_place_a" -ef "$nearest_dir_dir" ]
 }
 
 # link_points_to は、$1 がシンボリックリンクで、その中身（解かない）が $2 と同じ場所を指すか（same_place）。

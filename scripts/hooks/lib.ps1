@@ -303,6 +303,21 @@ function Get-HookInstallDir([string] $Year) {
 	return $dir.TrimEnd('\', '/')
 }
 
+# Get-HookTarget は、フックの冒頭で決めるもの（版 Year と <Plug-Ins>\cli\bin の Bin）を返す。決められなければ、
+# 理由を標準エラーへ書いて $null を返す（呼ぶ側は何も変えずに失敗で終わる）。exit は呼ばない（テストがこの
+# ファイルをドットソースで読むため）。
+function Get-HookTarget {
+	$year = Get-HookYear
+	if ($null -eq $year) {
+		return $null
+	}
+	$installDir = Get-HookInstallDir $year
+	if ($null -eq $installDir) {
+		return $null
+	}
+	return @{ Year = $year; Bin = $installDir + '\bin' }
+}
+
 # Get-RegistryPathStore は利用者の Path（HKCU\Environment の値 Path）の置き場所。展開しない値を読み、
 # 型を保って書く（[Environment]::SetEnvironmentVariable は展開した値を REG_SZ で書き戻すとされ、
 # setx は 1024 文字で切り詰めるので使わない）。開いたキーは例外のときに閉じない（フックはすぐ終わる）。

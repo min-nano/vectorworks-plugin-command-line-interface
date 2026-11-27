@@ -13,17 +13,13 @@ $ProgressPreference = 'SilentlyContinue'
 . (Join-Path $PSScriptRoot 'lib.ps1')
 Initialize-HookConsole
 
-$year = Get-HookYear
-if ($null -eq $year) {
+$target = Get-HookTarget
+if ($null -eq $target) {
 	exit 1
 }
-$installDir = Get-HookInstallDir $year
-if ($null -eq $installDir) {
-	exit 1
-}
-$bin = $installDir + '\bin'
+$bin = $target.Bin
 # 2025 の CLI が走らせたときは vw2025.exe（lib.ps1 の Get-HookYear）。
-$cli = $bin + '\vw' + $year + '.exe'
+$cli = $bin + '\vw' + $target.Year + '.exe'
 if (-not (Test-Path -LiteralPath $cli -PathType Leaf)) {
 	Write-HookError ('the CLI is missing: ' + $cli)
 	exit 1
