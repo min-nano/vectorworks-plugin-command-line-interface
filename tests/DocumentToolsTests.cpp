@@ -1,3 +1,4 @@
+#include "FakeDocuments.h"
 #include "TestSupport.h"
 
 #include "core/DocumentTools.h"
@@ -6,7 +7,6 @@
 #include "core/SaveTarget.h"
 #include "core/Serve.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -24,104 +24,17 @@
 namespace save_target = VwCli::core::save_target;
 using save_target::Entry;
 using save_target::Probe;
-using VwCli::core::Documents;
 using VwCli::core::ErrorCode;
 using VwCli::core::Json;
 using VwCli::core::OpenDocument;
 using VwCli::core::SaveEnvironment;
 using VwCli::core::ToolKind;
 using VwCli::core::ToolStatus;
+using VwCli::test::FakeDocuments;
 using VwCli::test::must;
 using VwCli::test::reasonOf;
 
 namespace {
-
-// FakeDocuments は開いている図面の一覧を持ち、SDK の呼び出しを真似て、呼んだ順を覚える。
-class FakeDocuments : public Documents {
-public:
-	std::vector<OpenDocument> open;
-	std::vector<std::string> calls;
-	std::uint32_t saveError = 0;
-	bool switchFails = false;
-	// SwitchToOpenFile が真を返すのに前面が変わらない
-	// （前面を確かめずに保存・閉じると、別の図面に効く）。
-	bool switchIgnored = false;
-	// 閉じても残る（not_closed を真似る）。
-	bool closeKeeps = false;
-	// 閉じると、この ref の図面も一覧から消える（前面へ戻せない場合を真似る）。
-	std::int32_t closeAlsoDrops = -1;
-	// 保存のあと、前面の図面の項目を一覧から消す（読み直せない場合を真似る）。
-	bool saveLosesFront = false;
-	// 閉じた図面が中に残った枚数（一覧には出ず、GetActiveDocument だけが真を返す）。
-	int remnants = 0;
-	// 一覧が空のときの CloseDocument で、残った図面が消えない。
-	bool remnantsStick = false;
-
-	std::vector<OpenDocument> list() override {
-		calls.emplace_back("list");
-		return open;
-	}
-	bool switchTo(std::int32_t ref) override {
-		calls.push_back("switch " + std::to_string(ref));
-		if (switchFails) {
-			return false;
-		}
-		if (switchIgnored) {
-			return true;
-		}
-		for (OpenDocument &document : open) {
-			document.active = document.ref == ref;
-		}
-		return true;
-	}
-	std::uint32_t saveActive(const std::string &path) override {
-		calls.push_back("save " + path);
-		if (saveError == 0) {
-			for (std::size_t i = 0; i < open.size(); ++i) {
-				if (open[i].active) {
-					if (saveLosesFront) {
-						open.erase(open.begin() + static_cast<std::ptrdiff_t>(i));
-						break;
-					}
-					open[i].path = path;
-					open[i].untitled = false;
-				}
-			}
-		}
-		return saveError;
-	}
-	void closeActive() override {
-		calls.emplace_back("close");
-		if (closeKeeps) {
-			return;
-		}
-		// 一覧が空なら、残った図面を 1 枚消す。
-		if (open.empty()) {
-			if (remnants > 0 && !remnantsStick) {
-				--remnants;
-			}
-			return;
-		}
-		for (std::size_t i = 0; i < open.size(); ++i) {
-			if (open[i].active) {
-				open.erase(open.begin() + static_cast<std::ptrdiff_t>(i));
-				break;
-			}
-		}
-		std::erase_if(
-		    open, [this](const OpenDocument &document) { return document.ref == closeAlsoDrops; });
-		// 閉じたあとに前面になるのは最後に開いた図面（ここでは一覧の末尾）。
-		if (!open.empty()) {
-			open.back().active = true;
-		}
-	}
-	bool hasActive() override {
-		calls.emplace_back("active");
-		return remnants > 0 ||
-		       std::any_of(open.begin(), open.end(),
-		                   [](const OpenDocument &document) { return document.active; });
-	}
-};
 
 constexpr std::string_view kUntitled = "/Applications/Vectorworks 2026/名称未設定 1";
 
@@ -626,8 +539,7 @@ TEST(CloseStopsClearingAtTheLimit) {
 	Json result = VwCli::core::close(must(R"({"document":"/Users/me/plan.vwx"})"), docs, status);
 	CHECK(status.code == ErrorCode::None);
 	CHECK_EQ(result, must(R"({"closed":true,"closed_documents_remain":true})"));
-	CHECK_EQ(std::count(docs.calls.begin(), docs.calls.end(), std::string("close")),
-	         std::ptrdiff_t{1 + VwCli::core::kMaxClosedRemnants});
+	CHECK_EQ(docs.count("close"), 1 + VwCli::core::kMaxClosedRemnants);
 }
 
 TEST(ClearClosedDocumentsDoesNothingWithoutRemnants) {

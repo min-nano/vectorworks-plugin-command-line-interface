@@ -16,6 +16,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace VwCli::core {
@@ -121,6 +122,23 @@ template <typename T> std::string show(const std::vector<T> &values) {
 	return out + "]";
 }
 
+// isCString は T が C の文字列（文字の配列か、文字へのポインタ）か。
+template <typename T>
+inline constexpr bool isCString =
+    std::is_same_v<std::decay_t<T>, const char *> || std::is_same_v<std::decay_t<T>, char *>;
+
+// checkEq は CHECK_EQ の中身。actual == expected でなければ、両辺を示して失敗を記録する。
+template <typename A, typename B>
+void checkEq(const A &actual, const B &expected, const char *file, int line, const char *what) {
+	// C の文字列どうしは中身ではなくアドレスを比べるので断る（片方を std::string にする）。
+	static_assert(!(isCString<A> && isCString<B>), "CHECK_EQ: compare C strings as std::string");
+	if (!(actual == expected)) {
+		fail(file, line,
+		     std::string(what) + "\n    actual:   " + show(actual) +
+		         "\n    expected: " + show(expected));
+	}
+}
+
 }
 
 #define VWCLI_JOIN2(a, b) a##b
@@ -147,14 +165,8 @@ template <typename T> std::string show(const std::vector<T> &values) {
 		}                                                                                          \
 	} while (false)
 
+// CHECK_EQ は両辺を checkEq の引数として渡す。引数は式の終わりまで生きるので、写さずに比べても
+// 一時の値の中を指す参照（must(...).asString() など）も寿命の内で読める。両辺を求める順は
+// 決まらない（関数の引数の評価順）ので、両辺に副作用のある式を書かない。
 #define CHECK_EQ(actual, expected)                                                                 \
-	do {                                                                                           \
-		const auto vwcliActual = (actual);                                                         \
-		const auto vwcliExpected = (expected);                                                     \
-		if (!(vwcliActual == vwcliExpected)) {                                                     \
-			::VwCli::test::fail(__FILE__, __LINE__,                                                \
-			                    std::string(#actual " == " #expected "\n    actual:   ") +         \
-			                        ::VwCli::test::show(vwcliActual) +                             \
-			                        "\n    expected: " + ::VwCli::test::show(vwcliExpected));      \
-		}                                                                                          \
-	} while (false)
+	::VwCli::test::checkEq((actual), (expected), __FILE__, __LINE__, #actual " == " #expected)

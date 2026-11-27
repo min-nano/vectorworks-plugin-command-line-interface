@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fixturetest"
 	. "github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
@@ -21,7 +22,7 @@ import (
 // FuzzNestingDepth は任意のバイト列を与える。種はプラグイン側のファジング
 // （tests/JsonFuzzer.cpp）と同じ要求の見本。
 func FuzzNestingDepth(f *testing.F) {
-	paths, err := filepath.Glob(filepath.Join(fixtures, "requests", "*"))
+	paths, err := filepath.Glob(filepath.Join(fixturetest.ProtocolDir, "requests", "*"))
 	if err != nil {
 		f.Fatal(err)
 	}

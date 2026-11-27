@@ -1,36 +1,22 @@
 package spool_test
 
 import (
-	"bytes"
-	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"testing"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fixturetest"
 	. "github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
 // 通信規則の見本（protocol/fixtures。形は docs/fixtures.md）の定数と id の綴りに照らす。プラグイン側
 // （src/core/Protocol.h）も同じ見本に照らすので、両側の綴りが揃う。
 
-// fixtures は通信規則の見本の場所（go test はパッケージのディレクトリで走る）。
-const fixtures = "../../../protocol/fixtures"
-
-// readFixture は見本のファイルを、知らないキーを誤りとして読む（綴りを誤った確かめが黙って
-// 省かれないように）。
+// readFixture は見本のファイルを、知らないキーを誤りとして読む。
 func readFixture(t *testing.T, name string, v any) {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(fixtures, name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(v); err != nil {
-		t.Fatalf("%s: %v", name, err)
-	}
+	fixturetest.ReadStrict(t, filepath.Join(fixturetest.ProtocolDir, name), v)
 }
 
 func sorted(values ...string) []string {
