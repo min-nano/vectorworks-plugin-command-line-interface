@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.20)
+# 3.24: CMAKE_COMPILE_WARNING_AS_ERROR（CI と手元のテストが警告をエラーにする）が効く最初の版。
+# 3.20〜3.23 では黙って無視され、警告があってもビルドが通る。
+cmake_minimum_required(VERSION 3.24)
 
 # Vectorworks 2026 のプラグイン（cli）。設計は docs/plugin/、ビルドの形は
 # docs/plugin/build-and-release.md。SDK に依らない共通部（src/core）とその単体テスト・ファジングと、
