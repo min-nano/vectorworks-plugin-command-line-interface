@@ -30,7 +30,7 @@ case "$sha" in
 	exit 1
 	;;
 esac
-slug="$(printf '%s' "$branch" | tr '/:@ ' '----' | tr -cd 'A-Za-z0-9._-' | sed 's/\.\.*/./g' | cut -c1-40 | sed 's/[-_.]*$//')"
+slug="$(printf '%s' "$branch" | tr '/:@ ' '----' | tr -cd 'A-Za-z0-9._-' | tr -s . | cut -c1-40 | sed 's/[-_.]*$//')"
 if [ -z "$slug" ]; then
 	printf 'dev-%s-%s\n' "$pr" "$sha"
 else

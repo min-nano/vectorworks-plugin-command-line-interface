@@ -52,8 +52,13 @@ clang_pin() {
 	exit 1
 }
 
-# powershell_files は、git が追う・無視しない PowerShell のファイルを並べる（ビルドの出力や SDK の写しを
-# 含めない）。
+# tracked_files は、git が追う・無視しないファイルのうち、パターン（$@）に合うものを並べる（ビルドの
+# 出力や SDK の写しを含めない）。
+tracked_files() {
+	git ls-files -co --exclude-standard -- "$@"
+}
+
+# powershell_files は、整形と検査の対象の PowerShell のファイルを並べる。
 powershell_files() {
-	git ls-files -co --exclude-standard -- '*.ps1' '*.psm1' '*.psd1'
+	tracked_files '*.ps1' '*.psm1' '*.psd1'
 }

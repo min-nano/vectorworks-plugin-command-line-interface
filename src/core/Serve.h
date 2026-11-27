@@ -66,32 +66,39 @@ struct ToolContext {
 // （失敗したときの戻り値は使わない）、例外は Server が internal で応える。
 using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolStatus &status);
 
-struct Tool {
-	// [a-z0-9_]+(\.[a-z0-9_]+)*。通信規則の綴り（core/Protocol.h の
-	// std::string_view）をそのまま使えるように、string_view で持つ。
+// ToolSpec は道具の表の 1 行のうち SDK に依らない部分（名前・説明・inputSchema・種類）。道具ごとに
+// src/core に定数で置き、src/tools/ToolTable.cpp が SDK に依る中身と組み合わせる（種類を取り違えて
+// 占有なしで呼べるようにしないことを、無 SDK のテストで確かめるため）。
+struct ToolSpec {
+	// [a-z0-9_]+(\.[a-z0-9_]+)*。通信規則の綴り（core/Protocol.h の std::string_view）をそのまま
+	// 使えるように、string_view で持つ。
 	std::string_view name;
 	// 日本語。呼ぶ側がそのまま読む。
 	const char *description;
 	// JSON Schema（文字列）。tools の結果にそのまま載る。
 	const char *inputSchema;
 	ToolKind kind;
+};
+
+// Tool は道具の表の 1 行（ToolSpec と中身）。
+struct Tool : ToolSpec {
 	ToolFn run;
 };
 
-// ToolSpec は道具の表の 1 行のうち SDK に依らない部分（名前・説明・inputSchema・種類）。道具ごとに
-// src/core に定数で置き、src/tools/ToolTable.cpp が SDK に依る中身と組み合わせる（種類を取り違えて
-// 占有なしで呼べるようにしないことを、無 SDK のテストで確かめるため）。
-struct ToolSpec {
-	std::string_view name;
-	const char *description;
-	const char *inputSchema;
-	ToolKind kind;
-};
-
 // toolOf は ToolSpec と中身から表の 1 行を作る。
-constexpr Tool toolOf(const ToolSpec &spec, ToolFn run) {
-	return Tool{spec.name, spec.description, spec.inputSchema, spec.kind, run};
-}
+constexpr Tool toolOf(const ToolSpec &spec, ToolFn run) { return Tool{spec, run}; }
+
+// ScopedFlag は印を立て、壊すと下ろす（例外で抜けるときも下ろす）。
+class ScopedFlag {
+public:
+	explicit ScopedFlag(bool &flag) : flag_(flag) { flag_ = true; }
+	~ScopedFlag() { flag_ = false; }
+	ScopedFlag(const ScopedFlag &) = delete;
+	ScopedFlag &operator=(const ScopedFlag &) = delete;
+
+private:
+	bool &flag_;
+};
 
 // 受け付けの状態。
 enum class Phase {

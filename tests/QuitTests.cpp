@@ -300,53 +300,7 @@ TEST(LifecycleLowersTheMarkWhenTheRequestThrows) {
 
 namespace {
 
-// 応答のファイルを読む上限（ServeTests と同じ）。
-constexpr std::size_t kMaxResponseBytes = VwCli::core::protocol::kMaxRequestBytes * 2;
-
-// Caller は呼ぶ側を真似る。待つ印を掴んでから要求を置き、壊すと放す。
-class Caller {
-public:
-	explicit Caller(const TempDir &dir) : dir_(dir) {}
-
-	void put(const std::string &id, const std::string &request) {
-		std::string error;
-		locks_.emplace_back(std::make_unique<files::Lock>());
-		CHECK(locks_.back()->take(dir_.sub(id + ".wait"), error) == files::Lock::Result::Taken);
-		CHECK(files::write(dir_.sub(id + ".req.json"), request));
-	}
-
-	// response は応答を読む。無ければ null。
-	Json response(const std::string &id) const {
-		std::optional<std::string> text =
-		    files::read(dir_.sub(id + ".res.json"), kMaxResponseBytes);
-		return text ? must(*text) : Json();
-	}
-
-	// member は応答のフィールドの値。無ければ null。
-	Json member(const std::string &id, std::string_view key) const {
-		Json value = response(id);
-		const Json *found = value.find(key);
-		return found ? *found : Json();
-	}
-
-	Json result(const std::string &id) const { return member(id, "result"); }
-
-	std::string code(const std::string &id) const {
-		Json code = member(id, "code");
-		return code.isString() ? code.asString() : "";
-	}
-
-	// session は session_start の応答の占有の印。無ければ空。
-	std::string session(const std::string &id) const {
-		Json value = result(id);
-		const Json *session = value.find("session");
-		return session && session->isString() ? session->asString() : "";
-	}
-
-private:
-	const TempDir &dir_;
-	std::vector<std::unique_ptr<files::Lock>> locks_;
-};
+using VwCli::test::Caller;
 
 FakeDocuments *gDocs = nullptr;
 
@@ -409,9 +363,7 @@ TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	caller.put("c1", quit);
 	VwCli::core::tick(server, kTools, kNow, lifecycle, noRequest);
 	CHECK_EQ(caller.code("c1"), std::string("internal"));
-	Json detail = caller.member("c1", "detail");
-	const Json *reason = detail.find("reason");
-	CHECK(reason && *reason == Json::string("documents_open"));
+	CHECK_EQ(VwCli::test::reasonOf(caller.member("c1", "detail")), std::string("documents_open"));
 	CHECK_EQ(requests, 0);
 	CHECK(server.inSession());
 

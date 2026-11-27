@@ -38,8 +38,8 @@ std::optional<std::string> checkMacTo(std::string_view to, std::string &problem)
 // 260 文字以上（どちらも UTF-16 の単位）を断る）。
 std::optional<std::string> checkWindowsTo(std::string_view to, std::string &problem);
 
-// kNativeForm はプラグインが使う規則（出荷するプラグインは OS
-// ごとのビルドなので、ビルドで決まる）。
+// kNativeForm はプラグインが使う規則（出荷するプラグインは OS ごとのビルドなので、
+// ビルドで決まる）。
 extern const FormCheck kNativeForm;
 
 // Entry はファイルシステムに聞いた結果。

@@ -2,10 +2,15 @@
 
 // 無 SDK の単体テストの小さな枠と、テストが共に使うもの。外部のテストの枠組みに依らない。
 
+#include "core/Files.h"
 #include "core/Json.h"
+#include "core/Protocol.h"
+#include "core/Serve.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <ostream>
 #include <source_location>
 #include <sstream>
@@ -68,6 +73,36 @@ inline bool isTrue(const core::Json &value) { return value.isBool() && value.asB
 
 // kNow は受け付けに渡す、決まった今の時刻（ナノ秒）。
 inline constexpr std::int64_t kNow = 1760000000000000000;
+
+// kMaxResponseBytes は応答のファイルを読む上限。通信規則は応答の大きさを決めないので、
+// 要求の上限より大きく取る。
+inline constexpr std::size_t kMaxResponseBytes = core::protocol::kMaxRequestBytes * 2;
+
+// reasonOf は失敗の詳細（detail）の reason。無ければ空。
+std::string reasonOf(const core::Json &detail);
+inline std::string reasonOf(const core::ToolStatus &status) { return reasonOf(status.detail); }
+
+// Caller は呼ぶ側を真似る。待つ印を掴んでから要求を置き、壊すと放す。
+class Caller {
+public:
+	explicit Caller(const TempDir &dir) : dir_(dir) {}
+
+	void put(const std::string &id, const std::string &request);
+	// response は応答を読む。無ければ null。
+	core::Json response(const std::string &id) const;
+	// member は応答のフィールドの値。無ければ null。
+	core::Json member(const std::string &id, std::string_view key) const;
+	core::Json result(const std::string &id) const { return member(id, "result"); }
+	// ok は応答が成功か。応答が無ければ偽。
+	bool ok(const std::string &id) const { return isTrue(member(id, "ok")); }
+	std::string code(const std::string &id) const;
+	// session は session_start の応答の占有の印。無ければ空。
+	std::string session(const std::string &id) const;
+
+private:
+	const TempDir &dir_;
+	std::vector<std::unique_ptr<core::files::Lock>> locks_;
+};
 
 // runAll は登録されたテストを走らせる。引数があれば、名前にその文字列を含むものだけ。
 int runAll(int argc, char **argv);

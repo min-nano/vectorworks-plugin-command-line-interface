@@ -13,7 +13,7 @@
 # するのは、何も変える前の確かめ（環境変数・CLI があること）だけ。シェルの設定ファイルは書き換えない。
 set -u
 
-# shellcheck source=/dev/null
+# shellcheck source=scripts/hooks/lib.sh
 . "$(dirname "$0")/lib.sh"
 
 year="$(hook_year)" || exit 1

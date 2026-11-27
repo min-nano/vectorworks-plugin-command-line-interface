@@ -28,51 +28,7 @@ namespace {
 
 using VwCli::test::kNow;
 
-// 応答のファイルを読む上限。通信規則は応答の大きさを決めないので、要求の上限より大きく取る（FixtureTests
-// と同じ）。
-constexpr std::size_t kMaxResponseBytes = VwCli::core::protocol::kMaxRequestBytes * 2;
-
-// Caller は呼ぶ側を真似る。待つ印を掴んでから要求を置き、壊すと放す。
-class Caller {
-public:
-	explicit Caller(const TempDir &dir) : dir_(dir) {}
-
-	void put(const std::string &id, const std::string &request) {
-		std::string error;
-		locks_.emplace_back(std::make_unique<files::Lock>());
-		CHECK(locks_.back()->take(dir_.sub(id + ".wait"), error) == files::Lock::Result::Taken);
-		CHECK(files::write(dir_.sub(id + ".req.json"), request));
-	}
-
-	// response は応答を読む。無ければ null。
-	Json response(const std::string &id) const {
-		std::optional<std::string> text =
-		    files::read(dir_.sub(id + ".res.json"), kMaxResponseBytes);
-		if (!text) {
-			return Json();
-		}
-		std::optional<Json> value = Json::parse(*text, VwCli::core::protocol::kMaxNestingDepth);
-		CHECK(value);
-		return value ? *value : Json();
-	}
-
-	// ok は応答が成功か。応答が無ければ偽。
-	bool ok(const std::string &id) const {
-		Json value = response(id);
-		const Json *ok = value.find("ok");
-		return ok && VwCli::test::isTrue(*ok);
-	}
-
-	std::string code(const std::string &id) const {
-		Json value = response(id);
-		const Json *code = value.find("code");
-		return code && code->isString() ? code->asString() : "";
-	}
-
-private:
-	const TempDir &dir_;
-	std::vector<std::unique_ptr<files::Lock>> locks_;
-};
+using VwCli::test::Caller;
 
 std::vector<std::string> gCalls;
 Caller *gCaller = nullptr;
@@ -139,25 +95,23 @@ Json readContext(const Json &, const ToolContext &context, ToolStatus &) {
 }
 
 const Tool kTools[] = {
-    {"first", "", "{}", ToolKind::Read, first},
-    {"put_later", "", "{}", ToolKind::Read, putLater},
-    {"nests", "", "{}", ToolKind::Read, nests},
-    {"quit_fails", "", "{}", ToolKind::App, quitFails},
-    {"quits", "", "{}", ToolKind::App, quits},
-    {"bad_detail", "", "{}", ToolKind::Read, badDetail},
-    {"throws_int", "", "{}", ToolKind::Read, throwsInt},
-    {"context", "", "{}", ToolKind::Read, readContext},
+    {{"first", "", "{}", ToolKind::Read}, first},
+    {{"put_later", "", "{}", ToolKind::Read}, putLater},
+    {{"nests", "", "{}", ToolKind::Read}, nests},
+    {{"quit_fails", "", "{}", ToolKind::App}, quitFails},
+    {{"quits", "", "{}", ToolKind::App}, quits},
+    {{"bad_detail", "", "{}", ToolKind::Read}, badDetail},
+    {{"throws_int", "", "{}", ToolKind::Read}, throwsInt},
+    {{"context", "", "{}", ToolKind::Read}, readContext},
 };
 
 // startSession は占有の印を受け取る。
 std::string startSession(Server &server, Caller &caller, const std::string &id) {
 	caller.put(id, R"({"tool":"session_start"})");
 	server.serve(kTools, kNow);
-	Json response = caller.response(id);
-	const Json *result = response.find("result");
-	const Json *session = result ? result->find("session") : nullptr;
-	CHECK(session && session->isString());
-	return session && session->isString() ? session->asString() : "";
+	std::string session = caller.session(id);
+	CHECK(!session.empty());
+	return session;
 }
 
 }
@@ -338,7 +292,7 @@ TEST(ServeDoesNotQuitWhenTheReplyCannotBeWritten) {
 }
 
 TEST(ServeAnswersInternalForABrokenInputSchema) {
-	const Tool broken[] = {{"bad", "", "{", ToolKind::Read, first}};
+	const Tool broken[] = {{{"bad", "", "{", ToolKind::Read}, first}};
 	TempDir dir;
 	Server server(dir.utf8Path());
 	Caller caller(dir);

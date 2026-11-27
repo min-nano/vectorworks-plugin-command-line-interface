@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
@@ -50,7 +49,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		// 前の回が消しきれなかった組み立ての場所（discard の残り）・続ける先の無い印・よけた CLI・空の <Work> も、
 		// 外したときと同じく片付ける（初回のスクリプトの uninstall が、入っていなくても何も残さないように）。
 		_ = removeStaging(p)
-		return finishUninstall(p, name, outcomeNotInstall, nil), nil
+		return finishUninstall(p, name, outcomeNotInstalled, nil), nil
 	}
 
 	hook, err := o.runHook("uninstall", record.Hooks.Uninstall, hookEnv{
@@ -84,7 +83,7 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	// 走らせ直す案内（run uninstall <name> again）は discard の文言にあるので、ここでは足さない。discard の誤りは %v で包み、cmd の見分け
 	// （ErrRunning・RunsInsideError・使い方の誤り）が discard の中まで見に行かないようにする（ErrRunning を返すのは
 	// 始めの確かめだけ）。
-	if err := o.discard(p, name, "uninstall "+name); err != nil {
+	if err := o.discard(p, name, uninstallCommand(name)); err != nil {
 		return nil, fmt.Errorf("%s is out of the folder of plug-ins, but %s is not deleted yet: %v", name, p.oldDir, err)
 	}
 	return finishUninstall(p, name, outcomeUninstalled, hook), nil
@@ -133,7 +132,7 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 		}
 		if err := rename(p.dest, p.oldDir); err != nil {
 			_ = removeFile(p.marker)
-			return nil, false, renameError(p.dest, err, "uninstall "+name)
+			return nil, false, renameError(p.dest, err, uninstallCommand(name))
 		}
 		return record, false, nil
 	case exists(p.oldDir):
@@ -170,7 +169,7 @@ func removeEmptyWork(p places) {
 	_ = removeFile(p.work)
 }
 
-// installedIn は、<Plug-Ins> の直下で、名前の一致する記録のあるフォルダの名前を返す。
+// installedIn は、<Plug-Ins> の直下で、名前の一致する記録のあるフォルダの名前を、名前の昇順（os.ReadDir の順）で返す。
 func installedIn(plugins string) []string {
 	names := []string{}
 	entries, err := os.ReadDir(plugins)
@@ -185,6 +184,5 @@ func installedIn(plugins string) []string {
 			names = append(names, entry.Name())
 		}
 	}
-	sort.Strings(names)
 	return names
 }

@@ -31,16 +31,14 @@ jobs:
       GH_REPO: ${{ github.repository }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
-      # 形は scripts/dev-tag.sh が作るもの（slug が空なら dev-<PR 番号>-<短い sha>）。末尾の -<短い sha> の
-      # 無いもの（dev-<slug>-<PR 番号>）は、以前の dev-tag.sh が作った形で、その頃から開いている PR
-      # のプレリリースも消すために当てる。短い sha は 7 桁なので、ほかの PR の新しい形のタグには当たらない。
-      # 前の形のプレリリースが残っていなければ、(-[0-9a-f]{7})? の ? を除いてよい。
+      # 形は scripts/dev-tag.sh が作るもの（slug が空なら dev-<PR 番号>-<短い sha>）。build.yml が下書きを
+      # 見分けるのと同じ形で当てる。
       - run: |
           set -eu
           api="repos/$GH_REPO"
           # 頁ごとに絞るので、頁を合わせない（gh の --jq。値は環境変数で渡す）。$ENV は jq の式で、
           # シェルに展開させない。
-          export PATTERN="^dev-(.*-)?$PR_NUMBER(-[0-9a-f]{7})?\$"
+          export PATTERN="^dev-(.*-)?$PR_NUMBER-[0-9a-f]{7}\$"
           # 下書きを含むリリース。消してもタグは残るので、タグは次で消す。
           # shellcheck disable=SC2016
           gh api --paginate "$api/releases?per_page=100" \

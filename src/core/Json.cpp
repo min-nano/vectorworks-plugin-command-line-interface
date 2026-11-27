@@ -369,21 +369,14 @@ private:
 		if (from + 4 > text_.size()) {
 			return std::nullopt;
 		}
-		char32_t value = 0;
-		for (std::size_t i = from; i < from + 4; ++i) {
-			char c = text_[i];
-			value <<= 4;
-			if (c >= '0' && c <= '9') {
-				value |= static_cast<char32_t>(c - '0');
-			} else if (c >= 'a' && c <= 'f') {
-				value |= static_cast<char32_t>(c - 'a' + 10);
-			} else if (c >= 'A' && c <= 'F') {
-				value |= static_cast<char32_t>(c - 'A' + 10);
-			} else {
-				return std::nullopt;
-			}
+		// 符号の無い型に読むので、from_chars は符号も 0x も受けず、16 進の数字だけを読む。
+		const char *first = text_.data() + from;
+		std::uint32_t value = 0;
+		auto [end, ec] = std::from_chars(first, first + 4, value, 16);
+		if (ec != std::errc() || end != first + 4) {
+			return std::nullopt;
 		}
-		return value;
+		return static_cast<char32_t>(value);
 	}
 
 	// parseNumber は JSON の数の文法（-? (0 | [1-9][0-9]*) (.[0-9]+)? ([eE][+-]?[0-9]+)?）を
@@ -692,21 +685,16 @@ const Json *Json::find(std::string_view key) const {
 	if (!members) {
 		return nullptr;
 	}
-	for (const Member &member : *members) {
-		if (member.first == key) {
-			return &member.second;
-		}
-	}
-	return nullptr;
+	auto found = std::ranges::find(*members, key, &Member::first);
+	return found == members->end() ? nullptr : &found->second;
 }
 
 void Json::set(std::string key, Json value) {
 	Object &members = std::get<Object>(value_);
-	for (Member &member : members) {
-		if (member.first == key) {
-			member.second = std::move(value);
-			return;
-		}
+	auto found = std::ranges::find(members, key, &Member::first);
+	if (found != members.end()) {
+		found->second = std::move(value);
+		return;
 	}
 	members.emplace_back(std::move(key), std::move(value));
 }

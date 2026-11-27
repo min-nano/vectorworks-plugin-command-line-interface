@@ -115,7 +115,9 @@ func (c *uninstallCmd) run(e *env) int {
 			"of the installed tag instead:\n\t%s\nIf that release no longer exists (a prerelease is deleted when "+
 			"its pull request closes), use latest:\n\t%s\n",
 			err, c.Name, command, uninstallScript(runtime.GOOS, "latest", given))
-		emit(e, map[string]any{"outcome": "failed", "name": c.Name, "message": err.Error(), "command": command})
+		out := failedJSON(c.Name, err)
+		out["command"] = command
+		emit(e, out)
 		return exitUsage
 	case err != nil:
 		return deployFailed(e, c.Name, err)

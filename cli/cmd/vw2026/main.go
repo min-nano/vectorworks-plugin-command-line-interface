@@ -263,7 +263,7 @@ func run(args []string, e env) int {
 		// "vw2026 help [<command>]" is "vw2026 [<command>] --help".
 		args = append(args[1:len(args):len(args)], "--help")
 	case args[0] == "--version":
-		args[0] = "version"
+		args = append([]string{"version"}, args[1:]...)
 	}
 
 	var grammar cli

@@ -26,11 +26,10 @@ func lockState(path string) (bool, error) {
 	}
 	defer file.Close()
 	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_SH|syscall.LOCK_NB); err != nil {
-		held := errors.Is(err, syscall.EWOULDBLOCK)
-		if held {
-			err = nil
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return true, nil
 		}
-		return held, err
+		return false, err
 	}
 	_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
 	return false, nil

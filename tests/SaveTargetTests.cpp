@@ -36,6 +36,7 @@ using VwCli::core::ErrorCode;
 using VwCli::core::Json;
 using VwCli::core::ToolStatus;
 using VwCli::test::must;
+using VwCli::test::reasonOf;
 using VwCli::test::TempDir;
 using VwCli::test::utf8;
 
@@ -266,11 +267,6 @@ struct Recorder {
 		                           }};
 	}
 };
-
-std::string reasonOf(const ToolStatus &status) {
-	const Json *reason = status.detail.find("reason");
-	return reason && reason->isString() ? reason->asString() : "";
-}
 
 bool runCheck(Recorder &recorder, ToolStatus &status,
               std::vector<std::string> open = {"/u/plan.vwx", "/Applications/VW/名称未設定 1"}) {

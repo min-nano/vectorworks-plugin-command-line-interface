@@ -32,6 +32,7 @@ using VwCli::core::SaveEnvironment;
 using VwCli::core::ToolKind;
 using VwCli::core::ToolStatus;
 using VwCli::test::must;
+using VwCli::test::reasonOf;
 
 namespace {
 
@@ -189,11 +190,6 @@ struct Fs {
 Json saveArgs(std::string_view document, std::string_view to) {
 	return Json::object(
 	    {{"document", Json::string(std::string(document))}, {"to", Json::string(std::string(to))}});
-}
-
-std::string reasonOf(const ToolStatus &status) {
-	const Json *reason = status.detail.find("reason");
-	return reason && reason->isString() ? reason->asString() : "";
 }
 
 std::vector<std::string> calls(std::initializer_list<const char *> names) {
@@ -661,6 +657,7 @@ namespace files = VwCli::core::files;
 using VwCli::core::Server;
 using VwCli::core::Tool;
 using VwCli::core::ToolContext;
+using VwCli::test::Caller;
 using VwCli::test::kNow;
 using VwCli::test::TempDir;
 
@@ -671,18 +668,14 @@ Json counts(const Json &, const ToolContext &, ToolStatus &) {
 	return Json::object();
 }
 
-// serveOnce は要求 1 つを置いて受け付けを 1 回走らせ、応答を返す（待つ印を掴んでおく）。
-Json serveOnce(Server &server, const TempDir &dir, std::span<const Tool> tools,
-               const std::string &id, const std::string &request) {
-	std::string error;
-	files::Lock wait;
-	CHECK(wait.take(dir.sub(id + ".wait"), error) == files::Lock::Result::Taken);
-	CHECK(files::write(dir.sub(id + ".req.json"), request));
+// serveOnce は要求 1 つを置いて受け付けを 1 回走らせ、応答を返す。
+Json serveOnce(Server &server, Caller &caller, std::span<const Tool> tools, const std::string &id,
+               const std::string &request) {
+	caller.put(id, request);
 	server.serve(tools, kNow);
-	std::optional<std::string> text =
-	    files::read(dir.sub(id + ".res.json"), VwCli::core::protocol::kMaxRequestBytes);
-	CHECK(text);
-	return text ? must(*text) : Json();
+	Json response = caller.response(id);
+	CHECK(!response.isNull());
+	return response;
 }
 
 }
@@ -693,27 +686,28 @@ TEST(ServeRefusesSaveAndCloseOutsideTheSession) {
 	const Tool tools[] = {VwCli::core::toolOf(VwCli::core::kSaveSpec, &counts),
 	                      VwCli::core::toolOf(VwCli::core::kCloseSpec, &counts)};
 	TempDir dir;
+	Caller caller(dir);
 	Server server(dir.utf8Path());
 	gRuns = 0;
 	for (const char *tool : {"save", "close"}) {
-		Json refused = serveOnce(server, dir, tools, std::string("a") + tool,
+		Json refused = serveOnce(server, caller, tools, std::string("a") + tool,
 		                         std::string(R"({"tool":")") + tool + "\"}");
 		CHECK_EQ(*refused.find("code"), Json::string("no_session"));
 	}
-	Json started = serveOnce(server, dir, tools, "b", R"({"tool":"session_start"})");
+	Json started = serveOnce(server, caller, tools, "b", R"({"tool":"session_start"})");
 	REQUIRE(started.find("result"));
 	std::string session = started.find("result")->find("session")->asString();
 	for (const char *tool : {"save", "close"}) {
-		Json other = serveOnce(server, dir, tools, std::string("c") + tool,
+		Json other = serveOnce(server, caller, tools, std::string("c") + tool,
 		                       std::string(R"({"tool":")") + tool + R"(","session":"other"})");
 		CHECK_EQ(*other.find("code"), Json::string("occupied"));
-		Json none = serveOnce(server, dir, tools, std::string("d") + tool,
+		Json none = serveOnce(server, caller, tools, std::string("d") + tool,
 		                      std::string(R"({"tool":")") + tool + "\"}");
 		CHECK_EQ(*none.find("code"), Json::string("occupied"));
 	}
 	CHECK_EQ(gRuns, 0);
 	Json allowed =
-	    serveOnce(server, dir, tools, "e", R"({"tool":"save","session":")" + session + "\"}");
+	    serveOnce(server, caller, tools, "e", R"({"tool":"save","session":")" + session + "\"}");
 	CHECK_EQ(*allowed.find("ok"), Json::boolean(true));
 	CHECK_EQ(gRuns, 1);
 }

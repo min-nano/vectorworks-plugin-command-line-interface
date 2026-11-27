@@ -20,10 +20,11 @@
 # The arguments come in $args: under Invoke-Expression a param block of the script is not
 # bound. Invoke-Expression runs the text in the scope of the caller, so there $args is the
 # caller's: use "| iex" only from the prompt, without arguments, and use the script block form
-# (which takes the arguments) from inside a script or a function. The body runs in a script block so that its variables and $ErrorActionPreference stay
-# out of the session of the user. It does not call exit, which under Invoke-Expression closes the
-# PowerShell of the user: the exit code of install or uninstall is left in $LASTEXITCODE, and a
-# failure before the CLI runs stops the script with an exception.
+# (which takes the arguments) from inside a script or a function. The body runs in a script block
+# so that its variables and $ErrorActionPreference stay out of the session of the user. It does
+# not call exit, which under Invoke-Expression closes the PowerShell of the user: the exit code of
+# install or uninstall is left in $LASTEXITCODE, and a failure before the CLI runs stops the script
+# with an exception.
 & {
 	# $LASTEXITCODE is set like a native command would set it, for the caller to read.
 	[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidGlobalVars', '')]

@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -139,7 +139,7 @@ func within(path, dir string) (string, bool) {
 func cleanOldCLIs(old string) []string {
 	// 読めなければ（無ければ）消すものも無い。
 	entries, _ := os.ReadDir(old)
-	// 出力の left は、無くても null ではなく [] にする。
+	// 出力の left は、無くても null ではなく [] にする。os.ReadDir の順（名前の昇順）のまま並べる。
 	left := []string{}
 	for _, entry := range entries {
 		if !entry.Type().IsRegular() || !hasOldCLIPrefix(entry.Name()) {
@@ -150,17 +150,11 @@ func cleanOldCLIs(old string) []string {
 			left = append(left, path)
 		}
 	}
-	sort.Strings(left)
 	return left
 }
 
 func hasOldCLIPrefix(name string) bool {
-	for _, prefix := range oldCLIPrefixes {
-		if strings.HasPrefix(name, prefix) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(oldCLIPrefixes, func(prefix string) bool { return strings.HasPrefix(name, prefix) })
 }
 
 // ファイルの操作のうち、OS の失敗（権限・ディスクの誤り）でしか失敗しないものは、テストが差し替えて
