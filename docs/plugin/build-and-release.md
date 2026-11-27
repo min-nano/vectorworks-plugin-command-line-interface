@@ -27,17 +27,19 @@ SDK のリンクとバンドルの形は、SDK リファレンスの実機確認
 `CMAKE_COMPILE_WARNING_AS_ERROR` は CMake 3.24 から効く変数で、3.20〜3.23 では黙って無視され、
 警告があってもビルドが通るためです。3.23 以下で構成すると、最初の行で止まります。
 
-最小版はポリシーの既定も決めます。3.21〜3.24 で入ったポリシー（CMP0121〜CMP0135）のうち、
+最小版はポリシーの既定も決めます。3.21〜3.24 で入ったポリシー（CMP0121〜CMP0139）のうち、
 `CMakeLists.txt` が使う書き方に関わるのは次のものだけで、どれも構成の結果を変えません。
-ほかは `CMakeLists.txt` が使わないコマンドとモジュール（`list()`・`find_*()`・`while()`・
-`cmake_dependent_option()`・`ExternalProject`・`CPack`・`UseSWIG` など）か、ほかのコンパイラーのものです。
+ほかは `CMakeLists.txt` が使わないコマンドとモジュールと書き方（`list()`・`find_*()`・`while()`・
+`cmake_dependent_option()`・project の形の `try_compile()`・`if()` の `PATH_EQUAL`・`ExternalProject`・
+`CheckIPOSupported`・`CPack`・`UseSWIG` など）か、ほかのコンパイラー（ARMClang・MCST LCC・Watcom）のものです。
 
 | ポリシー | NEW の振る舞い | このリポジトリ |
 | --- | --- | --- |
 | CMP0124（3.21） | `foreach()` のループ変数をループの外へ残さない | ループ変数（`stamp`・`required`・`test`）をループの後で読まない |
 | CMP0126（3.21） | `set(CACHE)` が同じ名前の通常の変数を消さない | キャッシュに書く `CMAKE_OSX_ARCHITECTURES`・`CMAKE_OSX_DEPLOYMENT_TARGET` は `if(NOT DEFINED ...)` の中で書き、同じ名前の通常の変数が無い |
-| CMP0128（3.22） | `<LANG>_EXTENSIONS` の既定をコンパイラーの既定から取り、要らない言語の版の指定を付けない | `CXX_STANDARD 20`・`CXX_STANDARD_REQUIRED ON`・`CXX_EXTENSIONS OFF` を明示していて、どのコンパイラーの既定も C++20 でないので `-std=c++20`（MSVC は `/std:c++20`）が付く。mac のプラグインの Objective-C++ も、`OBJCXX_EXTENSIONS` を決めていないので `CXX_EXTENSIONS` に従い、どちらの既定でも `-std=c++20` |
-| CMP0132（3.24） | 初めての構成で `CC`・`CXX` などの環境変数を設定しない | 構成の中で子のプロセスを走らせない |
+| CMP0128（3.22） | `<LANG>_EXTENSIONS` の既定をコンパイラーの既定から取り、要らない言語の版の指定を付けない | `CXX_STANDARD 20`・`CXX_STANDARD_REQUIRED ON`・`CXX_EXTENSIONS OFF` を明示している。`CXX_EXTENSIONS OFF` は GCC・clang の既定（GNU の拡張あり）と違うので、既定の版が C++20 のコンパイラー（GCC 16 など）でも `-std=c++20` が要る指定として付く（MSVC は既定が C++14 なので `/std:c++20` が付く）。mac のプラグインの Objective-C++ も、`OBJCXX_EXTENSIONS` を決めていないので `CXX_EXTENSIONS` に従い、どちらの既定でも `-std=c++20` |
+| CMP0131（3.24） | `LINK_LIBRARIES` で `$<LINK_ONLY:...>` を使える | `$<LINK_ONLY>` を書かない |
+| CMP0132（3.24） | 初めての構成で `CC`・`CXX` などの環境変数を設定しない | `execute_process()` などで、環境変数のコンパイラーを読む子のプロセスを構成の中で走らせない |
 
 ubuntu（CMake 3.28・clang 18）で、テストの構成（`-DVW_BUILD_PLUGIN=OFF`）の
 `compile_commands.json` とリンクの指定が 3.20 と 3.24 の既定で同じであること、OBJCXX を有効にした
