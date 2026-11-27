@@ -11,14 +11,16 @@
 #
 # -Mode LintFile <file> は -Mode Lint が子のプロセスで使う（指摘があれば 1、解析器が落ちたら 3 で終わる）。
 param(
-	[Parameter(Mandatory)]
+	[Parameter(Mandatory, Position = 0)]
 	[ValidateSet('Check', 'Fix', 'Lint', 'LintFile', 'Test', 'Install')]
 	[string] $Mode,
+	[Parameter(Position = 1, ValueFromRemainingArguments)]
+	[string[]] $Path = @(),
 	# -Mode Install で入れるモジュール。整形と検査は PSScriptAnalyzer だけ、フックのテストは Pester だけを使う。
+	# $Mode と $Path に Position を書き、これを名前でだけ渡せるようにする（Position を書かないと宣言の順に
+	# 位置が割り当てられ、ファイルの名前を受け取ってしまう）。
 	[ValidateSet('PSScriptAnalyzer', 'Pester')]
-	[string[]] $Module = @('PSScriptAnalyzer', 'Pester'),
-	[Parameter(ValueFromRemainingArguments)]
-	[string[]] $Path = @()
+	[string[]] $Module = @('PSScriptAnalyzer', 'Pester')
 )
 
 $ErrorActionPreference = 'Stop'
