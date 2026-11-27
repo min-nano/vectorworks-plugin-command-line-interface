@@ -30,12 +30,13 @@ void failWithReason(ToolStatus &status, std::string_view reason, std::string mes
 void noDocument(ToolStatus &status);
 
 // findOne は items のうち match に合うものがちょうど 1 つなら、その位置を返す。無ければ
-// invalid_args（文言は「<tool> の引数が誤っています: <missing>」）、2 つ以上なら internal
+// invalid_args（文言は「<tool> の引数が誤っています: <missing()>」）、2 つ以上なら internal
 // （reason は ambiguousReason。文言は ambiguous(一致した数)）で失敗し、空を返す。名前で 1 つを
-// 名指す道具が、同じ名前が 2 つあるときに黙ってどちらかを選ばないための共通の手順。
-template <typename T, typename Match, typename Ambiguous>
+// 名指す道具が、同じ名前が 2 つあるときに黙ってどちらかを選ばないための共通の手順。文言は失敗する
+// ときだけ組み立てる（missing・ambiguous は文言を返す関数）。
+template <typename T, typename Match, typename Missing, typename Ambiguous>
 std::optional<std::size_t> findOne(const std::vector<T> &items, Match match, std::string_view tool,
-                                   std::string missing, std::string_view ambiguousReason,
+                                   Missing missing, std::string_view ambiguousReason,
                                    Ambiguous ambiguous, ToolStatus &status) {
 	std::optional<std::size_t> found;
 	int matches = 0;
@@ -47,7 +48,7 @@ std::optional<std::size_t> findOne(const std::vector<T> &items, Match match, std
 	}
 	if (matches == 0) {
 		fail(status, ErrorCode::InvalidArgs,
-		     std::string(tool) + " の引数が誤っています: " + std::move(missing));
+		     std::string(tool) + " の引数が誤っています: " + missing());
 		return std::nullopt;
 	}
 	if (matches > 1) {

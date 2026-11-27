@@ -31,7 +31,10 @@ Target findTarget(const std::vector<OpenDocument> &list, const std::string &docu
 	std::optional<std::size_t> at = args::findOne(
 	    list, [&](const OpenDocument &open) { return !open.path.empty() && open.path == document; },
 	    tool,
-	    "開いている図面に " + document + " がありません（documents の path を渡してください）",
+	    [&] {
+		    return "開いている図面に " + document +
+			       " がありません（documents の path を渡してください）";
+	    },
 	    kDocumentAmbiguous,
 	    [&](int matches) {
 		    return "パスが " + document + " の図面が " + std::to_string(matches) +

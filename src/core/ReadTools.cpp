@@ -33,7 +33,7 @@ std::optional<std::size_t> findLayer(const std::vector<std::string> &names, cons
                                      std::string_view tool, ToolStatus &status) {
 	return args::findOne(
 	    names, [&](const std::string &candidate) { return candidate == name; }, tool,
-	    "レイヤ " + name + " がありません", kLayerAmbiguous,
+	    [&] { return "レイヤ " + name + " がありません"; }, kLayerAmbiguous,
 	    [&](int matches) {
 		    return "名前が " + name + " のレイヤが " + std::to_string(matches) +
 			       " 枚あるので、どれも読みませんでした";
