@@ -106,6 +106,10 @@ bool clearClosedDocuments(Documents &docs);
 // documentName は path の最後の区切り文字より後ろ（documents の name）。
 std::string documentName(std::string_view path);
 
+// documentJson は図面の項目 {"name","path","untitled"}（documents の結果の項目と、quit の
+// documents_open の detail の項目に共通の部分）。
+Json documentJson(const OpenDocument &open);
+
 Json documents(const Json &args, Documents &docs, ToolStatus &status);
 Json save(const Json &args, Documents &docs, const SaveEnvironment &environment,
           ToolStatus &status);

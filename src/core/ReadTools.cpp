@@ -25,36 +25,21 @@ Json typeNameJson(std::int16_t type) {
 	return name ? Json::string(std::string(*name)) : Json();
 }
 
-// kNoLayer は findLayer が 1 枚に決められなかったときの値。
-constexpr std::size_t kNoLayer = static_cast<std::size_t>(-1);
-
 // findLayer は名前が完全に一致するレイヤの、列の中の位置を返す。無ければ invalid_args、2 枚以上なら
-// internal（layer_ambiguous）で失敗し、kNoLayer を返す。Vectorworks は同じ名前のレイヤを参照で
+// internal（layer_ambiguous）で失敗し、空を返す。Vectorworks は同じ名前のレイヤを参照で
 // 入れることも断る（Findings「Layers and Stories」の「参照で入ってきたレイヤ」）が、確かめていない
 // 経路で同じ名前が 2 枚になっても、黙ってどちらかを読まない（save・close の document_ambiguous と
 // 同じ扱い）。
-std::size_t findLayer(const std::vector<std::string> &names, const std::string &name,
-                      std::string_view tool, ToolStatus &status) {
-	std::size_t found = kNoLayer;
-	int matches = 0;
-	for (std::size_t i = 0; i < names.size(); ++i) {
-		if (names[i] == name) {
-			found = i;
-			++matches;
-		}
-	}
-	if (matches == 0) {
-		args::fail(status, ErrorCode::InvalidArgs,
-		           std::string(tool) + " の引数が誤っています: レイヤ " + name + " がありません");
-		return kNoLayer;
-	}
-	if (matches > 1) {
-		args::failWithReason(status, kLayerAmbiguous,
-		                     "名前が " + name + " のレイヤが " + std::to_string(matches) +
-		                         " 枚あるので、どれも読みませんでした");
-		return kNoLayer;
-	}
-	return found;
+std::optional<std::size_t> findLayer(const std::vector<std::string> &names, const std::string &name,
+                                     std::string_view tool, ToolStatus &status) {
+	return args::findOne(
+	    names, [&](const std::string &candidate) { return candidate == name; }, tool,
+	    "レイヤ " + name + " がありません", kLayerAmbiguous,
+	    [&](int matches) {
+		    return "名前が " + name + " のレイヤが " + std::to_string(matches) +
+			       " 枚あるので、どれも読みませんでした";
+	    },
+	    status);
 }
 
 // allLayers は前面の図面のすべてのレイヤを、直下の列まで読む。
@@ -149,8 +134,7 @@ Json layers(const Json &args, Drawing &drawing, ToolStatus &status) {
 			              {"objects", Json::integer(static_cast<std::int64_t>(countOf(layer)))},
 			              {"current", Json::boolean(layer.current)}}));
 	}
-	auto count = static_cast<std::int64_t>(list.items().size());
-	return Json::object({{"layers", std::move(list)}, {"count", Json::integer(count)}});
+	return args::listResult("layers", std::move(list));
 }
 
 Json classes(const Json &args, Drawing &drawing, ToolStatus &status) {
@@ -167,8 +151,7 @@ Json classes(const Json &args, Drawing &drawing, ToolStatus &status) {
 	for (std::string &name : drawing.classes()) {
 		list.push(Json::string(std::move(name)));
 	}
-	auto count = static_cast<std::int64_t>(list.items().size());
-	return Json::object({{"classes", std::move(list)}, {"count", Json::integer(count)}});
+	return args::listResult("classes", std::move(list));
 }
 
 Json layerObjects(const Json &args, Drawing &drawing, ToolStatus &status) {
@@ -186,13 +169,15 @@ Json layerObjects(const Json &args, Drawing &drawing, ToolStatus &status) {
 		return Json();
 	}
 	// 名前で 1 枚を探し、そのレイヤの直下だけを読む（頁ごとに図面全体を辿らない）。
-	std::size_t at = findLayer(drawing.layerNames(), layerName, kLayerObjectsSpec.name, status);
-	if (at == kNoLayer) {
+	std::optional<std::size_t> found =
+	    findLayer(drawing.layerNames(), layerName, kLayerObjectsSpec.name, status);
+	if (!found) {
 		return Json();
 	}
-	LayerFacts found = drawing.layer(at);
+	std::size_t at = *found;
+	LayerFacts layer = drawing.layer(at);
 	// 絞ったあとの並び（列の中の位置）。
-	const std::vector<std::int16_t> &types = found.memberTypes;
+	const std::vector<std::int16_t> &types = layer.memberTypes;
 	std::vector<std::size_t> members;
 	for (std::size_t i = 0; i < types.size(); ++i) {
 		if (counted(types[i]) && (!type || types[i] == *type)) {
@@ -241,12 +226,12 @@ Json objectCounts(const Json &args, Drawing &drawing, ToolStatus &status) {
 	}
 	std::vector<LayerFacts> chosen;
 	if (layerName) {
-		std::size_t at =
+		std::optional<std::size_t> at =
 		    findLayer(drawing.layerNames(), *layerName, kObjectCountsSpec.name, status);
-		if (at == kNoLayer) {
+		if (!at) {
 			return Json();
 		}
-		chosen.push_back(drawing.layer(at));
+		chosen.push_back(drawing.layer(*at));
 	} else {
 		chosen = allLayers(drawing);
 	}

@@ -27,31 +27,24 @@ struct Target {
 Target findTarget(const std::vector<OpenDocument> &list, const std::string &document,
                   std::string_view tool, std::string_view undone, ToolStatus &status) {
 	Target target;
-	int matches = 0;
-	const OpenDocument *front = nullptr;
-	for (const OpenDocument &open : list) {
-		if (!open.path.empty() && open.path == document) {
-			target.document = open;
-			++matches;
-		}
-		if (open.active && !front) {
-			front = &open;
-		}
-	}
-	if (matches == 0) {
-		args::fail(status, ErrorCode::InvalidArgs,
-		           std::string(tool) + " の引数が誤っています: 開いている図面に " + document +
-		               " がありません（documents の path を渡してください）");
-		return target;
-	}
-	if (matches > 1) {
-		args::failWithReason(status, kDocumentAmbiguous,
-		                     "パスが " + document + " の図面が " + std::to_string(matches) +
-		                         " 枚あるので、どれも" + std::string(undone) + "ませんでした");
+	std::optional<std::size_t> at = args::findOne(
+	    list, [&](const OpenDocument &open) { return !open.path.empty() && open.path == document; },
+	    tool,
+	    "開いている図面に " + document + " がありません（documents の path を渡してください）",
+	    kDocumentAmbiguous,
+	    [&](int matches) {
+		    return "パスが " + document + " の図面が " + std::to_string(matches) +
+			       " 枚あるので、どれも" + std::string(undone) + "ませんでした";
+	    },
+	    status);
+	if (!at) {
 		return target;
 	}
 	target.found = true;
-	if (!target.document.active && front) {
+	target.document = list[*at];
+	auto front = std::find_if(list.begin(), list.end(),
+	                          [](const OpenDocument &open) { return open.active; });
+	if (!target.document.active && front != list.end()) {
 		target.hasFront = true;
 		target.front = front->ref;
 	}
@@ -117,6 +110,12 @@ std::string documentName(std::string_view path) {
 	return std::string(path);
 }
 
+Json documentJson(const OpenDocument &open) {
+	return Json::object({{"name", Json::string(documentName(open.path))},
+	                     {"path", Json::string(open.path)},
+	                     {"untitled", Json::boolean(open.untitled)}});
+}
+
 Json documents(const Json &args, Documents &docs, ToolStatus &status) {
 	args::Reader reader(args, kDocumentsSpec.name, status);
 	reader.onlyKnown({});
@@ -125,13 +124,11 @@ Json documents(const Json &args, Documents &docs, ToolStatus &status) {
 	}
 	Json list = Json::array();
 	for (const OpenDocument &open : docs.list()) {
-		list.push(Json::object({{"name", Json::string(documentName(open.path))},
-		                        {"path", Json::string(open.path)},
-		                        {"untitled", Json::boolean(open.untitled)},
-		                        {"active", Json::boolean(open.active)}}));
+		Json item = documentJson(open);
+		item.set("active", Json::boolean(open.active));
+		list.push(std::move(item));
 	}
-	auto count = static_cast<std::int64_t>(list.items().size());
-	return Json::object({{"documents", std::move(list)}, {"count", Json::integer(count)}});
+	return args::listResult("documents", std::move(list));
 }
 
 Json save(const Json &args, Documents &docs, const SaveEnvironment &environment,

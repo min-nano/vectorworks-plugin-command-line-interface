@@ -1,17 +1,19 @@
 #pragma once
 
-// 道具の引数の確かめと、道具が返す失敗の形（docs/plugin/tools.md「共通の決まり」）。
+// 道具の引数の確かめと、道具が返す失敗の形・結果の共通の形（docs/plugin/tools.md「共通の決まり」）。
 // SDK に依らない。引数の検査は道具の中で行い（JSON Schema の検証器は持たない）、知らない引数・
 // 型の違い・範囲の外・小数部・必須の欠けは invalid_args で返す。
 
 #include "core/Json.h"
 #include "core/Serve.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace VwCli::core::args {
 
@@ -26,6 +28,37 @@ void failWithReason(ToolStatus &status, std::string_view reason, std::string mes
 
 // noDocument は図面が無いときの失敗（internal。reason は no_document）。
 void noDocument(ToolStatus &status);
+
+// findOne は items のうち match に合うものがちょうど 1 つなら、その位置を返す。無ければ
+// invalid_args（文言は「<tool> の引数が誤っています: <missing>」）、2 つ以上なら internal
+// （reason は ambiguousReason。文言は ambiguous(一致した数)）で失敗し、空を返す。名前で 1 つを
+// 名指す道具が、同じ名前が 2 つあるときに黙ってどちらかを選ばないための共通の手順。
+template <typename T, typename Match, typename Ambiguous>
+std::optional<std::size_t> findOne(const std::vector<T> &items, Match match, std::string_view tool,
+                                   std::string missing, std::string_view ambiguousReason,
+                                   Ambiguous ambiguous, ToolStatus &status) {
+	std::optional<std::size_t> found;
+	int matches = 0;
+	for (std::size_t i = 0; i < items.size(); ++i) {
+		if (match(items[i])) {
+			found = i;
+			++matches;
+		}
+	}
+	if (matches == 0) {
+		fail(status, ErrorCode::InvalidArgs,
+		     std::string(tool) + " の引数が誤っています: " + std::move(missing));
+		return std::nullopt;
+	}
+	if (matches > 1) {
+		failWithReason(status, ambiguousReason, ambiguous(matches));
+		return std::nullopt;
+	}
+	return found;
+}
+
+// listResult は一覧の道具の結果 {"<key>": list, "count": 要素の数}（documents・layers・classes）。
+Json listResult(std::string_view key, Json list);
 
 // Reader は 1 つの道具の引数を読む。最初の誤りで status を invalid_args にし、以後の読みは何も
 // せずに既定の値を返す（最初に当たった誤りを返すため）。呼ぶ側は読み終えてから ok() を見る。

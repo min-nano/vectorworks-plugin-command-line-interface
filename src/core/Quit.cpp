@@ -13,9 +13,7 @@ namespace {
 void refuseOpen(const std::vector<OpenDocument> &open, ToolStatus &status) {
 	Json list = Json::array();
 	for (const OpenDocument &document : open) {
-		list.push(Json::object({{"name", Json::string(documentName(document.path))},
-		                        {"path", Json::string(document.path)},
-		                        {"untitled", Json::boolean(document.untitled)}}));
+		list.push(documentJson(document));
 	}
 	args::fail(status, ErrorCode::Internal,
 	           "図面が開いているので終了しませんでした。先に図面を閉じてください",

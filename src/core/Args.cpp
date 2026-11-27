@@ -19,6 +19,11 @@ void noDocument(ToolStatus &status) {
 	failWithReason(status, kNoDocument, "図面が開かれていません");
 }
 
+Json listResult(std::string_view key, Json list) {
+	auto count = static_cast<std::int64_t>(list.items().size());
+	return Json::object({{std::string(key), std::move(list)}, {"count", Json::integer(count)}});
+}
+
 Reader::Reader(const Json &args, std::string_view tool, ToolStatus &status)
     : args_(args), tool_(tool), status_(status) {}
 
