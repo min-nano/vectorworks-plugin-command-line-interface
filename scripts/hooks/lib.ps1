@@ -111,8 +111,9 @@ function Get-PathEntryPlace {
 	return $final.TrimEnd('\') + $rest
 }
 
-# Get-PathEntryTarget は、比べる側の $Dir の形（Get-PathEntryKey）・根（Get-PathEntryRoot）・実際の場所（Get-PathEntryPlace）。Path の
-# 項目ごとに $Dir のディレクトリを開き直さないよう、Path を 1 回たどるあいだ、これを 1 度だけ求めて使う。
+# Get-PathEntryTarget は、比べる側の $Dir の形（Get-PathEntryKey）・根（Get-PathEntryRoot）・根がこの計算機の
+# 固定ドライブか（Test-LocalFixedDrive）・実際の場所（Get-PathEntryPlace）。Path の項目ごとに $Dir の
+# ディレクトリを開き直さないよう、Path を 1 回たどるあいだ、これを 1 度だけ求めて使う。
 function Get-PathEntryTarget {
 	param([string] $Dir)
 	$key = Get-PathEntryKey $Dir

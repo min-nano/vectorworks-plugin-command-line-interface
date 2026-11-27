@@ -40,24 +40,12 @@ public:
 		if (quitting_) {
 			return false;
 		}
-		Raised raised(quitting_);
+		ScopedFlag raised(quitting_);
 		std::forward<Request>(request)();
 		return true;
 	}
 
 private:
-	// Raised は印を立て、壊すと下ろす（request が投げても下ろす）。
-	class Raised {
-	public:
-		explicit Raised(bool &flag) : flag_(flag) { flag_ = true; }
-		~Raised() { flag_ = false; }
-		Raised(const Raised &) = delete;
-		Raised &operator=(const Raised &) = delete;
-
-	private:
-		bool &flag_;
-	};
-
 	bool started_ = false;
 	bool notificationRegistered_ = false;
 	bool quitting_ = false;

@@ -26,8 +26,8 @@
 （`.gitattributes` の `-text`）。
 
 **両側のテストは、見本の知らないキーと型の違う値を誤りとして読みます**（Go は
-`DisallowUnknownFields`、C++ はキーと型の表）。キーの綴りを誤ると、その確かめが黙って省かれる
-ためです。手順（`steps`）の無い見本も誤りです。
+`cli/internal/fixturetest` が `DisallowUnknownFields` で読み、見本の場所もそこに置く。C++ は
+キーと型の表）。キーの綴りを誤ると、その確かめが黙って省かれるためです。手順（`steps`）の無い見本も誤りです。
 
 ## 偽の道具の表（`fake-tools.json`）
 

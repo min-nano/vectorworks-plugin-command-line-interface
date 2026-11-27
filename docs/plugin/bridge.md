@@ -8,13 +8,13 @@
 | --- | --- | --- |
 | `src/core/Protocol.h` | 依らない | 通信規則の定数（ファイルの綴り・上限・予約された道具・`code`）と id の検査。`protocol/fixtures/constants.json` と対（[通信規則の見本](../fixtures.md)） |
 | `src/core/Json.{h,cpp}` | 依らない | 小さな JSON（入れ子の深さに上限を設ける。読み方は Go の `encoding/json` に合わせる。[受け付け 1 回](#受け付け-1-回coreserverserve)の 3）。整数の引数を値で読む口（`integerValue`）と、実数を書き出す口（`real`）を持つ（決まりは[道具「共通の決まり」](tools.md#共通の決まり)） |
-| `src/core/Files.h`・`FilesPosix.cpp`・`FilesWindows.cpp` | 依らない | スプールに使う OS の呼び出し（ロック・待つ印・読み書き・自分のモジュールの場所）。開き方の決まり（子プロセスに受け継がせない・開いて待たない・リンクをたどらない・書きかけは消してから新しく作る）は[通信規則「ファイル」](../protocol.md#ファイル)と[「プラグイン側の義務」](../protocol.md#プラグイン側の義務)。Windows は `\\?\` を付けて開く（パスは絶対パスに限る） |
+| `src/core/Files.{h,cpp}`・`FilesPosix.cpp`・`FilesWindows.cpp` | 依らない | スプールに使う OS の呼び出し（ロック・待つ印・読み書き・自分のモジュールの場所）。OS に依らない部分（パスをつなぐ `join` など）は `Files.cpp`、OS の呼び出しは OS ごとのファイル。開き方の決まり（子プロセスに受け継がせない・開いて待たない・リンクをたどらない・書きかけは消してから新しく作る）は[通信規則「ファイル」](../protocol.md#ファイル)と[「プラグイン側の義務」](../protocol.md#プラグイン側の義務)。Windows は `\\?\` を付けて開く（パスは絶対パスに限る） |
 | `src/core/WindowsPath.{h,cpp}` | 依らない | `src/core` の内部用。パスを `\\?\`（UNC は `\\?\UNC\`）を付けた UTF-16 にする `extended()`と、UTF-8 と UTF-16 の変換。WIN32 のときだけビルドし、スプール（`FilesWindows.cpp`）と `save` の保存先の確かめ（`SaveTargetWindows.cpp`）の両方が使う（`\\?\` を付ける処理を書き写さない） |
 | `src/core/SaveTarget.{h,cpp}`・`SaveTargetPosix.cpp`・`SaveTargetWindows.cpp` | 依らない | `save` の `to` の形の規則（mac と Windows の 2 つ。どの OS でもビルドし、プラグインが使う規則は `kNativeForm`）と保存先の状態の確かめの手順（`SaveTarget.cpp`）、ファイルシステムに聞く関数の包み（「ファイルがある」「フォルダがある」「無い」「確かめられない（OS のエラーの番号）」と、OS のエラーの番号を「無い」とそれ以外に分ける表）。スプールのファイルとは分ける。保存先の確かめの手順はこの関数を引数で受ける（[保存先の確かめ](save-target.md)） |
 | `src/core/PathCompare.h`・`PathCompareMac.cpp`・`PathCompareWindows.cpp` | 依らない | `save` の `to` を開いている図面のパスと比べる、NFC への正規化と大文字小文字を区別しない比較の OS の呼び出し（mac は CoreFoundation、Windows は `NormalizeString`・`CompareStringOrdinal`）。APPLE と WIN32 のときだけビルドし、保存先の確かめは比べる関数を引数で受ける（[保存先の確かめ「パスの一致の判定」](save-target.md#パスの一致の判定)） |
 | `src/core/Bridge.{h,cpp}` | 依らない | スプール 1 つ（`prepare` / `lock` / `sweep` / `poll` / `take` / `waitState` / `reply`）と、スプールの場所（モジュールのパスから求める `spoolDirOf` と、自分のモジュールに当てる `defaultSpoolDir`）。`Bridge` は場所を引数で受ける（テストは一時ディレクトリを渡す） |
 | `src/core/Serve.{h,cpp}` | 依らない | **受け付け 1 回の手順**（`core::Server::serve`。下記）と、占有の印（`Server` が発行した 1 つをメモリに持つ）。道具の表と時刻を引数で受けるので無 SDK でテストできる |
-| `src/core/Ping.{h,cpp}` | 依らない | 道具 `ping` の中身のうち SDK に依らない部分（引数の検査と結果の形）。SDK から読む値（現在のレイヤの名前）は引数で受ける |
+| `src/core/Ping.{h,cpp}` | 依らない | 道具 `ping` の中身のうち SDK に依らない部分（表の行 `kPingSpec`・引数の検査と結果の形）。SDK から読む値（現在のレイヤの名前）は引数で受ける |
 | `src/core/Args.{h,cpp}` | 依らない | 道具の引数の読み方（知らない引数・型・範囲・小数部・必須の欠けを `invalid_args` にする `Reader`）と、失敗の `detail` の `reason` を付ける口 |
 | `src/core/ReadTools.{h,cpp}`・`DocumentTools.{h,cpp}` | 依らない | 読む道具と図面を扱う道具の中身のうち SDK に依らない部分（道具の表の行 `ToolSpec`（名前・説明・`inputSchema`・種類。`src/tools/ToolTable.cpp` はこの定数を使い、種類を無 SDK のテストで確かめる）・引数の検査・確かめの順・結果の形・`type_name` の表・`layer_objects` の絞り込みと頁送り・`no_document` の判定・`save` の保存先の確かめと前面を戻す手順・`close` で閉じた図面が中に残ったものの片付け（`clearClosedDocuments`。`close` と `quit` が使う））。SDK から読む値と SDK の呼び出しは、道具ごとの口（`Drawing`・`Documents`）で受ける。`ToolSpec` はヘッダーの `inline constexpr` で、表は定数で初期化される |
 | `src/core/Quit.{h,cpp}` | 依らない | 道具 `quit` の中身のうち SDK に依らない部分（表の行 `kQuitSpec`・引数の検査・確かめの順（引数の形 → 起動を終えたか → 開いている図面 → 中に残った閉じた図面の片付け（片付かなければ `closed_documents_remain`。片付けのあとに図面が開いていれば `documents_open`））・失敗の `detail`）。開いている図面の一覧は `core::Documents` で受ける |
@@ -22,6 +22,13 @@
 | `src/tools/ToolTable.cpp` | 依る | 道具の表 |
 | `src/tools/<道具>.cpp`・`Text.h` | 依る | 道具の中身（`Ping.cpp`・`ReadTools.cpp`・`Documents.cpp`）と、`TXString` を UTF-8 にする `utf8`（`Text.h`。1 か所にまとめる）。SDK から値を読み、SDK に依らない部分は `src/core` の関数に渡す（`Drawing`・`Documents` を SDK で作る。無 SDK でテストするため） |
 | `src/Clock.cpp` | 依る | OS タイマーから `core::tick` を呼び、終了の呼び出しとして `CloseAllFilesAndQuitVectorworks(true, false)` を渡す。最初の刻みで通知 `kNotifyBeforePendingUpdate` を登録し（登録できるまで刻みごとにやり直す）、届いたら `core::Lifecycle` の「起動を終えた」印を立てるだけにする。印の扱いは `src/core/Lifecycle.h` に置き、`Clock` は SDK を呼ぶだけ（保存の確認が開く競合は実機の確認で起こせないので、無 SDK のテストで確かめる） |
+
+**OS ごとのファイル（`FilesPosix.cpp`・`FilesWindows.cpp`）には OS の呼び出しだけを置き、
+OS に依らない部分は `Files.cpp` に置きます。** OS ごとの違いが値だけのもの（パスをつなぐ区切りの
+文字 `kSeparator`）は `Files.h` の定数で表し、区切りとみなす文字の違い（Windows は `/` も区切り）は
+`Files.cpp` の `isSeparator` の中で分けます。これらを使う処理（`join`）は `Files.cpp` に 1 つだけ
+書きます。パスを文字列として組み立てる・分ける処理（親のフォルダ・ファイル名を求めるなど）を
+足すときも `Files.cpp` に置き、OS ごとのファイルに書き写しません。
 
 **受け付けの手順は SDK に依らない `core/Serve` に置き、偽の道具の表でテストします**（終了の依頼の
 返し方・壊れた要求・ロックを取れたときに 1 度だけ残骸を消すこと・ロックを取れないときに何も
@@ -164,7 +171,7 @@ struct ToolContext {
 // 失敗と終了の依頼は status に書き（戻り値は使わない）、例外は Server が internal で応える。
 using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolStatus &status);
 
-struct Tool {
+struct ToolSpec {
 	// [a-z0-9_]+(\.[a-z0-9_]+)*（通信規則の綴りの std::string_view をそのまま使える）
 	std::string_view name;
 	// 日本語。呼ぶ側がそのまま読む。
@@ -172,12 +179,15 @@ struct Tool {
 	// JSON Schema（文字列）。tools の結果にそのまま載る。
 	const char *inputSchema;
 	ToolKind kind;
+};
+
+struct Tool : ToolSpec {
 	ToolFn run;
 };
 ```
 
 - **道具を足すときに触るのは表の 1 行と中身 1 つだけ**です。CLI は道具を知らないので直しません。
-  名前・説明・`inputSchema`・種類は `src/core` の `ToolSpec`（`ReadTools.h`・`DocumentTools.h`）に置き、表は
+  名前・説明・`inputSchema`・種類は `src/core` の `ToolSpec`（`Ping.h`・`ReadTools.h`・`DocumentTools.h`・`Quit.h`）に置き、表は
   `core::toolOf(spec, &中身)` で組み立てます（種類を無 SDK のテストで確かめるため）。
 - `tools` の結果の形と `kind` の意味は[通信規則「予約された道具」](../protocol.md#予約された道具)にあります。
   予約された道具のうち `tools`・`session_start`・`session_end` は表に載せず、`ping` と `quit` は表に載せます。

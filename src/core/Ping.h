@@ -4,6 +4,7 @@
 // レイヤの名前）は呼ぶ側（src/tools/Ping.cpp）が渡すので、無 SDK でテストできる。
 
 #include "core/Json.h"
+#include "core/Protocol.h"
 #include "core/Serve.h"
 
 #include <cstdint>
@@ -22,6 +23,14 @@ struct PingFacts {
 	// 現在のレイヤの名前。図面が開いていなければ空（GetCurrentLayer() が nullptr）。
 	std::optional<std::string> currentLayer;
 };
+
+// kPingSpec は道具 ping の表の 1 行のうち SDK に依らない部分（ToolSpec）。
+// 名前は通信規則の綴り（core/Protocol.h）を使い、テストが確かめる名前と
+// 応える名前を 1 か所にする。
+inline constexpr ToolSpec kPingSpec{
+    protocol::kToolPing,
+    "プラグインの版・通信規則の版・受け付けている Vectorworks と、図面が開いているかを返す",
+    R"({"type":"object","properties":{},"additionalProperties":false})", ToolKind::Read};
 
 // ping は ping の結果を返す。引数を受けないので、args にキーがあれば invalid_args で失敗する
 // （通信規則「互換性」）。

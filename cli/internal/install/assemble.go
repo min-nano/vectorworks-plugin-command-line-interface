@@ -10,7 +10,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
@@ -171,7 +170,7 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 		if _, err := scriptIn(p.stageDir, hook); err != nil {
 			return nil, fmt.Errorf("%s: %w", asset.URL, err)
 		}
-		if slices.Contains(registry.Interpreters, hook[0]) {
+		if registry.ViaInterpreter(hook) {
 			if _, err := o.interpreter(hook[0]); err != nil {
 				return nil, fmt.Errorf("%s: %w", asset.URL, err)
 			}

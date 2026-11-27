@@ -2,6 +2,7 @@
 
 #include "core/Args.h"
 
+#include <algorithm>
 #include <cstddef>
 
 namespace VwCli::core::save_target {
@@ -18,12 +19,7 @@ constexpr std::size_t kWindowsPathUnits = 260;
 constexpr std::string_view kExtension = ".vwx";
 
 bool hasControl(std::string_view text) {
-	for (char c : text) {
-		if (static_cast<unsigned char>(c) < 0x20) {
-			return true;
-		}
-	}
-	return false;
+	return std::ranges::any_of(text, [](char c) { return static_cast<unsigned char>(c) < 0x20; });
 }
 
 // endsWithVwx は名前が .vwx で終わるか（大文字と小文字を区別しない。ASCII だけを畳む）。
@@ -31,17 +27,11 @@ bool endsWithVwx(std::string_view name) {
 	if (name.size() < kExtension.size()) {
 		return false;
 	}
-	std::string_view tail = name.substr(name.size() - kExtension.size());
-	for (std::size_t i = 0; i < tail.size(); ++i) {
-		char c = tail[i];
-		if (c >= 'A' && c <= 'Z') {
-			c = static_cast<char>(c - 'A' + 'a');
-		}
-		if (c != kExtension[i]) {
-			return false;
-		}
-	}
-	return true;
+	auto asciiLower = [](char c) {
+		return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
+	};
+	return std::ranges::equal(name.substr(name.size() - kExtension.size()), kExtension, {},
+	                          asciiLower);
 }
 
 // utf16Units は UTF-8 の文字列を UTF-16 にしたときの単位の数（サロゲートペアは 2 つ）。文字列は

@@ -16,9 +16,9 @@ shfmt_scripts() {
 # Dependabot は片方だけを上げた PR を作ることがある。ここで止めて、もう片方の版が出るまでマージさせない。
 # sh には local が無いので、呼ぶ側の変数と重ならないよう、名前を common_ で始める。
 require_clang() {
-	clang_pin clang-format
+	requirements_pin clang-format
 	common_format="$common_pin"
-	clang_pin clang-tidy
+	requirements_pin clang-tidy
 	common_tidy="$common_pin"
 	if [ "$common_format" != "$common_tidy" ]; then
 		echo "tools/requirements.txt pins clang-format $common_format and" \
@@ -34,10 +34,31 @@ require_clang() {
 	fi
 }
 
-# clang_pin は、tools/requirements.txt の $1（clang-format か clang-tidy）を固定した版を common_pin に入れる。行末の
+# require_shellcheck は、PATH の shellcheck が tools/requirements.txt の shellcheck-py の版でなければ止める（版で
+# 指摘が変わるため。actionlint も PATH の shellcheck で run: の中を検査する）。shellcheck-py の版は
+# <shellcheck の版>.<包み直しの番号> なので、最後の番号を除いたものを、shellcheck --version の版と全体で比べる。
+# Windows では shellcheck の出力の行末が CRLF になり、版の行を $ で固定して読むので、CR を除いてから読む。
+require_shellcheck() {
+	requirements_pin shellcheck-py
+	common_want="$(printf '%s\n' "$common_pin" | sed -n 's/^\([0-9]*\.[0-9]*\.[0-9]*\)\.[0-9]*$/\1/p')"
+	if [ -z "$common_want" ]; then
+		echo "tools/requirements.txt pins shellcheck-py $common_pin;" \
+			"write it as <shellcheck version>.<build> (four numbers)" >&2
+		exit 1
+	fi
+	common_found="$(shellcheck --version 2>/dev/null | tr -d '\r' |
+		sed -n 's/^version: \([0-9][0-9.]*\)$/\1/p' | head -n 1)"
+	if [ "$common_found" != "$common_want" ]; then
+		echo "shellcheck $common_want is required (found ${common_found:-none}):" \
+			"pip install -r tools/requirements.txt" >&2
+		exit 1
+	fi
+}
+
+# requirements_pin は、tools/requirements.txt の $1（パッケージの名前）を固定した版を common_pin に入れる。行末の
 # CR は除く（Windows で autocrlf の checkout）。== の行が無いときと、== の行から版（数字とドット）を読めないとき
 # （接尾辞の付いた版・行末のコメント）は止め、読めなかったときはその行を示す（固定していないと誤って伝えない）。
-clang_pin() {
+requirements_pin() {
 	common_line="$(tr -d '\r' <tools/requirements.txt | grep "^$1==" || true)"
 	common_pin="$(printf '%s\n' "$common_line" | sed -n "s/^$1==\([0-9][0-9.]*\)\$/\1/p")"
 	if [ -n "$common_pin" ]; then
@@ -52,8 +73,13 @@ clang_pin() {
 	exit 1
 }
 
-# powershell_files は、git が追う・無視しない PowerShell のファイルを並べる（ビルドの出力や SDK の写しを
-# 含めない）。
+# tracked_files は、git が追う・無視しないファイルのうち、パターン（$@）に合うものを並べる（ビルドの
+# 出力や SDK の写しを含めない）。
+tracked_files() {
+	git ls-files -co --exclude-standard -- "$@"
+}
+
+# powershell_files は、整形と検査の対象の PowerShell のファイルを並べる。
 powershell_files() {
-	git ls-files -co --exclude-standard -- '*.ps1' '*.psm1' '*.psd1'
+	tracked_files '*.ps1' '*.psm1' '*.psd1'
 }

@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -77,13 +78,7 @@ func TryHoldLock(dir string) (release func(), err error) {
 	if err != nil {
 		return nil, err
 	}
-	released := false
-	return func() {
-		if !released {
-			released = true
-			unlock()
-		}
-	}, nil
+	return sync.OnceFunc(unlock), nil
 }
 
 // Start はロックを掴み、前の回の残骸を消してから、要求に handle で応え続ける。テストの終わりに
@@ -117,15 +112,11 @@ func StartWithKinds(t *testing.T, dir string, kinds map[string]string, handle Ha
 			s.serveOnce()
 		}
 	}()
-	stopped := false
-	stop = func() {
-		if !stopped {
-			stopped = true
-			close(quit)
-			<-done
-			s.release()
-		}
-	}
+	stop = sync.OnceFunc(func() {
+		close(quit)
+		<-done
+		s.release()
+	})
 	t.Cleanup(stop)
 	return stop
 }
@@ -389,8 +380,7 @@ func parseRequest(data []byte) (tool string, args json.RawMessage, session strin
 	if len(args) == 0 || string(args) == "null" {
 		args = json.RawMessage("{}")
 	}
-	// RawMessage は解析済みの値をそのまま持つので、先頭の 1 文字でオブジェクトかが分かる。
-	if args[0] != '{' {
+	if !spool.IsObject(args) {
 		return "", nil, "", false
 	}
 	return tool, args, session, true

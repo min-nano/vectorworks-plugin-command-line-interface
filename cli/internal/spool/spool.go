@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sync"
 	"time"
 )
 
@@ -218,28 +219,18 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 	if err != nil {
 		return nil, fmt.Errorf("hold %s: %w", id+WaitSuffix, err)
 	}
-	waiting := true
-	stopWaiting := func() {
-		if waiting {
-			waiting = false
-			unlock()
-			// 消せなくても（Windows でプラグインがちょうど開いている）、放してあるので実行されない。
-			// 残った .wait はプラグインかロックを取ったときの掃除が消す。
-			_ = os.Remove(waitPath)
-		}
-	}
+	stopWaiting := sync.OnceFunc(func() {
+		unlock()
+		// 消せなくても（Windows でプラグインがちょうど開いている）、放してあるので実行されない。
+		// 残った .wait はプラグインかロックを取ったときの掃除が消す。
+		_ = os.Remove(waitPath)
+	})
 	defer stopWaiting()
 	if err := WriteAtomically(requestPath, payload); err != nil {
 		return nil, fmt.Errorf("publish %s: %w", id+RequestSuffix, err)
 	}
 
 	deadline := time.Now().Add(timeout)
-	notRun := func(reason string) error {
-		if !Open(b.Dir).Running {
-			return fmt.Errorf("%w (stopped while waiting for %s)", ErrNotRunning, tool)
-		}
-		return fmt.Errorf("%w (%s, %s; %s)", ErrTimeout, tool, timeout, reason)
-	}
 	// receive は until まで応答を待つ。届けば arrived を真にして、確かめた結果を返す。
 	receive := func(until time.Time) (response *Response, arrived bool, err error) {
 		response, malformed := pollResponse(responsePath, until)
@@ -260,7 +251,10 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 	// .wait を試し、実行してしまうことがある）。消せれば、誰も待たない応答も残らない。
 	stopWaiting()
 	if os.Remove(requestPath) == nil {
-		return nil, notRun("a dialog may be open")
+		if !Open(b.Dir).Running {
+			return nil, fmt.Errorf("%w (stopped while waiting for %s)", ErrNotRunning, tool)
+		}
+		return nil, fmt.Errorf("%w (%s, %s; a dialog may be open)", ErrTimeout, tool, timeout)
 	}
 	if response, arrived, err := receive(time.Now().Add(takenGrace)); arrived {
 		return response, err

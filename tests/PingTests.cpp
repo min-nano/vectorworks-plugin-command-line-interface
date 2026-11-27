@@ -16,6 +16,10 @@ using VwCli::core::ToolContext;
 using VwCli::core::ToolStatus;
 using VwCli::test::must;
 
+// ping は図面も Vectorworks も変えないので、占有なしで呼べる種類 read で載せる（道具の表の種類）。
+static_assert(VwCli::core::kPingSpec.kind == VwCli::core::ToolKind::Read);
+static_assert(VwCli::core::kPingSpec.name == VwCli::core::protocol::kToolPing);
+
 namespace {
 
 // pingText は ping の結果のテキスト。protocol は通信規則の版から組み立てる（版を上げても

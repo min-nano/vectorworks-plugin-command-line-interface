@@ -102,6 +102,16 @@ func TestSelectFirstMatch(t *testing.T) {
 	}
 }
 
+// タグの綴りを満たさない文字列には、* の規則も合わない（match は ValidTag を通った文字列だけを照らす）。
+func TestSelectRefusesInvalidTags(t *testing.T) {
+	entry := Entry{Manifests: []Rule{{Match: "*", Path: "https://example.com/{tag}.json"}}}
+	for _, requested := range []string{"", "feature/x", "a?b", "[x]", `a\b`, "-x"} {
+		if rule, ok := entry.Select(requested); ok {
+			t.Errorf("Select(%q) = %+v", requested, rule)
+		}
+	}
+}
+
 func TestParse(t *testing.T) {
 	good := `{"registry_version":1,"extra":true,"plugins":{"a":{"manifests":[{"match":"*","path":"https://x/{tag}.json","note":1}]}}}`
 	if _, err := Parse([]byte(good), true); err != nil {

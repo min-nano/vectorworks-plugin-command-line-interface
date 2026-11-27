@@ -1,3 +1,4 @@
+#include "FakeDocuments.h"
 #include "TestSupport.h"
 
 #include "core/DocumentTools.h"
@@ -10,7 +11,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -22,7 +22,6 @@
 // 偽の終了の呼び出しの中から刻みを呼んで真似る。
 
 using VwCli::core::Activity;
-using VwCli::core::Documents;
 using VwCli::core::ErrorCode;
 using VwCli::core::Json;
 using VwCli::core::Lifecycle;
@@ -32,51 +31,13 @@ using VwCli::core::Tool;
 using VwCli::core::ToolContext;
 using VwCli::core::ToolKind;
 using VwCli::core::ToolStatus;
+using VwCli::test::FakeDocuments;
 using VwCli::test::kNow;
 using VwCli::test::must;
 using VwCli::test::TempDir;
 namespace files = VwCli::core::files;
 
 namespace {
-
-// FakeDocuments は開いている図面の一覧だけを持つ。quit は一覧を読むだけなので、ほかの呼び出しは
-// 覚えておき、呼ばれないことを確かめる。
-class FakeDocuments : public Documents {
-public:
-	std::vector<OpenDocument> open;
-	int lists = 0;
-	std::vector<std::string> others;
-	// 閉じた図面が中に残った枚数（一覧には出ず、GetActiveDocument だけが真を返す）と、一覧が空の
-	// ときの CloseDocument でそれが消えないか。
-	int remnants = 0;
-	bool remnantsStick = false;
-	// 片付けの CloseDocument の間に、この図面が開く（片付けの最中に図面が開くことを真似る）。
-	std::optional<OpenDocument> opensWhileClearing;
-
-	std::vector<OpenDocument> list() override {
-		++lists;
-		return open;
-	}
-	bool switchTo(std::int32_t ref) override {
-		others.push_back("switch " + std::to_string(ref));
-		return true;
-	}
-	std::uint32_t saveActive(const std::string &path) override {
-		others.push_back("save " + path);
-		return 0;
-	}
-	void closeActive() override {
-		others.emplace_back("close");
-		if (open.empty() && remnants > 0 && !remnantsStick) {
-			--remnants;
-		}
-		if (open.empty() && opensWhileClearing) {
-			open.push_back(*opensWhileClearing);
-			opensWhileClearing.reset();
-		}
-	}
-	bool hasActive() override { return remnants > 0 || !open.empty(); }
-};
 
 FakeDocuments twoDocuments() {
 	FakeDocuments docs;
@@ -111,8 +72,8 @@ TEST(QuitQuitsWithoutDocuments) {
 	CHECK(status.quit);
 	CHECK_EQ(result, must(R"({"quitting":true})"));
 	// 開いている図面を確かめる 1 回・残った図面を片付ける前に確かめる 1 回・片付けのあとの 1 回。
-	CHECK_EQ(docs.lists, 3);
-	CHECK(docs.others.empty());
+	CHECK_EQ(docs.count("list"), 3);
+	CHECK(docs.actions().empty());
 }
 
 // stillStarting は起動の途中（通知は登録できた）の状態。
@@ -135,8 +96,8 @@ TEST(QuitRefusesBeforeStarting) {
 		CHECK_EQ(status.detail, must(R"({"reason":"starting","notification_registered":true})"));
 		CHECK_EQ(status.message,
 		         std::string("Vectorworks が起動を終えていないので終了しませんでした"));
-		CHECK_EQ(docs.lists, 0);
-		CHECK(docs.others.empty());
+		CHECK_EQ(docs.count("list"), 0);
+		CHECK(docs.actions().empty());
 	}
 }
 
@@ -151,7 +112,7 @@ TEST(QuitTellsThatTheNotificationIsNotRegistered) {
 	CHECK_EQ(status.detail, must(R"({"reason":"starting","notification_registered":false})"));
 	CHECK(status.message.find("Vectorworks が起動を終えていないので終了しませんでした") == 0);
 	CHECK(status.message.find("通知を登録できていません") != std::string::npos);
-	CHECK_EQ(docs.lists, 0);
+	CHECK_EQ(docs.count("list"), 0);
 }
 
 // 図面が開いていれば、終了を頼まずに documents_open で断り、一覧をその順のまま detail に載せる。
@@ -169,7 +130,7 @@ TEST(QuitRefusesWithDocumentsOpen) {
 	              R"({"name":"plan.vwx","path":"/Users/me/plan.vwx","untitled":false},)"
 	              R"({"name":"名称未設定 1","path":"/Applications/Vectorworks 2026/名称未設定 1",)"
 	              R"("untitled":true}]})"));
-	CHECK(docs.others.empty());
+	CHECK(docs.actions().empty());
 }
 
 // 一覧が空でも閉じた図面が中に残っていれば、片付けてから終了を頼む（残すと終了で保存の確認が
@@ -183,7 +144,7 @@ TEST(QuitClearsClosedDocumentsBeforeQuitting) {
 	CHECK(status.quit);
 	CHECK_EQ(result, must(R"({"quitting":true})"));
 	CHECK_EQ(docs.remnants, 0);
-	CHECK_EQ(docs.others, (std::vector<std::string>{"close", "close"}));
+	CHECK_EQ(docs.actions(), (std::vector<std::string>{"close", "close"}));
 }
 
 // 片付けられなければ、終了を頼まずに closed_documents_remain で断る。
@@ -197,7 +158,7 @@ TEST(QuitRefusesWhenClosedDocumentsRemain) {
 	CHECK(!status.quit);
 	CHECK(result.isNull());
 	CHECK_EQ(status.detail, must(R"({"reason":"closed_documents_remain"})"));
-	CHECK_EQ(docs.others.size(), std::size_t(VwCli::core::kMaxClosedRemnants));
+	CHECK_EQ(docs.actions().size(), std::size_t(VwCli::core::kMaxClosedRemnants));
 }
 
 // 片付けの間に図面が開けば、終了を頼まずに documents_open で断る（片付けは一覧が空でなくなると
@@ -214,7 +175,7 @@ TEST(QuitRefusesADocumentOpenedWhileClearing) {
 	CHECK_EQ(status.detail,
 	         must(R"({"reason":"documents_open","documents":[)"
 	              R"({"name":"new.vwx","path":"/Users/me/new.vwx","untitled":false}]})"));
-	CHECK_EQ(docs.others, (std::vector<std::string>{"close"}));
+	CHECK_EQ(docs.actions(), (std::vector<std::string>{"close"}));
 }
 
 // 起動を終える前と、図面が開いている間は、残った図面に触れない。
@@ -223,12 +184,12 @@ TEST(QuitDoesNotClearBeforeStartingOrWithDocumentsOpen) {
 	before.remnants = 1;
 	ToolStatus starting;
 	VwCli::core::quit(Json::object(), ToolContext{}, before, starting);
-	CHECK(before.others.empty());
+	CHECK(before.actions().empty());
 	FakeDocuments open = twoDocuments();
 	open.remnants = 1;
 	ToolStatus documentsOpen;
 	VwCli::core::quit(Json::object(), started(), open, documentsOpen);
-	CHECK(open.others.empty());
+	CHECK(open.actions().empty());
 	CHECK_EQ(open.remnants, 1);
 }
 
@@ -245,7 +206,7 @@ TEST(QuitRejectsArguments) {
 		CHECK(result.isNull());
 		CHECK(status.detail.isNull());
 		CHECK(status.message.find("force") != std::string::npos);
-		CHECK_EQ(docs.lists, 0);
+		CHECK_EQ(docs.count("list"), 0);
 	}
 }
 
@@ -300,53 +261,7 @@ TEST(LifecycleLowersTheMarkWhenTheRequestThrows) {
 
 namespace {
 
-// 応答のファイルを読む上限（ServeTests と同じ）。
-constexpr std::size_t kMaxResponseBytes = VwCli::core::protocol::kMaxRequestBytes * 2;
-
-// Caller は呼ぶ側を真似る。待つ印を掴んでから要求を置き、壊すと放す。
-class Caller {
-public:
-	explicit Caller(const TempDir &dir) : dir_(dir) {}
-
-	void put(const std::string &id, const std::string &request) {
-		std::string error;
-		locks_.emplace_back(std::make_unique<files::Lock>());
-		CHECK(locks_.back()->take(dir_.sub(id + ".wait"), error) == files::Lock::Result::Taken);
-		CHECK(files::write(dir_.sub(id + ".req.json"), request));
-	}
-
-	// response は応答を読む。無ければ null。
-	Json response(const std::string &id) const {
-		std::optional<std::string> text =
-		    files::read(dir_.sub(id + ".res.json"), kMaxResponseBytes);
-		return text ? must(*text) : Json();
-	}
-
-	// member は応答のフィールドの値。無ければ null。
-	Json member(const std::string &id, std::string_view key) const {
-		Json value = response(id);
-		const Json *found = value.find(key);
-		return found ? *found : Json();
-	}
-
-	Json result(const std::string &id) const { return member(id, "result"); }
-
-	std::string code(const std::string &id) const {
-		Json code = member(id, "code");
-		return code.isString() ? code.asString() : "";
-	}
-
-	// session は session_start の応答の占有の印。無ければ空。
-	std::string session(const std::string &id) const {
-		Json value = result(id);
-		const Json *session = value.find("session");
-		return session && session->isString() ? session->asString() : "";
-	}
-
-private:
-	const TempDir &dir_;
-	std::vector<std::unique_ptr<files::Lock>> locks_;
-};
+using VwCli::test::Caller;
 
 FakeDocuments *gDocs = nullptr;
 
@@ -409,9 +324,7 @@ TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	caller.put("c1", quit);
 	VwCli::core::tick(server, kTools, kNow, lifecycle, noRequest);
 	CHECK_EQ(caller.code("c1"), std::string("internal"));
-	Json detail = caller.member("c1", "detail");
-	const Json *reason = detail.find("reason");
-	CHECK(reason && *reason == Json::string("documents_open"));
+	CHECK_EQ(VwCli::test::reasonOf(caller.member("c1", "detail")), std::string("documents_open"));
 	CHECK_EQ(requests, 0);
 	CHECK(server.inSession());
 
@@ -452,6 +365,6 @@ TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	CHECK(VwCli::core::tick(server, kTools, kNow, lifecycle, noRequest).quit);
 	CHECK_EQ(requests, 2);
 	CHECK(lifecycle.activity() == Activity::Idle);
-	CHECK(docs.others.empty());
+	CHECK(docs.actions().empty());
 	gDocs = nullptr;
 }

@@ -27,7 +27,7 @@ require_clang clang-format
 
 # 対象は git が追う・無視しないファイル（ビルドの出力や SDK の写しを含めない）。ファイル名に
 # 空白を含めない前提で、行ごとに引数へ分ける。
-cpp="$(git ls-files -co --exclude-standard -- '*.cpp' '*.h' '*.mm')"
+cpp="$(tracked_files '*.cpp' '*.h' '*.mm')"
 powershell="$(powershell_files)"
 
 if [ "$fix" = true ]; then

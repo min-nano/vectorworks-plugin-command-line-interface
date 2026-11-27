@@ -55,13 +55,14 @@ inline constexpr ToolSpec kObjectCountsSpec{
 // GetObjectTypeN の番号のうち、数えるときに除くもの（Objs.TDType.h）。
 inline constexpr std::int16_t kTermNode = 0;
 inline constexpr std::int16_t kUndoPlaceholderNode = 90;
+// GetObjectTypeN のプラグインオブジェクトの番号（Objs.TDType.h）。数え、pio_name を読む。
 inline constexpr std::int16_t kParametricNode = 86;
 
 // 失敗の detail の reason（docs/plugin/tools.md）。layer に一致するレイヤが 2 枚以上。
 inline constexpr std::string_view kLayerAmbiguous = "layer_ambiguous";
 
-// ovLayerType の値（MiniCadCallBacks.h の ELayerType。Findings「Layers and Stories」）。3
-// はリソースの 参照で入ったデザインレイヤだけで、レイヤの参照で入ったものは 1（参照由来かは
+// ovLayerType の値（MiniCadCallBacks.h の ELayerType。Findings「Layers and Stories」）。3 は
+// リソースの参照で入ったデザインレイヤだけで、レイヤの参照で入ったものは 1（参照由来かは
 // referenced で見る）。
 inline constexpr std::int16_t kLayerDesign = 1;
 inline constexpr std::int16_t kLayerSheet = 2;

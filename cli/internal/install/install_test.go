@@ -85,16 +85,9 @@ func TestInstallHookEnvironment(t *testing.T) {
 	if len(second.Env) != len(want) {
 		t.Errorf("the hook got other variables: %+v", second.Env)
 	}
-	if !sameDir(t, second.Dir, dest) || strings.Join(second.Args, "|") != "a b|--x" {
+	if !SameDirectory(second.Dir, dest) || strings.Join(second.Args, "|") != "a b|--x" {
 		t.Errorf("second: %+v", second)
 	}
-}
-
-func sameDir(t *testing.T, a, b string) bool {
-	t.Helper()
-	ia, err1 := os.Stat(a)
-	ib, err2 := os.Stat(b)
-	return err1 == nil && err2 == nil && os.SameFile(ia, ib)
 }
 
 func TestInstallUpdatesAndCleansUp(t *testing.T) {

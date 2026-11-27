@@ -113,9 +113,9 @@ TEST(BridgePrepareCreatesMissingParents) {
 #ifndef _WIN32
 	struct stat info{};
 	CHECK(::stat(dir.sub("a/b/spool").c_str(), &info) == 0);
-	CHECK_EQ(info.st_mode & 0777, 0700u);
+	CHECK_EQ(info.st_mode & 0777u, 0700u);
 	CHECK(::stat(dir.sub("a").c_str(), &info) == 0);
-	CHECK_EQ(info.st_mode & 0777, 0700u);
+	CHECK_EQ(info.st_mode & 0777u, 0700u);
 #endif
 }
 

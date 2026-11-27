@@ -76,6 +76,41 @@ core::Json must(std::string_view text, std::source_location where) {
 	return *value;
 }
 
+std::string reasonOf(const core::Json &detail) {
+	const core::Json *reason = detail.find("reason");
+	return reason && reason->isString() ? reason->asString() : "";
+}
+
+void Caller::put(const std::string &id, const std::string &request) {
+	std::string error;
+	locks_.emplace_back(std::make_unique<core::files::Lock>());
+	CHECK(locks_.back()->take(dir_.sub(id + ".wait"), error) == core::files::Lock::Result::Taken);
+	CHECK(core::files::write(dir_.sub(id + ".req.json"), request));
+}
+
+core::Json Caller::response(const std::string &id) const {
+	std::optional<std::string> text =
+	    core::files::read(dir_.sub(id + ".res.json"), kMaxResponseBytes);
+	return text ? must(*text) : core::Json();
+}
+
+core::Json Caller::member(const std::string &id, std::string_view key) const {
+	core::Json value = response(id);
+	const core::Json *found = value.find(key);
+	return found ? *found : core::Json();
+}
+
+std::string Caller::code(const std::string &id) const {
+	core::Json code = member(id, "code");
+	return code.isString() ? code.asString() : "";
+}
+
+std::string Caller::session(const std::string &id) const {
+	core::Json value = result(id);
+	const core::Json *session = value.find("session");
+	return session && session->isString() ? session->asString() : "";
+}
+
 int runAll(int argc, char **argv) {
 	std::string filter = argc > 1 ? argv[1] : "";
 	int run = 0;

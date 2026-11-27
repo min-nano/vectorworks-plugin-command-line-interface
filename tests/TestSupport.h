@@ -2,15 +2,21 @@
 
 // 無 SDK の単体テストの小さな枠と、テストが共に使うもの。外部のテストの枠組みに依らない。
 
+#include "core/Files.h"
 #include "core/Json.h"
+#include "core/Protocol.h"
+#include "core/Serve.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <ostream>
 #include <source_location>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace VwCli::core {
@@ -69,6 +75,36 @@ inline bool isTrue(const core::Json &value) { return value.isBool() && value.asB
 // kNow は受け付けに渡す、決まった今の時刻（ナノ秒）。
 inline constexpr std::int64_t kNow = 1760000000000000000;
 
+// kMaxResponseBytes は応答のファイルを読む上限。通信規則は応答の大きさを決めないので、
+// 要求の上限より大きく取る。
+inline constexpr std::size_t kMaxResponseBytes = core::protocol::kMaxRequestBytes * 2;
+
+// reasonOf は失敗の詳細（detail）の reason。無ければ空。
+std::string reasonOf(const core::Json &detail);
+inline std::string reasonOf(const core::ToolStatus &status) { return reasonOf(status.detail); }
+
+// Caller は呼ぶ側を真似る。待つ印を掴んでから要求を置き、壊すと放す。
+class Caller {
+public:
+	explicit Caller(const TempDir &dir) : dir_(dir) {}
+
+	void put(const std::string &id, const std::string &request);
+	// response は応答を読む。無ければ null。
+	core::Json response(const std::string &id) const;
+	// member は応答のフィールドの値。無ければ null。
+	core::Json member(const std::string &id, std::string_view key) const;
+	core::Json result(const std::string &id) const { return member(id, "result"); }
+	// ok は応答が成功か。応答が無ければ偽。
+	bool ok(const std::string &id) const { return isTrue(member(id, "ok")); }
+	std::string code(const std::string &id) const;
+	// session は session_start の応答の占有の印。無ければ空。
+	std::string session(const std::string &id) const;
+
+private:
+	const TempDir &dir_;
+	std::vector<std::unique_ptr<core::files::Lock>> locks_;
+};
+
 // runAll は登録されたテストを走らせる。引数があれば、名前にその文字列を含むものだけ。
 int runAll(int argc, char **argv);
 
@@ -84,6 +120,23 @@ template <typename T> std::string show(const std::vector<T> &values) {
 		out += (out.size() > 1 ? ", " : "") + show(value);
 	}
 	return out + "]";
+}
+
+// isCString は T が C の文字列（文字の配列か、文字へのポインタ）か。
+template <typename T>
+inline constexpr bool isCString =
+    std::is_same_v<std::decay_t<T>, const char *> || std::is_same_v<std::decay_t<T>, char *>;
+
+// checkEq は CHECK_EQ の中身。actual == expected でなければ、両辺を示して失敗を記録する。
+template <typename A, typename B>
+void checkEq(const A &actual, const B &expected, const char *file, int line, const char *what) {
+	// C の文字列どうしは中身ではなくアドレスを比べるので断る（片方を std::string にする）。
+	static_assert(!(isCString<A> && isCString<B>), "CHECK_EQ: compare C strings as std::string");
+	if (!(actual == expected)) {
+		fail(file, line,
+		     std::string(what) + "\n    actual:   " + show(actual) +
+		         "\n    expected: " + show(expected));
+	}
 }
 
 }
@@ -112,14 +165,8 @@ template <typename T> std::string show(const std::vector<T> &values) {
 		}                                                                                          \
 	} while (false)
 
+// CHECK_EQ は両辺を checkEq の引数として渡す。引数は式の終わりまで生きるので、写さずに比べても
+// 一時の値の中を指す参照（must(...).asString() など）も寿命の内で読める。両辺を求める順は
+// 決まらない（関数の引数の評価順）ので、両辺に副作用のある式を書かない。
 #define CHECK_EQ(actual, expected)                                                                 \
-	do {                                                                                           \
-		const auto vwcliActual = (actual);                                                         \
-		const auto vwcliExpected = (expected);                                                     \
-		if (!(vwcliActual == vwcliExpected)) {                                                     \
-			::VwCli::test::fail(__FILE__, __LINE__,                                                \
-			                    std::string(#actual " == " #expected "\n    actual:   ") +         \
-			                        ::VwCli::test::show(vwcliActual) +                             \
-			                        "\n    expected: " + ::VwCli::test::show(vwcliExpected));      \
-		}                                                                                          \
-	} while (false)
+	::VwCli::test::checkEq((actual), (expected), __FILE__, __LINE__, #actual " == " #expected)
