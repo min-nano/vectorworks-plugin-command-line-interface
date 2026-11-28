@@ -181,7 +181,6 @@ vw2026 install cli@latest
 vw2026 install cli@dev-feature-x-61-a1b2c3d
 # 入れずに、新しいビルドがあるかだけ返す（Vectorworks が動いていても良い）
 vw2026 install cli@latest --check
-vw2026 install import-ifc-homeskz@latest
 vw2026 install my-plugin@2026.3.1 --registry https://example.com/plugins.json
 # 手元のファイルも URL で書く
 vw2026 install my-plugin@2026.3.1 --registry file:///Users/me/plugins.json
@@ -650,7 +649,7 @@ vw2026 install <name>@<tag>
 ## アンインストール（`vw2026 uninstall`）
 
 ```sh
-vw2026 uninstall import-ifc-homeskz
+vw2026 uninstall my-plugin
 # cli（CLI そのもの）は、入っているタグの初回のスクリプトで外す
 curl -fsSL …/download/<tag>/get-vw2026.sh | sh -s -- uninstall
 ```
