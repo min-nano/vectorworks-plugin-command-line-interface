@@ -15,7 +15,7 @@
 
 // 図面を扱う道具（documents・save・close）の SDK の側。SDK の呼び出しを core::Documents として
 // 渡すだけで、確かめの順・保存先の確かめ・前面を戻す手順・結果の形は src/core/DocumentTools.cpp
-// （docs/plugin/tools.md「図面を扱う道具」。Findings「Documents」の「指定した図面を保存する・閉じる」）。
+// （docs/plugin/tools.md「図面を操作するツール」。Findings「Documents」の「指定した図面を保存する・閉じる」）。
 
 namespace VwCli::tools {
 
