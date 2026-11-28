@@ -11,11 +11,15 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
+// maxStdinBytes は、call が標準入力から読む引数の上限。要求の上限（空白を詰めた後の大きさ）より大きく取る
+// （整形した JSON の字下げと改行の分）。終わらない入力でメモリを使い切らないための歯止め。
+const maxStdinBytes = 16 * spool.MaxRequestBytes
+
 type callCmd struct {
 	Tool    string  `arg:"" help:"Tool to call (\"${cmd} tools\" lists them)."`
 	Args    string  `arg:"" optional:"" name:"args" help:"Arguments as a JSON object, or - to read them from the standard input."`
 	Raw     bool    `env:"${prefix}CALL_RAW" negatable:"" help:"Print the whole response (ok, result, error, and detail)."`
-	Timeout float64 `env:"${prefix}CALL_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
+	Timeout timeout `env:"${prefix}CALL_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
 	Session string  `env:"${prefix}SESSION" placeholder:"ID" help:"Session to call in (\"${cmd} session start\" prints it)."`
 }
 
@@ -28,13 +32,17 @@ the plug-in as it is and reserves no names of its own.
 The arguments are a JSON object. "-" reads them from the standard input.
 Without them, the tool is called with no arguments. Call does not check the
 arguments against the tool; the plug-in does. Call only refuses a request
-that the plug-in would not read (over 1 MiB, or nested deeper than 64).
+that the plug-in would not read (over 1 MiB once its spaces and line breaks
+are removed, or nested deeper than 64): it exits with 2 for it, before it looks
+at the bridge. It reads at most 16 MiB of the standard input.
 
 	${cmd} call layers '{"include_sheets":false}'
 	echo '{"layer":"1F"}' | ${cmd} call layer_objects -
 
 On success, call prints the result of the tool. With --raw it prints the
-whole response. When the tool fails, call writes its code and reason to the
+whole response. Either is one line of JSON: call removes the spaces and line
+breaks that the plug-in may have written, and keeps the strings and numbers as
+they are. When the tool fails, call writes its code and reason to the
 standard error and exits with 22 for wrong usage (invalid_request,
 unknown_tool, or invalid_args) or 21 for any other failure (internal). If the
 tool tells why it failed in a form for programs (the detail, a JSON object;
@@ -98,10 +106,17 @@ func (c *callCmd) run(e *env) int {
 	if c.Args != "" {
 		text := c.Args
 		if text == "-" {
-			data, err := io.ReadAll(e.stdin)
+			// 読むのは maxStdinBytes まで（終わらない入力を渡されても読み続けない）。大きすぎるかは、空白を
+			// 詰めた要求で下の確かめが決める（整形した JSON は、詰めれば上限に収まることがあるため）。
+			data, err := io.ReadAll(io.LimitReader(e.stdin, maxStdinBytes+1))
 			if err != nil {
 				fmt.Fprintf(e.stderr, edition.Command+": read stdin: %v\n", err)
 				return exitFailure
+			}
+			if len(data) > maxStdinBytes {
+				fmt.Fprintf(e.stderr, edition.Command+": %v (the standard input is over %d bytes)\n",
+					spool.ErrRequestTooLarge, maxStdinBytes)
+				return exitUsage
 			}
 			text = string(data)
 		}
@@ -115,6 +130,12 @@ func (c *callCmd) run(e *env) int {
 		}
 		payload = json.RawMessage(strings.TrimSpace(text))
 	}
+	// プラグインが読まない要求（大きすぎる・入れ子が深すぎる）は、ブリッジを見る前に使い方の誤りにする（Call も
+	// 同じ確かめで断るが、ブリッジが止まっていると 5 が先に返り、引数を直せば良いことが分からないため）。
+	if _, err := spool.EncodeRequest(c.Tool, payload, c.Session); err != nil {
+		fmt.Fprintf(e.stderr, edition.Command+": %v\n", err)
+		return codeFor(err)
+	}
 
 	bridge := open(e)
 	if bridge == nil {
@@ -123,7 +144,7 @@ func (c *callCmd) run(e *env) int {
 	if !bridge.Running {
 		return failed(e, bridge, spool.ErrNotRunning)
 	}
-	response, err := bridge.Call(c.Tool, payload, c.Session, seconds(c.Timeout))
+	response, err := bridge.Call(c.Tool, payload, c.Session, c.Timeout.duration())
 	if err != nil {
 		return failed(e, bridge, err)
 	}
@@ -186,6 +207,8 @@ func codeFor(err error) int {
 		return exitNoResponse
 	case errors.Is(err, spool.ErrBusy), errors.Is(err, spool.ErrOccupied), errors.Is(err, spool.ErrNoSession):
 		return exitBusy
+	case errors.Is(err, spool.ErrRequestTooLarge), errors.Is(err, spool.ErrRequestTooDeep):
+		return exitUsage
 	default:
 		return exitFailure
 	}
@@ -195,7 +218,7 @@ func codeFor(err error) int {
 // 出力する。出力・終了コードは call と同一。call は名前をそのまま渡すため call @tools なども
 // 通るが、呼び出し元が予約ツールの名前を綴る必要がないように、それぞれの
 // コマンド（tools・session start・session end）を設ける。
-func callReserved(e *env, tool, session string, timeout float64) int {
-	c := callCmd{Tool: tool, Session: session, Timeout: timeout}
+func callReserved(e *env, tool, session string, wait timeout) int {
+	c := callCmd{Tool: tool, Session: session, Timeout: wait}
 	return c.run(e)
 }

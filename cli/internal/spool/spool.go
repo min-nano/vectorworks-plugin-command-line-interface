@@ -159,12 +159,44 @@ func Open(dir string) *Bridge {
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 		return &Bridge{Dir: dir, Reason: "not found"}
 	}
-	// 調査できないロックは「動作していない」とする（install・uninstall は LockHeld でエラーを
-	// 確認し、何も変更しない）。
-	if held, _ := LockHeld(dir); !held {
+	// 調査できないロックは「動作していない」とし、その理由を Reason に記載する（install・uninstall は LockHeld で
+	// エラーを確認し、何も変更しない）。
+	held, err := LockHeld(dir)
+	switch {
+	case err != nil:
+		return &Bridge{Dir: dir, Reason: "cannot check the lock: " + err.Error()}
+	case !held:
 		return &Bridge{Dir: dir, Reason: "not running"}
 	}
 	return &Bridge{Dir: dir, Running: true}
+}
+
+// ErrRequestTooLarge と ErrRequestTooDeep は、プラグインが読み取らない要求（MaxRequestBytes を超える・入れ子が
+// MaxNestingDepth を超える）であるため配置せずに拒否した（呼び出し元の使用方法の誤り。配置すればプラグインは
+// 読み取らずに拒否する）。
+var (
+	ErrRequestTooLarge = errors.New("request is too large")
+	ErrRequestTooDeep  = errors.New("request is nested too deeply")
+)
+
+// EncodeRequest は要求を書き込む形式にし、プラグインが読み取らない要求であれば ErrRequestTooLarge・
+// ErrRequestTooDeep を包んで返す。args が空なら {}。Call もこれのみを使用するため、呼び出し元はブリッジを
+// 確認する前に同じ検証ができる。
+func EncodeRequest(tool string, args json.RawMessage, session string) ([]byte, error) {
+	if len(args) == 0 {
+		args = json.RawMessage("{}")
+	}
+	payload, err := json.Marshal(Request{Tool: tool, Args: args, Session: session})
+	if err != nil {
+		return nil, fmt.Errorf("encode request: %w", err)
+	}
+	if len(payload) > MaxRequestBytes {
+		return nil, fmt.Errorf("%w (%d bytes, limit %d)", ErrRequestTooLarge, len(payload), MaxRequestBytes)
+	}
+	if depth := NestingDepth(payload); depth > MaxNestingDepth {
+		return nil, fmt.Errorf("%w (depth %d, limit %d)", ErrRequestTooDeep, depth, MaxNestingDepth)
+	}
+	return payload, nil
 }
 
 // NewID は要求の id を生成する。名前の昇順が概ね送信した順になるように時刻を先頭へ配置する
@@ -199,18 +231,9 @@ func NewID(now time.Time) string {
 // 届く）。busy / occupied / no_session も「実行しなかった」なので、ErrBusy / ErrOccupied /
 // ErrNoSession として返す。
 func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout time.Duration) (*Response, error) {
-	if len(args) == 0 {
-		args = json.RawMessage("{}")
-	}
-	payload, err := json.Marshal(Request{Tool: tool, Args: args, Session: session})
+	payload, err := EncodeRequest(tool, args, session)
 	if err != nil {
-		return nil, fmt.Errorf("encode request: %w", err)
-	}
-	if len(payload) > MaxRequestBytes {
-		return nil, fmt.Errorf("request is too large (%d bytes, limit %d)", len(payload), MaxRequestBytes)
-	}
-	if depth := NestingDepth(payload); depth > MaxNestingDepth {
-		return nil, fmt.Errorf("request is nested too deeply (depth %d, limit %d)", depth, MaxNestingDepth)
+		return nil, err
 	}
 
 	makeID := b.newID
