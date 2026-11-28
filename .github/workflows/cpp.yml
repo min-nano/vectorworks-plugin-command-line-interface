@@ -9,21 +9,23 @@ on:
 permissions:
   contents: read
 
-# SDK に依らない共通部（src/core）の単体テストとファジング（docs/plugin/build-and-release.md「CI」）。
-# テストは通信規則の見本（protocol/fixtures）も読む。同じ見本を読む Go のテストは go.yml が走らせる。
+# SDK に依存しない共通部（src/core）の単体テストとファジング（docs/plugin/build-and-release.md
+# 「CI」）。
+# テストは通信規則のフィクスチャ（protocol/fixtures）も読み込む。同じフィクスチャを読み込む Go の
+# テストは go.yml が実行する。
 jobs:
   test:
-    # ジョブ名に cpp を付ける。go.yml と同じ名前だとチェックの名前が重なり、必須のチェックが
-    # どちらのジョブを指すか区別できないため（fuzz も同じ）。
+    # ジョブ名に cpp を付与する。go.yml と同じ名前ではチェックの名前が重複し、必須の
+    # チェックがいずれのジョブを指すか区別できないため（fuzz も同様）。
     name: cpp test (${{ matrix.os }})
     strategy:
       fail-fast: false
-      # Vectorworks の対応 OS（darwin・windows）でテストする。MSVC には UndefinedBehaviorSanitizer が
-      # 無いので、Windows はサニタイザを付けない（ASan と UBSan は macOS の test と fuzz のジョブが
-      # 受け持つ）。
-      # カバレッジは両方で測る。macOS は clang の source-based coverage（llvm）、Windows は MSVC の
-      # ビルドを Visual Studio の Microsoft.CodeCoverage.Console（msvc）で測る。Windows でしか
-      # ビルドしない FilesWindows.cpp は msvc の分にだけ入る。
+      # Vectorworks の対応 OS（darwin・windows）でテストする。MSVC には
+      # UndefinedBehaviorSanitizer が無いため、Windows はサニタイザを付けない（ASan と UBSan は
+      # macOS の test と fuzz のジョブが担当する）。
+      # カバレッジは両方で計測する。macOS は clang の source-based coverage（llvm）、Windows は
+      # MSVC のビルドを Visual Studio の Microsoft.CodeCoverage.Console（msvc）で計測する。
+      # Windows でのみビルドする FilesWindows.cpp は msvc の分にのみ含まれる。
       matrix:
         include:
           - os: macos-latest
@@ -35,26 +37,29 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      # 折り返しは YAML の >-（行を空白でつなぐ）で行う。Windows の既定のシェル（pwsh）は \ でつなげないため。
+      # 折り返しは YAML の >-（行を空白で連結する）で行う。Windows の既定のシェル（pwsh）は \ で
+      # 連結できないため。
       - run: >-
           cmake -S . -B build -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON
           -DVW_ENABLE_SANITIZERS=${{ matrix.sanitizers }} -DVW_ENABLE_COVERAGE=ON
           -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
       - run: cmake --build build --config Debug
-      # msvc はテストを計測の下で 1 回だけ走らせる（下のステップ）。
+      # msvc はテストを計測の下で 1 回のみ実行する（下のステップ）。
       - if: matrix.coverage != 'msvc'
         run: ctest --test-dir build --build-config Debug --output-on-failure
-      # 共通部（src/core）だけを lcov にする（テストのコードと標準ライブラリのヘッダは数えない）。
+      # 共通部（src/core）のみを lcov にする（テストのコードと標準ライブラリのヘッダは計上しない）。
       - if: matrix.coverage == 'llvm'
         run: |
           xcrun llvm-profdata merge -sparse build/coverage/*.profraw -o build/coverage.profdata
           xcrun llvm-cov export build/VwCliTests -instr-profile=build/coverage.profdata -format=lcov src/core > build/coverage.lcov
-      # ランナーの Visual Studio に付いているものを使う（版はランナーのイメージの Visual Studio に
-      # 従う。MSVC と同じ。docs/plugin/build-and-release.md「CI」）。テストの実行ファイルをその場で
-      # 計装し、ctest を collect の下で走らせる（collect は子のプロセスも数え、計装したものが読む
-      # static_covrun64.dll を Path に足す）。ctest を通すので、テストの TIMEOUT がここでも効く。
-      # collect が ctest の終了コードを返すかに頼らず、ctest が残す失敗の記録でも成否を決める。
-      # 数える範囲は tests/MsvcCoverage.xml。
+      # ランナーの Visual Studio に付属しているものを使用する（版はランナーのイメージの Visual
+      # Studio に従う。MSVC と同じ。docs/plugin/build-and-release.md「CI」）。テストの
+      # 実行ファイルをその場で計装し、ctest を collect の下で実行する（collect は子のプロセスも
+      # 計上し、計装したものが読み込む static_covrun64.dll を Path に追加する）。ctest を
+      # 経由するため、テストの TIMEOUT がここでも有効である。
+      # collect が ctest の終了コードを返すか否かに依存せず、ctest が残す失敗の記録でも成否を
+      # 判定する。
+      # 計上する範囲は tests/MsvcCoverage.xml。
       - if: matrix.coverage == 'msvc'
         shell: pwsh
         timeout-minutes: 10
@@ -72,7 +77,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (Test-Path build/Testing/Temporary/LastTestsFailed.log) { throw 'tests failed' }
           if (-not (Test-Path build/coverage.cobertura.xml)) { throw 'no coverage report' }
-      # Go（go.yml の go）と分けて見られるように、フラグを cpp にする（llvm と msvc は同じフラグに合わせる）。
+      # Go（go.yml の go）と区別して参照できるように、フラグを cpp にする（llvm と msvc は
+      # 同じフラグに統一する）。
       # go.yml と同じコミットに固定する。
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
@@ -81,7 +87,8 @@ jobs:
           flags: cpp
           fail_ci_if_error: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
 
-  # libFuzzer は Apple の clang に無いので、ubuntu の clang で回す。単体テストも同じビルドで走らせる。
+  # libFuzzer は Apple の clang に無いため、ubuntu の clang で実行する。単体テストも同じビルドで
+  # 実行する。
   fuzz:
     name: cpp fuzz
     runs-on: ubuntu-latest
@@ -90,8 +97,9 @@ jobs:
       - run: cmake -S . -B build -DCMAKE_CXX_COMPILER=clang++ -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON -DVW_BUILD_FUZZERS=ON -DVW_ENABLE_SANITIZERS=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug
       - run: cmake --build build
       - run: ctest --test-dir build --output-on-failure
-      # 種（要求の見本。深い入れ子・長い文字列・不正な UTF-8 を含む）から決まった時間だけ回す。
-      # 落ちた入力は crashes/ に残るので、失敗したら成果物として上げる。
+      # シード（要求のフィクスチャ。深い入れ子・長い文字列・不正な UTF-8 を含む）から定められた
+      # 時間のみ実行する。
+      # 失敗を引き起こした入力は crashes/ に残るため、失敗した場合は成果物としてアップロードする。
       - name: fuzz
         run: |
           mkdir -p corpus crashes

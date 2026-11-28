@@ -16,7 +16,8 @@ Json success(Json result) {
 	return Json::object({{"ok", Json::boolean(true)}, {"result", std::move(result)}});
 }
 
-// failure は失敗の応答。detail は道具が返した失敗の詳細で、null なら付けない（通信規則「応答」）。
+// failure は失敗の応答。detail はツールが返した失敗の詳細で、null なら付けない（通信規則
+// 「応答」）。
 Json failure(std::string_view code, std::string message, Json detail = Json()) {
 	Json response = Json::object({{"ok", Json::boolean(false)},
 	                              {"code", Json::string(std::string(code))},
@@ -27,18 +28,18 @@ Json failure(std::string_view code, std::string message, Json detail = Json()) {
 	return response;
 }
 
-// staleSession は、載せた占有の印が今の占有のものでないときの応答。
+// staleSession は、付与されたセッション ID が現在の占有のものでない場合の応答。
 Json staleSession() {
 	return failure(protocol::kCodeNoSession,
 	               "載せた印はいまの占有のものではありません（占有は終わったか、"
 	               "Vectorworks を起動し直しました）");
 }
 
-// occupied は、他の呼ぶ側が占有しているときの応答。
+// occupied は、他の呼び出し元が占有している場合の応答。
 Json occupied() { return failure(protocol::kCodeOccupied, "ほかの呼ぶ側が占有しています"); }
 
-// toolDefect は、道具の定義か返した値が通信規則に合わないときの文言
-// （道具の不具合。internal で応える）。
+// toolDefect は、ツールの定義か返した値が通信規則に適合しない場合の文言
+// （ツールの不具合。internal で応答する）。
 std::string toolDefect(std::string_view name, std::string_view what) {
 	return "道具 " + std::string(name) + " の " + std::string(what);
 }
@@ -46,12 +47,12 @@ std::string toolDefect(std::string_view name, std::string_view what) {
 struct Request {
 	std::string tool;
 	Json args;
-	// 空なら占有の印を載せていない（null と空の文字列も省略と同じ）。
+	// 空なら占有のセッション ID を付与していない（null と空の文字列も省略と同様）。
 	std::string session;
 };
 
-// readRequest は要求を読む（通信規則「要求」）。読めなければ空で、reason に理由を書く。キーは
-// 大文字と小文字を区別して照合し、知らないキーは無視する。
+// readRequest は要求を読み取る（通信規則「要求」）。読み取れなければ空で、reason に理由を書き込む。
+// キーは大文字と小文字を区別して照合し、未知のキーは無視する。
 std::optional<Request> readRequest(const std::string &text, std::string &reason) {
 	if (text.size() > protocol::kMaxRequestBytes) {
 		reason =
@@ -94,7 +95,8 @@ std::optional<Request> readRequest(const std::string &text, std::string &reason)
 	return request;
 }
 
-// newSession は占有の印を作る。綴りは id と同じで、先頭の時刻に推測されにくい乱数を続ける。
+// newSession は占有のセッション ID を生成する。綴りは id と同じで、先頭の時刻に推測されにくい
+// 乱数を続ける。
 std::string newSession(std::int64_t nowNanos) {
 	std::random_device random;
 	std::uint64_t bits = (static_cast<std::uint64_t>(random()) << 32) | random();
@@ -110,7 +112,7 @@ const Tool *findTool(std::span<const Tool> tools, const std::string &name) {
 	return found == tools.end() ? nullptr : &*found;
 }
 
-// toolsList は予約された道具 @tools の結果（通信規則「予約ツール」）。
+// toolsList は予約ツール @tools の結果（通信規則「予約ツール」）。
 std::optional<Json> toolsList(std::span<const Tool> tools, std::string &reason) {
 	Json list = Json::array();
 	for (const Tool &tool : tools) {
@@ -128,8 +130,8 @@ std::optional<Json> toolsList(std::span<const Tool> tools, std::string &reason) 
 	    {{"protocol", Json::integer(protocol::kVersion)}, {"tools", std::move(list)}});
 }
 
-// refuseOutsideSession は、占有の中でだけ呼べる要求（@session_end・種類 Write と App）を、今の占有
-// current に照らす（通信規則「占有」の表）。断るなら応答を返す。
+// refuseOutsideSession は、占有の中でのみ呼び出せる要求（@session_end・種類 Write と App）を、
+// 現在の占有 current と照合する（通信規則「占有」の表）。拒否する場合は応答を返す。
 std::optional<Json> refuseOutsideSession(const std::string &current, const Request &request) {
 	if (current.empty()) {
 		if (!request.session.empty()) {
@@ -143,14 +145,14 @@ std::optional<Json> refuseOutsideSession(const std::string &current, const Reque
 	return std::nullopt;
 }
 
-// ToolReply は道具を実行した結果。応答と、終了の依頼（道具が成功して立てたときだけ真）。
+// ToolReply はツールを実行した結果。応答と、終了の依頼（ツールが成功して設定した場合のみ真）。
 struct ToolReply {
 	Json response;
 	bool quit = false;
 };
 
-// runTool は道具を実行して応答を返す（通信規則「応答」）。道具 1 つの失敗でブリッジを止めないよう、
-// 例外はここで受ける。
+// runTool はツールを実行して応答を返す（通信規則「応答」）。1 つのツールの失敗でブリッジを停止
+// させないよう、例外はここで捕捉する。
 ToolReply runTool(const Tool &tool, const Json &args, const ToolContext &context) {
 	ToolStatus status;
 	Json result;
@@ -162,11 +164,11 @@ ToolReply runTool(const Tool &tool, const Json &args, const ToolContext &context
 	} catch (...) {
 		return {failure(protocol::kCodeInternal, "道具の中で例外が起きました")};
 	}
-	// 終了の依頼は、道具が成功したときだけ出す（失敗した quit は終了を頼まない）。
-	// 種類では決めない。
+	// 終了の依頼は、ツールが成功した場合のみ発行する（失敗した quit は終了を依頼しない）。
+	// 種類では決定しない。
 	if (status.code != ErrorCode::None) {
 		// detail は JSON のオブジェクト（通信規則「応答」）。オブジェクトでない値は
-		// 道具の不具合として internal で応え、detail を付けない。
+		// ツールの不具合として internal で応答し、detail を付けない。
 		if (!status.detail.isNull() && !status.detail.isObject()) {
 			return {failure(protocol::kCodeInternal,
 			                toolDefect(tool.name, "detail がオブジェクトではありません"))};
@@ -175,9 +177,10 @@ ToolReply runTool(const Tool &tool, const Json &args, const ToolContext &context
 		                                                              : protocol::kCodeInternal;
 		return {failure(code, std::move(status.message), std::move(status.detail))};
 	}
-	// result は必ずオブジェクト（通信規則「応答」）。値を返さない道具は {} にする。
-	// オブジェクトでない値は道具の不具合として internal で応え、失敗なので終了を頼まない（失敗の
-	// 終了コードを受け取った呼ぶ側が、終了していく Vectorworks に向かって動かないように）。
+	// result は必ずオブジェクト（通信規則「応答」）。値を返さないツールは {} にする。
+	// オブジェクトでない値はツールの不具合として internal で応答し、失敗であるため終了を依頼しない
+	// （失敗の終了コードを受け取った呼び出し元が、終了しつつある Vectorworks に対して動作しない
+	// ように）。
 	if (result.isNull()) {
 		result = Json::object();
 	} else if (!result.isObject()) {
@@ -232,29 +235,30 @@ ServeResult Server::serve(std::span<const Tool> tools, std::int64_t nowNanos, Ac
 			return result;
 		}
 	}
-	// 道具の中で Vectorworks がイベントを回すと、この回の途中で又 serve が呼ばれうる。戻るとき
-	// （例外で抜けるときも）に下ろす。
+	// ツールの中で Vectorworks がイベントを処理すると、この回の途中で再度 serve が呼び出されうる。
+	// 戻る際（例外で抜ける場合も）に解除する。
 	ScopedFlag serving(serving_);
 	for (const std::string &id : bridge_.poll()) {
 		std::optional<std::string> text = held(id);
 		if (!text) {
 			continue;
 		}
-		// 要求はもう消したので、ここで投げると誰も応えない（呼ぶ側は「実行されたかもしれない」で
-		// 終わる）。道具の外（印の乱数・メモリが足りないなど）で投げた例外も internal で応える。
-		// catch の中では確保しない（前もって書き出した応答を指すだけ）。応答を書く reply はパスを
-		// 組み立てるので確保する。そこでも確保できなければ、例外は serve の外（Clock）へ出て、
-		// この要求には応えない。
+		// 要求は既に削除したため、ここで例外が送出されると誰も応答しない（呼び出し元は
+		// 「実行されたかもしれない」で終了する）。ツールの外（セッション ID の乱数・メモリの不足
+		// など）で送出された例外も internal で応答する。catch の中では確保しない（事前に書き出した
+		// 応答を指すのみ）。応答を書き込む reply はパスを構築するため確保する。そこでも
+		// 確保できなければ、例外は serve の外（Clock）へ送出され、この要求には応答しない。
 		Outcome outcome;
 		const std::string *body = nullptr;
 		try {
 			outcome = answer(*text, tools, nowNanos, activity, startup);
 			body = &outcome.body;
 		} catch (...) {
-			// answer は状態を変えない（Serve.h）。outcome も代入されていない。
+			// answer は状態を変更しない（Serve.h）。outcome も代入されていない。
 			body = &internalFailure_;
 		}
-		// 占有の印と終了の依頼は、応答を書けたときだけ反映する（Serve.h。通信規則「占有」）。
+		// 占有のセッション ID と終了の依頼は、応答を書き込めた場合のみ反映する（Serve.h。通信規則
+		// 「占有」）。
 		if (!bridge_.reply(id, *body)) {
 			continue;
 		}
@@ -274,7 +278,7 @@ std::optional<std::string> Server::held(const std::string &id) {
 	if (!text) {
 		return std::nullopt;
 	}
-	// 消した直後、実行する前に、呼ぶ側が待っているかを確かめる（通信規則「待機標識」）。
+	// 削除した直後、実行する前に、呼び出し元が待機しているかを確認する（通信規則「待機標識」）。
 	switch (bridge_.waitState(id)) {
 	case files::WaitState::Released:
 		bridge_.removeWait(id);
@@ -291,8 +295,8 @@ std::optional<std::string> Server::held(const std::string &id) {
 }
 
 void Server::refuseAll() {
-	// 入れ子の回は、道具の SDK 呼び出しが回すイベントの中で走る。例外を外へ出すと SDK と
-	// Vectorworks のフレームを越えて巻き戻るので、ここで止める。
+	// 入れ子の回は、ツールの SDK 呼び出しが処理するイベントの中で実行される。例外を外へ送出すると
+	// SDK と Vectorworks のフレームを越えて巻き戻るため、ここで捕捉する。
 	try {
 		for (const std::string &id : bridge_.poll()) {
 			if (held(id)) {
@@ -300,8 +304,9 @@ void Server::refuseAll() {
 			}
 		}
 	} catch (...) {
-		// 取り出す前の要求は、外の回か次の刻みが扱う。取り出した後に投げたら（応答を書くパスを
-		// 組み立てられないなど）その要求には応えず、呼ぶ側は待ちきれずに終わる（実行はしていない）。
+		// 取り出す前の要求は、外の回か次の周期処理が扱う。取り出した後に例外が送出されたら（応答を
+		// 書き込むパスを構築できないなど）その要求には応答せず、呼び出し元は待機の上限に達して
+		// 終了する（実行はしていない）。
 		return;
 	}
 }
@@ -349,30 +354,30 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		return outcome;
 	}
 
-	// 表に無い道具と種類 Read の道具は占有に照らさない（図面を変えないので、占有している呼ぶ側の
-	// 作業と混ざらない）。
+	// 一覧に無いツールと種類 Read のツールは占有と照合しない（図面を変更しないため、占有している
+	// 呼び出し元の作業と混在しない）。
 	const Tool *tool = findTool(tools, name);
 	if (tool && tool->kind != ToolKind::Read) {
 		if (std::optional<Json> refusal = refuseOutsideSession(session_, *request)) {
 			return respond(*refusal);
 		}
 	}
-	// 表に無い道具は、終了の依頼の最中も unknown_tool で応える（SDK を呼ばない。綴りの誤りを、
-	// 呼び直せば通るかのような busy で返さない）。
+	// 一覧に無いツールは、終了の依頼の処理中も unknown_tool で応答する（SDK を呼び出さない。綴りの
+	// 誤りを、呼び出し直せば通過するかのような busy で返さない）。
 	if (!tool) {
 		return respond(failure(protocol::kCodeUnknownTool, "知らない道具です: " + name));
 	}
-	// 終了の依頼の最中は、表の道具を全て断る（種類 Read と ping も）。終了の呼び出しの途中で、
-	// 道具に SDK を呼ばせないため。SDK を呼ばない 3 つの道具（上の @tools・@session_start・
-	// @session_end）は応える。占有に照らすのが先。
+	// 終了の依頼の処理中は、一覧のツールを全て拒否する（種類 Read と ping も）。終了の呼び出しの
+	// 途中で、ツールに SDK を呼び出させないため。SDK を呼び出さない 3 つのツール（上の @tools・
+	// @session_start・@session_end）は応答する。占有との照合が先。
 	if (activity == Activity::Quitting) {
 		return respond(failure(protocol::kCodeBusy,
 		                       "Vectorworks に終了を頼んでいる最中なので実行しませんでした"));
 	}
 
 	ToolReply reply = runTool(*tool, request->args, ToolContext{inSession(), startup});
-	// 道具はもう実行したので、ここで投げると、実行した要求に internal で応えることになる（避け
-	// られない。応答を書き出すための確保だけが残る）。
+	// ツールは既に実行したため、ここで例外が送出されると、実行した要求に internal で応答することに
+	// なる（回避できない。応答を書き出すための確保のみが残る）。
 	return respond(reply.response, reply.quit);
 }
 

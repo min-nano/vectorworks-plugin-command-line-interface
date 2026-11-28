@@ -27,10 +27,10 @@ type result struct {
 	stderr string
 }
 
-// envVars は、コマンドが読む環境変数の全て。コマンドの定義（kong のタグ）から集める（手で並べると、
-// 指定を足したときに書き足し忘れる）。
-// テストを走らせる前のパッケージの初期化では作らない（kong のタグを壊したとき、初期化の panic で全ての
-// テストが走らなくなる代わりに、使うテストが名前付きで落ちるように）。
+// envVars は、コマンドが読み取る環境変数の全て。コマンドの定義（kong のタグ）から収集する（手で
+// 列挙すると、指定を追加した際に追記し忘れる）。
+// テストを実行する前のパッケージの初期化では生成しない（kong のタグを壊した場合、初期化の panic で
+// 全てのテストが実行されなくなる代わりに、使用するテストが名前付きで失敗するように）。
 var envVars = sync.OnceValue(func() []string {
 	seen := map[string]bool{}
 	var names []string
@@ -56,25 +56,26 @@ func eachFlag(fn func(command *kong.Node, flag *kong.Flag)) {
 	}
 }
 
-// opts は、テストが run に与える外の世界。零値は、何も無いスプール・環境変数なし・空の標準入力・
-// 成功する起動。
+// opts は、テストが run に与える外部との接点。零値は、何も無いスプール・環境変数なし・空の
+// 標準入力・成功する起動。
 type opts struct {
-	// スプール。空なら何も無い一時ディレクトリにする（利用者の本物のスプールに触れないように）。
+	// スプール。空ならば何も無い一時ディレクトリとする（利用者の実際のスプールに触れないように）。
 	dir string
-	// スプールの場所を求める関数（env.spool）。dir より優先する。求められないときを確かめるため。
+	// スプールの場所を導出する関数（env.spool）。dir より優先する。導出できない場合を検証するため。
 	locate func() (string, error)
-	// 環境変数。envVars に挙げたものの内、ここに無いものは消す。
+	// 環境変数。envVars に挙げたものの内、ここに無いものは削除する。
 	vars map[string]string
-	// 標準入力。nil なら空。
+	// 標準入力。nil ならば空。
 	stdin io.Reader
-	// 標準出力。nil なら書いたものを result.stdout に集める（書けないときを確かめるため）。
+	// 標準出力。nil ならば書き込んだものを result.stdout に収集する（書き込めない場合を
+	// 検証するため）。
 	stdout io.Writer
-	// 起動（env.start）。nil なら成功し、渡された引数を started に書く。
+	// 起動（env.start）。nil ならば成功し、渡された引数を started に書き込む。
 	start   func(argv []string) error
 	started *[]string
-	// install / uninstall の場所（env.pluginsDir・env.workDir・env.executable）。空なら一時ディレクトリ
-	// （executable はその中の偽のファイル）にする（開発者のマシンの本物の <Plug-Ins>・<Work> に
-	// 触れないように）。
+	// install / uninstall の場所（env.pluginsDir・env.workDir・env.executable）。空ならば
+	// 一時ディレクトリ（executable はその中の擬似ファイル）とする（開発者の計算機の実際の
+	// <Plug-Ins>・<Work> に触れないように）。
 	plugins    string
 	work       string
 	executable string
@@ -112,7 +113,8 @@ func invoke(t *testing.T, o opts, args ...string) result {
 			t.Fatal(err)
 		}
 	}
-	// 渡した名前がコマンドの読まない環境変数なら（指定の名前を変えたのにテストを直し忘れた）、黙って捨てずに落とす。
+	// 渡した名前がコマンドの読み取らない環境変数ならば（指定の名前を変更したにもかかわらずテストを
+	// 修正し忘れた）、黙って破棄せずに失敗させる。
 	known := map[string]bool{}
 	for _, name := range envVars() {
 		known[name] = true
@@ -122,13 +124,13 @@ func invoke(t *testing.T, o opts, args ...string) result {
 			t.Fatalf("no command reads %s", name)
 		}
 	}
-	// kong は環境変数を os から直接読むので、テストごとに置き直す（並行には走らせない）。
+	// kong は環境変数を os から直接読み取るため、テストごとに設定し直す（並行には実行しない）。
 	for _, name := range envVars() {
 		value, ok := o.vars[name]
-		// 終わったら元に戻させる
+		// 終了後に元に戻させる
 		t.Setenv(name, value)
 		if !ok {
-			// 空の値も値になる（空のタイムアウトは使い方の誤り）ので、渡さないものは消す。
+			// 空の値も値となる（空のタイムアウトは使用方法の誤り）ため、渡さないものは削除する。
 			os.Unsetenv(name)
 		}
 	}
@@ -189,8 +191,8 @@ func TestCallPrintsResult(t *testing.T) {
 	}
 }
 
-// 数の値は解釈しないので、float64 に収まらない数も JSON として正しければそのまま渡す（範囲を
-// 確かめるのはプラグイン）。
+// 数値は解釈しないため、float64 に収まらない数値も JSON として正しければそのまま渡す（範囲を
+// 検証するのはプラグイン）。
 func TestCallPassesNumbersUnchanged(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, opts{dir: dir}, "call", "layer_objects", `{"offset":1e400,"limit":2.0000000000000001}`)
@@ -208,8 +210,8 @@ func TestCallArgsFromStdin(t *testing.T) {
 	}
 }
 
-// 標準入力を読めなければ、要求を置かずに 1 で終わる。応える偽のプラグインは使わず、ロックだけを
-// 掴んでおき、終わった後に要求も待つ印も残っていないことを見る。
+// 標準入力を読み取れなければ、要求を配置せずに 1 で終了する。応答する擬似プラグインは使用せず、
+// ロックのみを保持しておき、終了後に要求も待機標識も残存していないことを確認する。
 func TestCallArgsFromUnreadableStdin(t *testing.T) {
 	dir, _ := fakeplugin.NewHeldDir(t)
 	broken := iotest.ErrReader(errors.New("broken pipe"))
@@ -228,8 +230,8 @@ func TestCallArgsFromUnreadableStdin(t *testing.T) {
 	}
 }
 
-// 道具の失敗は、種別ごとの終了コードで終わり、理由を標準エラーに書く。標準出力には detail があれば
-// それだけを出し（無ければ何も出さない）、--raw なら応答ごと出す。
+// ツールの失敗は、種別ごとの終了コードで終了し、理由を標準エラーに書き込む。標準出力には
+// detail があればそれのみを出力し（無ければ何も出力しない）、--raw ならば応答全体を出力する。
 func TestCallToolError(t *testing.T) {
 	dir := echoBridge(t)
 	for _, c := range []struct {
@@ -260,19 +262,20 @@ func TestCallToolError(t *testing.T) {
 	}
 }
 
-// failingWriter は書けない標準出力（ディスクが一杯・読む側がパイプを閉じた）を真似る。
+// failingWriter は書き込めない標準出力（ディスクが一杯・読み取る側がパイプを閉じた）を模倣する。
 type failingWriter struct{}
 
 func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("no space left on device") }
 
-// 成功した道具の結果を書けなければ、0 ではなく失敗で終わる。道具が失敗したときは、detail を書けなくても
-// 道具の終了コードを残す（書けなかったことと、道具の失敗の理由は標準エラーに書く）。
+// 成功したツールの結果を書き込めなければ、0 ではなく失敗で終了する。ツールが失敗した場合は、
+// detail を書き込めなくてもツールの終了コードを保持する（書き込めなかったことと、ツールの失敗の
+// 理由は標準エラーに書き込む）。
 func TestCallCannotWriteOutput(t *testing.T) {
 	dir := echoBridge(t)
 	for _, c := range []struct {
 		args []string
 		code int
-		// stderr は、書けなかったことの他に標準エラーに含まれるもの。
+		// stderr は、書き込めなかったこと以外に標準エラーに含まれるもの。
 		stderr string
 	}{
 		{[]string{"call", "ping"}, exitFailure, ""},
@@ -297,9 +300,9 @@ func TestCallUsageErrors(t *testing.T) {
 	}
 }
 
-// tools は予約された道具 @tools を呼び、その結果を出す。call は名前をそのまま渡すので、
-// call tools は予約された道具ではなく、名前が tools の道具を呼ぶ（予約された道具の名前は @ で始まり、
-// 道具の表の名前と重ならない）。
+// tools は予約ツール @tools を呼び出し、その結果を出力する。call は名前をそのまま渡すため、
+// call tools は予約ツールではなく、名前が tools のツールを呼び出す（予約ツールの名前は @ で始まり、
+// ツールの一覧の名前と重複しない）。
 func TestTools(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, opts{dir: dir}, "tools")
@@ -346,7 +349,7 @@ func TestLaunchStartFails(t *testing.T) {
 	}
 }
 
-// 起動するものが決まらなければ、起動を試みずに失敗する。
+// 起動対象を決定できなければ、起動を試みずに失敗する。
 func TestLaunchAppNotFound(t *testing.T) {
 	var started []string
 	missing := filepath.Join(t.TempDir(), "missing")
@@ -358,7 +361,8 @@ func TestLaunchAppNotFound(t *testing.T) {
 	}
 }
 
-// fakeApp は起動の対象にする実行ファイルを作る（launch.Command はファイルがあることだけを見る）。
+// fakeApp は起動の対象とする実行ファイルを作成する（launch.Command はファイルが存在することのみを
+// 確認する）。
 func fakeApp(t *testing.T) string {
 	t.Helper()
 	app := filepath.Join(t.TempDir(), "fake-vw")
@@ -368,7 +372,7 @@ func fakeApp(t *testing.T) string {
 	return app
 }
 
-// version と --version は同じものを出す。
+// version と --version は同じものを出力する。
 func TestVersion(t *testing.T) {
 	for _, arg := range []string{"version", "--version"} {
 		r := invoke(t, opts{}, arg)
@@ -386,8 +390,8 @@ func TestCallWhileBusyTimesOut(t *testing.T) {
 	}
 }
 
-// 終了を待つ呼ぶ側は status を繰り返すので、応えなくてもロックが掴まれている間は
-// 動いていると答え、放されたら止まったと答える（保存の確認のダイアログを止まったと誤らない）。
+// 終了を待機する呼び出し元は status を繰り返すため、応答しなくてもロックが保持されている間は
+// 実行中と応答し、解放されたら停止したと応答する（保存の確認のダイアログを停止と誤認しない）。
 func TestStatusWhileBusyUntilTheProcessEnds(t *testing.T) {
 	dir, quit := fakeplugin.NewHeldDir(t)
 	r := invoke(t, opts{dir: dir}, "status")
@@ -421,7 +425,7 @@ func TestHelp(t *testing.T) {
 			t.Fatalf("%v: %+v", args, r)
 		}
 	}
-	// 引数なしは使い方の誤りで、ヘルプは標準エラーへ。
+	// 引数なしは使用方法の誤りであり、ヘルプは標準エラーへ。
 	if r := invoke(t, opts{}); r.code != exitUsage || r.stdout != "" ||
 		!strings.Contains(r.stderr, "Usage:") {
 		t.Fatalf("%+v", r)
@@ -431,8 +435,8 @@ func TestHelp(t *testing.T) {
 	}
 }
 
-// TestEveryCommandRuns は、kong に並べたコマンドが全て command を満たすことを確かめる
-// （満たさなければ run の型アサーションが実行時に落ちる）。
+// TestEveryCommandRuns は、kong に列挙したコマンドが全て command を満たすことを検証する
+// （満たさなければ run の型アサーションが実行時に失敗する）。
 func TestEveryCommandRuns(t *testing.T) {
 	for _, node := range kong.Must(&cli{}, grammarOptions()...).Model.Leaves(true) {
 		if _, ok := node.Target.Addr().Interface().(command); !ok {
@@ -450,7 +454,7 @@ func TestCodeFor(t *testing.T) {
 		spool.ErrOccupied:   exitBusy,
 		spool.ErrNoSession:  exitBusy,
 		spool.ErrNoResponse: exitNoResponse,
-		// 分けるべき結果でなければ汎用の失敗
+		// 区別すべき結果でなければ汎用の失敗
 		spool.ErrMalformedResponse: exitFailure,
 		errors.New("disk full"):    exitFailure,
 	} {
@@ -460,8 +464,9 @@ func TestCodeFor(t *testing.T) {
 	}
 }
 
-// session start が印を出し、占有の中でだけ呼べる道具（quit）はその印の call だけが実行される。
-// 読む道具（layers・ping）は誰の call でも実行される。end の後は quit が占有の外として断られる。
+// session start がセッション ID を出力し、占有の中でのみ呼び出せるツール（quit）はその
+// セッション ID の call のみが実行される。読み取りツール（layers・ping）は誰の call でも
+// 実行される。end の後は quit が占有の外として拒否される。
 func TestSessionStartCallEnd(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, opts{dir: dir}, "session", "start")
@@ -506,7 +511,7 @@ func TestSessionEndNeedsSession(t *testing.T) {
 	}
 }
 
-// 終了コードは呼ぶ側との約束なので、定数の名前ではなく番号そのものを固定する。
+// 終了コードは呼び出し元との取り決めであるため、定数の名前ではなく番号そのものを固定する。
 func TestExitCodeNumbers(t *testing.T) {
 	for name, c := range map[string][2]int{
 		"OK":          {exitOK, 0},
@@ -540,7 +545,7 @@ func TestToolCodeFor(t *testing.T) {
 	}
 }
 
-// 指定は環境変数でも与えられ、両方あれば引数が勝つ。
+// 指定は環境変数でも与えられ、両方あれば引数が優先される。
 func TestFlagsFromEnv(t *testing.T) {
 	dir := echoBridge(t)
 	raw := map[string]string{edition.EnvPrefix + "CALL_RAW": "true"}
@@ -573,17 +578,17 @@ func TestFlagsFromEnv(t *testing.T) {
 	}
 }
 
-// スプールの場所を変える指定は無い（プラグインはモジュールの場所から求めた <Plug-Ins>/cli/spool
-// しか見ないので、別の場所を指せても要求が届かない）。環境変数を読まないことは spool の
-// TestDirIgnoresEnvironment。
+// スプールの場所を変更する指定は無い（プラグインはモジュールの場所から導出した
+// <Plug-Ins>/cli/spool のみを参照するため、別の場所を指定できても要求が届かない）。環境変数を
+// 読み取らないことは spool の TestDirIgnoresEnvironment。
 func TestSpoolFlagIsUsageError(t *testing.T) {
 	if r := invoke(t, opts{}, "status", "--spool", t.TempDir()); r.code != exitUsage {
 		t.Fatalf("%+v", r)
 	}
 }
 
-// 止まっていると答えるとき、求めたスプールの場所を標準エラーに示す（フォルダの外で動かした
-// vw2026 が、場所の取り違えと見分けられるように）。status は標準出力の JSON の spool にも示す。
+// 停止していると応答する場合、導出したスプールの場所を標準エラーに示す（フォルダの外で実行した
+// vw2026 が、場所の取り違えと区別できるように）。status は標準出力の JSON の spool にも示す。
 func TestNotRunningShowsTheSpool(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "spool")
 	for _, args := range [][]string{
@@ -605,12 +610,13 @@ func TestNotRunningShowsTheSpool(t *testing.T) {
 	}
 }
 
-// 待つ間にブリッジが止まった（ロックが放された）ときも、求めたスプールの場所を示して 5 で終わる。
+// 待機の間にブリッジが停止した（ロックが解放された）場合も、導出したスプールの場所を示して 5 で
+// 終了する。
 func TestCallStoppedWhileWaitingShowsTheSpool(t *testing.T) {
 	dir, quit := fakeplugin.NewHeldDir(t)
 	stopped := make(chan struct{})
-	// 要求が置かれてから（call が待ち始めてから）ロックを放す。call はロックを締切のときに
-	// 見るので、締切より前に放せばよく、締切には余裕を持たせる。
+	// 要求が配置されてから（call が待機を開始してから）ロックを解放する。call はロックを締切の
+	// 時点で確認するため、締切より前に解放すればよく、締切には余裕を持たせる。
 	go func() {
 		defer close(stopped)
 		for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
@@ -622,7 +628,7 @@ func TestCallStoppedWhileWaitingShowsTheSpool(t *testing.T) {
 		quit()
 	}()
 	r := invoke(t, opts{dir: dir}, "call", "ping", "--timeout", "2")
-	// quit を呼び終えるのを待つ（テストの後始末も quit を呼ぶので、競合させない）。
+	// quit の呼び出しの完了を待機する（テストの後処理も quit を呼び出すため、競合させない）。
 	<-stopped
 	if r.code != exitDown || r.stdout != "" || !strings.Contains(r.stderr, "stopped while waiting") ||
 		!strings.Contains(r.stderr, dir) {
@@ -630,8 +636,8 @@ func TestCallStoppedWhileWaitingShowsTheSpool(t *testing.T) {
 	}
 }
 
-// スプールの場所を求められなければ（実行ファイルの場所が分からないなど）、スプールを見るコマンドは
-// どこで失敗したかと理由を標準エラーに書いて 1 で終わる。
+// スプールの場所を導出できなければ（実行ファイルの場所が不明など）、スプールを参照する
+// コマンドはいずれの箇所で失敗したかと理由を標準エラーに書き込んで 1 で終了する。
 func TestSpoolNotLocated(t *testing.T) {
 	locate := func() (string, error) {
 		return "", errors.New("lstat /nowhere/bin/" + edition.Command + ": no such file or directory")
@@ -652,16 +658,16 @@ func TestSpoolNotLocated(t *testing.T) {
 	}
 }
 
-// TestEveryFlagHasEnv は、ヘルプと隠した指定を除く全ての指定に環境変数があり、オン・オフの指定が
-// --no-<flag> を持つことを確かめる（指定を足して環境変数を付け忘れないように。invoke が置き直す環境変数は、
-// envVars がコマンドの定義から集める）。
+// TestEveryFlagHasEnv は、ヘルプと隠し指定を除く全ての指定に環境変数があり、オン・オフの指定が
+// --no-<flag> を持つことを検証する（指定を追加して環境変数を付け忘れないように。invoke が設定し直す
+// 環境変数は、envVars がコマンドの定義から収集する）。
 func TestEveryFlagHasEnv(t *testing.T) {
 	eachFlag(func(node *kong.Node, flag *kong.Flag) {
 		if flag.Name == "help" {
 			return
 		}
-		// 隠した指定（初回のスクリプトだけが一時フォルダの CLI に渡す --plugins-dir）は、環境変数を持たない
-		// （持つと、入った CLI にも効いてしまう）。
+		// 隠し指定（初回スクリプトのみが一時フォルダの CLI に渡す --plugins-dir）は、環境変数を
+		// 持たない（持つと、インストールされた CLI にも作用してしまう）。
 		if flag.Hidden {
 			if len(flag.Envs) != 0 {
 				t.Errorf("%s --%s is hidden but has an environment variable", node.Path(), flag.Name)
@@ -679,12 +685,12 @@ func TestEveryFlagHasEnv(t *testing.T) {
 }
 
 // TestEnvNamesDoNotCollide は、VW2026_<コマンド>_ で始まる環境変数を、そのコマンド（とその下の
-// コマンド）の指定だけが使うことを確かめる。<コマンド> はどの深さのコマンドでも良い（session も
-// session end も）。全体で使う値に VW2026_SESSION_X のような名前を付けると、session コマンドの指定 X と
-// 区別できなくなるため（CLAUDE.md「Go」）。
+// コマンド）の指定のみが使用することを検証する。<コマンド> はいずれの深さのコマンドでもよい
+// （session も session end も）。全体で使用する値に VW2026_SESSION_X のような名前を付けると、
+// session コマンドの指定 X と区別できなくなるため（CLAUDE.md「Go」）。
 func TestEnvNamesDoNotCollide(t *testing.T) {
 	app := kong.Must(&cli{}, grammarOptions()...)
-	// コマンドの道筋（"session end"）ごとの接頭辞（"VW2026_SESSION_END_"）。
+	// コマンドの経路（"session end"）ごとの接頭辞（"VW2026_SESSION_END_"）。
 	prefixes := map[string]string{}
 	var walk func(nodes []*kong.Node)
 	walk = func(nodes []*kong.Node) {
@@ -707,8 +713,9 @@ func TestEnvNamesDoNotCollide(t *testing.T) {
 	})
 }
 
-// 本番の外の世界は、どの接点も埋まっている（main は run に渡すだけ）。場所を求める関数は呼ばない
-// （開発者のマシンの本物の場所を求めるだけでも、テストからは触れないようにする）。
+// 本番環境における外部との接点は、いずれも設定されている（main は run に渡すのみ）。場所を導出する
+// 関数は呼び出さない（開発者の計算機の実際の場所を導出するのみであっても、テストからは
+// 触れないようにする）。
 func TestDefaultEnv(t *testing.T) {
 	e := defaultEnv()
 	if e.stdin != os.Stdin || e.stdout != os.Stdout || e.stderr != os.Stderr || e.start == nil ||

@@ -4,7 +4,7 @@ package fakeplugin
 
 import "testing"
 
-// extendedPath は、プラグインの extended（src/core/FilesWindows.cpp）と同じく \\?\ を付ける。
+// extendedPath は、プラグインの extended（src/core/FilesWindows.cpp）と同様に \\?\ を付ける。
 func TestExtendedPath(t *testing.T) {
 	for _, c := range []struct{ in, want string }{
 		{`C:\spool`, `\\?\C:\spool`},

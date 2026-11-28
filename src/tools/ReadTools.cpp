@@ -9,27 +9,29 @@
 #include <string>
 #include <vector>
 
-// 読む道具（layers・classes・layer_objects・object_counts）の SDK の側。SDK から値を読んで
-// core::Drawing として渡すだけで、数え方・絞り込み・結果の形は src/core/ReadTools.cpp
-// （docs/plugin/tools.md「読み取りツール」。使う呼び出しは docs/sdk-research.md の 4）。
+// 読み取りツール（layers・classes・layer_objects・object_counts）の SDK の側。SDK から値を
+// 読み取って core::Drawing として渡すのみで、計数の方法・絞り込み・結果の形式は
+// src/core/ReadTools.cpp（docs/plugin/tools.md「読み取りツール」。使用する呼び出しは
+// docs/sdk-research.md の 4）。
 
 namespace VwCli::tools {
 
 namespace {
 
-// SdkDrawing は前面の図面を SDK で読む。ハンドルは道具 1 回の中でだけ持つ（刻みをまたいで持たない。
-// 閉じた図面と別の図面のハンドルが同じ番地で返る。Findings「Timers and Notifications」の 4 の 8）。
+// SdkDrawing は前面の図面を SDK で読み取る。ハンドルは 1 回のツールの呼び出しの中でのみ保持する
+// （周期処理をまたいで保持しない。閉じた図面と別の図面のハンドルが同じアドレスで返る。Findings
+// 「Timers and Notifications」の 4 の 8）。
 class SdkDrawing final : public core::Drawing {
 public:
-	// 図面が無ければ GetCurrentLayer() は落ちずに nullptr を返す（ping と同じ基準）。
+	// 図面が無ければ GetCurrentLayer() は異常終了せずに nullptr を返す（ping と同じ基準）。
 	bool open() override { return gSDK->GetCurrentLayer() != nullptr; }
 
 	std::vector<std::string> layerNames() override {
 		layers_.clear();
 		members_.clear();
 		std::vector<std::string> names;
-		// GetDrawingHeader の子の列はレイヤを作った順に並び、末尾にレイヤでない型 0 が 1 つ
-		// 居るので、型で絞る（Findings「Layers and Stories」の「レイヤを列挙する」）。
+		// GetDrawingHeader の子の列はレイヤを作成した順に並び、末尾にレイヤでない型 0 が
+		// 1 つ存在するため、型で絞り込む（Findings「Layers and Stories」の「レイヤを列挙する」）。
 		for (MCObjectHandle layer = gSDK->FirstMemberObj(gSDK->GetDrawingHeader());
 		     layer != nullptr; layer = gSDK->NextObject(layer)) {
 			if (gSDK->GetObjectTypeN(layer) != ::kLayerNode) {
@@ -50,22 +52,22 @@ public:
 		TXString name;
 		gSDK->GetObjectName(handle, name);
 		facts.name = utf8(name);
-		// ovLayerType は Sint16 で受け取れる（デザイン 1・シート 2・リソースの参照で入った
+		// ovLayerType は Sint16 で受け取れる（デザイン 1・シート 2・リソースの参照で追加された
 		// デザイン 3）。
 		TVariableBlock value;
 		Sint16 type = 0;
 		if (gSDK->GetObjectVariable(handle, ovLayerType, value) && value.GetSint16(type)) {
 			facts.layerType = type;
 		}
-		// 参照由来かは IsObjectFromReferencedFile で見る。ovLayerType の 3 はリソースの参照で
-		// しか立たず、レイヤの参照で入ったレイヤは 1 で自分のレイヤと見分けられない
+		// 参照由来か否かは IsObjectFromReferencedFile で判定する。ovLayerType の 3 はリソースの
+		// 参照でのみ設定され、レイヤの参照で追加されたレイヤは 1 で自身のレイヤと区別できない
 		// （Findings「Layers and Stories」の「参照で入ってきたレイヤ」。SDK リファレンス #310）。
 		facts.referenced = gSDK->IsObjectFromReferencedFile(handle) != 0;
 		double_gs scale = 1;
 		gSDK->GetLayerScaleN(handle, scale);
 		facts.scale = scale;
 		facts.current = handle == gSDK->GetCurrentLayer();
-		// 直下の列は終端（型 0）と undo の置き石（型 90）を含んだまま渡す（除くのは core。
+		// 直下の列は終端（型 0）と undo の置き石（型 90）を含んだまま渡す（除外するのは core。
 		// Findings「Layer Objects」の 2）。
 		std::vector<MCObjectHandle> &handles = members_.at(index);
 		handles.clear();
@@ -79,11 +81,11 @@ public:
 
 	std::vector<std::string> classes() override {
 		std::vector<std::string> out;
-		// 例外を SDK のフレームを越えて投げないよう、コールバックの中で受けてから投げ直す。
+		// 例外を SDK のフレームを越えて送出しないよう、コールバックの中で捕捉してから再送出する。
 		std::exception_ptr failure;
 		// doGuestClasses を偽にし、参照している図面のクラス（NNA#<n>_…）を含めない。渡されるのは
-		// クラスの定義（型 94）で、ID の順（Findings「Attributes and Classes」の「クラスの一覧は
-		// ForEachClass で列挙する」）。
+		// クラスの定義（型 94）で、ID の順（Findings「Attributes and Classes」の
+		// 「クラスの一覧は ForEachClass で列挙する」）。
 		gSDK->ForEachClass(false, [&](MCObjectHandle handle) {
 			if (failure || gSDK->GetObjectTypeN(handle) != ::kClassDefNode) {
 				return;
@@ -118,7 +120,7 @@ public:
 		facts.top = bounds.Top();
 		facts.right = bounds.Right();
 		facts.bottom = bounds.Bottom();
-		// PIO の名前（Findings「Layer Objects」の 5）。PIO の型を確かめてから包む。
+		// PIO の名前（Findings「Layer Objects」の 5）。PIO の型を確認してからラップする。
 		if (gSDK->GetObjectTypeN(handle) == ::kParametricNode) {
 			VWFC::VWObjects::VWParametricObj parametric(handle);
 			facts.pioName = utf8(parametric.GetParametricName());
@@ -127,7 +129,7 @@ public:
 	}
 
 private:
-	// 直前の layerNames() のレイヤのハンドルと、layer(index) で読んだ直下の列のハンドル。
+	// 直前の layerNames() のレイヤのハンドルと、layer(index) で読み取った直下の列のハンドル。
 	std::vector<MCObjectHandle> layers_;
 	std::vector<std::vector<MCObjectHandle>> members_;
 };

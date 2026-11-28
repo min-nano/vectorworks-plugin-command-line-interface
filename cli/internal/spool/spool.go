@@ -1,12 +1,13 @@
-// Package spool は、プラグイン側のブリッジとファイルで受け渡しをする通信規則（docs/protocol.md）の
+// Package spool は、プラグイン側のブリッジとファイルで受け渡しを行う通信規則（docs/protocol.md）の
 // CLI 側の実装である。
 //
-// 通信規則の真実は docs/protocol.md で、プラグイン側（C++）とこのパッケージはその対になる。
-// どちらかを変えたら仕様書と両方を直す。ProtocolVersion を上げるかは docs/protocol.md「互換性」に従う。
+// 通信規則の真実は docs/protocol.md で、プラグイン側（C++）と本パッケージはその対になる。いずれかを
+// 変更したら仕様書と両方を修正する。ProtocolVersion を上げるかは docs/protocol.md「互換性」に従う。
 //
-// このパッケージは排他を持たない。排他はプラグインの占有（docs/protocol.md「占有」）だけで、
-// CLI は印を要求に載せるだけである。占有しない呼ぶ側どうしが同時に要求を置いても受け渡しは
-// 壊れないが、図面に対する操作の順序は呼ぶ側の責任である（docs/design.md「CLI のプリミティブ性の維持」）。
+// 本パッケージは排他を保持しない。排他はプラグインの占有（docs/protocol.md「占有」）のみで、CLI は
+// セッション ID を要求に含めるのみである。占有しない呼び出し元同士が同時に要求を配置しても
+// 受け渡しは破綻しないが、図面に対する操作の順序は呼び出し元の責任である
+// （docs/design.md「CLI のプリミティブ性の維持」）。
 package spool
 
 import (
@@ -23,7 +24,7 @@ import (
 	"time"
 )
 
-// スプールに置くファイルの綴り。プラグイン側と対。
+// スプールに配置するファイルの綴り。プラグイン側と対。
 const (
 	RequestSuffix  = ".req.json"
 	ResponseSuffix = ".res.json"
@@ -31,23 +32,24 @@ const (
 	LockFile       = "bridge.lock"
 	TempSuffix     = ".tmp"
 
-	// ProtocolVersion は受け渡しの版（上げる場合は docs/protocol.md「互換性」）。表示のためだけで、
-	// 実行時に照合はしない（CLI とプラグインは同じ zip から同時に入り、更新は Vectorworks の
-	// 終了後にしか行わないので、両側は常に同じビルドである。docs/protocol.md「版」）。
+	// ProtocolVersion は受け渡しの版（上げる場合は docs/protocol.md「互換性」）。表示のためのみで、
+	// 実行時に照合はしない（CLI とプラグインは同一の zip から同時にインストールされ、更新は
+	// Vectorworks の終了後にのみ行うので、両側は常に同一のビルドである。docs/protocol.md「版」）。
 	ProtocolVersion = 7
 
-	// MaxRequestBytes はプラグイン側が受け付ける要求 1 件の上限。超える要求は置く前に断る
-	// （置いても「読めない要求」として失敗が返るだけなので）。
+	// MaxRequestBytes はプラグイン側が受け付ける要求 1 件の上限。超える要求は配置する前に拒否する
+	// （配置しても「読み取れない要求」として失敗が返るのみなので）。
 	MaxRequestBytes = 1 << 20
 
 	// MaxNestingDepth はプラグイン側が受け付ける要求の入れ子（オブジェクトと配列）の深さの上限。
-	// 要求の外側のオブジェクトを 1 と数える。深すぎる要求で JSON の解析がスタックを溢れさせ、
-	// Vectorworks ごと落ちないための関門（docs/protocol.md「要求」）。超える要求は置く前に断る。
+	// 要求の外側のオブジェクトを 1 と数える。深すぎる要求で JSON の解析がスタックを
+	// 溢れさせ、Vectorworks ごと異常終了しないための関門（docs/protocol.md「要求」）。超える要求は
+	// 配置する前に拒否する。
 	MaxNestingDepth = 64
 )
 
-// idPattern は id として使って良い綴り。プラグイン側はこれを満たさない要求を受け付けない
-// （ファイル名に使うので、スプールの外へ書かせないための関門）。
+// idPattern は id として使用してよい綴り。プラグイン側はこれを満たさない要求を受け付けない
+// （ファイル名に使用するので、スプールの外へ書き込ませないための関門）。
 var idPattern = regexp.MustCompile(`^[0-9A-Za-z_-]{1,64}$`)
 
 // ValidID は id の綴りが正しいか。
@@ -55,17 +57,17 @@ func ValidID(id string) bool {
 	return idPattern.MatchString(id)
 }
 
-// Request は要求 1 件の封筒（docs/protocol.md「要求」）。Call と偽のプラグインが同じ型を使い、
-// 片側だけ綴りが変わらないようにする。
+// Request は要求 1 件の封筒（docs/protocol.md「要求」）。Call と擬似プラグインが同一の型を使用し、
+// 片側のみ綴りが変わらないようにする。
 type Request struct {
 	Tool    string          `json:"tool"`
 	Args    json.RawMessage `json:"args"`
 	Session string          `json:"session,omitempty"`
 }
 
-// Response は応答 1 件。OK が false のときだけ Code（機械が読む種別）と Error（人向けの理由）が
-// 入り、道具が詳細を返した失敗（invalid_args・internal）だけが Detail（JSON のオブジェクト）を持つ。
-// id はファイル名が持つ。知らないフィールドは無視する（docs/protocol.md「互換性」）。
+// Response は応答 1 件。OK が false の場合のみ Code（機械が読み取る種別）と Error（人向けの理由）が
+// 入り、ツールが詳細を返した失敗（invalid_args・internal）のみが Detail（JSON のオブジェクト）を
+// 有する。id はファイル名が保持する。未知のフィールドは無視する（docs/protocol.md「互換性」）。
 type Response struct {
 	OK     bool            `json:"ok"`
 	Code   string          `json:"code,omitempty"`
@@ -75,95 +77,99 @@ type Response struct {
 }
 
 // 失敗の種別（Response.Code）。綴りは通信規則で固定する（docs/protocol.md「応答」）。CLI は
-// これを解釈せず、そのまま呼ぶ側へ渡す。
+// これを解釈せず、そのまま呼び出し元へ渡す。
 const (
-	// 要求が読めない（JSON として壊れている・大きすぎる・tool が無い）
+	// 要求が読み取れない（JSON として破損している・大きすぎる・tool が無い）
 	CodeInvalidRequest = "invalid_request"
-	// 知らない道具
+	// 未知のツール
 	CodeUnknownTool = "unknown_tool"
-	// 道具の引数が誤っている
+	// ツールの引数が誤っている
 	CodeInvalidArgs = "invalid_args"
-	// その他（道具の中の例外など）
+	// その他（ツールの中の例外など）
 	CodeInternal = "internal"
-	// 待つ印（<id>.wait）が無いので実行しなかった
+	// 待機標識（<id>.wait）が無いので実行しなかった
 	CodeNoWait = "no_wait"
-	// Vectorworks かプラグインが処理中（終了の依頼の最中・道具の中のダイアログで受け付けが入れ子に
-	// なった）なので実行しなかった。処理中でも刻みが来ない間は busy も返らない
+	// Vectorworks かプラグインが処理中（終了の依頼の最中・ツールの中のダイアログで受付処理が
+	// 入れ子になった）なので実行しなかった。処理中でも周期処理が来ない間は busy も返らない
 	CodeBusy = "busy"
-	// 他の呼ぶ側が占有しているので実行しなかった
+	// 他の呼び出し元が占有しているので実行しなかった
 	CodeOccupied = "occupied"
-	// 載せた印が今の占有のものではない・占有の中でしか呼べない道具なので実行しなかった
+	// 含めたセッション ID が現在の占有のものではない・占有の中でのみ呼び出せるツールなので
+	// 実行しなかった
 	CodeNoSession = "no_session"
 )
 
 // ErrBusy は、Vectorworks かプラグインが処理中なので実行しなかった（要求は実行されていない）。
-// 理由（終了の依頼・他の要求の処理）はプラグインの error に書かれていて、誤りの
+// 理由（終了の依頼・他の要求の処理）はプラグインの error に記述されており、エラーの
 // 文言に含める。
 var ErrBusy = errors.New("the bridge is busy")
 
 // ErrNotRunning はブリッジが見つからない（Vectorworks が起動していない・プラグインが
-// 読み込まれていない・場所が食い違っている）。
+// 読み込まれていない・場所に齟齬がある）。
 var ErrNotRunning = errors.New("bridge is not running")
 
-// ErrTimeout は、Vectorworks は動いている（ロックが掴まれている）が締切までに応答が
-// 無かった。Vectorworks が刻みを配らない（重い処理・一部のダイアログの最中）ことが多い。
+// ErrTimeout は、Vectorworks は動作している（ロックが取得されている）が期限までに応答が
+// 無かった。Vectorworks が周期処理を配信しない（重い処理・一部のダイアログの最中）ことが多い。
 var ErrTimeout = errors.New("timed out waiting for the response")
 
-// ErrNoWait は、プラグインが no_wait で断った（待つ印が無いので実行しなかった）。ErrTimeout と
-// 同じく実行されていないが、締切まで待ったとは限らない（掃除が待つ印を消したときなどは、
-// 締切の前に届く）ので、待ちきれなかったとは言わない。
+// ErrNoWait は、プラグインが no_wait で拒否した（待機標識が無いので実行しなかった）。ErrTimeout と
+// 同様に実行されていないが、期限まで待機したとは限らない（掃除が待機標識を削除した場合などは、
+// 期限の前に届く）ので、待機しきれなかったとは示さない。
 var ErrNoWait = errors.New("the bridge did not run the request, as its wait file was missing")
 
-// ErrMalformedResponse は、応答のファイルが JSON として壊れていた（docs/protocol.md「ファイル」）か、
-// 失敗の応答の code が無い・知らない値だった
-// （docs/protocol.md「互換性」: 知っているフィールドの未知の値はエラー）。
+// ErrMalformedResponse は、応答のファイルが JSON として破損していた（docs/protocol.md「ファイル」）
+// か、失敗の応答の code が無い・未知の値だった（docs/protocol.md「互換性」: 既知のフィールドの
+// 未知の値はエラー）。
 var ErrMalformedResponse = errors.New("malformed response")
 
-// ErrNoResponse は、待つのをやめたときに要求をプラグインが既に受け取っていて、猶予の間にも
+// ErrNoResponse は、待機を中止した時点で要求をプラグインが既に受け取っており、猶予の間にも
 // 応答が届かなかった。要求は実行されたかもしれない（ErrTimeout は実行されない）。
 var ErrNoResponse = errors.New("the bridge took the request but no response came")
 
-// takenGrace は、待つのをやめたときに要求をプラグインが受け取っていたら、応答を待つ猶予。
-// 待つのをやめる直前に受け取られた要求の応答を拾うためのもので、道具がこれより長く掛かれば
-// ErrNoResponse（実行されたかもしれない）で終わる（docs/protocol.md「待機の中止」）。テストが縮める。
+// takenGrace は、待機を中止した時点で要求をプラグインが受け取っていた場合に、応答を待機する猶予。
+// 待機を中止する直前に受け取られた要求の応答を取得するためのもので、ツールがこれより長く掛かれば
+// ErrNoResponse（実行されたかもしれない）で終了する（docs/protocol.md「待機の中止」）。テストが
+// 短縮する。
 var takenGrace = 5 * time.Second
 
 // Bridge はスプール 1 つと、その状態。
 type Bridge struct {
 	Dir string
-	// プラグインがロックを掴んでいる（Vectorworks が動いている）
+	// プラグインがロックを取得している（Vectorworks が動作している）
 	Running bool
-	// 動いていない理由
+	// 動作していない理由
 	Reason string
-	// newID は Call が要求の id を作る関数。nil なら NewID（テストが決まった id に替える。
-	// パッケージの変数にしないのは、並行するテストどうしで書き換えが競合しないため）。
+	// newID は Call が要求の id を生成する関数。nil ならば NewID（テストが固定の id に差し替える。
+	// パッケージの変数にしないのは、並行するテスト同士で書き換えが競合しないため）。
 	newID func(time.Time) string
 }
 
-// LockHeld は、スプール dir のロックが掴まれているか（Open と同じ判定。docs/protocol.md「生存の判定」）。
-// 無い以外の理由でロックを調べられなければ、その誤りも返す。Open はそれを「動いていない」とするが、
-// install・uninstall は、動いているかが分からないとして何も変えない。
+// LockHeld は、スプール dir のロックが取得されているか（Open と同じ判定。
+// docs/protocol.md「生存の判定」）。存在しない以外の理由でロックを調査できなければ、そのエラーも
+// 返す。Open はそれを「動作していない」とするが、install・uninstall は、動作しているかが判明しない
+// として何も変更しない。
 func LockHeld(dir string) (bool, error) {
 	return lockState(filepath.Join(dir, LockFile))
 }
 
 // Open はその場所のブリッジの状態を判定する（docs/protocol.md「生存の判定」）。
 //
-// 生死はロックだけで決まる。刻みが届かずに応えない間も、ロックは掴まれたまま。
+// 生死はロックのみで決定される。周期処理が届かずに応答しない間も、ロックは取得されたまま。
 func Open(dir string) *Bridge {
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 		return &Bridge{Dir: dir, Reason: "not found"}
 	}
-	// 調べられないロックは「動いていない」とする（install・uninstall は LockHeld で誤りを見て、何も変えない）。
+	// 調査できないロックは「動作していない」とする（install・uninstall は LockHeld でエラーを
+	// 確認し、何も変更しない）。
 	if held, _ := LockHeld(dir); !held {
 		return &Bridge{Dir: dir, Reason: "not running"}
 	}
 	return &Bridge{Dir: dir, Running: true}
 }
 
-// NewID は要求の id を作る。名前の昇順がおおむね送った順になるように時刻を先頭へ置く
-// （プラグイン側は名前の昇順で取り出す）。順序を保証するのは応答を受け取ってから次を送った
-// 要求だけである（同じ刻みの id は乱数の部分で並び、時計の調整で時刻は前後し、公開も遅れうる。
+// NewID は要求の id を生成する。名前の昇順が概ね送信した順になるように時刻を先頭へ配置する
+// （プラグイン側は名前の昇順で取り出す）。順序を保証するのは応答を受け取ってから次を送信した
+// 要求のみである（同じ周期処理の id は乱数の部分で並び、時計の調整で時刻は前後し、公開も遅れうる。
 // docs/protocol.md「id」）。
 func NewID(now time.Time) string {
 	var suffix [4]byte
@@ -171,25 +177,27 @@ func NewID(now time.Time) string {
 	return fmt.Sprintf("%019d-%s", now.UnixNano(), hex.EncodeToString(suffix[:]))
 }
 
-// Call は道具を 1 つ呼び、応答を待つ。session は占有の印（@session_start が返す。占有しないなら
-// 空）で、要求に載せる（docs/protocol.md「占有」）。
+// Call はツールを 1 つ呼び出し、応答を待機する。session は占有のセッション ID（@session_start が
+// 返す。占有しないならば空）で、要求に含める（docs/protocol.md「占有」）。
 //
-// 刻みが届かずに応えない間も要求を置いて timeout まで待つ（刻みが戻れば処理される）。
-// 待つ間は <id>.wait を掴み、プラグインに呼ぶ側が待っていることを示す（docs/protocol.md
-// 「待機標識」）。待つのをやめるときは .wait を放して消してから、要求を消す。先に .wait を
-// やめるので、要求を消す前にプラグインが取り出しても実行されない。呼ぶ側が強制終了されても
-// OS が .wait を放すので、残った要求は実行されず、シグナルを受けて後始末をする必要も無い。
+// 周期処理が届かずに応答しない間も要求を配置して timeout まで待機する（周期処理が戻れば
+// 処理される）。待機する間は <id>.wait を取得し、プラグインに呼び出し元が待機していることを示す
+// （docs/protocol.md「待機標識」）。待機を中止する場合は .wait を解放して削除してから、要求を
+// 削除する。先に .wait を中止するので、要求を削除する前にプラグインが取り出しても実行されない。
+// 呼び出し元が強制終了されても OS が .wait を解放するので、残った要求は実行されず、シグナルを受けて
+// 後処理を行う必要も無い。
 //
-//   - 要求を消せた: 取り出されていないので、実行されない。理由をその時点のロックで
-//     ErrNotRunning / ErrTimeout に分ける（呼ぶ側が起動し直すべきか、待てば良いかを判定
+//   - 要求を削除できた: 取り出されていないので、実行されない。理由をその時点のロックで
+//     ErrNotRunning / ErrTimeout に区別する（呼び出し元が再起動すべきか、待機すればよいかを判定
 //     できるように）。
-//   - 消せない（無い・Windows でプラグインが開いている）: プラグインが受け取った。やめる前に
-//     受け取っていれば実行される。takenGrace だけ応答を待ち、届かなければ ErrNoResponse
-//     （実行されたかは分からない）。
+//   - 削除できない（存在しない・Windows でプラグインが開いている）: プラグインが受け取った。
+//     中止する前に受け取っていれば実行される。takenGrace の間のみ応答を待機し、届かなければ
+//     ErrNoResponse（実行されたかは判明しない）。
 //
-// no_wait の応答は通信規則の種別で「実行しなかった」を意味するので、道具の失敗ではなく ErrNoWait
-// として返す（やめた後にプラグインが受け取ったときや、.wait が想定外に消えたときに届く）。busy / occupied /
-// no_session も「実行しなかった」なので、ErrBusy / ErrOccupied / ErrNoSession として返す。
+// no_wait の応答は通信規則の種別で「実行しなかった」を意味するので、ツールの失敗ではなく
+// ErrNoWait として返す（中止した後にプラグインが受け取った場合や、.wait が想定外に消失した場合に
+// 届く）。busy / occupied / no_session も「実行しなかった」なので、ErrBusy / ErrOccupied /
+// ErrNoSession として返す。
 func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout time.Duration) (*Response, error) {
 	if len(args) == 0 {
 		args = json.RawMessage("{}")
@@ -214,15 +222,15 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 	responsePath := filepath.Join(b.Dir, id+ResponseSuffix)
 	waitPath := filepath.Join(b.Dir, id+WaitSuffix)
 
-	// 要求を公開する前に .wait を掴む（公開した時点で、プラグインが生死を判定できるように）。
+	// 要求を公開する前に .wait を取得する（公開した時点で、プラグインが生死を判定できるように）。
 	unlock, err := holdWait(waitPath)
 	if err != nil {
 		return nil, fmt.Errorf("hold %s: %w", id+WaitSuffix, err)
 	}
 	stopWaiting := sync.OnceFunc(func() {
 		unlock()
-		// 消せなくても（Windows でプラグインが丁度開いている）、放してあるので実行されない。
-		// 残った .wait はプラグインかロックを取ったときの掃除が消す。
+		// 削除できなくても（Windows でプラグインがちょうど開いている）、解放してあるので
+		// 実行されない。残った .wait はプラグインかロックを取得したときの掃除が削除する。
 		_ = os.Remove(waitPath)
 	})
 	defer stopWaiting()
@@ -231,7 +239,7 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 	}
 
 	deadline := time.Now().Add(timeout)
-	// receive は until まで応答を待つ。届けば arrived を真にして、確かめた結果を返す。
+	// receive は until まで応答を待機する。届けば arrived を真にして、検証した結果を返す。
 	receive := func(until time.Time) (response *Response, arrived bool, err error) {
 		response, malformed := pollResponse(responsePath, until)
 		switch {
@@ -247,8 +255,9 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 		return response, err
 	}
 
-	// 待つのをやめてから要求を消す（消してからやめると、その間にプラグインが要求を取り出して
-	// .wait を試し、実行してしまうことがある）。消せれば、誰も待たない応答も残らない。
+	// 待機を中止してから要求を削除する（削除してから中止すると、その間にプラグインが要求を
+	// 取り出して .wait を試し、実行してしまうことがある）。削除できれば、誰も待機しない応答も
+	// 残らない。
 	stopWaiting()
 	if os.Remove(requestPath) == nil {
 		if !Open(b.Dir).Running {
@@ -262,12 +271,13 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 	return nil, fmt.Errorf("%w (%s, %s; it may have run)", ErrNoResponse, tool, timeout)
 }
 
-// checkResponse は届いた応答を確かめ、呼ぶ側へ返す形にする（docs/protocol.md「応答」）。ファイルに触れない。
-// 道具の失敗（invalid_request・unknown_tool・invalid_args・internal）は応答のまま返し、「実行しなかった」種別は
-// それぞれの誤りに、規則に合わない応答は ErrMalformedResponse にする。
+// checkResponse は届いた応答を検証し、呼び出し元へ返す形にする（docs/protocol.md「応答」）。
+// ファイルに触れない。ツールの失敗（invalid_request・unknown_tool・invalid_args・internal）は
+// 応答のまま返し、「実行しなかった」種別はそれぞれのエラーに、規則に合致しない応答は
+// ErrMalformedResponse にする。
 func checkResponse(tool string, response *Response) (*Response, error) {
-	// detail を持てるのは道具が返した失敗（invalid_args・internal）だけで、オブジェクトに限る
-	// （docs/protocol.md「応答」）。null も「無い」ではなく壊れた応答とする。
+	// detail を保持できるのはツールが返した失敗（invalid_args・internal）のみで、オブジェクトに限る
+	// （docs/protocol.md「応答」）。null も「存在しない」ではなく破損した応答とする。
 	if response.Detail != nil {
 		if response.OK || (response.Code != CodeInvalidArgs && response.Code != CodeInternal) {
 			return nil, fmt.Errorf("%w (%s; a detail on a response that cannot carry one)", ErrMalformedResponse, tool)
@@ -302,22 +312,24 @@ func checkResponse(tool string, response *Response) (*Response, error) {
 	}
 }
 
-// IsObject は data が JSON のオブジェクトか（前後の空白は除いて見る）。data は JSON として
-// 読めたものを渡す（応答の result など）。
+// IsObject は data が JSON のオブジェクトか（前後の空白は除いて確認する）。data は JSON として
+// 読み取れたものを渡す（応答の result など）。
 func IsObject(data json.RawMessage) bool {
 	trimmed := bytes.TrimSpace(data)
 	return len(trimmed) > 0 && trimmed[0] == '{'
 }
 
-// pollResponse は until まで応答のファイルを読み直す。届けば読んで消して返す。届かなければ nil。
+// pollResponse は until まで応答のファイルを読み直す。届けば読み取って削除して返す。届かなければ
+// nil。
 //
-// 読めない（まだ無い・開けない）応答は「まだ無い」とみなして読み直す。読めた応答は decodeResponse で読み、
-// 応答として読めなければ待たずに消して malformed を真にする。応答は rename で公開されるので、読めた応答は
-// 書き終えたもので、壊れていれば書き手の不具合であり、待っても直らない（docs/protocol.md「ファイル」）。
+// 読み取れない（未だ存在しない・開けない）応答は「未だ存在しない」とみなして読み直す。読み取れた
+// 応答は decodeResponse で読み取り、応答として読み取れなければ待機せずに削除して malformed を
+// 真にする。応答は rename で公開されるので、読み取れた応答は書き込みを終えたもので、破損していれば
+// 書き手の不具合であり、待機しても修正されない（docs/protocol.md「ファイル」）。
 func pollResponse(path string, until time.Time) (response *Response, malformed bool) {
 	for {
 		if text, err := os.ReadFile(path); err == nil {
-			// 消せなくても応答は取得できている。残骸はプラグイン側が開始時に掃除する。
+			// 削除できなくても応答は取得できている。残骸はプラグイン側が開始時に掃除する。
 			_ = os.Remove(path)
 			return decodeResponse(text)
 		}
@@ -328,9 +340,10 @@ func pollResponse(path string, until time.Time) (response *Response, malformed b
 	}
 }
 
-// decodeResponse は応答のファイルの中身を読む。応答として読めなければ（JSON として壊れている・形が合わない）
-// malformed を真にする。知らないフィールドは無視する（docs/protocol.md「互換性」）。値で受け、null も届いた応答として
-// 返す（checkResponse が壊れた応答にする）。
+// decodeResponse は応答のファイルの内容を読み取る。応答として読み取れなければ（JSON として
+// 破損している・形が合致しない）malformed を真にする。未知のフィールドは無視する
+// （docs/protocol.md「互換性」）。値で受け取り、null も届いた応答として返す（checkResponse が
+// 破損した応答にする）。
 func decodeResponse(text []byte) (response *Response, malformed bool) {
 	var received Response
 	if json.Unmarshal(text, &received) != nil {
@@ -340,7 +353,7 @@ func decodeResponse(text []byte) (response *Response, malformed bool) {
 }
 
 // NestingDepth は JSON の入れ子（オブジェクトと配列）の深さ。外側のオブジェクトを 1 と数える。
-// 文字列の中の括弧は数えない。JSON として正しいかは確かめない（解析する前に深さを見るため）。
+// 文字列の中の括弧は数えない。JSON として正しいかは検証しない（解析する前に深さを確認するため）。
 func NestingDepth(data []byte) int {
 	depth, deepest := 0, 0
 	inString, escaped := false, false
@@ -366,12 +379,13 @@ func NestingDepth(data []byte) int {
 	return deepest
 }
 
-// WriteAtomically は同じディレクトリへ書いてから rename する（読み手に書きかけを見せない）。
-// 要求を書く CLI と、応答を書く偽のプラグイン（fakeplugin）が共に使う。
+// WriteAtomically は同一のディレクトリへ書き込んでから rename する（読み手に書き込み途中のものを
+// 見せない）。要求を書き込む CLI と、応答を書き込む擬似プラグイン（fakeplugin）が共に使用する。
 //
-// 書きかけは、あれば消してから新しく作る（O_EXCL。docs/protocol.md「ファイル」）。あるものを
-// 開いて切り詰めると（os.WriteFile）、置かれたリンク（シンボリックリンクでも hard link でも）の先、
-// つまりスプールの外のファイルを壊してしまう。消すのは名前だけで、リンクの先は残る。
+// 書き込み途中のファイルは、存在すれば削除してから新たに作成する
+// （O_EXCL。docs/protocol.md「ファイル」）。存在するものを開いて切り詰めると（os.WriteFile）、
+// 配置されたリンク（シンボリックリンクでも hard link でも）の先、つまりスプールの外のファイルを
+// 破損させてしまう。削除するのは名前のみで、リンクの先は残る。
 func WriteAtomically(path string, data []byte) error {
 	temp := path + TempSuffix
 	if err := writeNew(temp, data); err != nil {
@@ -384,7 +398,7 @@ func WriteAtomically(path string, data []byte) error {
 	return nil
 }
 
-// writeNew は path を消してから新しく作り、data を書く。
+// writeNew は path を削除してから新たに作成し、data を書き込む。
 func writeNew(path string, data []byte) error {
 	_ = os.Remove(path)
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)

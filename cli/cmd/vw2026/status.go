@@ -78,7 +78,7 @@ func (statusCmd) run(e *env) int {
 	return code
 }
 
-// bridgeJSON はブリッジの状態の出力（status / launch で同じ形）。
+// bridgeJSON はブリッジの状態の出力（status / launch で同一の形式）。
 func bridgeJSON(bridge *spool.Bridge) map[string]any {
 	out := map[string]any{
 		"running": bridge.Running,

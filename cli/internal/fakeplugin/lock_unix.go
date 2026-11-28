@@ -7,7 +7,7 @@ import (
 	"syscall"
 )
 
-// lock はプラグインと同じく flock(LOCK_EX) を掴む。
+// lock はプラグインと同様に flock(LOCK_EX) を取得する。
 func lock(path string) (func(), error) {
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
@@ -20,7 +20,8 @@ func lock(path string) (func(), error) {
 	return func() { file.Close() }, nil
 }
 
-// waitStateOf は <id>.wait の状態（docs/protocol.md「待機標識」）。掴めれば呼ぶ側が放した・死んだ。
+// waitStateOf は <id>.wait の状態（docs/protocol.md「待機標識」）。取得できれば呼び出し元が
+// 解放した・異常終了した。
 func waitStateOf(path string) waitState {
 	file, err := os.Open(path)
 	if err != nil {

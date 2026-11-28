@@ -13,7 +13,7 @@ import (
 type uninstallCmd struct {
 	Name string `arg:"" help:"Plug-in to uninstall, such as cli."`
 
-	// 初回のスクリプトだけが渡す --plugins-dir（pluginsDirFlag）
+	// 初回スクリプトのみが渡す --plugins-dir（pluginsDirFlag）
 	pluginsDirFlag `embed:""`
 }
 
@@ -88,7 +88,7 @@ Exit status: 0 success (including not_installed), 1 failure, 2 wrong usage
 }
 
 func (c *uninstallCmd) run(e *env) int {
-	// 書き方の誤りは、場所を求める前に使い方の誤りにする（場所が分からないときも終了コード 2）。
+	// 記法の誤りは、場所を導出する前に使用方法の誤りとする（場所が不明な場合も終了コード 2）。
 	if err := install.CheckName(c.Name); err != nil {
 		return deployFailed(e, c.Name, err)
 	}
@@ -102,10 +102,13 @@ func (c *uninstallCmd) run(e *env) int {
 	case errors.Is(err, install.ErrRunning):
 		return deployRunning(e, err, result)
 	case errors.As(err, &inside):
-		// 入れた cli の vw2026 では外さず、入っているタグの初回のスクリプトと CLI で外すよう案内する。
-		// PR のプレリリースは PR を閉じると消えるので、latest で外すコマンドも示す。
-		// 外す CLI は入った cli なので、<Plug-Ins> は自分の入ったフォルダ。それが既定の場所でなければ、初回の
-		// スクリプトに渡すよう --plugins-dir をコマンドに載せる（既定の場所なら書かない）。
+		// インストールした cli の vw2026 ではアンインストールせず、インストールされているタグの
+		// 初回スクリプトと CLI でアンインストールするよう案内する。
+		// PR のプレリリースは PR を閉じると削除されるため、latest でアンインストールするコマンドも
+		// 示す。
+		// アンインストールする CLI はインストールされた cli であるため、<Plug-Ins> は自身の
+		// インストール先のフォルダ。それが既定の場所でなければ、初回スクリプトに渡すよう
+		// --plugins-dir をコマンドに含める（既定の場所ならば記述しない）。
 		given := ""
 		if !isDefaultPlugins(e, options.PluginsDir) {
 			given = options.PluginsDir
@@ -125,17 +128,18 @@ func (c *uninstallCmd) run(e *env) int {
 	return emit(e, result)
 }
 
-// releases は、初回のスクリプトを置くリリースの場所。
+// releases は、初回スクリプトを配置するリリースの場所。
 const releases = "https://github.com/min-nano/vectorworks-plugin-command-line-interface/releases/"
 
-// powershellQuote は、PowerShell の単一引用符の文字列の中身にする。PowerShell は ' の他に活字の引用符
-// （U+2018・U+2019・U+201A・U+201B）も単一引用符の区切りとして扱うので、どれも同じ文字を 2 つ重ねて逃がす。
+// powershellQuote は、PowerShell の単一引用符の文字列の内容に変換する。PowerShell は ' の他に活字の
+// 引用符（U+2018・U+2019・U+201A・U+201B）も単一引用符の区切りとして扱うため、いずれも同じ文字を
+// 2 つ重ねてエスケープする。
 var powershellQuote = strings.NewReplacer("'", "''", "\u2018", "\u2018\u2018", "\u2019", "\u2019\u2019",
 	"\u201a", "\u201a\u201a", "\u201b", "\u201b\u201b")
 
-// uninstallScript は、goos で tag のリリースの初回のスクリプトに uninstall を渡すコマンド（どのリリースの
-// スクリプトも、そのリリースの CLI で cli を外す）。tag が latest なら latest のリリースのもの。
-// --plugins-dir を渡されていれば、そのまま渡す（シェルの引用符で囲む）。
+// uninstallScript は、goos で tag のリリースの初回スクリプトに uninstall を渡すコマンド（いずれの
+// リリースのスクリプトも、そのリリースの CLI で cli をアンインストールする）。tag が latest ならば
+// latest のリリースのもの。--plugins-dir を渡されていれば、そのまま渡す（シェルの引用符で囲む）。
 func uninstallScript(goos, tag, pluginsDir string) string {
 	base := releases + "download/" + tag + "/"
 	if tag == "latest" {
@@ -155,7 +159,8 @@ func uninstallScript(goos, tag, pluginsDir string) string {
 	return command
 }
 
-// isDefaultPlugins は、dir が既定の <Plug-Ins> と同じフォルダか（書き方ではなくフォルダの同一性で決める。分からなければ偽）。
+// isDefaultPlugins は、dir が既定の <Plug-Ins> と同一のフォルダか否か（表記ではなくフォルダの
+// 同一性で判定する。不明ならば偽）。
 func isDefaultPlugins(e *env, dir string) bool {
 	def, err := e.pluginsDir()
 	if err != nil {

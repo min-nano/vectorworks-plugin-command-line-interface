@@ -25,9 +25,9 @@
 #include <cstdlib>
 #endif
 
-// save の保存先の確かめ（docs/plugin/save-target.md）。to の形の規則は mac と
-// Windows の両方を、どの OS でも名指しして呼ぶ。ファイルシステムに聞く関数は、この OS
-// の本物を呼ぶ。
+// save の保存先の検証（docs/plugin/save-target.md）。to の形式の規則は mac と
+// Windows の両方を、全ての OS で明示的に指定して呼び出す。ファイルシステムに問い合わせる関数は、
+// この OS の本物を呼び出す。
 
 namespace save_target = VwCli::core::save_target;
 using save_target::Entry;
@@ -112,13 +112,13 @@ TEST(MacToRejectsBadForms) {
 	         std::string("/x/a\nb.vwx"),
 	         std::string("/x/a\x1f.vwx"),
 	         std::string("/x/a\0b.vwx", 10),
-	         // 255 バイトを超える段と、1024 バイト以上（mac は UTF-8 のバイトで数える）。
+	         // 255 バイトを超える段と、1024 バイト以上（mac は UTF-8 のバイトで計数する）。
 	         "/x/" + repeat("a", 252) + ".vwx",
 	         "/x/" + repeat("あ", 84) + ".vwx",
 	     }) {
 		CHECK(!mac(to));
 	}
-	// 全体は 1023 バイトまで受け、1024 バイト以上を断る（段はどれも 255 バイト以下）。
+	// 全体は 1023 バイトまで受理し、1024 バイト以上を拒否する（段はいずれも 255 バイト以下）。
 	std::string base = "/" + repeat(repeat("a", 200) + "/", 4);
 	std::string fits = base + repeat("b", 1023 - base.size() - 4) + ".vwx";
 	CHECK_EQ(fits.size(), std::size_t{1023});
@@ -134,9 +134,9 @@ TEST(WindowsToAcceptsDrivePathsAndUnc) {
 	windowsParent("\\\\server\\share\\a.vwx", "\\\\server\\share\\");
 	windowsParent("\\\\server\\share\\x\\a.vwx", "\\\\server\\share\\x");
 	windowsParent("\\\\localhost\\共有\\図面.vwx", "\\\\localhost\\共有\\");
-	// 予約された名前は断らない（SDK が普通に保存した）。
+	// 予約された名前は拒否しない（SDK が通常通り保存した）。
 	windowsParent("C:\\x\\CON.vwx", "C:\\x");
-	// 段の途中の . と空白は良い（末尾だけを見る）。
+	// 段の途中の . と空白は差し支えない（末尾のみを確認する）。
 	windowsParent("C:\\x.y\\a b\\a.vwx", "C:\\x.y\\a b");
 	windowsParent("C:\\" + repeat("a", 251) + ".vwx", "C:\\");
 }
@@ -146,7 +146,7 @@ TEST(WindowsToRejectsBadForms) {
 	         std::string(""),
 	         std::string("a.vwx"),
 	         std::string("x\\a.vwx"),
-	         // / を含む（直して渡さない）。
+	         // / を含む（修正して渡さない）。
 	         std::string("C:/x/a.vwx"),
 	         std::string("C:\\x/a.vwx"),
 	         std::string("//server/share/a.vwx"),
@@ -182,7 +182,7 @@ TEST(WindowsToRejectsBadForms) {
 	         std::string("C:\\x\\a"),
 	         std::string("C:\\x\\a.vwx."),
 	         std::string("C:\\x\\a.vwx "),
-	         // 使えない文字（UNC のサーバーと共有の段も）。
+	         // 使用できない文字（UNC のサーバーと共有の段も）。
 	         std::string("C:\\x\\a<b.vwx"),
 	         std::string("C:\\x\\a>b.vwx"),
 	         std::string("C:\\x\\a:b.vwx"),
@@ -201,27 +201,27 @@ TEST(WindowsToRejectsBadForms) {
 	     }) {
 		CHECK(!windows(to));
 	}
-	// 段は 255 文字（UTF-16 の単位）まで受ける。日本語の 1 文字は UTF-8 で 3 バイトでも 1
-	// つと数える。
+	// 段は 255 文字（UTF-16 の単位）まで受理する。日本語の 1 文字は UTF-8 で 3 バイトでも 1 つと
+	// 数える。
 	CHECK(windows("C:\\" + repeat("あ", 251) + ".vwx"));
 	CHECK(windows("C:\\" + repeat("\xF0\x9F\x98\x80", 125) + "a.vwx"));
 }
 
-// 全体が 260 文字（UTF-16 の単位）以上なら断り、259 文字までは受ける。
+// 全体が 260 文字（UTF-16 の単位）以上なら拒否し、259 文字までは受理する。
 TEST(WindowsToRejectsMaxPath) {
 	std::string base = "C:\\" + repeat("abcdefghi\\", 24);
 	std::string fits = base + repeat("a", 259 - base.size() - 4) + ".vwx";
 	CHECK_EQ(fits.size(), std::size_t{259});
 	CHECK(windows(fits));
 	CHECK(!windows(base + repeat("a", 260 - base.size() - 4) + ".vwx"));
-	// サロゲートペアは 2 つに数える（バイトでも文字でもない）。
+	// サロゲートペアは 2 つと数える（バイトでも文字でもない）。
 	std::string surrogates =
 	    base + repeat("\xF0\x9F\x98\x80", (259 - base.size() - 4) / 2) + ".vwx";
 	CHECK(windows(surrogates));
 	CHECK(!windows(surrogates.substr(0, surrogates.size() - 4) + "a.vwx"));
 }
 
-// プラグインが使う規則は OS のビルドで決まる。
+// プラグインが使用する規則は OS のビルドで決定される。
 TEST(NativeFormFollowsTheBuild) {
 #ifdef _WIN32
 	CHECK(save_target::kNativeForm == &save_target::checkWindowsTo);
@@ -232,7 +232,7 @@ TEST(NativeFormFollowsTheBuild) {
 
 namespace {
 
-// Recorder は差し替えの比べ方と聞く関数。呼ばれた順を覚える。
+// Recorder は差し替えの比較の方法と問い合わせる関数。呼び出された順を記録する。
 struct Recorder {
 	std::vector<std::string> calls;
 	Probe to{Entry::Missing, 0};
@@ -241,7 +241,7 @@ struct Recorder {
 	save_target::Checks checks() {
 		return save_target::Checks{[this](std::string_view open, std::string_view target) {
 			                           calls.push_back("same " + std::string(open));
-			                           // 差し替えの比べ方: 大文字と小文字だけを畳む（ASCII）。
+			                           // 差し替えの比較の方法: 大文字と小文字のみを畳む（ASCII）。
 			                           if (open.size() != target.size()) {
 				                           return false;
 			                           }
@@ -285,7 +285,7 @@ TEST(SaveCheckPassesWhenTheTargetIsNew) {
 	CHECK(recorder.calls == expected);
 }
 
-// 開いている図面と一致する to は、ファイルシステムに聞く前に to_is_open（親が無くても）。
+// 開いている図面と一致する to は、ファイルシステムに問い合わせる前に to_is_open（親が無くても）。
 TEST(SaveCheckFindsAnOpenDocumentFirst) {
 	Recorder recorder;
 	recorder.to = {Entry::Failed, 53};
@@ -305,7 +305,7 @@ TEST(SaveCheckRefusesAnExistingTarget) {
 		ToolStatus status;
 		CHECK(!runCheck(recorder, status));
 		CHECK_EQ(reasonOf(status), std::string("file_exists"));
-		// 親は聞かない。
+		// 親は問い合わせない。
 		CHECK_EQ(recorder.calls.back(), std::string("to /u/tmp/a.vwx"));
 	}
 }
@@ -321,7 +321,7 @@ TEST(SaveCheckRefusesAMissingParent) {
 	}
 }
 
-// OS の呼び出しが「無い」以外の理由で失敗したら、その段で to_check_failed（番号を整数で載せる）。
+// OS の呼び出しが「無い」以外の理由で失敗したら、その段階で to_check_failed（番号を整数で載せる）。
 TEST(SaveCheckReportsFailedChecks) {
 	Recorder recorder;
 	recorder.to = {Entry::Failed, 53};
@@ -338,7 +338,8 @@ TEST(SaveCheckReportsFailedChecks) {
 	         must(R"({"reason":"to_check_failed","check":"parent","os_error":64})"));
 }
 
-// 共有が無い（67）は、Windows の「無い」の表で parent_missing になる（本物の 67 は実機で見る）。
+// 共有が無い（67）は、Windows の「無い」の表で parent_missing になる（本物の 67 は実機で
+// 確認する）。
 TEST(SaveCheckTreatsAMissingShareAsMissing) {
 #ifdef _WIN32
 	CHECK(save_target::isMissing(67));
@@ -372,7 +373,7 @@ void touch(const std::filesystem::path &path) { std::ofstream(path) << "x"; }
 }
 
 // この OS の本物の呼び出しで、ファイルが無い・親のフォルダが無い・
-// 途中の段がファイルを「無い」と読む。
+// 途中の段がファイルを「無い」と判定する。
 TEST(ProbesReadTheFileSystem) {
 	TempDir dir;
 	std::filesystem::create_directories(dir.path() / "folder");
@@ -402,13 +403,13 @@ TEST(ProbesReadTheFileSystem) {
 	CHECK(save_target::probeParent(root).entry == Entry::Directory);
 }
 
-// 壊れたリンクの to は既にあるとし、先の無いリンクの親は「無い」とする（OS で揃う）。
+// 壊れたリンクの to は既に存在するものとし、先の無いリンクの親は「無い」とする（OS 間で一致する）。
 TEST(ProbesDoNotFollowTheTargetButFollowTheParent) {
 	TempDir dir;
 	std::filesystem::create_directories(dir.path() / "target");
 	std::error_code error;
 #ifdef _WIN32
-	// ジャンクションは特権なしで作れる（シンボリックリンクは特権か開発者モードが要る）。
+	// ジャンクションは特権なしで作成できる（シンボリックリンクは特権か開発者モードを必要とする）。
 	std::string command = "mklink /J \"" + utf8(dir.path() / "link") + "\" \"" +
 	                      utf8(dir.path() / "target") + "\" >NUL";
 	REQUIRE(std::system(command.c_str()) == 0);
@@ -438,14 +439,14 @@ TEST(ProbesDoNotFollowTheTargetButFollowTheParent) {
 	CHECK_EQ(reasonOf(parentStatus), std::string("parent_missing"));
 }
 
-// 「無い」の表に無い失敗は Failed（番号を残す）。名前が長すぎる段で起こす。
+// 「無い」の表に無い失敗は Failed（番号を保持する）。名前が長すぎる段で発生させる。
 TEST(ProbesReportOtherFailures) {
 	TempDir dir;
 	std::string tooLong = utf8(dir.path() / std::string(300, 'a'));
 	Probe target = save_target::probeTo(tooLong);
 	Probe parent = save_target::probeParent(tooLong);
 #ifdef _WIN32
-	// Windows の番号は確かめていないので、ある・フォルダとは読まないことだけを見る。
+	// Windows の番号は確認していないため、存在する・フォルダとは判定しないことのみを確認する。
 	CHECK(target.entry != Entry::File && target.entry != Entry::Directory);
 	CHECK(parent.entry != Entry::File && parent.entry != Entry::Directory);
 #else
@@ -457,7 +458,7 @@ TEST(ProbesReportOtherFailures) {
 }
 
 #ifdef _WIN32
-// extended は受け付けない形（相対・ドライブ相対・ルート相対・\\.\）を空にする。
+// extended は受理しない形式（相対・ドライブ相対・ルート相対・\\.\）を空にする。
 // 空の文字列の変換も空。
 TEST(WindowsPathRefusesFormsItDoesNotOpen) {
 	namespace windows_path = VwCli::core::windows_path;
@@ -474,14 +475,14 @@ TEST(WindowsPathRefusesFormsItDoesNotOpen) {
 	CHECK(windows_path::narrow(windows_path::widen("図面.vwx")) == "図面.vwx");
 }
 
-// CON.vwx は装置ではなくファイルの名前として聞く（\\?\ を付けるので「無い」）。
+// CON.vwx は装置ではなくファイルの名前として問い合わせる（\\?\ を付けるため「無い」）。
 TEST(ProbesAskReservedNamesAsFiles) {
 	TempDir dir;
 	CHECK(save_target::probeTo(native(dir, "CON.vwx")).entry == Entry::Missing);
 	CHECK(save_target::probeTo(native(dir, "NUL.vwx")).entry == Entry::Missing);
 }
 
-// 他のプロセスが共有を絞って開いている親でも、共有違反（32）・拒否（5）にならない。
+// 他のプロセスが共有を制限して開いている親でも、共有違反（32）・拒否（5）にならない。
 TEST(ProbesSeeAParentThatIsHeldWithoutSharing) {
 	TempDir dir;
 	std::filesystem::create_directories(dir.path() / "held");

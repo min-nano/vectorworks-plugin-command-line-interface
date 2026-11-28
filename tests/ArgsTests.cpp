@@ -9,8 +9,9 @@
 #include <string>
 #include <vector>
 
-// 道具に共通の手順（core/Args.h）の内、道具のテストからは文言まで見ていないもの。findOne の
-// 失敗の文言は、呼ぶ側（findTarget・findLayer）と組み立てを分けているので、ここで綴りを確かめる。
+// ツールに共通の手順（core/Args.h）の内、ツールのテストでは文言まで確認していないもの。findOne
+// の失敗の文言は、呼び出し元（findTarget・findLayer）と構築を分割しているため、ここで綴りを
+// 確認する。
 
 using VwCli::core::ErrorCode;
 using VwCli::core::Json;
@@ -19,7 +20,7 @@ using VwCli::test::must;
 
 namespace {
 
-// Calls は findOne が文言の関数を呼んだ回数（失敗するときだけ組み立てることを確かめる）。
+// Calls は findOne が文言の関数を呼び出した回数（失敗する場合のみ構築することを確認する）。
 struct Calls {
 	int missing = 0;
 	int ambiguous = 0;
@@ -52,7 +53,7 @@ TEST(FindOneReturnsThePositionOfTheOnlyMatch) {
 	CHECK(status.code == ErrorCode::None);
 	CHECK_EQ(status.message, std::string());
 	CHECK(status.detail.isNull());
-	// 成功するときは文言を組み立てない。
+	// 成功する場合は文言を構築しない。
 	CHECK_EQ(calls.missing, 0);
 	CHECK_EQ(calls.ambiguous, 0);
 }

@@ -1,8 +1,8 @@
 #include "TestSupport.h"
 
-// save の to の比べ方の包み（docs/plugin/save-target.md「パスの一致の判定」）。包みは mac と
-// Windows でだけビルドし、CMake がそのとき VWCLI_HAS_PATH_COMPARE を定義する。このファイルは
-// どの OS でもテストのソースに並べ、Linux では空になる。
+// save の to の比較の方法の包み（docs/plugin/save-target.md「パスの一致の判定」）。包みは mac と
+// Windows でのみビルドし、CMake がその場合に VWCLI_HAS_PATH_COMPARE を定義する。このファイルは
+// 全ての OS でテストのソースに並べ、Linux では空になる。
 
 #if (defined(__APPLE__) || defined(_WIN32)) && !defined(VWCLI_HAS_PATH_COMPARE)
 #error "the path comparison wrapper must be built on macOS and Windows (CMakeLists.txt)"
@@ -16,7 +16,7 @@
 
 using VwCli::core::path_compare::equivalent;
 
-// NFC と NFD だけが違うパスは一致する（macOS のファイル名は NFD で返ることがある）。
+// NFC と NFD のみが異なるパスは一致する（macOS のファイル名は NFD で返されることがある）。
 TEST(PathCompareMatchesNfcAndNfd) {
 	// é（U+00E9）と e＋結合アクセント（U+0065 U+0301）、が（U+304C）と か＋濁点（U+304B U+3099）。
 	CHECK(equivalent("/Users/me/caf\xC3\xA9.vwx", "/Users/me/cafe\xCC\x81.vwx"));
@@ -24,7 +24,7 @@ TEST(PathCompareMatchesNfcAndNfd) {
 	CHECK(equivalent("C:\\x\\caf\xC3\xA9.vwx", "C:\\x\\cafe\xCC\x81.vwx"));
 }
 
-// 大文字と小文字だけが違うパスは一致する。
+// 大文字と小文字のみが異なるパスは一致する。
 TEST(PathCompareIgnoresCase) {
 	CHECK(equivalent("/Users/me/Plan.vwx", "/users/ME/plan.VWX"));
 	CHECK(equivalent("C:\\Users\\Me\\A.vwx", "c:\\users\\me\\a.VWX"));
@@ -33,8 +33,8 @@ TEST(PathCompareIgnoresCase) {
 	CHECK(equivalent("", ""));
 }
 
-// NFC で長くなる文字（U+0958 は U+0915 U+093C になる）も正規化して比べる（Windows は足りない
-// 領域を広げてやり直す）。
+// NFC で長くなる文字（U+0958 は U+0915 U+093C になる）も正規化して比較する（Windows は不足する
+// 領域を拡張して再試行する）。
 TEST(PathCompareNormalizesCharactersThatGrow) {
 	CHECK(equivalent("/x/\xE0\xA5\x98.vwx", "/x/\xE0\xA4\x95\xE0\xA4\xBC.vwx"));
 	CHECK(equivalent(std::string("/x/") + std::string(40, 'a') + "\xE0\xA5\x98\xE0\xA5\x98.vwx",
@@ -42,8 +42,8 @@ TEST(PathCompareNormalizesCharactersThatGrow) {
 	                     "\xE0\xA4\x95\xE0\xA4\xBC\xE0\xA4\x95\xE0\xA4\xBC.vwx"));
 }
 
-// 正しくない UTF-8（プラグインには届かない）は、mac は完全に一致するかで決め、Windows は U+FFFD に
-// して比べる。
+// 正しくない UTF-8（プラグインには到達しない）は、mac は完全に一致するか否かで判定し、Windows は
+// U+FFFD に変換して比較する。
 TEST(PathCompareHandlesInvalidUtf8) {
 	CHECK(equivalent("/x/\xFF.vwx", "/x/\xFF.vwx"));
 	CHECK(!equivalent("/x/\xFF.vwx", "/x/a.vwx"));

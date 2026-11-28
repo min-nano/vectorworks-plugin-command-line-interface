@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-// 読む道具の内 SDK に依らない部分（docs/plugin/tools.md「読み取りツール」）。
+// 読み取りツールの内 SDK に依存しない部分（docs/plugin/tools.md「読み取りツール」）。
 
 using VwCli::core::Drawing;
 using VwCli::core::ErrorCode;
@@ -27,7 +27,7 @@ namespace {
 constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 constexpr double kInfinity = std::numeric_limits<double>::infinity();
 
-// FakeDrawing は SDK の代わりに決まった図面を返す。object を呼んだ位置を覚える。
+// FakeDrawing は SDK の代わりに固定の図面を返す。object を呼び出した位置を記録する。
 class FakeDrawing : public Drawing {
 public:
 	bool isOpen = true;
@@ -35,7 +35,8 @@ public:
 	std::vector<std::string> classList;
 	std::vector<std::pair<std::size_t, std::size_t>> read;
 	bool layersCalled = false;
-	// layer(index) で直下まで読んだレイヤの位置（1 枚を探すときに図面全体を辿らないことを見る）。
+	// layer(index) で直下まで読み取ったレイヤの位置（1 枚を検索する場合に図面全体を辿らないことを
+	// 確認する）。
 	std::vector<std::size_t> layersRead;
 
 	bool open() override { return isOpen; }
@@ -69,7 +70,7 @@ public:
 	}
 };
 
-// layer はレイヤ 1 枚。type が負なら ovLayerType を読めなかったとする。
+// layer はレイヤ 1 枚。type が負なら ovLayerType を読み取れなかったものとする。
 LayerFacts layer(std::string name, int type, double scale, std::vector<std::int16_t> members,
                  bool current = false, bool referenced = false) {
 	std::optional<std::int16_t> layerType;
@@ -79,10 +80,10 @@ LayerFacts layer(std::string name, int type, double scale, std::vector<std::int1
 	return LayerFacts{std::move(name), layerType, referenced, scale, current, std::move(members)};
 }
 
-// sample は見本の図面（Findings「Layers and Stories」の列の並び）: レイヤの参照で入ったレイヤ
-// （列の先頭。元の名前・ovLayerType 1・中身が直下に見える）・デザイン（1:1。置き石と終端を含む）・
-// シート・リソースの参照で入ったレイヤ（NNA#1_・ovLayerType 3・直下は終端だけ）・種類の分からない
-// レイヤ。
+// sample はフィクスチャの図面（Findings「Layers and Stories」の列の並び）: レイヤの参照で入った
+// レイヤ（列の先頭。元の名前・ovLayerType 1・内容が直下に見える）・デザイン（1:1。置き石と終端を
+// 含む）・シート・リソースの参照で入ったレイヤ（NNA#1_・ovLayerType 3・直下は終端のみ）・種類の
+// 不明なレイヤ。
 FakeDrawing sample() {
 	FakeDrawing drawing;
 	drawing.layerList = {
@@ -103,7 +104,8 @@ Json call(Json (*tool)(const Json &, Drawing &, ToolStatus &), std::string_view 
 
 }
 
-// 種類は src/tools/ToolTable.cpp がこの定数を使う。読む道具はどれも占有に照らさない Read。
+// 種類は src/tools/ToolTable.cpp がこの定数を使用する。読み取りツールはいずれも占有と照合しない
+// Read。
 TEST(ReadToolsAreReadKind) {
 	CHECK(VwCli::core::kLayersSpec.kind == ToolKind::Read);
 	CHECK(VwCli::core::kClassesSpec.kind == ToolKind::Read);
@@ -131,7 +133,7 @@ TEST(LayersListsEveryLayerInListOrder) {
 	    R"({"name":"X","kind":null,"referenced":false,"scale":100,"objects":1,"current":false}],"count":5})");
 }
 
-// include_sheets が偽ならシートだけを除く（kind が null のものは除かない）。
+// include_sheets が偽ならシートのみを除外する（kind が null のものは除外しない）。
 TEST(LayersCanLeaveOutSheets) {
 	FakeDrawing drawing = sample();
 	ToolStatus status;
@@ -188,7 +190,7 @@ TEST(ReadToolsFailWithoutADocument) {
 		CHECK(status.code == ErrorCode::Internal);
 		CHECK_EQ(status.detail, must(R"({"reason":"no_document"})"));
 		CHECK(result.isNull());
-		// レイヤを確かめる前に返す（列を読まない）。
+		// レイヤを確認する前に返す（列を読み取らない）。
 		CHECK(!drawing.layersCalled);
 	}
 }
@@ -204,7 +206,7 @@ TEST(ClassesListsNamesInIdOrder) {
 	CHECK(refused.code == ErrorCode::InvalidArgs);
 }
 
-// 終端と置き石を除き、index は絞った後の並びの位置。PIO だけが pio_name を持つ。
+// 終端と置き石を除き、index は絞り込んだ後の並びの位置。PIO のみが pio_name を持つ。
 TEST(LayerObjectsListsTheObjectsUnderTheLayer) {
 	FakeDrawing drawing = sample();
 	ToolStatus status;
@@ -223,14 +225,14 @@ TEST(LayerObjectsListsTheObjectsUnderTheLayer) {
 	CHECK_EQ(*objects[2].find("pio_name"), Json::string("Door"));
 	CHECK_EQ(*objects[2].find("index"), Json::integer(2));
 	CHECK_EQ(*objects[4].find("type_name"), Json::string("group"));
-	// 読んだのは置き石（列の 1 番目）と終端を除いた位置だけ。
+	// 読み取ったのは置き石（列の 1 番目）と終端を除いた位置のみ。
 	std::vector<std::pair<std::size_t, std::size_t>> expected = {
 	    {1, 0}, {1, 2}, {1, 3}, {1, 4}, {1, 5}};
 	CHECK(drawing.read == expected);
 }
 
-// レイヤの参照で入ったレイヤは、参照元の図形が直下に見えるので、そのまま返す（情報パレットも
-// 「N 図形」に数える。Findings「Layers and Stories」の「参照で入ってきたレイヤ」）。
+// レイヤの参照で入ったレイヤは、参照元の図形が直下に見えるため、そのまま返す（情報パレットも
+// 「N 図形」に計数する。Findings「Layers and Stories」の「参照で入ってきたレイヤ」）。
 TEST(LayerObjectsListsTheContentsOfAReferencedLayer) {
 	FakeDrawing drawing = sample();
 	ToolStatus status;
@@ -271,7 +273,7 @@ TEST(LayerObjectsPagesWithLimitAndOffset) {
 	CHECK_EQ(*objects[1].find("index"), Json::integer(3));
 }
 
-// offset が total 以上なら空で成功し、表に無い番号の type も断らない。
+// offset が total 以上なら空で成功し、表に無い番号の type も拒否しない。
 TEST(LayerObjectsReturnsNothingPastTheEnd) {
 	FakeDrawing drawing = sample();
 	for (const char *args :
@@ -314,8 +316,8 @@ TEST(LayerObjectsRejectsBadArguments) {
 	}
 }
 
-// 名前は完全に一致するものだけ（参照で入ったレイヤは接頭辞ごと渡す）。
-// 範囲と型の誤りの文言（「以下」の後に空白を入れない）。
+// 名前は完全に一致するもののみ（参照で入ったレイヤは接頭辞ごと渡す）。
+// 範囲と型の誤りの文言（「以下」の後に空白を挿入しない）。
 TEST(LayerObjectsDescribesTheRange) {
 	FakeDrawing drawing = sample();
 	ToolStatus range;
@@ -326,7 +328,8 @@ TEST(LayerObjectsDescribesTheRange) {
 	CHECK(type.message.find("limit は 1 以上 1000 以下の整数です") != std::string::npos);
 }
 
-// 1 枚のレイヤを名前で探すときは、そのレイヤの直下だけを読む（頁ごとに図面全体を辿らない）。
+// 1 枚のレイヤを名前で検索する場合は、そのレイヤの直下のみを読み取る（頁ごとに図面全体を
+// 辿らない）。
 TEST(LayerObjectsReadsOnlyTheNamedLayer) {
 	FakeDrawing drawing = sample();
 	ToolStatus status;
@@ -339,7 +342,8 @@ TEST(LayerObjectsReadsOnlyTheNamedLayer) {
 	CHECK(counted.layersRead == std::vector<std::size_t>{1});
 }
 
-// 同じ名前のレイヤが 2 枚あれば、黙ってどちらかを読まずに internal（layer_ambiguous）で断る。
+// 同じ名前のレイヤが 2 枚あれば、暗黙にいずれかを読み取らずに internal（layer_ambiguous）で
+// 拒否する。
 TEST(LayerToolsRefuseAnAmbiguousLayer) {
 	FakeDrawing drawing = sample();
 	drawing.layerList.push_back(layer("1F", 1, 1, {2, 0}));
@@ -436,7 +440,7 @@ TEST(BoundsOrdersTheSides) {
 	         std::string(R"({"left":-5,"right":5,"top":7,"bottom":-7})"));
 }
 
-// 偽を返したか、4 つのどれかが有限でなければ null（NaN が最小・最大の後ろの引数でも）。
+// 偽を返したか、4 つのいずれかが有限でなければ null（NaN が最小・最大の後ろの引数でも）。
 TEST(BoundsIsNullUnlessAllSidesAreFinite) {
 	CHECK(VwCli::core::boundsJson(false, 0, 1, 1, 0).isNull());
 	CHECK(VwCli::core::boundsJson(true, kNaN, 1, 1, 0).isNull());

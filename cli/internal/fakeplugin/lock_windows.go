@@ -7,7 +7,7 @@ import (
 	"syscall"
 )
 
-// lock はプラグインと同じく共有なし（share mode 0）でロックファイルを開いたままにする。
+// lock はプラグインと同様に共有なし（share mode 0）でロックファイルを開いたままにする。
 func lock(path string) (func(), error) {
 	name, err := syscall.UTF16PtrFromString(path)
 	if err != nil {
@@ -24,8 +24,8 @@ func lock(path string) (func(), error) {
 // errorSharingViolation は ERROR_SHARING_VIOLATION。
 const errorSharingViolation = syscall.Errno(32)
 
-// waitStateOf は <id>.wait の状態（docs/protocol.md「待機標識」）。共有なしで開ければ呼ぶ側が
-// 放した・死んだ。共有違反なら呼ぶ側が待っている。
+// waitStateOf は <id>.wait の状態（docs/protocol.md「待機標識」）。共有なしで開ければ呼び出し元が
+// 解放した・異常終了した。共有違反ならば呼び出し元が待機している。
 func waitStateOf(path string) waitState {
 	name, err := syscall.UTF16PtrFromString(path)
 	if err != nil {

@@ -5,7 +5,7 @@ import (
 	"unsafe"
 )
 
-// terminal は、fd が端末か（端末の設定を読めるか。TIOCGETA）。
+// terminal は、fd が端末か否か（端末の設定を読み取れるか。TIOCGETA）。
 func terminal(fd uintptr) bool {
 	var state syscall.Termios
 	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, syscall.TIOCGETA, uintptr(unsafe.Pointer(&state)))
