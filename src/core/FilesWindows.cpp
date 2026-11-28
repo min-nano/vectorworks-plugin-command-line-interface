@@ -252,18 +252,16 @@ WaitState probe(const std::string &path) {
 	case ERROR_INVALID_NAME:
 	case ERROR_FILENAME_EXCED_RANGE:
 		return WaitState::Missing;
-	case ERROR_ACCESS_DENIED: {
+	case ERROR_ACCESS_DENIED:
 		// フォルダは、POSIX（開けてから通常のファイルでないと分かる）と同じく無いものとする（Windows
 		// では FILE_FLAG_BACKUP_SEMANTICS なしにフォルダを開けず、断られる）。
-		DWORD attributes = ::GetFileAttributesW(wide.c_str());
-		bool folder =
-		    attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-		return folder ? WaitState::Missing : WaitState::Unknown;
+		if (isDirectory(wide)) {
+			return WaitState::Missing;
+		}
+		break;
 	}
-	default:
-		// 無い以外の理由で開けなければ、確かめられない（掃除が、待っている呼ぶ側のものを消さないように）。
-		return WaitState::Unknown;
-	}
+	// 無い以外の理由で開けなければ、確かめられない（掃除が、待っている呼び出し元のものを消さないように）。
+	return WaitState::Unknown;
 }
 
 Lock::Result Lock::take(const std::string &path, std::string &error) {
