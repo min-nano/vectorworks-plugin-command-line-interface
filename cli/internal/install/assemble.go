@@ -71,14 +71,21 @@ func clearHookPending(dir string) error {
 	return replaceFile(path, append(out, '\n'))
 }
 
-// replaceFile は path を data で置き換える。隣に書いてから名前の変更で置き換え、書く途中で止まっても（電源が
-// 落ちた）空や半分の記録を残さない（読めない記録では install も uninstall も通らなくなる）。
+// replaceFile は path を data で置き換える。隣に書いて Sync してから名前の変更で置き換え、書く途中で止まっても
+// （電源が落ちた）空や半分の記録を残さない（読めない記録では install も uninstall も通らなくなる。durable.go）。
 func replaceFile(path string, data []byte) error {
 	// 隣の名前は回ごとに違う名前にする（前からあるファイルを上書きしたり、失敗したときに消したりしない）。
 	temp := path + ".new-" + stamp()
 	err := writeFile(temp, data, 0o644)
 	if err == nil {
 		err = rename(temp, path)
+	}
+	// 置き換えたことも残す（親のディレクトリを Sync しないと、電源が落ちたときに前の記録へ戻りうる）。できなくても
+	// 置き換えは済んでいて、戻っても前の記録は読めるので、誤りは見ない（ディレクトリの Sync を断るファイルシステムで、
+	// 置き換えたのに失敗と答えないように）。
+	if err == nil {
+		_ = syncDir(filepath.Dir(path))
+		return nil
 	}
 	// 書けなかった・置き換えられなかった隣のファイル（このとき書いたもの）は、プラグインのフォルダに残さない。
 	if err != nil {
@@ -190,6 +197,10 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 	if err := writeRecord(p.stageDir, record); err != nil {
 		return nil, err
 	}
+	// 付け替えの前に、展開した項目を全て残す（電源が落ちた後に、ファイルの欠けた版が <Plug-Ins> に現れないように）。
+	if err := syncTree(p.stageDir); err != nil {
+		return nil, err
+	}
 	return record, nil
 }
 
@@ -279,6 +290,10 @@ func writeEntry(file *zip.File, path string) error {
 		return fmt.Errorf("the entry %q: %w", file.Name, err)
 	}
 	_, err = io.Copy(out, in)
+	// 付け替えで公開する前にデータを書き終える（durable.go）。
+	if err == nil {
+		err = syncEntry(out)
+	}
 	if closeErr := out.Close(); err == nil {
 		err = closeErr
 	}

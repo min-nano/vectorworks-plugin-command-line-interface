@@ -126,8 +126,13 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 				"Run install %s@%s again (from the registry %s, into %s) to finish that install (it cleans this up), "+
 				"or delete it, then run uninstall again", p.oldDir, name, record.Tag, record.Registry, p.plugins)
 		}
-		// 印を書いてからフォルダを移す（移した後で止まっても、次の uninstall が続きから走れる）。
+		// 印を書いて <Work>/old を Sync してからフォルダを移す（移した後で止まっても、次の uninstall が続きから走れる。
+		// 電源が落ちても、移したことだけが残って印が消えることのないように。durable.go）。
 		if err := writeFile(p.marker, nil, 0o600); err != nil {
+			return nil, false, err
+		}
+		if err := syncDir(p.old); err != nil {
+			_ = removeFile(p.marker)
 			return nil, false, err
 		}
 		if err := rename(p.dest, p.oldDir); err != nil {
