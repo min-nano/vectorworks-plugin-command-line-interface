@@ -17,9 +17,9 @@
 #include <vector>
 
 // 道具 quit と、起動を終えた印・終了の依頼の最中の印（docs/plugin/tools.md「quit」・
-// docs/plugin/architecture.md「エントリポイント」「Vectorworks が処理中」）。SDK の代わりに偽の Documents と
-// 偽の終了の呼び出しを渡す。保存の確認が開いて呼び出しが戻らない間に刻みが入り直すこと（Windows）は、
-// 偽の終了の呼び出しの中から刻みを呼んで真似る。
+// docs/plugin/architecture.md「エントリポイント」「Vectorworks が処理中」）。SDK の代わりに
+// 偽の Documents と偽の終了の呼び出しを渡す。保存の確認が開いて呼び出しが戻らない間に刻みが
+// 入り直すこと（Windows）は、偽の終了の呼び出しの中から刻みを呼んで真似る。
 
 using VwCli::core::Activity;
 using VwCli::core::ErrorCode;

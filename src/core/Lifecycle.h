@@ -1,10 +1,11 @@
 #pragma once
 
-// 起動を終えた印と、終了の依頼の最中の印（docs/plugin/architecture.md「エントリポイント」「Vectorworks が
-// 処理中」）。SDK に依らない。タイマー（src/Clock.cpp）は刻みごとに tick を呼び、SDK で行うのは
-// 通知の登録と終了の呼び出し（CloseAllFilesAndQuitVectorworks）だけにする。印の立て下ろしをここに
-// 置くのは、保存の確認が開く競合（quit が図面を確かめてから終了を頼むまでに図面が開く）を実機の
-// 確認で起こせず、無 SDK のテストでしか確かめられないため（docs/plugin/bridge.md「分割の方針」）。
+// 起動を終えた印と、終了の依頼の最中の印（docs/plugin/architecture.md「エントリポイント」
+// 「Vectorworks が処理中」）。SDK に依らない。タイマー（src/Clock.cpp）は刻みごとに tick を呼び、
+// SDK で行うのは通知の登録と終了の呼び出し（CloseAllFilesAndQuitVectorworks）だけにする。印の
+// 立て下ろしをここに置くのは、保存の確認が開く競合（quit が図面を確かめてから終了を頼むまでに
+// 図面が開く）を実機の確認で起こせず、無 SDK のテストでしか確かめられないため
+// （docs/plugin/bridge.md「分割の方針」）。
 
 #include "core/Serve.h"
 
