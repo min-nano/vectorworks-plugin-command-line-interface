@@ -197,6 +197,30 @@ TEST(ServeRefusesEveryRequestWhileNested) {
 	gServer = nullptr;
 }
 
+// 確かめられない待機標識の要求は、実行せずに no_wait
+// で応える（待っているかが分からないので、実行しない側に
+// 倒す）。待機標識は消さない。読めなくできない環境（POSIX の root）では確かめない。
+TEST(ServeRefusesARequestWhoseWaitCannotBeChecked) {
+	TempDir dir;
+	gCalls.clear();
+	Server server(dir.utf8Path());
+	Caller caller(dir);
+	// 先にロックを取る（取るときの掃除で消えないように。確かめられない待機標識の id
+	// は掃除も残す）。
+	server.serve(kTools, kNow);
+	CHECK(files::write(dir.sub("u.wait"), ""));
+	CHECK(files::write(dir.sub("u.req.json"), R"({"tool":"first"})"));
+	if (!VwCli::test::denyRead(dir.path() / "u.wait")) {
+		return;
+	}
+	server.serve(kTools, kNow);
+	VwCli::test::allowRead(dir.path() / "u.wait");
+	CHECK(gCalls.empty());
+	CHECK_EQ(caller.code("u"), std::string("no_wait"));
+	CHECK(!std::filesystem::exists(dir.path() / "u.req.json"));
+	CHECK(std::filesystem::exists(dir.path() / "u.wait"));
+}
+
 TEST(ServeAnswersAnyExceptionWithInternal) {
 	TempDir dir;
 	Server server(dir.utf8Path());

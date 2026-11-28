@@ -234,6 +234,26 @@ TEST(BridgeWaitThatIsAFolderIsMissing) {
 	CHECK(bridge.waitState("d") == files::WaitState::Missing);
 }
 
+// 無い以外の理由で開けない待機標識は、確かめられない（Unknown）。
+// 掃除はその id のファイルを残す（待っている呼び出し元のものかもしれない）。
+// 読めなくできない環境（POSIX の root）では確かめない（CI の mac と Windows では確かめる）。
+TEST(BridgeKeepsTheFilesOfAWaitItCannotCheck) {
+	TempDir dir;
+	put(dir, "u.wait");
+	put(dir, "u.req.json", R"({"tool":"ping"})");
+	put(dir, "u.res.json", R"({"ok":true})");
+	if (!VwCli::test::denyRead(dir.path() / "u.wait")) {
+		return;
+	}
+	Bridge bridge(dir.utf8Path());
+	CHECK(bridge.waitState("u") == files::WaitState::Unknown);
+	bridge.sweep();
+	CHECK(exists(dir, "u.wait"));
+	CHECK(exists(dir, "u.req.json"));
+	CHECK(exists(dir, "u.res.json"));
+	VwCli::test::allowRead(dir.path() / "u.wait");
+}
+
 TEST(BridgeReplyPublishesWithoutLeavingTemp) {
 	TempDir dir;
 	Bridge bridge(dir.utf8Path());
@@ -275,28 +295,6 @@ TEST(BridgeDoesNotWaitOnFifos) {
 	// 書きかけの FIFO は消して作り直すので、応答を書ける。
 	CHECK(bridge.reply("g", R"({"ok":true})"));
 	CHECK_EQ(VwCli::test::readFile(dir.path() / "g.res.json"), std::string(R"({"ok":true})"));
-}
-
-// 無い以外の理由で開けない待つ印は、確かめられない（Unknown）。
-// 掃除はその id のファイルを残す（待っている呼ぶ側のものかもしれない）。
-// root は権限を無視して開けるので、確かめない（CI の mac は root でない）。
-TEST(BridgeKeepsTheFilesOfAWaitItCannotCheck) {
-	if (::geteuid() == 0) {
-		return;
-	}
-	TempDir dir;
-	put(dir, "u.wait");
-	put(dir, "u.req.json", R"({"tool":"ping"})");
-	put(dir, "u.res.json", R"({"ok":true})");
-	REQUIRE(::chmod(dir.sub("u.wait").c_str(), 0) == 0);
-	Bridge bridge(dir.utf8Path());
-	CHECK(bridge.waitState("u") == files::WaitState::Unknown);
-	bridge.sweep();
-	CHECK(exists(dir, "u.wait"));
-	CHECK(exists(dir, "u.req.json"));
-	CHECK(exists(dir, "u.res.json"));
-	// 一時ディレクトリを消せるように戻す。
-	REQUIRE(::chmod(dir.sub("u.wait").c_str(), 0600) == 0);
 }
 
 // bridge.lock が通常のファイルでなければ、開いて待たずに、消して作り直してから掴む。作り直すのは
