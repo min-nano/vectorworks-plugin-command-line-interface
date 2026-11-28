@@ -650,3 +650,319 @@ TEST(SaveRestoresTheFrontWhenSavingThrows) {
 	CHECK(docs.calls ==
 	      calls({"list", "switch 22", "list", "save /Users/me/tmp/a.vwx", "list", "switch 11"}));
 }
+
+namespace {
+
+using VwCli::core::SheetPdf;
+
+// FakePdf は IExportPDF の代わり。呼び出しを図面の呼び出しと同じ列（docs.calls）に記録し、
+// 書き終えたら差し替えのファイルシステムにファイルを置く。
+class FakePdf : public SheetPdf {
+public:
+	FakePdf(std::vector<std::string> &log, Fs &fs) : log_(log), fs_(fs) {}
+
+	std::vector<std::string> names = {"S-1", "S-2", "S-3"};
+	std::uint32_t openError = 0;
+	std::uint32_t closeError = 0;
+	// この名前の頁で失敗する（1 を返す。無い名前を渡した場合の ExportPDFPages と同じ）。
+	std::string failsAt;
+	// この名前の頁で投げる。
+	std::string throwsAt;
+	// 書き終えてもファイルを置かない（出力先のフォルダが無い場合を模倣する）。
+	bool writes = true;
+
+	std::vector<std::string> sheets() override {
+		log_.emplace_back("sheets");
+		return names;
+	}
+	std::uint32_t open(const std::string &path) override {
+		log_.push_back("open " + path);
+		path_ = path;
+		return openError;
+	}
+	std::uint32_t page(const std::string &sheet) override {
+		log_.push_back("page " + sheet);
+		if (sheet == throwsAt) {
+			throw std::runtime_error("page");
+		}
+		return sheet == failsAt ? 1 : 0;
+	}
+	std::uint32_t close() override {
+		log_.emplace_back("close pdf");
+		if (writes) {
+			fs_.files.push_back(path_);
+		}
+		return closeError;
+	}
+
+private:
+	std::vector<std::string> &log_;
+	Fs &fs_;
+	std::string path_;
+};
+
+Json exportArgs(std::string_view document, std::initializer_list<const char *> sheets,
+                std::string_view to) {
+	Json list = Json::array();
+	for (const char *sheet : sheets) {
+		list.push(Json::string(sheet));
+	}
+	return Json::object({{"document", Json::string(std::string(document))},
+	                     {"sheets", std::move(list)},
+	                     {"to", Json::string(std::string(to))}});
+}
+
+}
+
+static_assert(VwCli::core::kExportPdfSpec.kind == ToolKind::App);
+
+TEST(ExportPdfSpec) {
+	CHECK_EQ(std::string(VwCli::core::kExportPdfSpec.name), std::string("export_pdf"));
+	CHECK(must(VwCli::core::kExportPdfSpec.inputSchema).isObject());
+}
+
+// 前面でない図面は前面にしてからシートを確かめ、sheets の順に書き出し、書き終えたファイルを
+// 確かめてから前面を戻す。
+TEST(ExportPdfWritesTheSheetsInOrderAndRestoresTheFront) {
+	FakeDocuments docs = sample();
+	Fs fs;
+	FakePdf pdf(docs.calls, fs);
+	ToolStatus status;
+	Json result =
+	    VwCli::core::exportPdf(exportArgs(kUntitled, {"S-3", "S-1"}, "/Users/me/tmp/a.pdf"), docs,
+		                       pdf, fs.environment(), status);
+	CHECK(status.code == ErrorCode::None);
+	CHECK_EQ(result, Json::object({{"document", Json::string(std::string(kUntitled))},
+	                               {"path", Json::string("/Users/me/tmp/a.pdf")},
+	                               {"pages", Json::integer(2)}}));
+	CHECK(docs.calls == calls({"list", "switch 22", "list", "sheets", "open /Users/me/tmp/a.pdf",
+	                           "page S-3", "page S-1", "close pdf", "list", "switch 11"}));
+	CHECK(docs.open[0].active);
+	std::vector<std::string> asked = {"to /Users/me/tmp/a.pdf", "parent /Users/me/tmp",
+	                                  "to /Users/me/tmp/a.pdf"};
+	CHECK(fs.asked == asked);
+}
+
+// 前面の図面なら切り替えない。同じシートを 2 度渡せば 2 頁になる（重複を断らない）。
+TEST(ExportPdfExportsTheFrontDocumentWithoutSwitching) {
+	FakeDocuments docs = sample();
+	Fs fs;
+	FakePdf pdf(docs.calls, fs);
+	ToolStatus status;
+	Json result = VwCli::core::exportPdf(
+	    exportArgs("/Users/me/plan.vwx", {"S-2", "S-2"}, "/Users/me/tmp/a.PDF"), docs, pdf,
+	    fs.environment(), status);
+	CHECK(status.code == ErrorCode::None);
+	CHECK_EQ(*result.find("pages"), Json::integer(2));
+	CHECK(docs.calls == calls({"list", "sheets", "open /Users/me/tmp/a.PDF", "page S-2", "page S-2",
+	                           "close pdf", "list"}));
+}
+
+TEST(ExportPdfRejectsBadArguments) {
+	for (
+	    const char *args : {
+	        R"({})",
+	        R"({"document":"/Users/me/plan.vwx","to":"/Users/me/tmp/a.pdf"})",
+	        R"({"document":"/Users/me/plan.vwx","sheets":["S-1"]})",
+	        R"({"sheets":["S-1"],"to":"/Users/me/tmp/a.pdf"})",
+	        R"({"document":"/Users/me/plan.vwx","sheets":[],"to":"/Users/me/tmp/a.pdf"})",
+	        R"({"document":"/Users/me/plan.vwx","sheets":"S-1","to":"/Users/me/tmp/a.pdf"})",
+	        R"({"document":"/Users/me/plan.vwx","sheets":[1],"to":"/Users/me/tmp/a.pdf"})",
+	        R"({"document":"/Users/me/plan.vwx","sheets":["S-1",null],"to":"/Users/me/tmp/a.pdf"})",
+	        R"({"document":"/Users/me/plan.vwx","sheets":null,"to":"/Users/me/tmp/a.pdf"})",
+	        R"({"document":"/Users/me/plan.vwx","sheets":["S-1"],"to":"/Users/me/tmp/a.vwx"})",
+	        R"({"document":"/Users/me/plan.vwx","sheets":["S-1"],"to":"tmp/a.pdf"})",
+	        R"({"document":"/Users/me/plan.vwx","sheets":["S-1"],"to":"/Users/me/../a.pdf"})",
+	        R"({"document":"/Users/me/plan.vwx","sheets":["S-1"],"to":"/Users/me/tmp/a.pdf","x":1})",
+	    }) {
+		FakeDocuments docs = sample();
+		Fs fs;
+		FakePdf pdf(docs.calls, fs);
+		ToolStatus status;
+		Json result = VwCli::core::exportPdf(must(args), docs, pdf, fs.environment(), status);
+		CHECK(status.code == ErrorCode::InvalidArgs);
+		CHECK(result.isNull());
+		CHECK(docs.calls.empty());
+		CHECK(fs.asked.empty());
+	}
+	// Windows の規則を渡せば、/ を含む to を拒否する。
+	FakeDocuments docs = sample();
+	Fs fs;
+	FakePdf pdf(docs.calls, fs);
+	ToolStatus status;
+	VwCli::core::exportPdf(exportArgs(kUntitled, {"S-1"}, "C:/x/a.pdf"), docs, pdf,
+	                       fs.environment(&save_target::checkWindowsTo), status);
+	CHECK(status.code == ErrorCode::InvalidArgs);
+	CHECK(docs.calls.empty());
+}
+
+TEST(ExportPdfFailsWithoutDocuments) {
+	FakeDocuments docs;
+	Fs fs;
+	FakePdf pdf(docs.calls, fs);
+	ToolStatus status;
+	VwCli::core::exportPdf(exportArgs("/Users/me/plan.vwx", {"S-1"}, "/Users/me/tmp/a.pdf"), docs,
+	                       pdf, fs.environment(), status);
+	CHECK(status.code == ErrorCode::Internal);
+	CHECK_EQ(status.detail, must(R"({"reason":"no_document"})"));
+	CHECK(docs.calls == calls({"list"}));
+	CHECK(fs.asked.empty());
+}
+
+TEST(ExportPdfRejectsADocumentThatIsNotOpenOrAmbiguous) {
+	FakeDocuments docs = sample();
+	Fs fs;
+	FakePdf pdf(docs.calls, fs);
+	ToolStatus status;
+	VwCli::core::exportPdf(exportArgs("/Users/me/Plan.vwx", {"S-1"}, "/Users/me/tmp/a.pdf"), docs,
+	                       pdf, fs.environment(), status);
+	CHECK(status.code == ErrorCode::InvalidArgs);
+	CHECK(docs.calls == calls({"list"}));
+
+	FakeDocuments twins;
+	twins.open = {{"/Applications/Vectorworks 2026/plan v2026.vwx", true, false, 1},
+	              {"/Applications/Vectorworks 2026/plan v2026.vwx", false, true, 2}};
+	FakePdf twinPdf(twins.calls, fs);
+	ToolStatus ambiguous;
+	VwCli::core::exportPdf(
+	    exportArgs("/Applications/Vectorworks 2026/plan v2026.vwx", {"S-1"}, "/Users/me/tmp/a.pdf"),
+	    twins, twinPdf, fs.environment(), ambiguous);
+	CHECK_EQ(ambiguous.detail, must(R"({"reason":"document_ambiguous"})"));
+	CHECK(ambiguous.message.find("どれも書き出しませんでした") != std::string::npos);
+	CHECK(twins.calls == calls({"list"}));
+	CHECK(fs.asked.empty());
+}
+
+// 無い名前（デザインレイヤの名前・空の名前・大文字と小文字だけが違う名前を含む）は、書き出す
+// 先を確かめる前・PDF を開く前に invalid_args で断り、前面を戻す。
+TEST(ExportPdfRejectsNamesThatAreNotSheets) {
+	for (const char *sheet : {"S-4", "1F", "", "s-1"}) {
+		FakeDocuments docs = sample();
+		Fs fs;
+		FakePdf pdf(docs.calls, fs);
+		ToolStatus status;
+		VwCli::core::exportPdf(exportArgs(kUntitled, {"S-1", sheet}, "/Users/me/tmp/a.pdf"), docs,
+		                       pdf, fs.environment(), status);
+		CHECK(status.code == ErrorCode::InvalidArgs);
+		CHECK(status.message.find("シートレイヤ " + std::string(sheet) + " がありません") !=
+		      std::string::npos);
+		CHECK(docs.calls == calls({"list", "switch 22", "list", "sheets", "list", "switch 11"}));
+		CHECK(fs.asked.empty());
+	}
+}
+
+// 書き出す先の状態は save と同じ順で確かめ、PDF を開く前に断る（to_is_open は返さない）。
+TEST(ExportPdfRefusesTargetsBeforeOpening) {
+	struct Case {
+		std::vector<std::string> files;
+		std::vector<std::string> folders;
+		const char *to;
+		const char *reason;
+	};
+	for (const Case &c : {
+	         Case{{"/Users/me/tmp/a.pdf"}, {"/Users/me/tmp"}, "/Users/me/tmp/a.pdf", "file_exists"},
+	         Case{{},
+			      {"/Users/me/tmp/a.pdf", "/Users/me/tmp"},
+			      "/Users/me/tmp/a.pdf",
+			      "file_exists"},
+	         Case{{}, {}, "/Users/me/none/a.pdf", "parent_missing"},
+	         Case{{"/Users/me/file"}, {}, "/Users/me/file/a.pdf", "parent_missing"},
+	     }) {
+		FakeDocuments docs = sample();
+		Fs fs;
+		fs.files = c.files;
+		fs.folders = c.folders;
+		FakePdf pdf(docs.calls, fs);
+		ToolStatus status;
+		VwCli::core::exportPdf(exportArgs(kUntitled, {"S-1"}, c.to), docs, pdf, fs.environment(),
+		                       status);
+		CHECK(status.code == ErrorCode::Internal);
+		CHECK_EQ(reasonOf(status), std::string(c.reason));
+		CHECK(docs.calls == calls({"list", "switch 22", "list", "sheets", "list", "switch 11"}));
+	}
+	FakeDocuments docs = sample();
+	Fs fs;
+	fs.toFails = Probe{Entry::Failed, 13};
+	FakePdf pdf(docs.calls, fs);
+	ToolStatus status;
+	VwCli::core::exportPdf(exportArgs(kUntitled, {"S-1"}, "/Users/me/tmp/a.pdf"), docs, pdf,
+	                       fs.environment(), status);
+	CHECK_EQ(status.detail, must(R"({"reason":"to_check_failed","check":"to","os_error":13})"));
+}
+
+TEST(ExportPdfReportsAnOpenFailure) {
+	FakeDocuments docs = sample();
+	Fs fs;
+	FakePdf pdf(docs.calls, fs);
+	pdf.openError = 1;
+	ToolStatus status;
+	VwCli::core::exportPdf(exportArgs(kUntitled, {"S-1"}, "/Users/me/tmp/a.pdf"), docs, pdf,
+	                       fs.environment(), status);
+	CHECK(status.code == ErrorCode::Internal);
+	CHECK_EQ(status.detail, must(R"({"reason":"export_failed","step":"open","vcom_error":1})"));
+	// 開けなければ閉じない。
+	CHECK(docs.calls == calls({"list", "switch 22", "list", "sheets", "open /Users/me/tmp/a.pdf",
+	                           "list", "switch 11"}));
+}
+
+// 頁の失敗では残りを書かずに閉じ、書きかけの PDF を消さない。
+TEST(ExportPdfStopsAtAFailedPageAndCloses) {
+	FakeDocuments docs = sample();
+	Fs fs;
+	FakePdf pdf(docs.calls, fs);
+	pdf.failsAt = "S-2";
+	ToolStatus status;
+	VwCli::core::exportPdf(exportArgs(kUntitled, {"S-1", "S-2", "S-3"}, "/Users/me/tmp/a.pdf"),
+	                       docs, pdf, fs.environment(), status);
+	CHECK(status.code == ErrorCode::Internal);
+	CHECK_EQ(status.detail,
+	         must(R"({"reason":"export_failed","step":"page","sheet":"S-2","vcom_error":1})"));
+	CHECK(docs.calls == calls({"list", "switch 22", "list", "sheets", "open /Users/me/tmp/a.pdf",
+	                           "page S-1", "page S-2", "close pdf", "list", "switch 11"}));
+	CHECK(fs.files == std::vector<std::string>{"/Users/me/tmp/a.pdf"});
+}
+
+TEST(ExportPdfReportsACloseFailure) {
+	FakeDocuments docs = sample();
+	Fs fs;
+	FakePdf pdf(docs.calls, fs);
+	pdf.closeError = 1;
+	ToolStatus status;
+	VwCli::core::exportPdf(exportArgs("/Users/me/plan.vwx", {"S-1"}, "/Users/me/tmp/a.pdf"), docs,
+	                       pdf, fs.environment(), status);
+	CHECK_EQ(status.detail, must(R"({"reason":"export_failed","step":"close","vcom_error":1})"));
+}
+
+// 全てが成功を返してもファイルが無ければ失敗にする（出力先のフォルダが無い場合の IExportPDF）。
+TEST(ExportPdfChecksTheFileAfterWriting) {
+	FakeDocuments docs = sample();
+	Fs fs;
+	FakePdf pdf(docs.calls, fs);
+	pdf.writes = false;
+	ToolStatus status;
+	VwCli::core::exportPdf(exportArgs(kUntitled, {"S-1"}, "/Users/me/tmp/a.pdf"), docs, pdf,
+	                       fs.environment(), status);
+	CHECK(status.code == ErrorCode::Internal);
+	CHECK_EQ(status.detail, must(R"({"reason":"export_failed","step":"file"})"));
+	CHECK(docs.calls == calls({"list", "switch 22", "list", "sheets", "open /Users/me/tmp/a.pdf",
+	                           "page S-1", "close pdf", "list", "switch 11"}));
+}
+
+// 頁の途中で投げた場合も、PDF を閉じ、前面を戻してから投げる（Server が internal で応答する）。
+TEST(ExportPdfClosesAndRestoresTheFrontWhenAPageThrows) {
+	FakeDocuments docs = sample();
+	Fs fs;
+	FakePdf pdf(docs.calls, fs);
+	pdf.throwsAt = "S-2";
+	ToolStatus status;
+	bool threw = false;
+	try {
+		VwCli::core::exportPdf(exportArgs(kUntitled, {"S-1", "S-2"}, "/Users/me/tmp/a.pdf"), docs,
+		                       pdf, fs.environment(), status);
+	} catch (const std::runtime_error &) {
+		threw = true;
+	}
+	CHECK(threw);
+	CHECK(docs.calls == calls({"list", "switch 22", "list", "sheets", "open /Users/me/tmp/a.pdf",
+	                           "page S-1", "page S-2", "close pdf", "list", "switch 11"}));
+}

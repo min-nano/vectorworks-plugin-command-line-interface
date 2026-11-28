@@ -86,6 +86,10 @@ public:
 	// requiredString は必須の文字列の引数。存在しなければ誤り（空の文字列を返す）。
 	std::string requiredString(std::string_view key);
 
+	// requiredStrings は必須の、1 つ以上の文字列の配列の引数（順のまま返す。重複は拒否しない）。
+	// 存在しない・配列でない・空・文字列でない要素があれば誤り（空の配列を返す）。
+	std::vector<std::string> requiredStrings(std::string_view key);
+
 	bool ok() const { return status_.code == ErrorCode::None; }
 
 private:

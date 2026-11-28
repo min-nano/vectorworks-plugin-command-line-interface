@@ -88,6 +88,92 @@ bool bringForward(Documents &docs, const Target &target, ToolStatus &status) {
 	return false;
 }
 
+// exportFailed は書き出しの失敗（internal。reason は export_failed）。step は失敗した段
+// （open・page・close・file）。
+void exportFailed(ToolStatus &status, std::string message, std::string_view step, Json detail) {
+	detail.set("reason", Json::string(std::string(kExportFailed)));
+	detail.set("step", Json::string(std::string(step)));
+	args::fail(status, ErrorCode::Internal, std::move(message), std::move(detail));
+}
+
+// exportFront は前面にした図面のシートを確かめ、書き出す先の状態を確かめてから書き出す
+// （export_pdf の検証の順の 3 の残りと 4、書き出し）。前面は呼び出し元が戻す。
+Json exportFront(const std::string &document, const std::vector<std::string> &sheets,
+                 const std::string &to, const std::string &parent, SheetPdf &pdf,
+                 const SaveEnvironment &environment, ToolStatus &status) {
+	// 無い名前を渡すと、ExportPDFPages は失敗を返し、頁の欠けた PDF が残るため、書き出す前に全てを
+	// 確かめる（Findings「PDF Export」の「失敗の見え方」）。デザインレイヤの名前も断る。
+	std::vector<std::string> present = pdf.sheets();
+	for (const std::string &sheet : sheets) {
+		if (std::ranges::find(present, sheet) == present.end()) {
+			args::fail(status, ErrorCode::InvalidArgs,
+			           std::string(kExportPdfSpec.name) + " の引数が誤っています: 図面 " +
+			               document + " にシートレイヤ " + sheet +
+			               " がありません（layers の kind が sheet の name を渡してください）");
+			return Json();
+		}
+	}
+	// 開いている図面は .vwx なので、.pdf の to と比べない（to_is_open は返さない）。
+	if (!save_target::check(to, parent, {}, environment.checks, status)) {
+		return Json();
+	}
+	std::uint32_t error = pdf.open(to);
+	if (error != 0) {
+		exportFailed(status,
+		             "PDF を開けませんでした（OpenPDFDocument が " + std::to_string(error) +
+		                 " を返した）",
+		             "open", Json::object({{"vcom_error", Json::integer(error)}}));
+		return Json();
+	}
+	std::optional<std::string> failedSheet;
+	try {
+		for (const std::string &sheet : sheets) {
+			error = pdf.page(sheet);
+			if (error != 0) {
+				failedSheet = sheet;
+				break;
+			}
+		}
+	} catch (...) {
+		// 開いた PDF を閉じ、設定を戻してから、Server に internal で応答させる。
+		(void)pdf.close();
+		throw;
+	}
+	std::uint32_t closed = pdf.close();
+	// 途中で失敗しても、書きかけの PDF は消さない（CLAUDE.md の 9）。
+	if (failedSheet) {
+		exportFailed(status,
+		             "シート " + *failedSheet + " を書き出せませんでした（ExportPDFPages が " +
+		                 std::to_string(error) + " を返した）。" + to +
+		                 " に書きかけの PDF が残っていることがあります",
+		             "page",
+		             Json::object({{"sheet", Json::string(*failedSheet)},
+		                           {"vcom_error", Json::integer(error)}}));
+		return Json();
+	}
+	if (closed != 0) {
+		exportFailed(status,
+		             "PDF を書き終えられませんでした（ClosePDFDocument が " +
+		                 std::to_string(closed) + " を返した）",
+		             "close", Json::object({{"vcom_error", Json::integer(closed)}}));
+		return Json();
+	}
+	// 戻り値が成功でもファイルができないことがあるため、書き終えた後に確かめる（同じ節）。
+	save_target::Probe written = environment.checks.to(to);
+	if (written.entry != save_target::Entry::File) {
+		Json detail = Json::object();
+		if (written.entry == save_target::Entry::Failed) {
+			detail.set("os_error", Json::integer(written.osError));
+		}
+		exportFailed(status, "書き出しは成功を返しましたが、" + to + " にファイルがありません",
+		             "file", std::move(detail));
+		return Json();
+	}
+	return Json::object({{"document", Json::string(document)},
+	                     {"path", Json::string(to)},
+	                     {"pages", Json::integer(static_cast<std::int64_t>(sheets.size()))}});
+}
+
 }
 
 bool clearClosedDocuments(Documents &docs) {
@@ -143,7 +229,7 @@ Json save(const Json &args, Documents &docs, const SaveEnvironment &environment,
 		return Json();
 	}
 	std::string problem;
-	std::optional<std::string> checked = environment.form(to, problem);
+	std::optional<std::string> checked = environment.form(to, save_target::kVwxExtension, problem);
 	if (!checked) {
 		args::fail(status, ErrorCode::InvalidArgs, "save の引数が誤っています: " + problem);
 		return Json();
@@ -231,6 +317,48 @@ Json close(const Json &args, Documents &docs, ToolStatus &status) {
 	if (after.empty() && !clearClosedDocuments(docs)) {
 		result.set(std::string(kClosedDocumentsRemainField), Json::boolean(true));
 	}
+	return result;
+}
+
+Json exportPdf(const Json &args, Documents &docs, SheetPdf &pdf, const SaveEnvironment &environment,
+               ToolStatus &status) {
+	// 1. 引数の形式（to の形式を含む）。
+	args::Reader reader(args, kExportPdfSpec.name, status);
+	reader.onlyKnown({"document", "sheets", "to"});
+	std::string document = reader.requiredString("document");
+	std::vector<std::string> sheets = reader.requiredStrings("sheets");
+	std::string to = reader.requiredString("to");
+	if (!reader.ok()) {
+		return Json();
+	}
+	std::string problem;
+	std::optional<std::string> checked = environment.form(to, save_target::kPdfExtension, problem);
+	if (!checked) {
+		args::fail(status, ErrorCode::InvalidArgs,
+		           std::string(kExportPdfSpec.name) + " の引数が誤っています: " + problem);
+		return Json();
+	}
+	// 2. 図面が存在しない。
+	std::vector<OpenDocument> before = docs.list();
+	if (before.empty()) {
+		args::noDocument(status);
+		return Json();
+	}
+	// 3. 指定する図面。シートレイヤは前面の図面からしか読めず、前面でない図面のシートは書き出せない
+	// ため、前面にしてから確かめる（Findings「PDF Export」）。
+	Target target = findTarget(before, document, kExportPdfSpec.name, "書き出し", status);
+	if (!target.found || !bringForward(docs, target, status)) {
+		return Json();
+	}
+	Json result;
+	try {
+		result = exportFront(document, sheets, to, *checked, pdf, environment, status);
+	} catch (...) {
+		restoreFront(docs, target, docs.list());
+		throw;
+	}
+	// 成否に関わらず前面を戻す。
+	restoreFront(docs, target, docs.list());
 	return result;
 }
 

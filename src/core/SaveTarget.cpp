@@ -16,21 +16,20 @@ constexpr std::size_t kMacPathBytes = 1024;
 constexpr std::size_t kWindowsSegmentUnits = 255;
 constexpr std::size_t kWindowsPathUnits = 260;
 
-constexpr std::string_view kExtension = ".vwx";
-
 bool hasControl(std::string_view text) {
 	return std::ranges::any_of(text, [](char c) { return static_cast<unsigned char>(c) < 0x20; });
 }
 
-// endsWithVwx は名前が .vwx で終わるか（大文字と小文字を区別しない。ASCII のみを畳む）。
-bool endsWithVwx(std::string_view name) {
-	if (name.size() < kExtension.size()) {
+// endsWith は名前が extension（小文字）で終わるか（大文字と小文字を区別しない。ASCII のみを
+// 畳む）。
+bool endsWith(std::string_view name, std::string_view extension) {
+	if (name.size() < extension.size()) {
 		return false;
 	}
 	auto asciiLower = [](char c) {
 		return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
 	};
-	return std::ranges::equal(name.substr(name.size() - kExtension.size()), kExtension, {},
+	return std::ranges::equal(name.substr(name.size() - extension.size()), extension, {},
 	                          asciiLower);
 }
 
@@ -80,7 +79,8 @@ std::optional<std::string> commonSegment(std::string_view segment) {
 
 }
 
-std::optional<std::string> checkMacTo(std::string_view to, std::string &problem) {
+std::optional<std::string> checkMacTo(std::string_view to, std::string_view extension,
+                                      std::string &problem) {
 	if (!to.starts_with('/')) {
 		return refuse(problem, "to が絶対パス（/ から始まる）ではありません");
 	}
@@ -99,14 +99,15 @@ std::optional<std::string> checkMacTo(std::string_view to, std::string &problem)
 			return refuse(problem, "to に長すぎる段があります（255 バイトを超える）");
 		}
 	}
-	if (!endsWithVwx(segments.back())) {
-		return refuse(problem, "to の拡張子が .vwx ではありません");
+	if (!endsWith(segments.back(), extension)) {
+		return refuse(problem, "to の拡張子が " + std::string(extension) + " ではありません");
 	}
 	std::size_t last = to.rfind('/');
 	return std::string(last == 0 ? to.substr(0, 1) : to.substr(0, last));
 }
 
-std::optional<std::string> checkWindowsTo(std::string_view to, std::string &problem) {
+std::optional<std::string> checkWindowsTo(std::string_view to, std::string_view extension,
+                                          std::string &problem) {
 	if (hasControl(to)) {
 		return refuse(problem, "to に制御文字があります");
 	}
@@ -144,8 +145,8 @@ std::optional<std::string> checkWindowsTo(std::string_view to, std::string &prob
 	if (unc && segments.size() < 3) {
 		return refuse(problem, "UNC の to にはサーバー・共有・ファイル名が要ります");
 	}
-	if (!endsWithVwx(segments.back())) {
-		return refuse(problem, "to の拡張子が .vwx ではありません");
+	if (!endsWith(segments.back(), extension)) {
+		return refuse(problem, "to の拡張子が " + std::string(extension) + " ではありません");
 	}
 	std::size_t last = to.rfind('\\');
 	// ルートの直下は、区切りを含めたルートの形式（C:\ と \\server\share\）。

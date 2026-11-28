@@ -90,7 +90,7 @@ vw2026 call layer_objects '{"layer":"1F","limit":10}'
 
 ### 図面の保存・終了と Vectorworks の終了
 
-Vectorworks に指示する操作（`save`・`close`・`quit`）は、他のプログラムの操作と混在しないように、
+Vectorworks に指示する操作（`save`・`close`・`export_pdf`・`quit`）は、他のプログラムの操作と混在しないように、
 **セッションによって占有した状態でのみ**実行できます（占有していない場合・他が占有している場合は、標準出力に何も返さず、終了コード 23 で拒否されます。理由は標準エラーに出力されます）。
 
 ```bash
@@ -105,6 +105,10 @@ export VW2026_SESSION=<ID>
 vw2026 call save '{"document":"/Users/me/plan.vwx","to":"/Users/me/plan-2.vwx"}'
 # {"document":"/Users/me/plan.vwx","path":"/Users/me/plan-2.vwx"}
 
+# シートレイヤ（layers の kind が sheet）を、この順に 1 枚 1 頁で PDF へ書き出す（mac のみ）
+vw2026 call export_pdf '{"document":"/Users/me/plan-2.vwx","sheets":["S-1","S-2"],"to":"/Users/me/plan-2.pdf"}'
+# {"document":"/Users/me/plan-2.vwx","path":"/Users/me/plan-2.pdf","pages":2}
+
 # 図面を閉じる
 vw2026 call close '{"document":"/Users/me/plan-2.vwx"}'
 # {"closed":true}
@@ -116,6 +120,7 @@ vw2026 session end
 
 - **`close` は保存されていない変更を破棄します。確認ダイアログは表示されません。** 保持したい変更は、先に `save` で
   新しいファイルへ保存します（`save` は既存のファイルへは保存しません）。
+- `export_pdf` も既存のファイルへは書き出しません。書き直す場合は、先にファイルを消すか、新しい `to` を渡します。
 - `quit`（`vw2026 call quit`）は、図面を全て閉じてから呼び出します。図面が開いている場合は終了せず、開いている
   図面の一覧を返します。Vectorworks が終了すると、セッションも終了します。
 

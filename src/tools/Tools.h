@@ -26,6 +26,8 @@ core::Json documents(const core::Json &args, const core::ToolContext &context,
 core::Json save(const core::Json &args, const core::ToolContext &context, core::ToolStatus &status);
 core::Json close(const core::Json &args, const core::ToolContext &context,
                  core::ToolStatus &status);
+core::Json exportPdf(const core::Json &args, const core::ToolContext &context,
+                     core::ToolStatus &status);
 
 // 終了の依頼（Documents.cpp。開いている図面の一覧を、図面を操作するツールと同じインターフェースで
 // 読み取る）。

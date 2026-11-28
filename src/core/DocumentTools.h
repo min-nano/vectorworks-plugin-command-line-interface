@@ -1,9 +1,10 @@
 #pragma once
 
-// 図面を操作するツール（documents・save・close）の内 SDK に依存しない部分（docs/plugin/tools.md
-// 「図面を操作するツール」）。引数の検査・検証の順序（引数の形式 → no_document → 指定する図面 →
-// 状態）・save の保存先の検証・前面を戻す手順・結果の形式をここに配置し、SDK の呼び出しは
-// Documents（src/tools/Documents.cpp が SDK で実装する）から受け取るため、無 SDK でテストできる。
+// 図面を操作するツール（documents・save・close・export_pdf）の内 SDK に依存しない部分
+// （docs/plugin/tools.md「図面を操作するツール」・「export_pdf」）。引数の検査・検証の順序（引数の
+// 形式 → no_document → 指定する図面 → 状態）・保存先の検証・前面を戻す手順・結果の形式をここに
+// 配置し、SDK の呼び出しは Documents と SheetPdf（src/tools/Documents.cpp が SDK で実装する）から
+// 受け取るため、無 SDK でテストできる。
 
 #include "core/Json.h"
 #include "core/SaveTarget.h"
@@ -45,10 +46,24 @@ inline constexpr ToolSpec kCloseSpec{
     R"("required":["document"],"additionalProperties":false})",
     ToolKind::App};
 
+// export_pdf は図面の内容を変更せず、ファイルに書き込む App（save と同じ）。
+inline constexpr ToolSpec kExportPdfSpec{
+    "export_pdf",
+    "名指した図面のシートレイヤを、sheets の順に 1 枚 1 頁で to の新しい PDF へ書き出す"
+    "（ダイアログを出さない。既にあるファイルは断る）。前面の図面は書き出した後に戻す",
+    R"({"type":"object","properties":{)"
+    R"("document":{"type":"string","description":"図面のパス（documents の path）"},)"
+    R"("sheets":{"type":"array","items":{"type":"string"},"minItems":1,)"
+    R"("description":"シートレイヤの名前（layers の kind が sheet の name）。この順に頁が並ぶ"},)"
+    R"("to":{"type":"string","description":"書き出す先の新しいパス（絶対パス。拡張子は .pdf）"}},)"
+    R"("required":["document","sheets","to"],"additionalProperties":false})",
+    ToolKind::App};
+
 // 失敗の detail の reason（docs/plugin/tools.md）。
 inline constexpr std::string_view kDocumentAmbiguous = "document_ambiguous";
 inline constexpr std::string_view kSaveFailed = "save_failed";
 inline constexpr std::string_view kNotClosed = "not_closed";
+inline constexpr std::string_view kExportFailed = "export_failed";
 
 // close の結果に、閉じた図面が内部に残存して後処理できなかった場合のみ真で含めるフィールド
 // （docs/plugin/tools.md「close」）。
@@ -91,8 +106,26 @@ public:
 	virtual bool hasActive() = 0;
 };
 
-// SaveEnvironment は save の保存先の検証に使用する規則と関数（プラグインは to の形式の規則に
-// save_target::kNativeForm を、比較の方法に path_compare::equivalent を渡す）。
+// SheetPdf は前面の図面のシートレイヤを PDF に書き出すインターフェース（IExportPDF。Findings
+// 「PDF Export」）。1 回のツールの実行の中でのみ使用する。
+class SheetPdf {
+public:
+	virtual ~SheetPdf() = default;
+	// sheets は前面の図面のシートレイヤ（ovLayerType が 2 のレイヤ）の名前を列の順に返す。
+	virtual std::vector<std::string> sheets() = 0;
+	// open は利用者の書き出しの設定を退避し、書き出す設定（fOpenInViewer を偽・
+	// eWholeAreaAsOnePage）にしてから path の PDF を開く（OpenPDFDocument）。VCOMError を返す
+	// （0 は成功）。失敗した場合は設定を戻してから返す。
+	virtual std::uint32_t open(const std::string &path) = 0;
+	// page は開いた PDF にシート sheet の頁を足す（ExportPDFPages）。VCOMError を返す。
+	virtual std::uint32_t page(const std::string &sheet) = 0;
+	// close は PDF を閉じて書き終え（ClosePDFDocument）、退避した設定を戻す。open が成功した
+	// 場合にのみ、1 回呼ぶ。VCOMError（ClosePDFDocument の戻り値）を返す。
+	virtual std::uint32_t close() = 0;
+};
+
+// SaveEnvironment は save と export_pdf の書き出す先の検証に使用する規則と関数（プラグインは to の
+// 形式の規則に save_target::kNativeForm を、比較の方法に path_compare::equivalent を渡す）。
 struct SaveEnvironment {
 	save_target::FormCheck form = nullptr;
 	save_target::Checks checks;
@@ -117,5 +150,7 @@ Json documents(const Json &args, Documents &docs, ToolStatus &status);
 Json save(const Json &args, Documents &docs, const SaveEnvironment &environment,
           ToolStatus &status);
 Json close(const Json &args, Documents &docs, ToolStatus &status);
+Json exportPdf(const Json &args, Documents &docs, SheetPdf &pdf, const SaveEnvironment &environment,
+               ToolStatus &status);
 
 }
