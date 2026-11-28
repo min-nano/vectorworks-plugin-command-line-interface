@@ -18,7 +18,7 @@ import (
 // 無い以外の理由でロックを調べられなければ（開けない・通常のファイルでない・flock が
 // EWOULDBLOCK 以外で失敗する）、その誤りも返す（install・uninstall が「動いていない」とみなさないため）。
 //
-// プラグインと同じく、開いて待たない（docs/protocol.md「受け付けの手順」）。FIFO を O_NONBLOCK なしで開くと書き手を
+// プラグインと同じく、開いて待たない（docs/protocol.md「ロック（bridge.lock）」と「プラグイン側の義務」）。FIFO を O_NONBLOCK なしで開くと書き手を
 // 待って止まるので O_NONBLOCK で開き、リンクは O_NOFOLLOW でたどらず（リンクの先のデバイスやパイプを開かない）、
 // 開いた後に通常のファイルかを確かめる。
 func lockState(path string) (bool, error) {
