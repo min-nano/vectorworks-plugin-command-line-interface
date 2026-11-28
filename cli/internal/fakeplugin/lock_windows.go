@@ -24,7 +24,7 @@ func lock(path string) (func(), error) {
 // errorSharingViolation は ERROR_SHARING_VIOLATION。
 const errorSharingViolation = syscall.Errno(32)
 
-// waitStateOf は <id>.wait の状態（docs/protocol.md「待つ印」）。共有なしで開ければ呼ぶ側が
+// waitStateOf は <id>.wait の状態（docs/protocol.md「待機標識」）。共有なしで開ければ呼ぶ側が
 // 放した・死んだ。共有違反なら呼ぶ側が待っている。
 func waitStateOf(path string) waitState {
 	name, err := syscall.UTF16PtrFromString(path)

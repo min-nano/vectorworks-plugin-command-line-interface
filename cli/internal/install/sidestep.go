@@ -78,7 +78,7 @@ func (m *movedCLI) where() string {
 }
 
 // sidestep は、走らせている CLI の実行ファイルが dir の中にあれば、old へ名前の変更で移す
-// （docs/plugin/install-and-update.md「動いている CLI のよけ方」）。Windows では開いている
+// （docs/plugin/install-and-update.md「実行中の CLI の退避」）。Windows では開いている
 // ファイル（動いている実行ファイル）を含むフォルダの名前を変えられないが、実行ファイルそのものは
 // 同じボリュームの別のディレクトリへ移せる。mac でも同じ手順を踏む（OS で分けない）。
 func (o *Options) sidestep(dir, old string) (*movedCLI, error) {

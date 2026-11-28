@@ -6,5 +6,5 @@
 #define PLUGIN_VWR_ID "cli"
 
 // 刻印（VW_BUILD_VERSION / VW_BUILD_BRANCH）。CMake が構成の度に書く（-D で渡さなければ
-// "local"）。ping の結果にだけ載る（docs/plugin/build-and-release.md「リリースの形」）。
+// "local"）。ping の結果にだけ載る（docs/plugin/build-and-release.md「リリースの構成」）。
 #include "BuildStamp.h"

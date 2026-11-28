@@ -255,7 +255,7 @@ constexpr std::array<ToolFn, sizeof...(I)> makeRunners(std::index_sequence<I...>
 }
 
 // 偽の道具の数の上限。fake-tools.json の道具がこれより多ければ loadTools が失敗にするので、
-// 足りなくなったら増やす（docs/fixtures.md「偽の道具の表」）。
+// 足りなくなったら増やす（docs/fixtures.md「擬似ツールの一覧」）。
 constexpr auto kRunners = makeRunners(std::make_index_sequence<32>{});
 
 std::vector<Tool> loadTools() {
