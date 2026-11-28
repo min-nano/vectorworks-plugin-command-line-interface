@@ -42,7 +42,8 @@
 - `lock`: `bridge.lock` を掴み、取れたら終了まで放しません（掴み方と、断った `bridge.lock` を
   1 度だけ作り直すことは[通信規則「ロック」](../protocol.md#ロックbridgelock)）。
 - `sweep`: **ロックを取れた直後に 1 度だけ**、待つ印を掴める・無い id のファイルを消します
-  （[通信規則「ロック」](../protocol.md#ロックbridgelock)）。
+  （[通信規則「ロック」](../protocol.md#ロックbridgelock)）。待つ印を確かめられない id のファイル（`files::WaitState::Unknown`）は
+  残します。
 
 ## 受け付け 1 回（`core::Server::serve`）
 

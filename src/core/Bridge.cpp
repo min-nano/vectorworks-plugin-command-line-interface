@@ -72,7 +72,9 @@ void Bridge::sweep() {
 			continue;
 		}
 		std::string id = name.substr(0, name.find('.'));
-		if (waitState(id) != files::WaitState::Held) {
+		// 確かめられない待つ印の id のファイルも残す（待っている呼ぶ側のものかもしれない）。
+		files::WaitState state = waitState(id);
+		if (state == files::WaitState::Released || state == files::WaitState::Missing) {
 			files::remove(path(name));
 		}
 	}

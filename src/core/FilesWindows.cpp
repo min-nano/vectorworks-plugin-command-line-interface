@@ -230,13 +230,40 @@ bool remove(const std::string &path) { return ::DeleteFileW(extended(path).c_str
 
 WaitState probe(const std::string &path) {
 	// 共有なしで開ければ、呼ぶ側は放している。共有違反なら掴んでいる。通常のファイルでない待つ印は
-	// 無いものとする（実行しない側に倒す）。
+	// 無いものとする（実行しない側に倒す）。絶対パスでなければ開かない（\\?\ を付けられない）ので、
+	// 無いものとする。
+	std::wstring wide = extended(path);
+	if (wide.empty()) {
+		return WaitState::Missing;
+	}
 	Opened opened = openFile(path, GENERIC_READ, 0, OPEN_EXISTING);
 	if (opened.handle != INVALID_HANDLE_VALUE) {
 		::CloseHandle(opened.handle);
 		return WaitState::Released;
 	}
-	return opened.error == ERROR_SHARING_VIOLATION ? WaitState::Held : WaitState::Missing;
+	switch (opened.error) {
+	case ERROR_SHARING_VIOLATION:
+		return WaitState::Held;
+	// 0 は断った（通常のファイルでない・中身がローカルにない）。他は無い（名前が長すぎて置けない・
+	// 名前に使えないものも）。
+	case 0:
+	case ERROR_FILE_NOT_FOUND:
+	case ERROR_PATH_NOT_FOUND:
+	case ERROR_INVALID_NAME:
+	case ERROR_FILENAME_EXCED_RANGE:
+		return WaitState::Missing;
+	case ERROR_ACCESS_DENIED: {
+		// フォルダは、POSIX（開けてから通常のファイルでないと分かる）と同じく無いものとする（Windows
+		// では FILE_FLAG_BACKUP_SEMANTICS なしにフォルダを開けず、断られる）。
+		DWORD attributes = ::GetFileAttributesW(wide.c_str());
+		bool folder =
+		    attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+		return folder ? WaitState::Missing : WaitState::Unknown;
+	}
+	default:
+		// 無い以外の理由で開けなければ、確かめられない（掃除が、待っている呼ぶ側のものを消さないように）。
+		return WaitState::Unknown;
+	}
 }
 
 Lock::Result Lock::take(const std::string &path, std::string &error) {
