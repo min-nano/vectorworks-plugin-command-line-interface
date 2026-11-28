@@ -16,10 +16,10 @@
 #include <string_view>
 #include <vector>
 
-// 道具 quit と、起動を終えた印・終了の依頼の最中の印（docs/plugin/tools.md「quit」・
+// ツール quit と、起動を終了したフラグ・終了の依頼の最中のフラグ（docs/plugin/tools.md「quit」・
 // docs/plugin/architecture.md「エントリポイント」「Vectorworks が処理中」）。SDK の代わりに
-// 偽の Documents と偽の終了の呼び出しを渡す。保存の確認が開いて呼び出しが戻らない間に刻みが
-// 入り直すこと（Windows）は、偽の終了の呼び出しの中から刻みを呼んで真似る。
+// 擬似 Documents と擬似的な終了の呼び出しを渡す。保存の確認が開いて呼び出しが戻らない間に周期処理が
+// 再入すること（Windows）は、擬似的な終了の呼び出しの中から周期処理を呼び出して模倣する。
 
 using VwCli::core::Activity;
 using VwCli::core::ErrorCode;
@@ -54,8 +54,8 @@ ToolContext started() {
 
 }
 
-// quit は占有の中でだけ呼べる App（Read で登録すると、占有なしで終了を頼める）。種類は定数で
-// 決まる（道具の表は定数で初期化される）。
+// quit は占有の中でのみ呼び出せる App（Read で登録すると、占有なしで終了を依頼できる）。種類は
+// 定数で決定される（ツールの一覧は定数で初期化される）。
 static_assert(VwCli::core::kQuitSpec.kind == ToolKind::App);
 
 TEST(QuitSpec) {
@@ -71,7 +71,7 @@ TEST(QuitQuitsWithoutDocuments) {
 	CHECK(status.code == ErrorCode::None);
 	CHECK(status.quit);
 	CHECK_EQ(result, must(R"({"quitting":true})"));
-	// 開いている図面を確かめる 1 回・残った図面を片付ける前に確かめる 1 回・片付けの後の 1 回。
+	// 開いている図面を確認する 1 回・残存した図面を後処理する前に確認する 1 回・後処理の後の 1 回。
 	CHECK_EQ(docs.count("list"), 3);
 	CHECK(docs.actions().empty());
 }
@@ -83,7 +83,7 @@ ToolContext stillStarting() {
 	return context;
 }
 
-// 起動を終えるまでは、図面の有無によらず、図面の一覧を見ずに starting で断る（detail は
+// 起動を終了するまでは、図面の有無によらず、図面の一覧を参照せずに starting で拒否する（detail は
 // documents を持たない）。
 TEST(QuitRefusesBeforeStarting) {
 	for (bool withDocuments : {false, true}) {
@@ -101,8 +101,8 @@ TEST(QuitRefusesBeforeStarting) {
 	}
 }
 
-// 起動を終えた目印の通知を登録できていなければ、reason は starting のまま、detail と文言で分けて
-// 示す（印はいつまでも立たないので、呼ぶ側が起動を待って呼び直し続けないように）。
+// 起動の終了を示す通知を登録できていなければ、reason は starting のまま、detail と文言で区別して
+// 示す（フラグは永久に立たないため、呼び出し元が起動を待機して呼び出しを繰り返し続けないように）。
 TEST(QuitTellsThatTheNotificationIsNotRegistered) {
 	FakeDocuments docs;
 	ToolStatus status;
@@ -115,7 +115,8 @@ TEST(QuitTellsThatTheNotificationIsNotRegistered) {
 	CHECK_EQ(docs.count("list"), 0);
 }
 
-// 図面が開いていれば、終了を頼まずに documents_open で断り、一覧をその順のまま detail に載せる。
+// 図面が開いていれば、終了を依頼せずに documents_open で拒否し、一覧をその順のまま detail に
+// 含める。
 TEST(QuitRefusesWithDocumentsOpen) {
 	FakeDocuments docs = twoDocuments();
 	ToolStatus status;
@@ -133,8 +134,8 @@ TEST(QuitRefusesWithDocumentsOpen) {
 	CHECK(docs.actions().empty());
 }
 
-// 一覧が空でも閉じた図面が中に残っていれば、片付けてから終了を頼む（残すと終了で保存の確認が
-// 出る。#321）。
+// 一覧が空でも閉じた図面が内部に残存していれば、後処理してから終了を依頼する（残すと終了で保存の
+// 確認が表示される。#321）。
 TEST(QuitClearsClosedDocumentsBeforeQuitting) {
 	FakeDocuments docs;
 	docs.remnants = 2;
@@ -147,7 +148,7 @@ TEST(QuitClearsClosedDocumentsBeforeQuitting) {
 	CHECK_EQ(docs.actions(), (std::vector<std::string>{"close", "close"}));
 }
 
-// 片付けられなければ、終了を頼まずに closed_documents_remain で断る。
+// 後処理できなければ、終了を依頼せずに closed_documents_remain で拒否する。
 TEST(QuitRefusesWhenClosedDocumentsRemain) {
 	FakeDocuments docs;
 	docs.remnants = 1;
@@ -161,8 +162,8 @@ TEST(QuitRefusesWhenClosedDocumentsRemain) {
 	CHECK_EQ(docs.actions().size(), std::size_t(VwCli::core::kMaxClosedRemnants));
 }
 
-// 片付けの間に図面が開けば、終了を頼まずに documents_open で断る（片付けは一覧が空でなくなると
-// 止まって「片付いた」と返すので、その後にもう一度一覧を見る）。
+// 後処理の間に図面が開けば、終了を依頼せずに documents_open で拒否する（後処理は一覧が空で
+// なくなると停止して「後処理が完了した」と返すため、その後に再度一覧を参照する）。
 TEST(QuitRefusesADocumentOpenedWhileClearing) {
 	FakeDocuments docs;
 	docs.remnants = 2;
@@ -178,7 +179,7 @@ TEST(QuitRefusesADocumentOpenedWhileClearing) {
 	CHECK_EQ(docs.actions(), (std::vector<std::string>{"close"}));
 }
 
-// 起動を終える前と、図面が開いている間は、残った図面に触れない。
+// 起動を終了する前と、図面が開いている間は、残存した図面に触れない。
 TEST(QuitDoesNotClearBeforeStartingOrWithDocumentsOpen) {
 	FakeDocuments before;
 	before.remnants = 1;
@@ -193,8 +194,8 @@ TEST(QuitDoesNotClearBeforeStartingOrWithDocumentsOpen) {
 	CHECK_EQ(open.remnants, 1);
 }
 
-// 引数の形は、起動を終えたかより先に確かめる（docs/plugin/tools.md「共通の規則」の
-// 確かめの順の 1）。
+// 引数の形式は、起動を終了したかより先に検証する（docs/plugin/tools.md「共通の規則」の
+// 検証の順の 1）。
 TEST(QuitRejectsArguments) {
 	for (bool hasStarted : {false, true}) {
 		FakeDocuments docs;
@@ -228,7 +229,7 @@ TEST(LifecycleStartsWhenMarked) {
 	CHECK(lifecycle.activity() == Activity::Idle);
 }
 
-// 終了を頼んでいる間は Quitting で、2 度目を頼まない。戻ったら下ろし、次は又頼める。
+// 終了を依頼している間は Quitting で、2 度目を依頼しない。戻ったら下ろし、次は再度依頼できる。
 TEST(LifecycleRaisesTheMarkWhileQuitting) {
 	Lifecycle lifecycle;
 	int requests = 0;
@@ -246,7 +247,7 @@ TEST(LifecycleRaisesTheMarkWhileQuitting) {
 	CHECK(lifecycle.activity() == Activity::Idle);
 }
 
-// 終了の呼び出しが投げても、印を下ろす（下ろさないと以後の道具を断り続ける）。
+// 終了の呼び出しが投げても、フラグを下ろす（下ろさないと以後のツールを拒否し続ける）。
 TEST(LifecycleLowersTheMarkWhenTheRequestThrows) {
 	Lifecycle lifecycle;
 	bool thrown = false;
@@ -273,16 +274,17 @@ Json documentsTool(const Json &args, const ToolContext & /*context*/, ToolStatus
 	return VwCli::core::documents(args, *gDocs, status);
 }
 
-// 道具の表と同じ行（種類）で載せる。
+// ツールの一覧と同じ行（種類）で登録する。
 constexpr Tool kTools[] = {VwCli::core::toolOf(VwCli::core::kDocumentsSpec, &documentsTool),
                            VwCli::core::toolOf(VwCli::core::kQuitSpec, &quitTool)};
 
 }
 
-// 刻み（core::tick）を通した quit: 占有の外では断られ、起動を終えるまでと図面が開いている間は
-// 終了を頼まず、図面が 0 枚なら応答を書いてから終了を頼む。頼んでいる間に入り直した刻み（Windows の
-// 保存の確認の間）では、表の道具（quit と読む道具も）を busy で断って 2 度目を頼まず、@tools・
-// @session_start・@session_end は応え、表に無い道具は unknown_tool。戻ったら印を下ろす。
+// 周期処理（core::tick）を経由した quit: 占有の外では拒否され、起動を終了するまでと図面が
+// 開いている間は終了を依頼せず、図面が 0 枚なら応答を書き込んでから終了を依頼する。依頼している
+// 間に再入した周期処理（Windows の保存の確認の間）では、一覧のツール（quit と読み取りツールも）を
+// busy で拒否して 2 度目を依頼せず、@tools・@session_start・@session_end は応答し、一覧に無い
+// ツールは unknown_tool。戻ったらフラグを下ろす。
 TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	TempDir dir;
 	Server server(dir.utf8Path());
@@ -304,7 +306,7 @@ TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	REQUIRE(!session.empty());
 	std::string quit = R"({"tool":"quit","session":")" + session + R"("})";
 
-	// 起動を終える前は、図面が開いていても starting。通知を登録できたかも渡る。
+	// 起動を終了する前は、図面が開いていても starting。通知を登録できたかも渡される。
 	caller.put("b1", quit);
 	VwCli::core::tick(server, kTools, kNow, lifecycle, noRequest);
 	CHECK_EQ(caller.code("b1"), std::string("internal"));
@@ -318,7 +320,7 @@ TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	         must(R"({"reason":"starting","notification_registered":true})"));
 	CHECK_EQ(requests, 0);
 
-	// 起動を終えた後、図面が開いていれば documents_open で、占有は残る。
+	// 起動を終了した後、図面が開いていれば documents_open で、占有は残る。
 	lifecycle.markStarted();
 	docs = twoDocuments();
 	caller.put("c1", quit);
@@ -328,13 +330,13 @@ TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	CHECK_EQ(requests, 0);
 	CHECK(server.inSession());
 
-	// 図面が 0 枚なら終了を頼む。頼んでいる間に刻みが入り直す。
+	// 図面が 0 枚なら終了を依頼する。依頼している間に周期処理が再入する。
 	docs.open.clear();
 	caller.put("d1", quit);
 	bool answeredFirst = false;
 	VwCli::core::ServeResult outer = VwCli::core::tick(server, kTools, kNow, lifecycle, [&] {
 		++requests;
-		// 終了を頼む前に応答を書いてある。
+		// 終了を依頼する前に応答を書き込んである。
 		answeredFirst = caller.result("d1") == must(R"({"quitting":true})");
 		CHECK(lifecycle.activity() == Activity::Quitting);
 		caller.put("e1", quit);
@@ -355,7 +357,7 @@ TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	CHECK_EQ(caller.code("e4"), std::string("unknown_tool"));
 	CHECK(caller.result("e5").isObject());
 	CHECK(!server.inSession());
-	// 戻ったら下ろす（取り消されて Vectorworks が動き続けても、又頼める）。
+	// 戻ったら下ろす（取り消されて Vectorworks が動作し続けても、再度依頼できる）。
 	CHECK(lifecycle.activity() == Activity::Idle);
 	caller.put("f1", R"({"tool":"@session_start"})");
 	VwCli::core::tick(server, kTools, kNow, lifecycle, noRequest);

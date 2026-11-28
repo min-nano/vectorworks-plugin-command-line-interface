@@ -13,8 +13,8 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
-// 取得の進み具合を標準エラーに書く。端末でなければ 1 行ずつ足し、端末なら同じ行を書き直して改行で
-// 閉じる。大きさが分からない本文（chunked）では量だけを示す。
+// 取得の進捗を標準エラーに書き込む。端末でなければ 1 行ずつ追加し、端末ならば同じ行を書き直して
+// 改行で閉じる。大きさが判明しない本文（chunked）では量のみを示す。
 func TestDownloadProgress(t *testing.T) {
 	originals := [2]time.Duration{progressEvery, progressEveryTerminal}
 	progressEvery, progressEveryTerminal = 0, 0
@@ -30,7 +30,7 @@ func TestDownloadProgress(t *testing.T) {
 		w.Write(data)
 	})
 	mux.HandleFunc("/unknown.zip", func(w http.ResponseWriter, r *http.Request) {
-		// 先に送り出して、Content-Length を付けない。
+		// 先に送出して、Content-Length を付けない。
 		w.(http.Flusher).Flush()
 		w.Write(data)
 	})
@@ -71,7 +71,7 @@ func TestDownloadProgress(t *testing.T) {
 	}
 }
 
-// 端末で書き直す行が前より短ければ、残りを空白で消す。失敗で終われば、そこまでの量を示す。
+// 端末で書き直す行が以前より短ければ、残りを空白で消去する。失敗で終了すれば、そこまでの量を示す。
 func TestProgressLine(t *testing.T) {
 	var stderr bytes.Buffer
 	p := &progress{w: &stderr, terminal: true, total: -1}

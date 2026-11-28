@@ -9,19 +9,19 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
-// fakeExecutable は <Plug-Ins>/cli/bin/vw2026（入れた cli の CLI）。
+// fakeExecutable は <Plug-Ins>/cli/bin/vw2026（インストールした cli の CLI）。
 func (h *harness) fakeExecutable() string {
 	return filepath.Join(h.plugins, "cli", "bin", edition.Command)
 }
 
-// 走らせている CLI が付け替えるフォルダの中にあれば、<Work>/old/ へよけてから付け替える。
-// 後始末で消す（mac では動いていても消せる）。
+// 実行中の CLI が差し替えるフォルダの中にあれば、<Work>/old/ へ退避してから差し替える。後処理で
+// 削除する（mac では実行中でも削除できる）。
 func TestInstallSidestepsTheRunningCLI(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	h.publish(release{name: "cli", tag: "c2"})
-	// sidestep はリンクを解いた実行ファイルを移す（mac の一時ディレクトリの /var は /private/var への
-	// リンク）ので、解いたパスで比べる。
+	// sidestep はリンクを解決した実行ファイルを移動する（mac の一時ディレクトリの /var は
+	// /private/var へのリンク）ため、解決したパスで比較する。
 	resolved, err := filepath.EvalSymlinks(h.fakeExecutable())
 	if err != nil {
 		t.Fatal(err)
@@ -47,8 +47,8 @@ func TestInstallSidestepsTheRunningCLI(t *testing.T) {
 	}
 }
 
-// 消せないよけた CLI（Windows で動いているもの）は、install では黙って残し、uninstall では left に載せる。
-// <Work>/old/ の直下の vw2026.old-* / vw2026.exe.old-* の他は消さない。
+// 削除できない退避した CLI（Windows で実行中のもの）は、install では黙って残置し、uninstall では
+// left に含める。<Work>/old/ の直下の vw2026.old-* / vw2026.exe.old-* の他は削除しない。
 func TestCleanOldCLIs(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -81,7 +81,7 @@ func TestCleanOldCLIs(t *testing.T) {
 	}
 }
 
-// 中にあるかは、パスの文字列ではなくディレクトリの同一性で決める。
+// 内部にあるか否かは、パスの文字列ではなくディレクトリの同一性で決定する。
 func TestWithin(t *testing.T) {
 	tmp := t.TempDir()
 	dir := filepath.Join(tmp, "Plug-Ins", "cli")
@@ -108,7 +108,7 @@ func TestWithin(t *testing.T) {
 	if err := os.Symlink(filepath.Join(tmp, "Plug-Ins"), link); err == nil {
 		check("through a link", executable, filepath.Join(link, "cli"), true)
 	}
-	// 大文字と小文字を区別しないボリューム（Windows・mac の既定の APFS）でだけ走らせる。
+	// 大文字と小文字を区別しないボリューム（Windows・mac の既定の APFS）でのみ実行する。
 	upper := filepath.Join(tmp, "PLUG-INS", "CLI")
 	if _, err := os.Stat(upper); err == nil {
 		check("case", executable, upper, true)
@@ -117,7 +117,7 @@ func TestWithin(t *testing.T) {
 	}
 }
 
-// 実行ファイルがリンク（mac の ~/.local/bin/vw2026）なら、解いた先で決める。
+// 実行ファイルがリンク（mac の ~/.local/bin/vw2026）ならば、解決した先で決定する。
 func TestSidestepFollowsTheLink(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -137,7 +137,7 @@ func TestSidestepFollowsTheLink(t *testing.T) {
 	}
 }
 
-// よけていなければ、手で戻す手順に CLI の場所を足さない。
+// 退避していなければ、手動で復元する手順に CLI の場所を追加しない。
 func TestMovedCLIWhereWhenNotMoved(t *testing.T) {
 	var moved *movedCLI
 	if got := moved.where(); got != "" {

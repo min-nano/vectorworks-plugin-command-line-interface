@@ -47,7 +47,7 @@ TEST(JsonParsesEveryType) {
 	CHECK_EQ(value->find("a")->items().size(), std::size_t{2});
 	CHECK(value->find("o")->isObject() && value->find("o")->members().empty());
 	CHECK(value->find("missing") == nullptr);
-	// オブジェクトでない値には、キーが無いのと同じに答える。
+	// オブジェクトでない値には、キーが存在しない場合と同様に応答する。
 	CHECK(value->find("a")->find("0") == nullptr);
 	CHECK(value->find("s")->find("x") == nullptr);
 }
@@ -64,7 +64,7 @@ TEST(JsonDepthLimitCountsTheOutermostAsOne) {
 }
 
 TEST(JsonDepthLimitStopsBeforeRecursingIntoHugeInput) {
-	// 1 MiB の [ で、上限まで降りたところで失敗する（スタックを溢れさせない）。
+	// 1 MiB の [ で、上限の深さに到達した時点で失敗する（スタックを溢れさせない）。
 	std::string error;
 	CHECK(!Json::parse(std::string(1 << 20, '['), kDepth, &error));
 	CHECK(error.find("入れ子が深すぎます") != std::string::npos);
@@ -121,12 +121,13 @@ TEST(JsonDecodesEscapes) {
 	REQUIRE(value);
 	CHECK_EQ(value->asString(),
 	         std::string("\"\\/\b\f\n\r\tA\xc3\xa9\xe3\x81\x82\xf0\x9f\x98\x80"));
-	// 16 進の大文字も小文字と同じに読む。
+	// 16 進の大文字も小文字と同様に読み取る。
 	CHECK_EQ(must(R"("\u00E9\uD83D\uDE00")").asString(), std::string("\xc3\xa9\xf0\x9f\x98\x80"));
 }
 
 TEST(JsonReplacesLoneSurrogates) {
-	// 対にならないサロゲートは U+FFFD にし、続くエスケープは別に読む（encoding/json と同じ）。
+	// 対にならないサロゲートは U+FFFD とし、後続のエスケープは別個に読み取る
+	// （encoding/json と同じ）。
 	const std::string fffd = "\xef\xbf\xbd";
 	CHECK_EQ(must(R"("\ud800")").asString(), fffd);
 	CHECK_EQ(must(R"("\udc00")").asString(), fffd);
@@ -142,16 +143,16 @@ TEST(JsonReplacesInvalidUtf8BytewiseInStrings) {
 	              "b\"")
 	             .asString(),
 	         "a" + fffd + "b");
-	// 途切れた 3 バイトの文字は、残ったバイトごとに U+FFFD（utf8.DecodeRune と同じ）。
+	// 途切れた 3 バイトの文字は、残存するバイトごとに U+FFFD（utf8.DecodeRune と同じ）。
 	CHECK_EQ(must("\"\xe3\x81\"").asString(), fffd + fffd);
-	// 長すぎる綴り・サロゲート・U+10FFFF を超えるもの。
+	// 冗長な綴り・サロゲート・U+10FFFF を超えるもの。
 	CHECK_EQ(must("\"\xc0\xaf\"").asString(), fffd + fffd);
 	CHECK_EQ(must("\"\xed\xa0\x80\"").asString(), fffd + fffd + fffd);
 	CHECK_EQ(must("\"\xf4\x90\x80\x80\"").asString(), fffd + fffd + fffd + fffd);
 	// 正しい 2〜4 バイトの文字はそのまま。
 	CHECK_EQ(must("\"\xc3\xa9\xe3\x81\x82\xf0\x9f\x98\x80\xf4\x8f\xbf\xbf\"").asString(),
 	         std::string("\xc3\xa9\xe3\x81\x82\xf0\x9f\x98\x80\xf4\x8f\xbf\xbf"));
-	// キーも同じ。
+	// キーも同様。
 	CHECK(must("{\"a\xff\":1}").find("a" + fffd));
 }
 
@@ -164,7 +165,7 @@ TEST(JsonKeepsTheLastOfDuplicateKeys) {
 }
 
 TEST(JsonKeepsTheLastOfDuplicateKeysAmongMany) {
-	// キーが多いと索引で探す。並びは最初に現れた位置のまま、値は後のもの。
+	// キーが多い場合は索引で検索する。並びは最初に出現した位置のまま、値は後のもの。
 	std::string text = "{";
 	for (int i = 0; i < 40; ++i) {
 		text += "\"k" + std::to_string(i) + "\":" + std::to_string(i) + ",";
@@ -180,10 +181,10 @@ TEST(JsonKeepsTheLastOfDuplicateKeysAmongMany) {
 }
 
 TEST(JsonParsesAMebibyteOfKeysInLinearTime) {
-	// 1 MiB の要求に 10 万のキーを並べても、同じキーを探すのが 2 乗の時間にならない
-	// （並びを順に見ると、Vectorworks のメインスレッドを長く止める）。索引を使えば
-	// 最適化なし・サニタイザ付きでも数秒掛からず、並びを順に見ると最適化なしでも
-	// 100 秒を超えるので、その間に上限を置く。
+	// 1 MiB の要求に 10 万のキーを並べても、同じキーの検索が 2 乗の時間にならない
+	// （並びを順に参照すると、Vectorworks のメインスレッドを長時間停止させる）。索引を使用すれば
+	// 最適化なし・サニタイザ付きでも数秒を要さず、並びを順に参照すると最適化なしでも
+	// 100 秒を超えるため、その間に上限を設定する。
 	std::string text = "{";
 	for (int i = 0; i < 100000; ++i) {
 		text += "\"" + std::to_string(i) + "\":0,";
@@ -226,7 +227,7 @@ TEST(JsonDumpsCompactlyAndEscapes) {
 }
 
 TEST(JsonDumpReplacesInvalidUtf8) {
-	// 道具が返す文字列（例外の文言など）が UTF-8 でなくても、応答は UTF-8 にする。
+	// ツールが返す文字列（例外の文言など）が UTF-8 でなくても、応答は UTF-8 とする。
 	CHECK_EQ(Json::string("a\x82\xa0z").dump(), std::string("\"a\xef\xbf\xbd\xef\xbf\xbdz\""));
 }
 
@@ -242,7 +243,7 @@ TEST(JsonRoundTrips) {
 TEST(JsonComparesObjectsIgnoringOrder) {
 	CHECK_EQ(must(R"({"a":1,"b":[1,2]})"), must(R"({"b":[1,2],"a":1})"));
 	CHECK(!(must(R"({"a":1})") == must(R"({"a":1,"b":2})")));
-	// キーの数が同じでも、キーか値が違えば違う。
+	// キーの数が同じでも、キーか値が異なれば異なる。
 	CHECK(!(must(R"({"a":1})") == must(R"({"b":1})")));
 	CHECK(!(must(R"({"a":1})") == must(R"({"a":2})")));
 	CHECK(!(must("[1,2]") == must("[2,1]")));

@@ -1,6 +1,7 @@
 #pragma once
 
-// 偽の Documents（図面の SDK の呼び出しの代わり）。図面を扱う道具と quit のテストが共に使う。
+// 擬似 Documents（図面の SDK の呼び出しの代替）。図面を操作するツールと quit のテストが共に
+// 使用する。
 
 #include "core/DocumentTools.h"
 
@@ -15,28 +16,28 @@
 
 namespace VwCli::test {
 
-// FakeDocuments は開いている図面の一覧を持ち、SDK の呼び出しを真似て、呼んだ順を覚える。
-// 道具の確かめ（DocumentToolsTests）と quit の確かめ（QuitTests）が共に使う。
+// FakeDocuments は開いている図面の一覧を保持し、SDK の呼び出しを模倣して、呼び出された順を
+// 記録する。ツールの検証（DocumentToolsTests）と quit の検証（QuitTests）が共に使用する。
 class FakeDocuments : public core::Documents {
 public:
 	std::vector<core::OpenDocument> open;
 	std::vector<std::string> calls;
 	std::uint32_t saveError = 0;
 	bool switchFails = false;
-	// SwitchToOpenFile が真を返すのに前面が変わらない
-	// （前面を確かめずに保存・閉じると、別の図面に効く）。
+	// SwitchToOpenFile が真を返すにもかかわらず前面が変わらない
+	// （前面を確認せずに保存する・閉じると、別の図面に作用する）。
 	bool switchIgnored = false;
-	// 閉じても残る（not_closed を真似る）。
+	// 閉じても残存する（not_closed を模倣する）。
 	bool closeKeeps = false;
-	// 閉じると、この ref の図面も一覧から消える（前面へ戻せない場合を真似る）。
+	// 閉じると、この ref の図面も一覧から消える（前面へ戻せない場合を模倣する）。
 	std::int32_t closeAlsoDrops = -1;
-	// 保存の後、前面の図面の項目を一覧から消す（読み直せない場合を真似る）。
+	// 保存の後、前面の図面の項目を一覧から削除する（読み直せない場合を模倣する）。
 	bool saveLosesFront = false;
-	// 閉じた図面が中に残った枚数（一覧には出ず、GetActiveDocument だけが真を返す）。
+	// 閉じた図面が内部に残存した枚数（一覧には現れず、GetActiveDocument のみが真を返す）。
 	int remnants = 0;
-	// 一覧が空のときの CloseDocument で、残った図面が消えない。
+	// 一覧が空の場合の CloseDocument で、残存した図面が消えない。
 	bool remnantsStick = false;
-	// 片付けの最中に開く図面。一覧が空のときの CloseDocument の間に、一覧へ加わる。
+	// 後処理の最中に開く図面。一覧が空の場合の CloseDocument の間に、一覧へ追加される。
 	std::optional<core::OpenDocument> opensWhileClearing;
 	// この回目（1 から数える）の一覧の読み出しで投げる。0 なら投げない。
 	// パスを読めない・確保できないことを真似る。投げた回も calls に残す。
@@ -48,8 +49,8 @@ public:
 	int count(std::string_view name) const {
 		return static_cast<int>(std::ranges::count(calls, name));
 	}
-	// actions は図面を変えうる呼び出し（前面の切り替え・保存・閉じる）だけを、呼んだ順に返す
-	// （一覧と前面の有無を読む呼び出しを除く）。
+	// actions は図面を変更しうる呼び出し（前面の切り替え・保存・閉じる）のみを、呼び出された順に
+	// 返す（一覧と前面の有無を読み取る呼び出しを除く）。
 	std::vector<std::string> actions() const {
 		std::vector<std::string> out;
 		for (const std::string &call : calls) {
@@ -103,7 +104,7 @@ public:
 		if (closeKeeps) {
 			return;
 		}
-		// 一覧が空なら、残った図面を 1 枚消す。
+		// 一覧が空であれば、残存した図面を 1 枚消す。
 		if (open.empty()) {
 			if (remnants > 0 && !remnantsStick) {
 				--remnants;
@@ -128,9 +129,10 @@ public:
 			open.back().active = true;
 		}
 	}
-	// hasActive は、残った図面があるか、active の印の付いた図面があれば真（GetActiveDocument を
-	// 真似る）。開いている図面を入れるときは、前面の 1 枚に active を付ける。付けないと、図面が
-	// 開いていても偽になり、片付け（clearClosedDocuments）が確かめたい道筋を通らずに止まる。
+	// hasActive は、残存した図面があるか、active のフラグの付いた図面があれば真（GetActiveDocument
+	// を模倣する）。開いている図面を格納する場合は、前面の 1 枚に active を付ける。付けないと、
+	// 図面が開いていても偽になり、後処理（clearClosedDocuments）が検証したい経路を通らずに
+	// 停止する。
 	bool hasActive() override {
 		calls.emplace_back("active");
 		return remnants > 0 ||

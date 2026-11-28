@@ -10,10 +10,11 @@ import (
 	. "github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// 通信規則の見本（protocol/fixtures。形は docs/fixtures.md）の定数と id の綴りに照らす。プラグイン側
-// （src/core/Protocol.h）も同じ見本に照らすので、両側の綴りが揃う。
+// 通信規則のフィクスチャ（protocol/fixtures。形式は docs/fixtures.md）の定数と id の綴りと
+// 照合する。プラグイン側（src/core/Protocol.h）も同一のフィクスチャと照合するので、両側の綴りが
+// 統一される。
 
-// readFixture は見本のファイルを、知らないキーを誤りとして読む。
+// readFixture はフィクスチャのファイルを、未知のキーをエラーとして読み込む。
 func readFixture(t *testing.T, name string, v any) {
 	t.Helper()
 	fixturetest.ReadStrict(t, filepath.Join(fixturetest.ProtocolDir, name), v)
@@ -36,7 +37,7 @@ func TestConstantsMatchFixtures(t *testing.T) {
 		MaxRequestBytes int      `json:"max_request_bytes"`
 		MaxNestingDepth int      `json:"max_nesting_depth"`
 		ReservedTools   []string `json:"reserved_tools"`
-		// CLI は道具の種類を読まないので、照らす定数が無い（プラグイン側だけが照らす）。
+		// CLI はツールの種類を読み取らないので、照合する定数が無い（プラグイン側のみが照合する）。
 		Kinds []string `json:"kinds"`
 		Codes []string `json:"codes"`
 	}

@@ -1,7 +1,7 @@
 #pragma once
 
-// 受け付け 1 回の手順と、占有の印（docs/plugin/bridge.md「1 回の受付処理」）。SDK に依らない。
-// 道具の表と時刻を引数で受けるので、偽の道具の表でテストできる。
+// 1 回の受付処理の手順と、占有のセッション ID（docs/plugin/bridge.md「1 回の受付処理」）。SDK に
+// 依存しない。ツールの一覧と時刻を引数で受け取るため、擬似ツールの一覧でテストできる。
 
 #include "core/Bridge.h"
 #include "core/Json.h"
@@ -14,81 +14,82 @@
 
 namespace VwCli::core {
 
-// 道具の種類（@tools の結果の kind）。Read は図面を変えず、占有に照らさない。Write は図面の中身を
-// 変える（図面を変えるかが分からない道具も Write とする）。App は Vectorworks・図面のファイルや窓に
-// 働き、図面の中身は変えない（save・close・quit など）。Write と App は占有の中でだけ呼べる。終了の
-// 依頼は種類では決めず、道具が ToolStatus::quit で返す。
+// ツールの種類（@tools の結果の kind）。Read は図面を変更せず、占有と照合しない。Write は図面の
+// 内容を変更する（図面を変更するか否かが不明なツールも Write とする）。App は Vectorworks・図面の
+// ファイルやウィンドウに作用し、図面の内容は変更しない（save・close・quit など）。Write と App は
+// 占有の中でのみ呼び出せる。終了の依頼は種類では決定せず、ツールが ToolStatus::quit で返す。
 enum class ToolKind { Read, Write, App };
 
-// 受け付けの外の状態。タイマー（Clock）が回ごとに渡す。Quitting では、道具の表の道具を全て
-// busy で断る（種類 Read と ping も）。SDK を呼ばない 3 つの道具（@tools・@session_start・
-// @session_end）と、表に無い道具の unknown_tool はふだんどおり応える
+// 受付処理の外の状態。タイマー（Clock）が回ごとに渡す。Quitting では、ツールの一覧のツールを全て
+// busy で拒否する（種類 Read と ping も）。SDK を呼び出さない 3 つのツール（@tools・
+// @session_start・@session_end）と、一覧に無いツールの unknown_tool は通常通り応答する
 // （docs/plugin/architecture.md「Vectorworks が処理中」）。
 enum class Activity {
 	Idle,
-	// 終了の依頼の最中（保存の確認を開いている）。
+	// 終了の依頼の処理中（保存の確認を表示している）。
 	Quitting,
 };
 
-// 道具が返す失敗の種別。None は失敗していない。
+// ツールが返す失敗の種別。None は失敗していない。
 enum class ErrorCode { None, InvalidArgs, Internal };
 
-// 道具が返す失敗と終了の依頼。
+// ツールが返す失敗と終了の依頼。
 struct ToolStatus {
 	ErrorCode code = ErrorCode::None;
-	// 日本語。応答の error にそのまま載る。
+	// 日本語。応答の error にそのまま含まれる。
 	std::string message;
-	// 失敗の詳細（JSON のオブジェクト）。失敗したときだけ応答の detail にそのまま載る（通信規則
-	// 「応答」）。空（null）なら detail を付けない。オブジェクトでない値は internal で応える。
+	// 失敗の詳細（JSON のオブジェクト）。失敗した場合のみ応答の detail にそのまま含まれる（通信規則
+	// 「応答」）。空（null）なら detail を付けない。オブジェクトでない値は internal で応答する。
 	Json detail;
-	// 終了の依頼。成功し、応答を書けたとき、受け付けの外で終了を頼む（quit だけが立てる）。
+	// 終了の依頼。成功し、応答を書き込めた場合に、受付処理の外で終了を依頼する（quit のみが
+	// 設定する）。
 	bool quit = false;
 };
 
-// 起動の状態（受け付けの外。タイマーが core/Lifecycle.h から渡し、quit が見る）。
+// 起動の状態（受付処理の外。タイマーが core/Lifecycle.h から渡し、quit が参照する）。
 struct Startup {
-	// Vectorworks が起動を終えたか（最初の kNotifyBeforePendingUpdate で立つ）。
+	// Vectorworks が起動を終えたか（最初の kNotifyBeforePendingUpdate で設定される）。
 	bool started = false;
-	// その通知を登録できたか（できない間は started が立たない。quit が「起動の途中」と
-	// 「登録できていない」を呼ぶ側に分けて示すため）。
+	// その通知を登録できたか（できない間は started が設定されない。quit が「起動の途中」と
+	// 「登録できていない」を呼び出し元に区別して示すため）。
 	bool notificationRegistered = false;
 };
 
-// 道具に渡す受け付けの状態。
+// ツールに渡す受付処理の状態。
 struct ToolContext {
-	// 占有の印を発行しているか（ping の session）。
+	// 占有のセッション ID を発行しているか（ping の session）。
 	bool session = false;
 	Startup startup;
 };
 
-// 道具の中身。結果は JSON のオブジェクトで返す（返す値が無ければ Json() でよく、{} になる。
-// オブジェクトでない値は internal で応える。通信規則「応答」）。失敗と終了の依頼は status に書き
-// （失敗したときの戻り値は使わない）、例外は Server が internal で応える。
+// ツールの内容。結果は JSON のオブジェクトで返す（返す値が無ければ Json() でよく、{} になる。
+// オブジェクトでない値は internal で応答する。通信規則「応答」）。失敗と終了の依頼は status に
+// 書き込み（失敗した場合の戻り値は使用しない）、例外は Server が internal で応答する。
 using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolStatus &status);
 
-// ToolSpec は道具の表の 1 行の内 SDK に依らない部分（名前・説明・inputSchema・種類）。道具ごとに
-// src/core に定数で置き、src/tools/ToolTable.cpp が SDK に依る中身と組み合わせる（種類を取り違えて
-// 占有なしで呼べるようにしないことを、無 SDK のテストで確かめるため）。
+// ToolSpec はツールの一覧の 1 行の内 SDK に依存しない部分（名前・説明・inputSchema・種類）。
+// ツールごとに src/core に定数で配置し、src/tools/ToolTable.cpp が SDK に依存する内容と組み合わせる
+// （種類を取り違えて占有なしで呼び出せるようにしないことを、無 SDK のテストで検証するため）。
 struct ToolSpec {
 	// [a-z0-9_]+(\.[a-z0-9_]+)*。通信規則の綴り（core/Protocol.h の std::string_view）をそのまま
-	// 使えるように、string_view で持つ。
+	// 使用できるように、string_view で保持する。
 	std::string_view name;
-	// 日本語。呼ぶ側がそのまま読む。
+	// 日本語。呼び出し元がそのまま読み取る。
 	const char *description;
-	// JSON Schema（文字列）。@tools の結果にそのまま載る。
+	// JSON Schema（文字列）。@tools の結果にそのまま含まれる。
 	const char *inputSchema;
 	ToolKind kind;
 };
 
-// Tool は道具の表の 1 行（ToolSpec と中身）。
+// Tool はツールの一覧の 1 行（ToolSpec と内容）。
 struct Tool : ToolSpec {
 	ToolFn run;
 };
 
-// toolOf は ToolSpec と中身から表の 1 行を作る。
+// toolOf は ToolSpec と内容から一覧の 1 行を作成する。
 constexpr Tool toolOf(const ToolSpec &spec, ToolFn run) { return Tool{spec, run}; }
 
-// ScopedFlag は印を立て、壊すと下ろす（例外で抜けるときも下ろす）。
+// ScopedFlag はフラグを設定し、破棄時に解除する（例外で抜ける場合も解除する）。
 class ScopedFlag {
 public:
 	explicit ScopedFlag(bool &flag) : flag_(flag) { flag_ = true; }
@@ -100,13 +101,13 @@ private:
 	bool &flag_;
 };
 
-// 受け付けの状態。
+// 受付処理の状態。
 enum class Phase {
-	// ロックを掴んで受け付けた
+	// ロックを取得して受付処理を行った
 	Serving,
-	// 他の Vectorworks がロックを掴んでいるので、何もしなかった
+	// 他の Vectorworks がロックを保持しているため、何もしなかった
 	Waiting,
-	// スプールを用意できない・ロックのファイルを開けない（次の回にやり直す）
+	// スプールを準備できない・ロックのファイルを開けない（次の回に再試行する）
 	Error,
 };
 
@@ -114,30 +115,32 @@ struct ServeResult {
 	Phase phase = Phase::Serving;
 	// Error の理由。
 	std::string message;
-	// 道具が成功して ToolStatus::quit を立て、その応答を書けた（終了の依頼）。受け付けの外で終了を
-	// 頼む。
+	// ツールが成功して ToolStatus::quit を設定し、その応答を書き込めた（終了の依頼）。受付処理の
+	// 外で終了を依頼する。
 	bool quit = false;
 };
 
-// Server はスプール 1 つの受け付けと、発行した占有の印（1 つだけ。メモリだけに持つ）。
+// Server はスプール 1 つの受付処理と、発行した占有のセッション ID（1 つのみ。メモリのみに
+// 保持する）。
 class Server {
 public:
 	explicit Server(std::string spoolDir);
 
-	// serve は受け付け 1 回。nowNanos は Unix 時刻のナノ秒で、占有の印の先頭に使う。
+	// serve は 1 回の受付処理。nowNanos は Unix 時刻のナノ秒で、占有のセッション ID の先頭に
+	// 使用する。
 	//
-	// ロックを掴んでいなければ用意（prepare → lock → sweep）をし、取れなければ何もせずに戻る。
-	// 回の始めに並べた要求を名前の昇順で全て処理し、取り出した要求には同じ回の中で応える
-	// （受け付けの入れ子が起きたときは、入れ子の回が先に取り出して断った要求を飛ばす）。
-	// 道具が成功して終了の依頼（ToolStatus::quit）を立て、応答を書けたら、その回の残りの要求を
-	// 取り出さずに戻る（終了したら応えられないので、残りは置いたままにする）。
+	// ロックを保持していなければ準備（prepare → lock → sweep）を行い、取得できなければ何もせずに
+	// 戻る。回の始めに列挙した要求を名前の昇順で全て処理し、取り出した要求には同じ回の中で応答する
+	// （受付処理の入れ子が発生した場合は、入れ子の回が先に取り出して拒否した要求を飛ばす）。
+	// ツールが成功して終了の依頼（ToolStatus::quit）を設定し、応答を書き込めたら、その回の残りの
+	// 要求を取り出さずに戻る（終了したら応答できないため、残りは配置したままにする）。
 	//
-	// 道具の中で Vectorworks がイベントを回し、serve の途中で又 serve が呼ばれたら（受け付けの
-	// 入れ子）、外の回の状態に触れず、取り出せる要求を全て busy で断って戻る。外の回がすでに
-	// 並べていた要求も断る（外の回の一覧を入れ子の側へ見せる状態を持たないため）。
+	// ツールの中で Vectorworks がイベントを処理し、serve の途中で再度 serve が呼び出されたら
+	// （受付処理の入れ子）、外の回の状態に触れず、取り出せる要求を全て busy で拒否して戻る。外の回
+	// が既に列挙していた要求も拒否する（外の回の一覧を入れ子の側へ公開する状態を保持しないため）。
 	//
-	// activity と startup は受け付けの外の状態（タイマーが core/Lifecycle.h から渡す）。startup は
-	// 道具に ToolContext で渡す。
+	// activity と startup は受付処理の外の状態（タイマーが core/Lifecycle.h から渡す）。startup は
+	// ツールに ToolContext で渡す。
 	ServeResult serve(std::span<const Tool> tools, std::int64_t nowNanos,
 	                  Activity activity = Activity::Idle, Startup startup = {});
 
@@ -151,35 +154,38 @@ private:
 		// 書き出した応答。
 		std::string body;
 		bool quit = false;
-		// 応答を書けたら置く、新しい占有の印（空の文字列なら占有を終える）。無ければ変えない。
+		// 応答を書き込めたら設定する、新しい占有のセッション ID（空の文字列なら占有を終了する）。
+		// 無ければ変更しない。
 		std::optional<std::string> session;
 	};
 
-	// answer は状態（占有の印・終了の依頼）を変えない。反映するのは serve で、応答を書けたときだけ
-	// （書けないと呼ぶ側は結果を受け取れないのに、占有だけが残る・消える、Vectorworks が終わる）。
+	// answer は状態（占有のセッション ID・終了の依頼）を変更しない。反映するのは serve で、応答を
+	// 書き込めた場合のみ（書き込めなければ呼び出し元は結果を受け取れないのに、占有のみが残存する・
+	// 消失する、Vectorworks が終了する）。
 	Outcome answer(const std::string &text, std::span<const Tool> tools, std::int64_t nowNanos,
 	               Activity activity, Startup startup);
 
-	// held は要求を取り出し、呼ぶ側が待っていれば中身を返す（通信規則「待機標識」）。待つ者が
-	// 居なければ待つ印を消し、待つ印が無ければ no_wait で応えて、どちらも空を返す。
+	// held は要求を取り出し、呼び出し元が待機していれば内容を返す（通信規則「待機標識」）。待機する
+	// 者が存在しなければ待機標識を削除し、待機標識が無ければ no_wait で応答して、いずれも空を返す。
 	std::optional<std::string> held(const std::string &id);
 
-	// refuseAll は受け付けの入れ子の回。取り出せる要求を全て busy で断る。解析も道具の実行も
-	// しない（外の回の占有の印と取り合わない。道具の SDK 呼び出しの途中で SDK を呼ばない）。
+	// refuseAll は受付処理の入れ子の回。取り出せる要求を全て busy で拒否する。解析もツールの実行も
+	// 行わない（外の回の占有のセッション ID と競合しない。ツールの SDK 呼び出しの途中で SDK を
+	// 呼び出さない）。
 	void refuseAll();
 
 	Bridge bridge_;
 	std::string session_;
-	// serve の途中か（受け付けの入れ子の判定）。
+	// serve の途中か（受付処理の入れ子の判定）。
 	bool serving_ = false;
-	// answer が投げたときの応答。前もって書き出しておき、catch の中では確保しない（メモリが足りない
-	// ときに又投げて、応えられなくならないように）。
+	// answer が例外を送出した場合の応答。事前に書き出しておき、catch の中では確保しない（メモリが
+	// 不足した場合に再度例外を送出して、応答できなくならないように）。
 	std::string internalFailure_;
-	// 受け付けの入れ子の回が断る応答。前もって書き出しておき、入れ子の回では書くだけにする。
+	// 受付処理の入れ子の回が拒否する応答。事前に書き出しておき、入れ子の回では書き込むのみとする。
 	std::string nestedRefusal_;
 };
 
-// kindName は @tools の結果に載せる種類の綴り。
+// kindName は @tools の結果に含める種類の綴り。
 std::string_view kindName(ToolKind kind);
 
 }

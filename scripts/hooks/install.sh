@@ -1,16 +1,18 @@
 #!/bin/sh
-# cli の install のフック（mac）。~/.local/bin/vw2026 から <Plug-Ins>/cli/bin/vw2026 へのリンクを置き
-# （2025 の CLI が走らせたときは vw2025。lib.sh の hook_year）、
-# 標準出力に {"path":…} を 1 つだけ書く（docs/plugin/install-and-update.md「PATH」）。
+# cli の install のフック（mac）。~/.local/bin/vw2026 から <Plug-Ins>/cli/bin/vw2026 へのリンクを
+# 配置し（2025 の CLI が実行した場合は vw2025。lib.sh の hook_year）、標準出力に {"path":…} を
+# 1 つのみ書き込む（docs/plugin/install-and-update.md「PATH」）。
 #
-#   linked       リンクを作った（~/.local/bin は PATH にある）
-#   exists       このプラグインの CLI を指すリンクが既にあった（~/.local/bin は PATH にある）
-#   not_in_path  リンクはある（作った・既にあった）が、~/.local/bin が PATH に無い
-#   conflict     ~/.local/bin/vw2026 か ~/.local/bin に別のもの（利用者のファイル・別の場所を指すリンク）がある
-#   failed       リンクを作れなかった
+#   linked       リンクを作成した（~/.local/bin は PATH にある）
+#   exists       このプラグインの CLI を指すリンクが既に存在した（~/.local/bin は PATH にある）
+#   not_in_path  リンクは存在する（作成した・既に存在した）が、~/.local/bin が PATH に無い
+#   conflict     ~/.local/bin/vw2026 か ~/.local/bin に別のもの（利用者のファイル・別の場所を指す
+#                リンク）が存在する
+#   failed       リンクを作成できなかった
 #
-# 何度走らせても同じ結果になる。PATH の失敗ではフックを失敗にしない（プラグインは動く）。失敗に
-# するのは、何も変える前の確かめ（環境変数・CLI があること）だけ。シェルの設定ファイルは書き換えない。
+# 何度実行しても同じ結果になる。PATH の失敗ではフックを失敗させない（プラグインは動作する）。
+# 失敗させるのは、何も変更する前の確認（環境変数・CLI の存在）のみ。シェルの設定ファイルは
+# 書き換えない。
 set -u
 
 # shellcheck source=SCRIPTDIR/lib.sh

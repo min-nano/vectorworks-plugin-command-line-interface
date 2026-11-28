@@ -9,7 +9,8 @@ import (
 	"testing"
 )
 
-// fatalRecorder は Fatal を覚えて、呼んだゴルーチンを止める（testing.T と同じく、そこで戻らない）。
+// fatalRecorder は Fatal を記録し、呼び出したゴルーチンを停止する（testing.T と同様に、そこで
+// 戻らない）。
 type fatalRecorder struct {
 	testing.TB
 	message string
@@ -27,7 +28,7 @@ func (r *fatalRecorder) Fatalf(format string, args ...any) {
 	runtime.Goexit()
 }
 
-// fatalOf は f を別のゴルーチンで走らせ、Fatal の文言を返す（Fatal が無ければ空）。
+// fatalOf は f を別のゴルーチンで実行し、Fatal の文言を返す（Fatal が無ければ空）。
 func fatalOf(t *testing.T, f func(tb testing.TB)) string {
 	t.Helper()
 	recorder := &fatalRecorder{TB: t}
@@ -49,7 +50,7 @@ func TestReadStrictReadsFixtures(t *testing.T) {
 	if _, ok := whole["protocol"]; !ok {
 		t.Fatal("constants.json has no protocol")
 	}
-	// 知らないキーを誤りとして読むので、一部のキーだけの構造体では読めない。
+	// 未知のキーをエラーとして読み込むので、一部のキーのみの構造体では読み込めない。
 	message := fatalOf(t, func(tb testing.TB) {
 		ReadStrict(tb, filepath.Join(ProtocolDir, "constants.json"), &constants)
 	})
@@ -89,8 +90,9 @@ func TestDecodeStrictRejectsUnknownFields(t *testing.T) {
 	}
 }
 
-// TestCommandDoesNotDependOnTesting は、配る実行ファイル（cmd）の依存に testing が無いことを
-// 確かめる。testing を取り込むパッケージ（fixturetest・fakeplugin）をテスト以外から取り込むと落ちる。
+// TestCommandDoesNotDependOnTesting は、配布する実行ファイル（cmd）の依存に testing が無いことを
+// 検証する。testing をインポートするパッケージ（fixturetest・fakeplugin）をテスト以外から
+// インポートすると失敗する。
 func TestCommandDoesNotDependOnTesting(t *testing.T) {
 	for _, tags := range []string{"", "vw2025"} {
 		out, err := exec.Command("go", "list", "-deps", "-tags", tags, "../../cmd/...").CombinedOutput()

@@ -8,7 +8,8 @@ import (
 	"unsafe"
 )
 
-// openTerminal は疑似端末の子の側（/dev/ttys…）を開く（親の側の /dev/ptmx は、mac では端末の設定を読めない）。
+// openTerminal は疑似端末の子の側（/dev/ttys…）を開く（親の側の /dev/ptmx は、mac では端末の設定を
+// 読み取れない）。
 func openTerminal(t *testing.T) *os.File {
 	t.Helper()
 	parent, err := os.OpenFile("/dev/ptmx", os.O_RDWR|syscall.O_NOCTTY, 0)

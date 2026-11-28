@@ -38,7 +38,8 @@ one. With the old one, a tool of kind write or app and "session end" exit with
 `)
 }
 
-// sessionTimeout は session start と session end が共有する待つ上限（環境変数も同じ VW2026_SESSION_TIMEOUT）。
+// sessionTimeout は session start と session end が共有する待機の上限（環境変数も同一の
+// VW2026_SESSION_TIMEOUT）。
 type sessionTimeout struct {
 	Timeout float64 `env:"${prefix}SESSION_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
 }
@@ -75,7 +76,7 @@ Vectorworks has restarted.
 }
 
 func (c *sessionEndCmd) run(e *env) int {
-	// kong の required は、空の環境変数も値とみなすので、ここで確かめる。
+	// kong の required は、空の環境変数も値とみなすため、ここで検証する。
 	if c.Session == "" {
 		fmt.Fprintln(e.stderr, edition.Command+": session end needs --session or "+edition.EnvPrefix+"SESSION")
 		return exitUsage

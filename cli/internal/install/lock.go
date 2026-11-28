@@ -8,11 +8,13 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// lockState は、Vectorworks が居るか（docs/protocol.md「生存の判定」）。<Plug-Ins>/cli/spool/ と、
-// <Work>/old/cli/spool/ の両方のロックを見る。cli の付け替え・uninstall の直前に前の版を読み込んだ
-// Vectorworks のロックは、フォルダと一緒に old/cli/spool/ へ移る（mac）ので、install・uninstall のどの確かめも
-// これだけを使い、道ごとに見る場所を変えない。どちらかのロックを無い以外の理由で調べられなければ（権限・壊れた
-// 場所）、動いているかが分からないという誤りも返す（判定そのもの、spool.Open の意味は変えない）。
+// lockState は、Vectorworks が存在するか（docs/protocol.md「生存の判定」）。
+// <Plug-Ins>/cli/spool/ と、<Work>/old/cli/spool/ の両方のロックを確認する。cli の
+// 差し替え・uninstall の直前に前の版を読み込んだ Vectorworks のロックは、フォルダと共に
+// old/cli/spool/ へ移動する（mac）ため、install・uninstall のいずれの確認もこれのみを使用し、
+// 経路ごとに確認する場所を変更しない。いずれかのロックを、存在しないこと以外の理由で
+// 調査できなければ（権限・破損した場所）、動作しているかが不明であるという誤りも返す
+// （判定そのもの、spool.Open の意味は変更しない）。
 func lockState(p places) (bool, error) {
 	var unknown error
 	for _, dir := range []string{filepath.Join(p.plugins, cliName), filepath.Join(p.old, cliName)} {
@@ -28,10 +30,11 @@ func lockState(p places) (bool, error) {
 	return false, unknown
 }
 
-// stopped は、何かを変える前の確かめ（始め・同じタグのフックの前・付け替えの前・前の版を片付ける前）。Vectorworks が
-// 居れば ErrRunning（終了コード 6）、ロックを調べられなければその誤り（終了コード 1）を返す。フックが通った後に
-// 前の版を片付ける前（finishInstall の settleOld）にも使うが、そこで返った誤りは知らせるだけで、install の結果は
-// 変えない（新しい版は入っている）。
+// stopped は、何かを変更する前の確認（開始時・同じタグのフックの前・差し替えの前・前の版を整理する
+// 前）。Vectorworks が存在すれば ErrRunning（終了コード 6）、ロックを調査できなければその誤り
+// （終了コード 1）を返す。フックが通過した後に前の版を整理する前（finishInstall の settleOld）にも
+// 使用するが、そこで返った誤りは通知するのみで、install の結果は変更しない（新しい版は
+// インストールされている）。
 func stopped(p places) error {
 	held, err := lockState(p)
 	if held {
@@ -40,22 +43,24 @@ func stopped(p places) error {
 	return err
 }
 
-// running は、Vectorworks が居るとみなすか。ロックを調べられないときも居るとみなす（付け替えやフックの後の
-// 確かめで、動いているかもしれない Vectorworks の下でフォルダを動かさない）。何も変えていないときは stopped を使う。
+// running は、Vectorworks が存在するとみなすか。ロックを調査できない場合も存在するとみなす
+// （差し替えやフックの後の確認で、動作しているかもしれない Vectorworks の下でフォルダを
+// 移動しない）。何も変更していない場合は stopped を使用する。
 func running(p places) bool {
 	held, err := lockState(p)
 	return held || err != nil
 }
 
-// startedMeanwhile は、フックの間（始めの確かめの後）に Vectorworks が起動したとみなしたときの文言（running が
-// 真。install と uninstall で同じに書く）。
+// startedMeanwhile は、フックの間（開始時の確認の後）に Vectorworks が起動したとみなした場合の文言
+// （running が真。install と uninstall で同一に記述する）。
 const startedMeanwhile = "Vectorworks started meanwhile (or its lock cannot be read)"
 
-// checkCLI は、cli 以外を入れる・外すときに、<Plug-Ins>/cli/ に正しい記録があるかを確かめる。
-// cli の無い <Plug-Ins> では Vectorworks が動いているかを判定できないため。
-// cli の install・uninstall が途中で止まって cli が無いこともあるので、Vectorworks を
-// 終えてそれを終えるよう添える（止まった状態は読まない。続け方は install cli /
-// uninstall cli が答える。CLAUDE.md の守ること 3）。
+// checkCLI は、cli 以外をインストール・アンインストールする際に、<Plug-Ins>/cli/ に正しい記録が
+// 存在するかを確認する。
+// cli の無い <Plug-Ins> では Vectorworks が動作しているかを判定できないため。
+// cli の install・uninstall が途中で停止して cli が存在しないこともあるため、Vectorworks を
+// 終了してそれを完了するよう付記する（停止した状態は読み取らない。継続の方法は install cli /
+// uninstall cli が応答する。CLAUDE.md の遵守事項 3）。
 func checkCLI(plugins, name string) error {
 	if name == cliName {
 		return nil
@@ -73,11 +78,12 @@ func checkCLI(plugins, name string) error {
 	return nil
 }
 
-// precheck は、install・uninstall が何かを変える前の確かめを、両方で同じ順にする。cli の記録（checkCLI）を、
-// Vectorworks が動いているか（stopped）より先に確かめる（cli の記録の誤りは、Vectorworks を終えて走らせ直しても
-// 通らないので、先に答える）。cli の install・uninstall が途中で止まって cli が無いときは、
-// Vectorworks を終えて先にそれを終えれば通る（checkCLI の文言がそう案内する）。checkLock が
-// 偽なら（install --check）動いているかは見ない。
+// precheck は、install・uninstall が何かを変更する前の確認を、両方で同じ順序とする。
+// cli の記録（checkCLI）を、Vectorworks が動作しているか（stopped）より先に確認する（cli の記録の
+// 誤りは、Vectorworks を終了して実行し直しても通過しないため、先に応答する）。cli の
+// install・uninstall が途中で停止して cli が存在しない場合は、Vectorworks を終了して先にそれを
+// 完了すれば通過する（checkCLI の文言がそのように案内する）。checkLock が偽ならば（install
+// --check）動作しているかは確認しない。
 func precheck(p places, name string, checkLock bool) error {
 	if err := checkCLI(p.plugins, name); err != nil {
 		return err

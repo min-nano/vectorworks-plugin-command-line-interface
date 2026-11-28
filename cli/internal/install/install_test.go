@@ -26,7 +26,7 @@ func TestInstallFirstTime(t *testing.T) {
 	if h.installedVersion("cli") != "c1" {
 		t.Fatal("not installed")
 	}
-	// 実行ビットを保つ。
+	// 実行ビットを保持する。
 	if info, err := os.Stat(filepath.Join(h.plugins, "cli", "bin", edition.Command)); err != nil || info.Mode().Perm()&0o100 == 0 && os.PathSeparator == '/' {
 		t.Fatalf("%v %v", info, err)
 	}
@@ -38,21 +38,21 @@ func TestInstallFirstTime(t *testing.T) {
 		record.Module != "cli.vwlibrary" || strings.Join(record.Hooks.Install, " ") != "sh hooks/install.hook" {
 		t.Fatalf("%+v", record)
 	}
-	// 組み立ての場所は残らない。
+	// 構築の場所は残存しない。
 	if exists(filepath.Join(h.work, "staging", "cli")) || exists(filepath.Join(h.work, "staging", "cli.zip")) ||
 		exists(filepath.Join(h.work, "old", "cli")) {
 		t.Fatal("left the staging or old folder")
 	}
 }
 
-// フックの走らせ方: 作業ディレクトリはプラグインのフォルダで、VW2026_HOOK_* を渡す。sh の後ろの
+// フックの実行方法: 作業ディレクトリはプラグインのフォルダであり、VW2026_HOOK_* を渡す。sh の後の
 // 引数はそのまま渡す。
 func TestInstallHookEnvironment(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	hooks := registry.Hooks{Install: []string{"sh", "hooks/install.hook", "a b", "--x"}, Uninstall: []string{"sh", "hooks/uninstall.hook"}}
 	t.Setenv(edition.EnvPrefix+"HOOK_TAG", "from the caller")
-	// 他の版の名前も渡さない（cli のフックは渡された名前で版を決め、両方あると断る）。
+	// 他の版の名前も渡さない（cli のフックは渡された名前で版を決定し、両方存在すると拒否する）。
 	other := "VW2025_HOOK_INSTALL_DIR"
 	if edition.Year == "2025" {
 		other = "VW2026_HOOK_INSTALL_DIR"
@@ -104,15 +104,15 @@ func TestInstallUpdatesAndCleansUp(t *testing.T) {
 	}
 }
 
-// 同じタグなら、zip もマニフェストも取らず（タグで直接指す規則でターゲットも同じ）、付け替えずに
-// 記録に写したフックだけを走らせる。
+// 同じタグならば、zip もマニフェストも取得せず（タグで直接指す規則でターゲットも同じ）、
+// 差し替えずに記録に複製したフックのみを実行する。
 func TestInstallSameTagRunsOnlyTheRecordedHook(t *testing.T) {
 	h := newHarness(t)
 	zip := h.publish(release{name: "cli", tag: "c1"})
 	if _, err := h.install("cli", "c1"); err != nil {
 		t.Fatal(err)
 	}
-	// 提供側が同じ場所のマニフェストを差し替えても、入れていないフックは走らない。
+	// 提供側が同じ場所のマニフェストを差し替えても、インストールしていないフックは実行されない。
 	other := hookPlan{Stdout: `{"ran":"replaced"}`}
 	h.publish(release{name: "cli", tag: "c1", install: &other})
 	before := snapshot(t, h.plugins)
@@ -133,7 +133,8 @@ func TestInstallSameTagRunsOnlyTheRecordedHook(t *testing.T) {
 	}
 }
 
-// latest のように決まった場所を指す規則では、今のタグを知るためにマニフェストを取るが、zip は取らない。
+// latest のように定められた場所を指す規則では、現在のタグを知るためにマニフェストを取得するが、
+// zip は取得しない。
 func TestInstallLatestFetchesOnlyTheManifest(t *testing.T) {
 	h := newHarness(t)
 	zip := h.publish(release{name: "cli", tag: "c1", latest: true})
@@ -150,7 +151,7 @@ func TestInstallLatestFetchesOnlyTheManifest(t *testing.T) {
 	}
 }
 
-// 同じタグでもターゲットが違えば、マニフェストを取って入れ直す。
+// 同じタグでもターゲットが異なれば、マニフェストを取得して再インストールする。
 func TestInstallSameTagOtherTargetReinstalls(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -165,7 +166,7 @@ func TestInstallSameTagOtherTargetReinstalls(t *testing.T) {
 	}
 }
 
-// 記録の module が無ければ（ウイルス対策が隔離したなど）、同じタグでも入れ直す。
+// 記録の module が存在しなければ（ウイルス対策が隔離したなど）、同じタグでも再インストールする。
 func TestInstallSameTagWithoutModuleReinstalls(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -209,7 +210,7 @@ func TestInstallCheck(t *testing.T) {
 		t.Fatal("--check changed something")
 	}
 	h.mustInstall(release{name: "cli", tag: "c1", latest: true})
-	// --check は Vectorworks が動いていても答える。
+	// --check は Vectorworks が実行中でも応答する。
 	h.holdLock()
 	before := snapshot(t, h.plugins)
 	if r := check("latest"); r.Outcome != outcomeUpToDate {
@@ -225,7 +226,7 @@ func TestInstallCheck(t *testing.T) {
 	}
 }
 
-// Vectorworks が動いていれば、同じタグでもフックを走らせず、何も変えない。
+// Vectorworks が実行中であれば、同じタグでもフックを実行せず、何も変更しない。
 func TestInstallWhileRunning(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -247,7 +248,8 @@ func TestInstallWhileRunning(t *testing.T) {
 	}
 }
 
-// 手順 2 で見た後、zip を取る間に起動した Vectorworks も、付け替えの直前に見つけて何も変えない。
+// 手順 2 で確認した後、zip を取得する間に起動した Vectorworks も、差し替えの直前に検出して何も
+// 変更しない。
 func TestInstallLockTakenWhileDownloading(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -306,7 +308,8 @@ func TestInstallBadZipChangesNothing(t *testing.T) {
 	}
 }
 
-// 入れる先に、記録の無い・読めない・別の名前・別のレジストリのフォルダがあれば、何も変えない。
+// インストール先に、記録の無い・読み取れない・別の名前・別のレジストリのフォルダが存在すれば、何も
+// 変更しない。
 func TestInstallRefusesForeignFolders(t *testing.T) {
 	for name, prepare := range map[string]func(t *testing.T, dir string){
 		"no record": func(t *testing.T, dir string) { os.Remove(filepath.Join(dir, RecordFile)) },
@@ -338,10 +341,11 @@ func TestInstallRefusesForeignFolders(t *testing.T) {
 	}
 }
 
-// cli 以外は、cli が入っている <Plug-Ins> にだけ入れ、そこからだけ外す（Vectorworks が
-// 動いているかを <Plug-Ins>/cli/spool のロックで判定するため）。cli の記録の module が
-// 無ければ、Vectorworks が動いていても、install と uninstall はどちらも cli の記録の誤りを
-// 答え（同じ順に確かめる）、<Plug-Ins> も <Work> も変えない。
+// cli 以外は、cli がインストールされている <Plug-Ins> にのみインストールし、そこからのみ
+// アンインストールする（Vectorworks が実行中であるか否かを <Plug-Ins>/cli/spool のロックで
+// 判定するため）。cli の記録の module が存在しなければ、Vectorworks が実行中であっても、install と
+// uninstall はいずれも cli の記録の誤りを応答し（同じ順序で検証する）、<Plug-Ins> も <Work> も
+// 変更しない。
 func TestOtherPluginNeedsCLI(t *testing.T) {
 	h := newHarness(t)
 	h.publish(release{name: "demo", tag: "d1"})
@@ -360,7 +364,8 @@ func TestOtherPluginNeedsCLI(t *testing.T) {
 			if running {
 				defer h.holdLock()()
 			}
-			// 1 回ごとに、何も変えていないことを確かめる（片方が残したものを、もう片方が片付けて隠さないように）。
+			// 1 回ごとに、何も変更していないことを確認する（一方が残置したものを、他方が整理して
+			// 隠さないように）。
 			for _, c := range []struct {
 				name string
 				run  func() error
@@ -379,10 +384,10 @@ func TestOtherPluginNeedsCLI(t *testing.T) {
 	}
 }
 
-// cli の install・uninstall が途中で止まって <Plug-Ins>/cli/ が無いとき、cli 以外の
-// install・uninstall は、Vectorworks を終えて cli の操作を終えるよう添えて断り、何も
-// 変えない。前の版を読み込んだ Vectorworks が <Work>/old/cli/spool のロックを持って
-// いても同じ（checkCLI が先に答える）。
+// cli の install・uninstall が途中で停止して <Plug-Ins>/cli/ が存在しない場合、cli 以外の
+// install・uninstall は、Vectorworks を終了して cli の操作を完了するよう付記して拒否し、何も
+// 変更しない。以前の版を読み込んだ Vectorworks が <Work>/old/cli/spool のロックを保持していても同様
+// （checkCLI が先に応答する）。
 func TestNoCLIAfterStoppedCLISwap(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -415,7 +420,8 @@ func TestNoCLIAfterStoppedCLISwap(t *testing.T) {
 	sameSnapshot(t, work, snapshot(t, h.work))
 }
 
-// 付け替えの 1 つ目（<Plug-Ins>/<name> を移す）と 2 つ目（組み立てたものを置く）の失敗で元に戻る。
+// 差し替えの 1 つ目（<Plug-Ins>/<name> を移動する）と 2 つ目（構築したものを配置する）の失敗で元に
+// 戻る。
 func TestInstallRenameFailureRestores(t *testing.T) {
 	for name, from := range map[string]func(h *harness) string{
 		"first":  func(h *harness) string { return filepath.Join(h.plugins, "cli") },
@@ -441,7 +447,7 @@ func TestInstallRenameFailureRestores(t *testing.T) {
 	}
 }
 
-// oldCLIs は <Work>/old/ の直下のよけた CLI。
+// oldCLIs は <Work>/old/ の直下の退避した CLI。
 func oldCLIs(t *testing.T, h *harness) []string {
 	t.Helper()
 	matches, err := filepath.Glob(filepath.Join(h.work, "old", edition.Command+"*.old-*"))
@@ -451,8 +457,8 @@ func oldCLIs(t *testing.T, h *harness) []string {
 	return matches
 }
 
-// フックが失敗したら前の版へ戻す（最初に入れたときは何も残さない）。標準出力が JSON のオブジェクト
-// 1 つでないときも失敗。
+// フックが失敗したら以前の版へ巻き戻す（初回のインストールでは何も残置しない）。標準出力が JSON の
+// オブジェクト 1 つでない場合も失敗。
 func TestInstallHookFailureRestores(t *testing.T) {
 	for name, plan := range map[string]hookPlan{
 		"exit":        {Exit: 3},
@@ -493,7 +499,7 @@ func TestInstallHookFailureRestores(t *testing.T) {
 	}
 }
 
-// フックの出力: 空なら {}、BOM と前後の空白は許す。
+// フックの出力: 空ならば {}、BOM と前後の空白は許容する。
 func TestHookOutput(t *testing.T) {
 	for in, want := range map[string]string{
 		"":                             "{}",
@@ -508,7 +514,8 @@ func TestHookOutput(t *testing.T) {
 	}
 }
 
-// フックが走る間に起動した Vectorworks が新しい版を読み込んでロックを掴んだら、戻さずに新しい版を残す。
+// フックの実行中に起動した Vectorworks が新しい版を読み込んでロックを取得したら、巻き戻さずに新しい
+// 版を残置する。
 func TestInstallHookFailureWhileRunningKeepsTheNewVersion(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -524,12 +531,13 @@ func TestInstallHookFailureWhileRunningKeepsTheNewVersion(t *testing.T) {
 		t.Fatal("the new version should stay, and the previous one in old")
 	}
 	unlock()
-	// Vectorworks を終了しても、install を終えるまで uninstall は old を消さずに断り、同じタグの install を示す。
+	// Vectorworks を終了しても、install を完了するまで uninstall は old を削除せずに拒否し、同じ
+	// タグの install を示す。
 	if _, err := Uninstall(h.options(), "cli"); err == nil || !strings.Contains(err.Error(), "install cli@c2") ||
 		!strings.Contains(err.Error(), "registry default") || !strings.Contains(err.Error(), h.plugins) {
 		t.Fatal(err)
 	}
-	// 同じタグで走らせ直すと、フックだけが走り、退避した前の版を片付ける。
+	// 同じタグで再実行すると、フックのみが実行され、退避した以前の版を整理する。
 	os.WriteFile(filepath.Join(h.plugins, "cli", "hooks", "install.hook"), []byte(planJSON(t, hookPlan{Stdout: "{}"})), 0o644)
 	if result, err := h.install("cli", "c2"); err != nil || result.Outcome != outcomeUpToDate {
 		t.Fatalf("%+v %v", result, err)
@@ -542,7 +550,7 @@ func TestInstallHookFailureWhileRunningKeepsTheNewVersion(t *testing.T) {
 	}
 }
 
-// 同じタグでフックだけを走らせた回で退避した前の版を片付けられなくても、up_to_date のまま知らせる。
+// 同じタグでフックのみを実行した回で退避した以前の版を整理できなくても、up_to_date のまま通知する。
 func TestInstallSameTagCannotSettleOld(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -558,7 +566,7 @@ func TestInstallSameTagCannotSettleOld(t *testing.T) {
 	}
 }
 
-// 付け替えに成功した install は、残っていた中断した uninstall の印を消す。
+// 差し替えに成功した install は、残存していた中断した uninstall の標識を削除する。
 func TestInstallRemovesUninstallMarker(t *testing.T) {
 	h := newHarness(t)
 	marker := filepath.Join(h.work, "old", "cli.uninstalling")
@@ -570,8 +578,8 @@ func TestInstallRemovesUninstallMarker(t *testing.T) {
 	}
 }
 
-// 前の回が残した <Work>/old/<name>/: <Plug-Ins>/<name>/ があり記録が正しければ消し、記録が正しくなければ
-// 脇へ移す。<Plug-Ins>/<name>/ が無ければ何も変えずに断る。
+// 以前の回が残置した <Work>/old/<name>/: <Plug-Ins>/<name>/ が存在し記録が正しければ削除し、記録が
+// 正しくなければ別の場所へ移動する。<Plug-Ins>/<name>/ が存在しなければ何も変更せずに拒否する。
 func TestInstallLeftoverOld(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -590,7 +598,7 @@ func TestInstallLeftoverOld(t *testing.T) {
 		t.Fatalf("should move old aside: %v", kept)
 	}
 
-	// <Plug-Ins>/<name>/ が無ければ、old が唯一の版かもしれない。
+	// <Plug-Ins>/<name>/ が存在しなければ、old が唯一の版である可能性がある。
 	if err := os.Rename(filepath.Join(h.plugins, "cli"), old); err != nil {
 		t.Fatal(err)
 	}
@@ -601,7 +609,7 @@ func TestInstallLeftoverOld(t *testing.T) {
 	if !exists(filepath.Join(old, "version.txt")) || exists(filepath.Join(h.plugins, "cli")) {
 		t.Fatal("changed something")
 	}
-	// 印もあれば、止まった uninstall の続きを示す。
+	// 標識も存在すれば、停止した uninstall の続きを示す。
 	os.WriteFile(filepath.Join(h.work, "old", "cli.uninstalling"), nil, 0o600)
 	if _, err := h.install("cli", "c4"); err == nil || !strings.Contains(err.Error(), "run uninstall cli again") {
 		t.Fatal(err)
@@ -642,7 +650,7 @@ func TestInstallUsageErrors(t *testing.T) {
 	}
 }
 
-// レジストリの順と規則の選び方。
+// レジストリの優先順位と規則の選択。
 func TestLookup(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -665,19 +673,20 @@ func TestLookup(t *testing.T) {
 		t.Fatalf("%v %s %v", entry, source, err)
 	}
 
-	// 名前が見つかる前に取れないレジストリがあれば、そこで失敗にする（後ろに名前があっても）。
+	// 名前が見つかる前に取得できないレジストリがあれば、その時点で失敗とする（後に
+	// 名前があっても）。
 	h.serve("/registry.json", []byte(extra("other", h.url("/other/{tag}/"+edition.Command+".json"))))
 	o.Registries = []string{h.url("/missing.json"), h.url("/registry.json")}
 	if _, _, err := o.lookup("other"); err == nil {
 		t.Fatal("should fail on the missing registry")
 	}
-	// 先に見つかった名前を使う。
+	// 先に見つかった名前を使用する。
 	write(localPath, extra("other", "https://example.invalid/{tag}.json"))
 	o.Registries = []string{h.url("/registry.json"), local}
 	if _, source, err := o.lookup("other"); err != nil || source != h.url("/registry.json") {
 		t.Fatalf("%s %v", source, err)
 	}
-	// https:// で取ったレジストリは手元のファイルを指せない。
+	// https:// で取得したレジストリはローカル環境のファイルを指せない。
 	h.serve("/local.json", []byte(extra("other", fileURL(filepath.Join(h.tmp, "{tag}.json")))))
 	o.Registries = []string{h.url("/local.json")}
 	if _, _, err := o.lookup("other"); err == nil {
@@ -690,8 +699,8 @@ func TestLookup(t *testing.T) {
 	}
 }
 
-// 合った規則のマニフェストが取れなければ、次の規則へ進まずに失敗にする。{tag} のある規則で
-// マニフェストのタグが違えば失敗にする。
+// 合致した規則のマニフェストが取得できなければ、次の規則へ進まずに失敗とする。{tag} のある規則で
+// マニフェストのタグが異なれば失敗とする。
 func TestInstallRuleSelection(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -705,7 +714,7 @@ func TestInstallRuleSelection(t *testing.T) {
 	if _, err := Install(o, "other", "stable", false); err == nil || !strings.Contains(err.Error(), "missing.json") {
 		t.Fatal(err)
 	}
-	// /other/o2/vw2026.json にタグ o1 のマニフェストを置く。
+	// /other/o2/vw2026.json にタグ o1 のマニフェストを配置する。
 	h.publish(release{name: "other", tag: "o1"})
 	h.mu.Lock()
 	h.files["/other/o2/"+edition.Command+".json"] = h.files["/other/o1/"+edition.Command+".json"]
@@ -713,14 +722,14 @@ func TestInstallRuleSelection(t *testing.T) {
 	if _, err := Install(o, "other", "o2", false); err == nil || !strings.Contains(err.Error(), `"o1"`) {
 		t.Fatal(err)
 	}
-	// 入れた記録には、渡したレジストリの URL をそのまま残す。
+	// インストールの記録には、渡したレジストリの URL をそのまま保持する。
 	result, err := Install(o, "other", "o1", false)
 	if err != nil || result.Registry != registryPath {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
 
-// マニフェストに今のターゲットが無ければ、何も変えずに失敗にする。
+// マニフェストに現在のターゲットが無ければ、何も変更せずに失敗とする。
 func TestInstallUnsupportedTarget(t *testing.T) {
 	h := newHarness(t)
 	h.publish(release{name: "cli", tag: "c1"})
@@ -731,7 +740,8 @@ func TestInstallUnsupportedTarget(t *testing.T) {
 	}
 }
 
-// 手元のファイル（file:// の URL）のマニフェストと資産も取れる（社内のファイル共有など）。空白は %20。
+// ローカル環境のファイル（file:// の URL）のマニフェストと資産も取得できる（社内の
+// ファイル共有など）。空白は %20。
 func TestInstallFromPaths(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -759,7 +769,7 @@ func jsonString(s string) string {
 	return string(data)
 }
 
-// Default を渡さなければ、CLI に埋め込んだ既定のレジストリを引く。
+// Default を渡さなければ、CLI に埋め込んだ既定のレジストリを検索する。
 func TestLookupUsesTheEmbeddedRegistry(t *testing.T) {
 	o := Options{}
 	entry, source, err := o.lookup("cli")

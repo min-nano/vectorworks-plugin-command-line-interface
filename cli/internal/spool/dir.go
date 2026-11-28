@@ -9,7 +9,7 @@ import (
 // （docs/protocol.md「スプールの場所」）。
 const SpoolDirName = "spool"
 
-// Dir は、走らせている実行ファイルの場所からスプールの場所を返す（DirOf）。
+// Dir は、実行している実行ファイルの場所からスプールの場所を返す（DirOf）。
 func Dir() (string, error) {
 	executable, err := os.Executable()
 	if err != nil {
@@ -19,28 +19,30 @@ func Dir() (string, error) {
 }
 
 // DirOf は、実行ファイル（<Plug-Ins>/cli/bin/vw2026）の場所からスプールの場所
-// （<Plug-Ins>/cli/spool）を返す。リンクを解いた実行ファイルのあるフォルダ（bin）の親の下の
-// SpoolDirName で、確かめも探索もしない。
+// （<Plug-Ins>/cli/spool）を返す。リンクを解決した実行ファイルのあるフォルダ（bin）の親の下の
+// SpoolDirName で、確認も探索もしない。
 //
-// プラグインも自分のモジュールの場所から求めるので、両側が同じ場所にたどり着く。環境変数は
-// 読まない（GUI アプリの Vectorworks と、ssh や別のアプリから起動された CLI とで食い違わない
-// ように）。リンクを解くのは、mac の ~/.local/bin/vw2026 が <Plug-Ins>/cli/bin/vw2026 への
-// リンクだから。フォルダの外で動かした実行ファイル（zip を展開しただけのもの・手でビルドした
-// もの）は、入っている cli のスプールではない場所を返す。そこにロックを掴む者は居ないので、
-// 呼ぶ側には止まっていると見える（場所はコマンドが示す）。
+// プラグインも自身のモジュールの場所から導出するので、両側が同一の場所に到達する。環境変数は
+// 読み取らない（GUI アプリの Vectorworks と、ssh や別のアプリから起動された CLI とで齟齬が
+// 生じないように）。リンクを解決するのは、mac の ~/.local/bin/vw2026 が
+// <Plug-Ins>/cli/bin/vw2026 へのリンクであるため。フォルダの外で実行した実行ファイル（zip を
+// 展開したのみのもの・手動でビルドしたもの）は、インストールされた cli のスプールではない場所を
+// 返す。そこでロックを取得する者は存在しないので、呼び出し元には停止していると見える（場所は
+// コマンドが示す）。
 //
-// リンクを解けなければ、解く前のパスから求める（ResolveLinks）。
+// リンクを解決できなければ、解決する前のパスから導出する（ResolveLinks）。
 func DirOf(executable string) string {
 	return filepath.Join(filepath.Dir(filepath.Dir(ResolveLinks(executable))), SpoolDirName)
 }
 
-// ResolveLinks は、実行ファイルのパスのリンクを解いたものを返す（mac の ~/.local/bin/vw2026 は
-// <Plug-Ins>/cli/bin/vw2026 へのリンク）。解けなければ（Windows の subst のドライブ・割り当てたネットワーク
-// ドライブなどでは EvalSymlinks が失敗することがある）解く前のパスを返す。実行ファイルのパスは使えるので、
-// 場所を決められずに終わらせないため。スプールの場所（DirOf）と、install が自分の入った <Plug-Ins> と
-// 動いている自分を見つけるときに、同じ解き方を使う（実行ファイルの場所はスプールの場所と同じ決め方で求める）。
-// 実在する実行ファイルのパスに使う。まだ無いかもしれない場所（--plugins-dir・<Work>）を解くのは install の
-// resolvedPath で、あるところまでの親を解く。
+// ResolveLinks は、実行ファイルのパスのリンクを解決したものを返す（mac の ~/.local/bin/vw2026 は
+// <Plug-Ins>/cli/bin/vw2026 へのリンク）。解決できなければ（Windows の subst のドライブ・割り当てた
+// ネットワークドライブなどでは EvalSymlinks が失敗することがある）解決する前のパスを返す。
+// 実行ファイルのパスは使用できるので、場所を決定できずに終了させないため。スプールの場所（DirOf）
+// と、install が自身のインストールされた <Plug-Ins> と実行中の自身を特定する場合に、同一の
+// 解決方法を使用する（実行ファイルの場所はスプールの場所と同じ方法で導出する）。実在する
+// 実行ファイルのパスに使用する。未だ存在しない可能性のある場所（--plugins-dir・<Work>）を
+// 解決するのは install の resolvedPath で、存在するところまでの親を解決する。
 func ResolveLinks(executable string) string {
 	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
 		return resolved

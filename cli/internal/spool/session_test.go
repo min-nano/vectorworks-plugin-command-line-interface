@@ -11,11 +11,11 @@ import (
 	. "github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// writeKinds は占有の中でだけ呼べる道具（種類 write）を 1 つ持つ道具の表。
+// writeKinds は占有の中でのみ呼び出せるツール（種類 write）を 1 つ有するツールの一覧。
 var writeKinds = map[string]string{"edit": "write"}
 
-// occupied と no_session は実行していないので、道具の失敗ではなく ErrOccupied / ErrNoSession に
-// なる。種類 read の道具は占有に照らさない。
+// occupied と no_session は実行していないので、ツールの失敗ではなく ErrOccupied / ErrNoSession に
+// なる。種類 read のツールは占有と照合しない。
 func TestCallRefusedBySession(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	fakeplugin.StartWithKinds(t, dir, writeKinds, echo)
@@ -30,7 +30,7 @@ func TestCallRefusedBySession(t *testing.T) {
 	if _, err := bridge.Call("edit", nil, "", 5*time.Second); !errors.Is(err, ErrOccupied) {
 		t.Fatalf("want ErrOccupied, got %v", err)
 	}
-	// 道具の種類を渡しても、quit は種類 app のまま（占有の中でだけ呼べる）。
+	// ツールの種類を渡しても、quit は種類 app のまま（占有の中でのみ呼び出せる）。
 	if _, err := bridge.Call("quit", nil, "", 5*time.Second); !errors.Is(err, ErrOccupied) {
 		t.Fatalf("want ErrOccupied for quit, got %v", err)
 	}
@@ -48,8 +48,8 @@ func TestCallRefusedBySession(t *testing.T) {
 	}
 }
 
-// busy は実行していないので、道具の失敗ではなく ErrBusy になる。理由（プラグインの error）を
-// 誤りの文言に含める（終了の依頼・他の要求の処理を呼ぶ側が見分けられるように）。
+// busy は実行していないので、ツールの失敗ではなく ErrBusy になる。理由（プラグインの error）を
+// エラーの文言に含める（終了の依頼・他の要求の処理を呼び出し元が判別できるように）。
 func TestCallRefusedAsBusy(t *testing.T) {
 	for _, reason := range []string{"Vectorworks is quitting", ""} {
 		dir := fakeplugin.NewDir(t)
@@ -60,14 +60,14 @@ func TestCallRefusedAsBusy(t *testing.T) {
 		if !errors.Is(err, ErrBusy) || !strings.Contains(err.Error(), reason) {
 			t.Fatalf("want ErrBusy with the reason %q, got %v", reason, err)
 		}
-		// 理由が空なら、区切りだけを残さない。
+		// 理由が空ならば、区切りのみを残さない。
 		if strings.Contains(err.Error(), ": )") {
 			t.Fatalf("an empty reason left a separator: %v", err)
 		}
 	}
 }
 
-// Vectorworks を起動し直すと占有は消え、古い印は ErrNoSession になる。
+// Vectorworks を再起動すると占有は消失し、古いセッション ID は ErrNoSession になる。
 func TestSessionEndsWithRestart(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	stop := fakeplugin.StartWithKinds(t, dir, writeKinds, echo)

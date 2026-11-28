@@ -43,7 +43,7 @@ func TestCallRoundTrip(t *testing.T) {
 	if got.Tool != "layers" || got.Args["include_sheets"] != false {
 		t.Fatalf("unexpected result: %s", response.Result)
 	}
-	// 応答と .wait は読んだ後消す。
+	// 応答と .wait は読み取った後に削除する。
 	assertNoFiles(t, dir, ResponseSuffix)
 	assertNoFiles(t, dir, WaitSuffix)
 }
@@ -74,10 +74,10 @@ func TestCallToolFailure(t *testing.T) {
 	}
 }
 
-// 待ちきれなかった要求は、.wait をやめてから消す（誰も待たない要求も応答も残さない）。
+// 待機しきれなかった要求は、.wait を中止してから削除する（誰も待機しない要求も応答も残さない）。
 func TestCallTimeoutWithdrawsRequest(t *testing.T) {
 	dir, _ := fakeplugin.NewHeldDir(t)
-	// 動いているが応えない（ダイアログの最中など）
+	// 動作しているが応答しない（ダイアログの最中など）
 	_, err := Open(dir).Call("ping", nil, "", 200*time.Millisecond)
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("want ErrTimeout, got %v", err)
@@ -86,13 +86,13 @@ func TestCallTimeoutWithdrawsRequest(t *testing.T) {
 	assertNoFiles(t, dir, WaitSuffix)
 }
 
-// 猶予の間に届いた no_wait は「実行しなかった」なので、道具の失敗ではなく ErrNoWait。
+// 猶予の間に届いた no_wait は「実行しなかった」なので、ツールの失敗ではなく ErrNoWait。
 func TestCallNoWaitDuringGrace(t *testing.T) {
 	dir, _ := fakeplugin.NewHeldDir(t)
 	taken := takeRequest(t, dir)
 	go func() {
 		id := <-taken
-		// 締切（200 ms）を過ぎ、.wait が消えてから断る
+		// 期限（200 ms）を過ぎ、.wait が消失してから拒否する
 		time.Sleep(400 * time.Millisecond)
 		_ = WriteAtomically(filepath.Join(dir, id+ResponseSuffix), []byte(`{"ok":false,"code":"no_wait","error":"no wait file"}`))
 	}()
@@ -103,8 +103,8 @@ func TestCallNoWaitDuringGrace(t *testing.T) {
 	assertNoFiles(t, dir, ResponseSuffix)
 }
 
-// 締切の前に届いた no_wait（掃除が待つ印を消したときなど）は、待たずに ErrNoWait で終わり、
-// 待ちきれなかったとは言わない。
+// 期限の前に届いた no_wait（掃除が待機標識を削除した場合など）は、待機せずに ErrNoWait で終了し、
+// 待機しきれなかったとは示さない。
 func TestCallNoWaitBeforeDeadline(t *testing.T) {
 	dir, _ := fakeplugin.NewHeldDir(t)
 	answer(t, dir, `{"ok":false,"code":"no_wait","error":"no wait file"}`)
@@ -118,7 +118,7 @@ func TestCallNoWaitBeforeDeadline(t *testing.T) {
 	}
 }
 
-// ロックファイルがあっても、掴まれていなければ（異常終了の後）止まっている。
+// ロックファイルが存在しても、取得されていなければ（異常終了の後）停止している。
 func TestLockFileWithoutHolderIsDown(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	if err := os.WriteFile(filepath.Join(dir, LockFile), nil, 0o600); err != nil {
@@ -129,14 +129,15 @@ func TestLockFileWithoutHolderIsDown(t *testing.T) {
 	}
 }
 
-// スプールがあってもロックファイルが無ければ（プラグインが一度も掴んでいない）止まっている。
+// スプールが存在してもロックファイルが無ければ（プラグインが一度も取得していない）停止している。
 func TestDirWithoutLockFileIsDown(t *testing.T) {
 	if bridge := Open(fakeplugin.NewDir(t)); bridge.Running || bridge.Reason != "not running" {
 		t.Fatalf("want down, got %+v", bridge)
 	}
 }
 
-// LockHeld は、掴まれたロックを真、無いロック・放されたロックを偽にし、どちらも誤りにしない。
+// LockHeld は、取得されたロックを真、存在しないロック・解放されたロックを偽にし、いずれも
+// エラーにしない。
 func TestLockHeld(t *testing.T) {
 	dir := fakeplugin.NewDir(t)
 	if held, err := LockHeld(dir); held || err != nil {
@@ -155,8 +156,9 @@ func TestLockHeld(t *testing.T) {
 	}
 }
 
-// ロックを無い以外の理由で調べられなければ、動いているかが分からないという誤りを返す（mac・Linux では、
-// ファイルの下のパス。Windows はそれを無いと答えるので、名前に使えない文字で調べられなくする）。
+// ロックを存在しない以外の理由で調査できなければ、動作しているかが判明しないというエラーを返す
+// （mac・Linux では、ファイルの下のパス。Windows はそれを存在しないと応答するので、名前に
+// 使用できない文字で調査できなくする）。
 func TestLockHeldCannotTell(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "file")
 	if err := os.WriteFile(file, nil, 0o600); err != nil {
@@ -185,7 +187,7 @@ func TestReleasedLockIsDown(t *testing.T) {
 func TestCallIsServedWhenServingResumes(t *testing.T) {
 	dir, release := fakeplugin.NewHeldDir(t)
 	bridge := Open(dir)
-	// ダイアログが閉じて受け付けが戻るのを真似る: 要求を置いた後で応え始める。
+	// ダイアログが閉じて受付処理が戻るのを模倣する: 要求を配置した後で応答を開始する。
 	go func() {
 		time.Sleep(300 * time.Millisecond)
 		release()
@@ -235,8 +237,9 @@ func assertNoFiles(t *testing.T, dir, suffix string) {
 	}
 }
 
-// 読めない（まだ無い・開けない）応答は「まだ無い」とみなして読み直す（docs/protocol.md「ファイル」）。
-// 応答の名前に開けないもの（ディレクトリ）がある間も壊れた応答とせず、後から公開された応答を返す。
+// 読み取れない（未だ存在しない・開けない）応答は「未だ存在しない」とみなして読み直す
+// （docs/protocol.md「ファイル」）。応答の名前に開けないもの（ディレクトリ）がある間も破損した
+// 応答とせず、後から公開された応答を返す。
 func TestCallRereadsUnreadableResponse(t *testing.T) {
 	dir, _ := fakeplugin.NewHeldDir(t)
 	taken := takeRequest(t, dir)
@@ -257,7 +260,7 @@ func TestCallRereadsUnreadableResponse(t *testing.T) {
 	}
 }
 
-// 上限を超える要求は、スプールに置く前に断る。
+// 上限を超える要求は、スプールに配置する前に拒否する。
 func TestCallRejectsOversizedRequest(t *testing.T) {
 	dir, _ := fakeplugin.NewHeldDir(t)
 	big := json.RawMessage(`{"s":"` + strings.Repeat("x", MaxRequestBytes) + `"}`)
@@ -269,8 +272,8 @@ func TestCallRejectsOversizedRequest(t *testing.T) {
 	assertNoFiles(t, dir, TempSuffix)
 }
 
-// takeRequest はプラグインが要求を受け取ったこと（読んで消した）を真似る。応答は書かない。
-// 受け取った要求の id を返す。
+// takeRequest はプラグインが要求を受け取ったこと（読み取って削除した）を模倣する。応答は
+// 書き込まない。受け取った要求の id を返す。
 func takeRequest(t *testing.T, dir string) <-chan string {
 	t.Helper()
 	taken := make(chan string, 1)
@@ -293,7 +296,7 @@ func takeRequest(t *testing.T, dir string) <-chan string {
 	return taken
 }
 
-// answer は要求を受け取り、text を応答として書く（プラグインを真似る）。
+// answer は要求を受け取り、text を応答として書き込む（プラグインを模倣する）。
 func answer(t *testing.T, dir, text string) {
 	t.Helper()
 	taken := takeRequest(t, dir)
@@ -304,7 +307,7 @@ func answer(t *testing.T, dir, text string) {
 	}()
 }
 
-// 待つのをやめたときに要求が既に受け取られていて、猶予の間にも応答が無ければ ErrNoResponse
+// 待機を中止した時点で要求が既に受け取られており、猶予の間にも応答が無ければ ErrNoResponse
 // （「実行されていない」と区別する）。
 func TestCallTakenWithoutResponse(t *testing.T) {
 	SetTakenGrace(t, 200*time.Millisecond)
@@ -318,13 +321,14 @@ func TestCallTakenWithoutResponse(t *testing.T) {
 	assertNoFiles(t, dir, WaitSuffix)
 }
 
-// 受け取られた要求の応答が締切の後猶予の内に届けば、その応答で終わる（ErrNoResponse ではない）。
-// 届いた応答が壊れていれば ErrMalformedResponse（応答は届いていて、書き手の不具合なので）。
+// 受け取られた要求の応答が期限の後、猶予の内に届けば、その応答で終了する（ErrNoResponse では
+// ない）。届いた応答が破損していれば ErrMalformedResponse（応答は届いており、書き手の不具合
+// なので）。
 //
-// 時間に依らないよう、要求を受け取ってから、Call が待つのをやめた（.wait を消した）のを見て
-// 応える。こうすると必ず猶予の分岐を通る。締切（1 秒）は受け取り（10 ms ごとの見回り）に十分な
-// 長さにする。受け取りが締切に間に合わなければ、Call は要求を消して ErrTimeout で終わり、テストは
-// 落ちる（どの分岐を通ったかが分かる）。
+// 時間に依存しないよう、要求を受け取ってから、Call が待機を中止した（.wait を削除した）のを確認して
+// 応答する。こうすると必ず猶予の分岐を通過する。期限（1 秒）は受け取り（10 ms ごとの巡回）に十分な
+// 長さにする。受け取りが期限に間に合わなければ、Call は要求を削除して ErrTimeout で終了し、テストは
+// 失敗する（いずれの分岐を通過したかが判明する）。
 func TestCallTakenThenAnsweredInGrace(t *testing.T) {
 	for _, c := range []struct {
 		name, response string
@@ -336,7 +340,8 @@ func TestCallTakenThenAnsweredInGrace(t *testing.T) {
 		{"malformed", `{"ok":tr`, func(_ *Response, err error) bool {
 			return errors.Is(err, ErrMalformedResponse)
 		}},
-		// null は JSON として読めるが、応答のオブジェクトではない（届かなかったとみなして待ち続けない）。
+		// null は JSON として読み取れるが、応答のオブジェクトではない（届かなかったとみなして
+		// 待機し続けない）。
 		{"null", `null`, func(_ *Response, err error) bool {
 			return errors.Is(err, ErrMalformedResponse)
 		}},
@@ -376,8 +381,9 @@ func exists(path string) bool {
 	return err == nil
 }
 
-// 応答のファイルが JSON として壊れていれば、読み直さず、締切まで待たずに ErrMalformedResponse で
-// 終え、ファイルを消す（rename で公開されるので待っても直らない。docs/protocol.md「ファイル」）。
+// 応答のファイルが JSON として破損していれば、読み直さず、期限まで待機せずに
+// ErrMalformedResponse で終了し、ファイルを削除する（rename で公開されるので待機しても
+// 修正されない。docs/protocol.md「ファイル」）。
 func TestCallStopsOnMalformedResponse(t *testing.T) {
 	dir, _ := fakeplugin.NewHeldDir(t)
 	answer(t, dir, `{"ok":tr`)
@@ -393,7 +399,8 @@ func TestCallStopsOnMalformedResponse(t *testing.T) {
 	assertNoFiles(t, dir, WaitSuffix)
 }
 
-// 入れ子が深すぎる要求は、スプールに置く前に断る（プラグインが invalid_request で断るので）。
+// 入れ子が深すぎる要求は、スプールに配置する前に拒否する（プラグインが invalid_request で
+// 拒否するので）。
 func TestCallRejectsDeepRequest(t *testing.T) {
 	dir, _ := fakeplugin.NewHeldDir(t)
 	deep := json.RawMessage(`{"a":` + strings.Repeat("[", MaxNestingDepth) + strings.Repeat("]", MaxNestingDepth) + `}`)
@@ -417,8 +424,8 @@ func TestNestingDepth(t *testing.T) {
 	}
 }
 
-// 書きかけの名前に hard link が置かれていても、リンクの先（スプールの外のファイル）を変えない
-// （docs/protocol.md「ファイル」）。
+// 書き込み途中のファイルの名前に hard link が配置されていても、リンクの先（スプールの外のファイル）
+// を変更しない（docs/protocol.md「ファイル」）。
 func TestWriteAtomicallyDoesNotWriteThroughLinks(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "target")
@@ -440,7 +447,8 @@ func TestWriteAtomicallyDoesNotWriteThroughLinks(t *testing.T) {
 	}
 }
 
-// 書きかけを作れなければ（同じ名前の空でないディレクトリがある）、要求を公開しない。
+// 書き込み途中のファイルを作成できなければ（同じ名前の空でないディレクトリがある）、要求を
+// 公開しない。
 func TestWriteAtomicallyFailsWhenTheTempCannotBeCreated(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "x"+RequestSuffix)
@@ -455,7 +463,7 @@ func TestWriteAtomicallyFailsWhenTheTempCannotBeCreated(t *testing.T) {
 	}
 }
 
-// 公開（rename）できなければ、書きかけを残さない。
+// 公開（rename）できなければ、書き込み途中のファイルを残さない。
 func TestWriteAtomicallyRemovesTheTempWhenItCannotPublish(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "x"+RequestSuffix)
@@ -470,8 +478,8 @@ func TestWriteAtomicallyRemovesTheTempWhenItCannotPublish(t *testing.T) {
 	}
 }
 
-// 要求を公開できなければ、どの要求かと、どの段（書きかけを開く・rename）で失敗したかを返す
-// （段は os のエラーの文言が示す）。
+// 要求を公開できなければ、いずれの要求かと、いずれの段階（書き込み途中のファイルを開く・rename）で
+// 失敗したかを返す（段階は os のエラーの文言が示す）。
 func TestCallNamesTheRequestItCannotPublish(t *testing.T) {
 	for _, c := range []struct{ blocked, stage string }{
 		{"x" + RequestSuffix + TempSuffix, "open"},
@@ -491,8 +499,8 @@ func TestCallNamesTheRequestItCannotPublish(t *testing.T) {
 	}
 }
 
-// 引数が JSON として読めなければ、何も置かずに断る（vw2026 は先に確かめるが、Call を直接
-// 呼ぶ側のため）。
+// 引数が JSON として読み取れなければ、何も配置せずに拒否する（vw2026 は先に検証するが、Call を直接
+// 呼び出す呼び出し元のため）。
 func TestCallRejectsInvalidArgs(t *testing.T) {
 	dir, _ := fakeplugin.NewHeldDir(t)
 	_, err := Open(dir).Call("ping", json.RawMessage(`{"a":`), "", time.Second)
@@ -503,8 +511,8 @@ func TestCallRejectsInvalidArgs(t *testing.T) {
 	assertNoFiles(t, dir, WaitSuffix)
 }
 
-// 待つ印（.wait）を作れなければ、どの印かを返し、要求を公開しない。.wait は O_EXCL で作るので、
-// 同じ名前が残っていれば作れない。
+// 待機標識（.wait）を作成できなければ、いずれの標識かを返し、要求を公開しない。.wait は O_EXCL で
+// 作成するので、同じ名前が残っていれば作成できない。
 func TestCallNamesTheWaitItCannotHold(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "x"+WaitSuffix), nil, 0o600); err != nil {
@@ -527,37 +535,40 @@ func TestIsObject(t *testing.T) {
 	}
 }
 
-// 届いた応答の読み方と確かめ（docs/protocol.md「応答」「互換性」）。ファイルを使わずに、pollResponse と同じ
-// decodeResponse で読み、checkResponse で確かめる（Call がこの 2 つを通すことは TestCallPassesDetail・
-// TestCallStopsOnMalformedResponse・TestCallTakenThenAnsweredInGrace が確かめる）。
+// 届いた応答の読み取り方と検証（docs/protocol.md「応答」「互換性」）。ファイルを使用せずに、
+// pollResponse と同じ decodeResponse で読み取り、checkResponse で検証する（Call がこの 2 つを通す
+// ことは TestCallPassesDetail・TestCallStopsOnMalformedResponse・TestCallTakenThenAnsweredInGrace
+// が検証する）。
 func TestCheckResponse(t *testing.T) {
 	const malformed = "malformed"
 	for _, c := range []struct {
 		text string
-		// want は返る応答の result（成功）か detail（失敗）。malformed なら壊れた応答。
+		// want は返る応答の result（成功）か detail（失敗）。malformed ならば破損した応答。
 		want string
-		// err は「実行しなかった」種別のときの誤り（want は見ない）。
+		// err は「実行しなかった」種別の場合のエラー（want は参照しない）。
 		err error
 	}{
-		// 「実行しなかった」種別は、道具の失敗ではなく、それぞれの誤りにする。
+		// 「実行しなかった」種別は、ツールの失敗ではなく、それぞれのエラーにする。
 		{text: `{"ok":false,"code":"no_wait","error":"x"}`, err: ErrNoWait},
 		{text: `{"ok":false,"code":"busy","error":"x"}`, err: ErrBusy},
 		{text: `{"ok":false,"code":"occupied","error":"x"}`, err: ErrOccupied},
 		{text: `{"ok":false,"code":"no_session","error":"x"}`, err: ErrNoSession},
-		// JSON として壊れている・オブジェクトでない応答。
+		// JSON として破損している・オブジェクトでない応答。
 		{`{"ok":tr`, malformed, nil},
 		{`null`, malformed, nil},
-		// 知らないフィールドは無視する（「互換性」）。
+		// 未知のフィールドは無視する（「互換性」）。
 		{`{"ok":true,"result":{},"future":[1]}`, `{}`, nil},
 		// 成功の result は必ずオブジェクト。
 		{`{"ok":true}`, malformed, nil},
 		{`{"ok":true,"result":null}`, malformed, nil},
 		{`{"ok":true,"result":[1]}`, malformed, nil},
 		{`{"ok":true,"result":"done"}`, malformed, nil},
-		// 失敗の code が無い・知らない値なら、道具の失敗ではなく壊れた応答（知っているフィールドの未知の値）。
+		// 失敗の code が無い・未知の値ならば、ツールの失敗ではなく破損した応答（既知のフィールドの
+		// 未知の値）。
 		{`{"ok":false,"error":"x"}`, malformed, nil},
 		{`{"ok":false,"code":"later","error":"x"}`, malformed, nil},
-		// 失敗の detail はそのまま渡す。持てるのは invalid_args・internal だけで、オブジェクトに限る。
+		// 失敗の detail はそのまま渡す。保持できるのは invalid_args・internal のみで、
+		// オブジェクトに限る。
 		{
 			`{"ok":false,"code":"internal","error":"x","detail":{"reason":"documents_open"}}`,
 			`{"reason":"documents_open"}`,
@@ -595,7 +606,7 @@ func TestCheckResponse(t *testing.T) {
 				}
 				return
 			}
-			// 確かめた応答は、そのまま返す（ok・code を変えない）。
+			// 検証した応答は、そのまま返す（ok・code を変更しない）。
 			if err != nil || got != response {
 				t.Fatalf("got %+v %v, want the response as it is", got, err)
 			}
@@ -610,7 +621,8 @@ func TestCheckResponse(t *testing.T) {
 	}
 }
 
-// Call は、締切の前に届いた応答も確かめる。読めても規則に合わない応答は壊れた応答にし、応答のファイルを残さない。
+// Call は、期限の前に届いた応答も検証する。読み取れても規則に合致しない応答は破損した応答にし、
+// 応答のファイルを残さない。
 func TestCallRejectsInvalidResponse(t *testing.T) {
 	dir, _ := fakeplugin.NewHeldDir(t)
 	answer(t, dir, `{"ok":true}`)
@@ -621,7 +633,7 @@ func TestCallRejectsInvalidResponse(t *testing.T) {
 	assertNoFiles(t, dir, WaitSuffix)
 }
 
-// Call は届いた応答を確かめて返す（失敗の detail もそのまま渡す）。
+// Call は届いた応答を検証して返す（失敗の detail もそのまま渡す）。
 func TestCallPassesDetail(t *testing.T) {
 	dir, _ := fakeplugin.NewHeldDir(t)
 	answer(t, dir, `{"ok":false,"code":"internal","error":"x","detail":{"reason":"documents_open"}}`)

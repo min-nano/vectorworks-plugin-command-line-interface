@@ -11,9 +11,9 @@ import (
 	"unicode/utf8"
 )
 
-// CLI の出力・エラーの文言は英語で、ASCII だけにする（CLAUDE.md「Go」。Windows の OEM のコードページの
-// コンソールで化けないため）。テストでないコードの文字列のリテラルを、cli/ の下の全てで確かめる
-// （コメントは日本語で良い）。
+// CLI の出力・エラーの文言は英語で、ASCII のみとする（CLAUDE.md「Go」。Windows の OEM の
+// コードページのコンソールで文字化けしないため）。テスト以外のコードの文字列リテラルを、cli/ の下の
+// 全てで検証する（コメントは日本語でよい）。
 func TestStringLiteralsAreASCII(t *testing.T) {
 	root := filepath.Join("..", "..")
 	fset := token.NewFileSet()
