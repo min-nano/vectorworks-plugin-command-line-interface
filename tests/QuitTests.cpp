@@ -391,9 +391,9 @@ const Tool kRegisterTools[] = {{{"registers", "", "{}", ToolKind::Read}, registe
 
 }
 
-// 通知の登録は、受け付けの途中（道具の SDK 呼び出しが回すイベントから入り直した刻み）と終了の依頼の
-// 最中には試さない（SDK の呼び出しの途中で SDK
-// を呼ばない）。登録できなければ印を立てずに次で試し直し、 登録できたら 2 度と試さない。
+// 通知の登録は、受け付けの途中と終了の依頼の最中には試さない。
+// どちらも SDK の呼び出しの途中のため（前者は、道具の SDK 呼び出しが回すイベントから入り直した刻み）。
+// 登録できなければ印を立てずに次で試し直し、登録できたら 2 度と試さない。
 TEST(LifecycleRegistersTheNotificationOnlyOutsideServeAndQuit) {
 	TempDir dir;
 	Server server(dir.utf8Path());

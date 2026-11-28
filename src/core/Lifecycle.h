@@ -25,11 +25,11 @@ public:
 
 	bool notificationRegistered() const { return notificationRegistered_; }
 
-	// registerNotification は、通知をまだ登録していなければ registerOnce を呼び（登録できたら真を
-	// 返す）、できたら印を立てる。受け付けの途中（道具の SDK
-	// 呼び出しが回すイベントから入り直した刻み）と 終了の依頼の最中は呼ばない（道具・終了の SDK
-	// 呼び出しの途中で SDK を呼ばない。
-	// docs/plugin/architecture.md「受け付けの流れ」）。呼ばなかった回は、次の刻みでやり直す。
+	// registerNotification は、通知をまだ登録していなければ registerOnce を呼ぶ。
+	// registerOnce が真を返したら（登録できたら）印を立てる。
+	// 受け付けの途中と終了の依頼の最中は呼ばない。前者は、道具の SDK 呼び出しが回す
+	// イベントから入り直した刻み。どちらも SDK の呼び出しの途中で SDK を呼ばないため
+	// （docs/plugin/architecture.md「受け付けの流れ」）。呼ばなかった回は、次の刻みでやり直す。
 	template <typename Register>
 	void registerNotification(const Server &server, Register &&registerOnce) {
 		if (notificationRegistered_ || quitting_ || server.serving()) {

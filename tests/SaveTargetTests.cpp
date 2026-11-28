@@ -474,9 +474,9 @@ TEST(WindowsPathRefusesFormsItDoesNotOpen) {
 	CHECK(windows_path::narrow(windows_path::widen("図面.vwx")) == "図面.vwx");
 }
 
-// \\?\ の形にできないパス（相対・ドライブ相対・\\.\）は、OS
-// に聞かずに確かめられない（Failed）とする。
-// 「無い」と答えると、上書きの確かめを素通りするため。checkWindowsTo が先に断る形と同じ。
+// \\?\ の形にできないパス（相対・ドライブ相対・\\.\）は、確かめられない（Failed）とする。
+// OS には聞かない。「無い」と答えると、上書きの確かめを素通りするため。
+// checkWindowsTo が先に断る形と同じ。
 TEST(ProbesRefuseFormsThatCannotBeExtended) {
 	for (const char *path : {"a.vwx", "C:a.vwx", "\\a.vwx", "\\\\.\\C:\\a.vwx"}) {
 		Probe target = save_target::probeTo(path);
