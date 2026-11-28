@@ -21,6 +21,11 @@ It prints one of
 	{"running":true,"spool":"..."}
 	{"running":false,"spool":"...","reason":"..."}
 
+The reason is "not found" when there is no spool, "not running" when nobody
+holds the lock, and starts with "cannot check the lock:" when the lock cannot
+be checked (it cannot be opened, or it is not a regular file); status reports
+the bridge as not running then too.
+
 and exits with 5 when the bridge is not running, writing the spool it looked at
 to the standard error too (a ${cmd} run from outside the folder of the plug-in
 looks at another spool; see "${cmd} --help").

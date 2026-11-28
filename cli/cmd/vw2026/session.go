@@ -40,7 +40,7 @@ one. With the old one, a tool of kind write or app and "session end" exit with
 
 // sessionTimeout は session start と session end が共有する待つ上限（環境変数も同じ VW2026_SESSION_TIMEOUT）。
 type sessionTimeout struct {
-	Timeout float64 `env:"${prefix}SESSION_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
+	Timeout timeout `env:"${prefix}SESSION_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
 }
 
 type sessionStartCmd struct {

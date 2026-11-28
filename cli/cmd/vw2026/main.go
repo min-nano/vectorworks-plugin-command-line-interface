@@ -13,11 +13,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/alecthomas/kong"
 
@@ -307,25 +307,30 @@ func open(e *env) *spool.Bridge {
 	return spool.Open(dir)
 }
 
-func seconds(value float64) time.Duration {
-	return time.Duration(value * float64(time.Second))
-}
-
-// emit は値を JSON 1 行で標準出力へ書く。
+// emit は値を JSON 1 行で標準出力へ書く。< > & を \u003c などに書き換えない（HTML に埋め込む出力ではなく、
+// --raw の有無で同じ値の綴りが変わらないように）。
 func emit(e *env, value any) int {
-	data, err := json.Marshal(value)
-	if err != nil {
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
 		fmt.Fprintf(e.stderr, edition.Command+": encode output: %v\n", err)
 		return exitFailure
 	}
-	return emitRaw(e, data)
+	return emitRaw(e, bytes.TrimSuffix(buffer.Bytes(), []byte("\n")))
 }
 
-// emitRaw は data をそのまま 1 行で書く。書けなければ（ディスクが一杯など）失敗の終了コードを返す（呼ぶ側の
+// emitRaw は JSON の data を詰めて（空白と改行を除いて）1 行で書く。通信規則は応答を詰めて書くとは決めていない
+// ので、プラグインが改行を入れても出力を 1 行に保つ（数や文字列の綴りは変えない）。書けなければ（ディスクが一杯など）失敗の終了コードを返す（呼ぶ側の
 // スクリプトが、空や途中までの出力を正しいものとして扱わないように）。読む側が閉じたパイプへの書き込みは、
 // macOS と Linux では Go の既定どおり SIGPIPE で終わり、ここへは来ない（Windows では誤りとして来る）。
 func emitRaw(e *env, data []byte) int {
-	if _, err := fmt.Fprintf(e.stdout, "%s\n", data); err != nil {
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, data); err != nil {
+		fmt.Fprintf(e.stderr, edition.Command+": encode output: %v\n", err)
+		return exitFailure
+	}
+	if _, err := fmt.Fprintf(e.stdout, "%s\n", compact.Bytes()); err != nil {
 		fmt.Fprintf(e.stderr, edition.Command+": write output: %v\n", err)
 		return exitFailure
 	}

@@ -6,7 +6,7 @@ import (
 )
 
 type toolsCmd struct {
-	Timeout float64 `env:"${prefix}TOOLS_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
+	Timeout timeout `env:"${prefix}TOOLS_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
 }
 
 func (toolsCmd) Help() string {
