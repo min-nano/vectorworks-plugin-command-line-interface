@@ -146,6 +146,34 @@ func TestUncheckableDestBeforeTheSwap(t *testing.T) {
 	}
 }
 
+// 前回の残りの old/<name>/ を片付ける前に <Plug-Ins>/<name>/ を調べられなければ、唯一の版かを決めずに、何も変えずに
+// 失敗にする。
+func TestUncheckableDestBeforeSettlingOld(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.publish(release{name: "cli", tag: "c2"})
+	old := filepath.Join(h.work, "old", "cli")
+	if err := os.MkdirAll(old, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// 片付けは old を先に調べるので、その後の <Plug-Ins>/<name>/ だけを失敗させる（始めの確かめは通す）。
+	var sawOld atomic.Bool
+	original := lstat
+	swap(t, &lstat, func(path string) (fs.FileInfo, error) {
+		if path == old {
+			sawOld.Store(true)
+		}
+		return original(path)
+	})
+	failLstatWhen(t, filepath.Join(h.plugins, "cli"), sawOld.Load)
+	before, beforeWork := snapshot(t, h.plugins), snapshot(t, h.work)
+	if _, err := h.install("cli", "c2"); !errors.Is(err, errInjected) || !strings.Contains(err.Error(), "cannot check") {
+		t.Fatal(err)
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
+	sameSnapshot(t, beforeWork, snapshot(t, h.work))
+}
+
 // <Work> の下を調べられなければ（権限・届かない共有）、install も uninstall も何も変えずに失敗にする。
 func TestUncheckableWorkFolder(t *testing.T) {
 	h := newHarness(t)
