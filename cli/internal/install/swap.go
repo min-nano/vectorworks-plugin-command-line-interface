@@ -49,7 +49,12 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 		_ = removeStaging(p)
 		return nil, err
 	}
-	hadOld := exists(p.dest)
+	hadOld, err := present(p.dest)
+	if err != nil {
+		note := moved.restore()
+		_ = removeStaging(p)
+		return nil, fmt.Errorf("%w%s", checkError(p.dest, err, again), note)
+	}
 	if hadOld {
 		if err := rename(p.dest, p.oldDir); err != nil {
 			note := moved.restore()
@@ -201,13 +206,22 @@ func removeStaging(p places) error {
 // 使っているかもしれないので残すときに添える、次にすること（呼ぶ側が決める。付け替えの前は何も変えていない、
 // 付け替えの後は新しい版が入っている）。
 func (o *Options) settleOld(p places, name, again, advice string) (string, error) {
+	// 調べられないものがあれば、何も変えずに失敗にする（無いとみなすと、唯一の版かもしれない old を消しうる）。
+	there := map[string]bool{}
+	for _, path := range []string{p.oldDir, p.dest, p.marker} {
+		found, err := present(path)
+		if err != nil {
+			return "", checkError(path, err, again)
+		}
+		there[path] = found
+	}
 	switch {
-	case !exists(p.oldDir):
+	case !there[p.oldDir]:
 		return "", nil
-	case !exists(p.dest) && exists(p.marker):
+	case !there[p.dest] && there[p.marker]:
 		return "", fmt.Errorf("%s was left by an uninstall that stopped halfway; run uninstall %s again to finish it",
 			p.oldDir, name)
-	case !exists(p.dest):
+	case !there[p.dest]:
 		return "", fmt.Errorf("%s was left by an install or uninstall that stopped halfway; "+
 			"it may be the only copy of %s. Move it back to %s or delete it, then run %s again",
 			p.oldDir, name, p.dest, again)
@@ -262,7 +276,26 @@ func renameError(dir string, err error, command string) error {
 		dir, err, command)
 }
 
+// exists は path が在るか（調べられなければ偽）。知らせるだけの判定に使う。消す・移すかを決める判定は present を使う。
 func exists(path string) bool {
-	_, err := os.Lstat(path)
+	_, err := lstat(path)
 	return err == nil
+}
+
+// present は path が在るか。無い以外の理由で調べられなければ（権限・届かない共有）、その誤りを返す（無いとみなして
+// 進むと、唯一の版かもしれない <Work>/old/<name>/ を見落として、消す・移す判定を誤るため。守ること 9 の歯止め）。
+func present(path string) (bool, error) {
+	_, err := lstat(path)
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, os.ErrNotExist):
+		return false, nil
+	}
+	return false, err
+}
+
+// checkError は、present が調べられなかったときの文言。command（走らせ直すコマンド）を案内する。
+func checkError(path string, err error, command string) error {
+	return fmt.Errorf("cannot check whether %s is there (%w); run %s again once it can be checked", path, err, command)
 }

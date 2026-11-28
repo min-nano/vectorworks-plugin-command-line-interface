@@ -166,4 +166,5 @@ var (
 	mkdirAll   = os.MkdirAll
 	writeFile  = os.WriteFile
 	openFile   = os.OpenFile
+	lstat      = os.Lstat
 )

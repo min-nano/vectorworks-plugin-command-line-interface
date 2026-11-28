@@ -163,6 +163,9 @@ func (o *Options) places(name string) (places, error) {
 	}
 	staging := filepath.Join(work, "staging")
 	old := filepath.Join(work, "old")
+	if err := plainWorkFolders(work, staging, old); err != nil {
+		return places{}, err
+	}
 	return places{
 		plugins:  plugins,
 		dest:     filepath.Join(plugins, name),
@@ -174,6 +177,27 @@ func (o *Options) places(name string) (places, error) {
 		oldDir:   filepath.Join(old, name),
 		marker:   filepath.Join(old, name+".uninstalling"),
 	}, nil
+}
+
+// plainWorkFolders は、<Work>・<Work>/staging・<Work>/old のそれぞれが、無いか普通のフォルダかを確かめる。リンク
+// （Windows ではジャンクションも。Go は ModeDir と ModeIrregular を返す）・ファイルなら、何も変えずに誤りにする
+// （名前をそのまま組み立てた staging/<name>/ や old/<name>/ を消す・移すときに、途中のリンクを通してリンクの先の
+// フォルダに触れないため。守ること 9 の歯止め）。無い以外の理由で調べられなければ、その誤りを返す。<Work> の親
+// （mac の /var などはリンク）は見ない。<Work> から下は vw2026 が作るので、普通のフォルダしか無いはず。
+func plainWorkFolders(dirs ...string) error {
+	for _, dir := range dirs {
+		info, err := lstat(dir)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			continue
+		case err != nil:
+			return fmt.Errorf("cannot check the work folder %s (%w); nothing is changed", dir, err)
+		case info.Mode().Type() != os.ModeDir:
+			return fmt.Errorf("the work folder %s is not a plain folder (a link, a junction or a file); nothing is "+
+				"changed. Remove it (removing a link does not touch what it points to), then run again", dir)
+		}
+	}
+	return nil
 }
 
 // overlap は、a と b の片方がもう片方と同じか、その中か。書いたままのパスと、リンクを解いたパス（resolvedPath。それぞれ
