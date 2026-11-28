@@ -5,8 +5,6 @@ import (
 	"math"
 	"strconv"
 	"time"
-
-	"github.com/alecthomas/kong"
 )
 
 // maxTimeoutSeconds は待つ上限の最大（time.Duration に収まる秒数）。
@@ -17,23 +15,11 @@ const maxTimeoutSeconds = math.MaxInt64 / int64(time.Second)
 // 無限大・大きすぎる値は time.Duration に直すと負になり、すぐに待つのをやめてしまうため）。
 type timeout float64
 
-// Decode は kong の MapperValue（指定・環境変数・既定値のどれもこれを通る）。
-func (t *timeout) Decode(ctx *kong.DecodeContext) error {
-	token, err := ctx.Scan.PopValue("seconds")
+// UnmarshalText は指定・環境変数・既定値の文字列を読む（kong は encoding.TextUnmarshaler の型をこれで読む）。
+func (t *timeout) UnmarshalText(text []byte) error {
+	value, err := strconv.ParseFloat(string(text), 64)
 	if err != nil {
-		return err
-	}
-	var value float64
-	switch v := token.Value.(type) {
-	case string:
-		value, err = strconv.ParseFloat(v, 64)
-		if err != nil {
-			return fmt.Errorf("expected a number of seconds but got %q", v)
-		}
-	case float64:
-		value = v
-	default:
-		return fmt.Errorf("expected a number of seconds but got %v", token.Value)
+		return fmt.Errorf("expected a number of seconds but got %q", text)
 	}
 	// NaN は比べると偽なので、範囲の内側を確かめる形で断る。
 	if !(value >= 0 && value <= float64(maxTimeoutSeconds)) {

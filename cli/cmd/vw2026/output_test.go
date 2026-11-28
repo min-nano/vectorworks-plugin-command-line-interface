@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -128,6 +129,22 @@ func TestCallRefusesUnreadableRequests(t *testing.T) {
 	for _, entry := range entries {
 		if entry.Name() != spool.LockFile {
 			t.Errorf("left %s in the spool", entry.Name())
+		}
+	}
+}
+
+// 出力を JSON にできなければ（emit が NaN を受けた・emitRaw が JSON でないものを受けた）、標準出力に何も書かずに
+// 失敗（1）にする（呼ぶ側に壊れた 1 行を渡さない）。
+func TestEmitRefusesWhatIsNotJSON(t *testing.T) {
+	for name, write := range map[string]func(e *env) int{
+		"emit":    func(e *env) int { return emit(e, math.NaN()) },
+		"emitRaw": func(e *env) int { return emitRaw(e, []byte(`{"a":`)) },
+	} {
+		var stdout, stderr strings.Builder
+		e := &env{stdout: &stdout, stderr: &stderr}
+		if code := write(e); code != exitFailure || stdout.Len() != 0 ||
+			!strings.Contains(stderr.String(), "encode output") {
+			t.Errorf("%s: code %d, stdout %q, stderr %q", name, code, stdout.String(), stderr.String())
 		}
 	}
 }
