@@ -26,11 +26,11 @@ Vectorworks ──読み込む──▶ cli.vwlibrary / cli.vlb     … 起動�
 ## 受付処理の流れ
 
 ```
-OS タイマー（刻み 1 回。core::tick）
-  ├─ gSDK が無い → 何もしない
-  ├─ core::Server::serve（受け付け 1 回。終了の依頼の最中なら Quitting、他は Idle を渡す）
-  │     回の始めに並べた要求を取り出し、道具を実行して応答を書く
-  └─ quit が終了を頼んでいたら、終了の依頼の最中の印を立てて CloseAllFilesAndQuitVectorworks。戻ったら下ろす
+OS タイマー（1 回の周期処理。core::tick）
+  ├─ gSDK が存在しない → 何も行わない
+  ├─ core::Server::serve（1 回の受付処理。終了の依頼の最中であれば Quitting、それ以外は Idle を渡す）
+  │     回の始めに列挙した要求を取り出し、ツールを実行して応答を書き込む
+  └─ quit が終了を依頼していれば、終了の依頼の最中のフラグを立てて CloseAllFilesAndQuitVectorworks。戻ったら下ろす
 ```
 
 `serve` 内の手順（ロック・取り出し・待機標識・占有・処理中の判定・ツールの実行）は

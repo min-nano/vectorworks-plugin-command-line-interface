@@ -111,7 +111,7 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
 | `release` | 公開する場合のみ。版ごとにマニフェスト（`vw2026.json`・`vw2025.json`。[レジストリ「マニフェスト」](../registry.md#マニフェストvw2026json)）を書き出し、**下書きのリリース**に zip・マニフェスト・初回スクリプトをアップロードし終えてから公開する（下書きは利用者の URL から参照できないので、資産が揃っていない間の状態を見せない）。同じタグのリリースが既にある場合の扱いは[リリースの構成](#リリースの構成) |
 | `verify` | 公開した資産を利用者と同じ経路（既定のレジストリの `cli` の規則が指すマニフェスト → その `asset`）で、mac と Windows で版ごとに取得して、マニフェスト・zip の構成・`build.json` と CLI の版を検証する。mac では、公開した初回スクリプトで一時の `<Plug-Ins>` にインストールしてアンインストールする。`--latest` を付けて公開した場合は、`latest` の規則でも取得する |
 | `verify-result` | `verify` の結果を 1 つのチェックに集約する（行列のジョブは、スキップされると必須のチェックにできないため） |
-| `install-windows` | PR のプレリリースを公開した場合のみ。`windows-latest` で、公開した PR のビルドを実物の exe とレジストリで置換・アンインストールする（手順は[インストール「テスト」](install-and-update.md#テスト)の「実物の exe の入れ替え」）。版の行列のジョブ `install-windows-editions` の結果を、必須のチェック `install-windows` が集約する（`verify-result` と同じ理由） |
+| `install-windows` | PR のプレリリースを公開した場合のみ。`windows-latest` で、公開した PR のビルドを実物の exe とレジストリで置換・アンインストールする（手順は[インストール「テスト」](install-and-update.md#テスト)の「実物の exe の置換」）。版の行列のジョブ `install-windows-editions` の結果を、必須のチェック `install-windows` が集約する（`verify-result` と同じ理由） |
 
 各ジョブの検証事項の詳細は `build.yml` の注釈にあります。
 
