@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fakeplugin"
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
@@ -20,10 +21,10 @@ func TestTimeoutMustBeInRange(t *testing.T) {
 		args []string
 		env  string
 	}{
-		{[]string{"call", "ping"}, "VW2026_CALL_TIMEOUT"},
-		{[]string{"tools"}, "VW2026_TOOLS_TIMEOUT"},
-		{[]string{"session", "start"}, "VW2026_SESSION_TIMEOUT"},
-		{[]string{"session", "end", "--session", "x"}, "VW2026_SESSION_TIMEOUT"},
+		{[]string{"call", "ping"}, edition.EnvPrefix + "CALL_TIMEOUT"},
+		{[]string{"tools"}, edition.EnvPrefix + "TOOLS_TIMEOUT"},
+		{[]string{"session", "start"}, edition.EnvPrefix + "SESSION_TIMEOUT"},
+		{[]string{"session", "end", "--session", "x"}, edition.EnvPrefix + "SESSION_TIMEOUT"},
 	}
 	for _, command := range commands {
 		for _, value := range []string{"-1", "NaN", "inf", "1e10", "9223372037", "soon"} {
