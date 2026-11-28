@@ -186,7 +186,7 @@ func removeStaging(p places) error {
 
 // settleOld は <Work>/old/<name>/ を片付ける。install のどの道（付け替えの前・付け替えの後・同じタグで
 // フックだけを走らせた後）もこれだけを使う（docs/plugin/install-and-update.md「<Work>/old/<name>/ の
-// 片付け」）。
+// 整理」）。
 //
 //   - <Plug-Ins>/<name>/ が無ければ、old が唯一の版かもしれないので、何も変えずに失敗にする（印があれば、
 //     止まった uninstall の続きを示す）。

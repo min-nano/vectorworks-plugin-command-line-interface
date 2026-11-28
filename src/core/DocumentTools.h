@@ -1,7 +1,7 @@
 #pragma once
 
 // 図面を扱う道具（documents・save・close）の内 SDK に依らない部分（docs/plugin/tools.md「図面を
-// 扱う道具」）。引数の検査・確かめの順（引数の形 → no_document → 名指す図面 → 状態）・save の
+// 操作するツール」）。引数の検査・確かめの順（引数の形 → no_document → 名指す図面 → 状態）・save の
 // 保存先の確かめ・前面を戻す手順・結果の形をここに置き、SDK の呼び出しは
 // Documents（src/tools/Documents.cpp が SDK で作る）から受けるので、無 SDK でテストできる。
 
