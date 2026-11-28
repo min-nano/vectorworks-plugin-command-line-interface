@@ -110,7 +110,7 @@ const Tool *findTool(std::span<const Tool> tools, const std::string &name) {
 	return found == tools.end() ? nullptr : &*found;
 }
 
-// toolsList は予約された道具 @tools の結果（通信規則「予約された道具」）。
+// toolsList は予約された道具 @tools の結果（通信規則「予約ツール」）。
 std::optional<Json> toolsList(std::span<const Tool> tools, std::string &reason) {
 	Json list = Json::array();
 	for (const Tool &tool : tools) {
@@ -274,7 +274,7 @@ std::optional<std::string> Server::held(const std::string &id) {
 	if (!text) {
 		return std::nullopt;
 	}
-	// 消した直後、実行する前に、呼ぶ側が待っているかを確かめる（通信規則「待つ印」）。
+	// 消した直後、実行する前に、呼ぶ側が待っているかを確かめる（通信規則「待機標識」）。
 	switch (bridge_.waitState(id)) {
 	case files::WaitState::Released:
 		bridge_.removeWait(id);

@@ -19,7 +19,7 @@
 #include <vector>
 
 // 図面を扱う道具（documents・save・close）の内 SDK に依らない部分（docs/plugin/tools.md「図面を
-// 扱う道具」）。SDK の代わりに偽の Documents を渡し、呼んだ順を確かめる。
+// 操作するツール」）。SDK の代わりに偽の Documents を渡し、呼んだ順を確かめる。
 
 namespace save_target = VwCli::core::save_target;
 using save_target::Entry;

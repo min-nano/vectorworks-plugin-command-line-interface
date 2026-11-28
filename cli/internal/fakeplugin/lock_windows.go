@@ -30,7 +30,7 @@ const (
 	errorFilenameExcedRange = syscall.Errno(206)
 )
 
-// waitStateOf は <id>.wait の状態（docs/protocol.md「待つ印」）。共有なしで開ければ呼ぶ側が
+// waitStateOf は <id>.wait の状態（docs/protocol.md「待機標識」）。共有なしで開ければ呼ぶ側が
 // 放した・死んだ。共有違反なら呼ぶ側が待っている。無い（名前が長すぎて置けない・名前に使えないものと、
 // フォルダも）なら無い、それ以外の理由で開けなければ確かめられない（プラグインと同じ分け方）。
 func waitStateOf(path string) waitState {
