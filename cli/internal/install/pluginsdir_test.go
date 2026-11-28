@@ -51,8 +51,8 @@ func TestPluginsDirOf(t *testing.T) {
 	if _, ok := PluginsDirOf(executable); !ok {
 		t.Error("with the spool only")
 	}
-	// いずれの標識も無ければインストールされた CLI とみなさない（リポジトリの cli/bin/ に手動で
-	// ビルドした CLI）。
+	// 記録・モジュール・スプールのいずれも無ければインストールされた CLI とみなさない
+	// （リポジトリの cli/bin/ に手動でビルドした CLI）。
 	os.RemoveAll(filepath.Join(h.plugins, "cli", "spool"))
 	if _, ok := PluginsDirOf(executable); ok {
 		t.Error("without any mark")

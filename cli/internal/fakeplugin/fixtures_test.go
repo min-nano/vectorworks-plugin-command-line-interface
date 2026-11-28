@@ -22,7 +22,7 @@ import (
 const fixtures = fixturetest.ProtocolDir
 
 // sessionMark は、要求のフィクスチャでは発行されたセッション ID に置換し、期待する応答では id の
-// 綴りを満たす文字列に合致させてその値を記録する標識。
+// 綴りを満たす文字列に合致させてその値を記録するためのプレースホルダー。
 const sessionMark = "$session"
 
 type fakeTool struct {
