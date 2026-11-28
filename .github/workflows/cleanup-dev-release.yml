@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 
-# PR が閉じたら、その PR のプレリリース（dev-<slug>-<PR 番号>-<短い sha>）をリリースとタグごとすべて
+# PR が閉じたら、その PR のプレリリース（dev-<slug>-<PR 番号>-<短い sha>）をリリースとタグごと全て
 # 消す（docs/plugin/build-and-release.md「CI」）。タグは push ごとに新しく付くので、末尾の
 # -<PR 番号>-<短い sha> で見分ける（ブランチの名前が変わって slug が違うものも含む）。push で止められた
 # release の下書きはまだタグが無いので、リリースの一覧からタグ名で見分けて消す。
@@ -15,7 +15,7 @@ jobs:
   cleanup:
     # プレリリースを作るのは同じリポジトリの PR だけ。
     if: github.event.pull_request.head.repo.full_name == github.repository
-    # build.yml と同じグループで走り、その PR の走っているビルドを止めてから消す（消したあとに
+    # build.yml と同じグループで走り、その PR の走っているビルドを止めてから消す（消した後に
     # 公開されない）。グループの式は build.yml と同じものにする（片方だけ変えると同じグループに
     # 入らない）。PR では PR 番号になる。github.ref で組むと、マージで閉じた PR では main になり、
     # main の push のビルドを止めて main のリリースが作られない。ジョブの段に置き、片付けが走るとき

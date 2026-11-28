@@ -1,4 +1,4 @@
-# 改行は LF にそろえる（.editorconfig と同じ）。
+# 改行は LF に揃える（.editorconfig と同じ）。
 * text=auto eol=lf
 
 # UTF-16LE・CRLF のまま保つ。git に改行を変換させない。

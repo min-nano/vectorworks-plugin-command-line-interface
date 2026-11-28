@@ -2,5 +2,5 @@
 
 package fakeplugin
 
-// extendedPath は Windows だけのもの（path_windows.go）。ほかではそのまま返す。
+// extendedPath は Windows だけのもの（path_windows.go）。他ではそのまま返す。
 func extendedPath(dir string) string { return dir }

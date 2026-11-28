@@ -128,7 +128,7 @@ bool isDigit(char c) { return c >= '0' && c <= '9'; }
 
 // 整数の引数の指数を飽和させる境（±2^31）。要求は 1 MiB までなので、仮数の桁の位置は ±2^20 程度に
 // 収まり、指数がこれを超えれば仮数が 0 でない限り答えは決まる。int64 の端で飽和させないのは、
-// そのあとで仮数の桁の位置を足すと溢れるため（docs/plugin/tools.md「共通の決まり」）。
+// その後で仮数の桁の位置を足すと溢れるため（docs/plugin/tools.md「共通の決まり」）。
 constexpr std::int64_t kExponentLimit = 2147483648;
 
 // kMaxIntegerArg の桁の位置（2147483647 は 10 桁なので、最上位は 10^9 の位）。
@@ -192,7 +192,7 @@ private:
 	std::optional<Json> parseObject(int depth) {
 		++at_;
 		Json::Object members;
-		// 同じキーを探す索引（キー → members の位置）。キーが少ないうちは並びを順に見るだけにし、
+		// 同じキーを探す索引（キー → members の位置）。キーが少ない内は並びを順に見るだけにし、
 		// 増えたら作る（1 MiB の要求に何万ものキーを並べても、解析が 2 乗の時間にならないように）。
 		std::unordered_map<std::string, std::size_t> index;
 		skipSpace();
@@ -348,7 +348,7 @@ private:
 		at_ += 4;
 		char32_t code = *unit;
 		if (code >= 0xD800 && code <= 0xDFFF) {
-			// 高いサロゲートのすぐあとに低いサロゲートの \u があるときだけ組にする。それ以外は
+			// 高いサロゲートのすぐ後に低いサロゲートの \u があるときだけ組にする。それ以外は
 			// U+FFFD とし、続くエスケープは別に読む（encoding/json と同じ）。
 			std::optional<char32_t> low;
 			if (code <= 0xDBFF && at_ + 1 < text_.size() && text_[at_] == '\\' &&
@@ -385,7 +385,7 @@ private:
 	std::optional<Json> parseNumber() {
 		std::size_t start = at_;
 		consume('-');
-		// 先頭の 0 のあとには数字を続けられない。
+		// 先頭の 0 の後には数字を続けられない。
 		if (!consume('0') && !skipDigits()) {
 			return fail(start == at_ ? "値として読めない文字です" : "- のあとに数字がありません");
 		}
@@ -474,7 +474,7 @@ Json Json::real(double value) {
 	// 桁は精度を指定しない
 	// to_chars（元の値に戻る最も短いもの）の指数の形から取る。書き方（固定小数点
 	// か指数か・指数の綴り）は Go に合わせて組み立て直す。指数の形を選ぶのは、形を指定しない
-	// to_chars は短いほうを選び（100000 が 1e+05 になる）、固定小数点は大きな値を最も短い桁では
+	// to_chars は短い方を選び（100000 が 1e+05 になる）、固定小数点は大きな値を最も短い桁では
 	// なく正確な値で書く実装がある（999999999999999900000 が 999999999999999868928 になる）ため。
 	char buffer[64];
 	auto [end, ec] =
@@ -616,7 +616,7 @@ IntegerValue Json::integerValue() const {
 			negativeExponent = text[at] == '-';
 			++at;
 		}
-		// 先頭の 0 は値を変えないので、そのまま数えてよい（0 のあいだは 0 のまま）。
+		// 先頭の 0 は値を変えないので、そのまま数えて良い（0 の間は 0 のまま）。
 		for (; at < text.size(); ++at) {
 			exponent = std::min(exponent * 10 + (text[at] - '0'), kExponentLimit);
 		}

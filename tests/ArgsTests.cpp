@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-// 道具に共通の手順（core/Args.h）のうち、道具のテストからは文言まで見ていないもの。findOne の
+// 道具に共通の手順（core/Args.h）の内、道具のテストからは文言まで見ていないもの。findOne の
 // 失敗の文言は、呼ぶ側（findTarget・findLayer）と組み立てを分けているので、ここで綴りを確かめる。
 
 using VwCli::core::ErrorCode;

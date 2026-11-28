@@ -74,7 +74,7 @@ Opened openRegular(const std::string &path, int flags, mode_t mode = 0) {
 }
 
 std::optional<std::string> modulePathOf(const void *address) {
-	// リンクは解かない。バンドル（cli.vwlibrary）だけをほかの場所へのリンクにしても、そのバンドルの
+	// リンクは解かない。バンドル（cli.vwlibrary）だけを他の場所へのリンクにしても、そのバンドルの
 	// あるフォルダ（<Plug-Ins>/cli）を指すため。呼ぶ側は実行ファイルのリンクを解くが、その親の bin
 	// と <Plug-Ins>/cli が実体なら、両側は同じフォルダにたどり着く（通信規則「スプールの場所」）。
 	Dl_info info{};
@@ -92,7 +92,7 @@ std::optional<std::string> absolute(const std::string &path) {
 }
 
 bool makeDirectories(const std::string &path, std::string &error) {
-	// 既にあれば何もしない（prepare は受け付けのたびに呼ばれうるので、毎回失敗する mkdir を
+	// 既にあれば何もしない（prepare は受け付けの度に呼ばれうるので、毎回失敗する mkdir を
 	// メインスレッドに載せない）。
 	struct stat existing{};
 	if (::stat(path.c_str(), &existing) == 0 && S_ISDIR(existing.st_mode)) {
@@ -208,7 +208,7 @@ Lock::Result Lock::take(const std::string &path, std::string &error) {
 	Opened opened = openRegular(path, O_RDWR | O_CREAT, 0600);
 	if (opened.notRegular && !recreated_) {
 		// ロックのファイルはプラグインのもので中身を持たないので、通常のファイルでなければ消して
-		// 作り直す（FIFO・リンクは、ほかの Vectorworks も掴めない）。消すのは名前だけで、リンクは
+		// 作り直す（FIFO・リンクは、他の Vectorworks も掴めない）。消すのは名前だけで、リンクは
 		// たどらない。作り直すのは 1 度だけ（Files.h）。
 		recreated_ = true;
 		if (::unlink(path.c_str()) != 0) {

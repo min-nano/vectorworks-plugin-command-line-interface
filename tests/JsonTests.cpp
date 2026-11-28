@@ -182,7 +182,7 @@ TEST(JsonKeepsTheLastOfDuplicateKeysAmongMany) {
 TEST(JsonParsesAMebibyteOfKeysInLinearTime) {
 	// 1 MiB の要求に 10 万のキーを並べても、同じキーを探すのが 2 乗の時間にならない
 	// （並びを順に見ると、Vectorworks のメインスレッドを長く止める）。索引を使えば
-	// 最適化なし・サニタイザ付きでも数秒かからず、並びを順に見ると最適化なしでも
+	// 最適化なし・サニタイザ付きでも数秒掛からず、並びを順に見ると最適化なしでも
 	// 100 秒を超えるので、その間に上限を置く。
 	std::string text = "{";
 	for (int i = 0; i < 100000; ++i) {

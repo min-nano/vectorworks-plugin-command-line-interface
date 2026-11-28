@@ -31,7 +31,7 @@ type hookEnv struct {
 func (h hookEnv) environ() []string {
 	var env []string
 	for _, kv := range os.Environ() {
-		// 呼ぶ側の環境に同じ名前があっても、こちらの値だけを渡す。ほかの版の名前（VW2025_HOOK_* と
+		// 呼ぶ側の環境に同じ名前があっても、こちらの値だけを渡す。他の版の名前（VW2025_HOOK_* と
 		// VW2026_HOOK_*）も渡さない。cli のフックは渡された名前で版を決め、両方あると断るため
 		// （docs/plugin/editions.md）。
 		if !isHookVar(kv) {
@@ -125,14 +125,14 @@ func (o *Options) runHook(kind string, argv []string, env hookEnv) (json.RawMess
 		command = slices.Concat([]string{path}, argv[1:])
 	}
 	// 受けるのは小さな JSON のオブジェクト 1 つなので、レジストリと同じ上限までだけを溜める（超えた分は
-	// 捨てて読み続け、フックを止めない。終わったあとで失敗にする）。
+	// 捨てて読み続け、フックを止めない。終わった後で失敗にする）。
 	stdout := &boundedBuffer{max: maxDocument}
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Dir = env.pluginDir
 	cmd.Env = env.environ()
 	cmd.Stdout = stdout
 	cmd.Stderr = o.stderr()
-	// フックが終わったあとは、後ろに残った子（フックが & で起こしたもの）が標準出力・標準エラーを
+	// フックが終わった後は、後ろに残った子（フックが & で起こしたもの）が標準出力・標準エラーを
 	// 持ち続けても待たずにパイプを閉じる。フックそのものの時間には上限を持たない（docs/registry.md「書き方」）。
 	cmd.WaitDelay = hookWaitDelay
 	err = cmd.Run()

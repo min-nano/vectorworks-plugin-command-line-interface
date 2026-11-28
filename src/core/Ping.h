@@ -1,6 +1,6 @@
 #pragma once
 
-// 道具 ping のうち SDK に依らない部分（docs/plugin/tools.md「ping」）。SDK から集める値（現在の
+// 道具 ping の内 SDK に依らない部分（docs/plugin/tools.md「ping」）。SDK から集める値（現在の
 // レイヤの名前）は呼ぶ側（src/tools/Ping.cpp）が渡すので、無 SDK でテストできる。
 
 #include "core/Json.h"
@@ -24,7 +24,7 @@ struct PingFacts {
 	std::optional<std::string> currentLayer;
 };
 
-// kPingSpec は道具 ping の表の 1 行のうち SDK に依らない部分（ToolSpec）。
+// kPingSpec は道具 ping の表の 1 行の内 SDK に依らない部分（ToolSpec）。
 // 名前は通信規則の綴り（core/Protocol.h）を使い、テストが確かめる名前と
 // 応える名前を 1 か所にする。
 inline constexpr ToolSpec kPingSpec{

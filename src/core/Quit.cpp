@@ -54,8 +54,8 @@ Json quit(const Json &args, const ToolContext &context, Documents &docs, ToolSta
 	}
 	// 4. 閉じた図面が中に残っていれば片付ける。一覧が空でも、残った図面が「変更あり」なら終了で
 	// 保存の確認が出る（mac。Findings「Documents」の「閉じた図面が残り、終了で保存の確認が出る」）。
-	// 残った図面は close（または CloseDocument を呼ぶほかのもの）が閉じたもので、変更は捨てる。
-	// close の片付けが届かない道（ほかのプラグインの CloseDocument が最後の図面を閉じた・close の
+	// 残った図面は close（又は CloseDocument を呼ぶ他のもの）が閉じたもので、変更は捨てる。
+	// close の片付けが届かない道（他のプラグインの CloseDocument が最後の図面を閉じた・close の
 	// 片付けが上限で止まったなど。実機では起こせていない）への備えで、ここでも片付ける。残った図面が
 	// 無ければ GetActiveDocument を 1 回呼ぶだけ。
 	if (!clearClosedDocuments(docs)) {
@@ -64,7 +64,7 @@ Json quit(const Json &args, const ToolContext &context, Documents &docs, ToolSta
 		                     "終了しませんでした");
 		return Json();
 	}
-	// 片付けは一覧が空でなくなると止まる（片付いたと返す）ので、片付けのあとにもう一度一覧を見る。
+	// 片付けは一覧が空でなくなると止まる（片付いたと返す）ので、片付けの後にもう一度一覧を見る。
 	// 片付けの間に図面が開いていれば、上と同じく断る（確かめから頼むまでの窓を片付けの分だけ
 	// 広げない）。
 	open = docs.list();

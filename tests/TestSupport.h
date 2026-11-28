@@ -58,18 +58,18 @@ private:
 	std::filesystem::path path_;
 };
 
-// readFile はファイルの中身をすべて読む。読めなければ失敗を記録して空を返す。
+// readFile はファイルの中身を全て読む。読めなければ失敗を記録して空を返す。
 std::string readFile(const std::filesystem::path &path);
 
 // utf8 はパスを UTF-8 の文字列にする。
 std::string utf8(const std::filesystem::path &path);
 
 // must は読めるはずのテキストを、要求と同じ深さの上限で読む。読めなければ呼んだ場所で失敗を記録して
-// null を返す。値で返すので、式の中で使っても寿命を気にしなくてよい。
+// null を返す。値で返すので、式の中で使っても寿命を気にしなくて良い。
 core::Json must(std::string_view text,
                 std::source_location where = std::source_location::current());
 
-// isTrue は value が真偽値の true か（無い・null・ほかの型は偽）。
+// isTrue は value が真偽値の true か（無い・null・他の型は偽）。
 inline bool isTrue(const core::Json &value) { return value.isBool() && value.asBool(); }
 
 // kNow は受け付けに渡す、決まった今の時刻（ナノ秒）。

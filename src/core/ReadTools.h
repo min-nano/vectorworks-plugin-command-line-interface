@@ -1,6 +1,6 @@
 #pragma once
 
-// 読む道具（layers・classes・layer_objects・object_counts）のうち SDK に依らない部分
+// 読む道具（layers・classes・layer_objects・object_counts）の内 SDK に依らない部分
 // （docs/plugin/tools.md「読む道具」）。引数の検査・no_document の判定・数え方・type_name の表・
 // 絞り込みと頁送り・結果の形をここに置き、SDK から読む値は Drawing（src/tools/ReadTools.cpp が
 // SDK で作る）から受け取るので、無 SDK でテストできる。
@@ -52,7 +52,7 @@ inline constexpr ToolSpec kObjectCountsSpec{
     R"("additionalProperties":false})",
     ToolKind::Read};
 
-// GetObjectTypeN の番号のうち、数えるときに除くもの（Objs.TDType.h）。
+// GetObjectTypeN の番号の内、数えるときに除くもの（Objs.TDType.h）。
 inline constexpr std::int16_t kTermNode = 0;
 inline constexpr std::int16_t kUndoPlaceholderNode = 90;
 // GetObjectTypeN のプラグインオブジェクトの番号（Objs.TDType.h）。数え、pio_name を読む。
@@ -68,7 +68,7 @@ inline constexpr std::int16_t kLayerDesign = 1;
 inline constexpr std::int16_t kLayerSheet = 2;
 inline constexpr std::int16_t kGuestLayerDesign = 3;
 
-// LayerFacts は SDK から読むレイヤ 1 枚（GetDrawingHeader の列のうち型が kLayerNode のもの）。
+// LayerFacts は SDK から読むレイヤ 1 枚（GetDrawingHeader の列の内型が kLayerNode のもの）。
 struct LayerFacts {
 	// GetObjectName。リソースの参照で入ったレイヤは
 	// NNA#<n>_<元の名前>、レイヤの参照で入ったレイヤは 元の名前のまま。

@@ -1,7 +1,7 @@
 # Windows の実機での確かめ方
 
 Windows の Vectorworks の起動・終了と、プラグインの有無による違いを実機で確かめる手順です。プラグインの骨格
-（道具が `ping` だけの版）の実機確認で使い、[実機の確かめ方](verification.md#windows)から指しています。
+（道具が `ping` だけの版）の実機の確認で使い、[実機の確かめ方](verification.md#windows)から指しています。
 
 そのとき測った結果は SDK リファレンスの `Findings/` へ移しました（下記「結果の移った先」）。このプラグインでの扱いは
 [SDK の調査 0](../sdk-research.md#0-拡張機能を-1-つも登録しないプラグインの読み込み分かった) にあります。
@@ -17,11 +17,11 @@ Windows の Vectorworks の起動・終了と、プラグインの有無によ�
 | 描画 | Direct3D 11 を WARP（`d3d10warp.dll`。ソフトウェアの描画）で動かしている |
 | プラグイン | `0683df0` と `296a797`（どちらもタイマーの前にモジュールを留める版） |
 
-- `vw2026 launch` は既定で `C:\Program Files\Vectorworks 2026\Vectorworks2026.exe` を探すので、この PC では
-  `VW2026_APP` に実際の場所を与えた。
-- Vectorworks を 1 つ起動すると、`Vectorworks2026.exe` のプロセスが 4 つ立つ（本体と、CEF の GPU・
-  ネットワーク・ストレージの補助プロセス）。二重に起動したのではない。
-- 起動からホーム画面までは数分かかる。
+- `vw2026 launch` は既定で `C:\Program Files\Vectorworks 2026\Vectorworks2026.exe` を探すので、この計算機では
+  `VW2026_APP` に実際の場所を与えました。
+- Vectorworks を 1 つ起動すると、`Vectorworks2026.exe` のプロセスが 4 つ立ちます（本体と、CEF の GPU・
+  ネットワーク・ストレージの補助プロセス）。二重に起動したのではありません。
+- 起動からホーム画面までは数分掛かります。
 
 ## 確かめ方
 
@@ -47,9 +47,3 @@ Windows の Vectorworks の起動・終了と、プラグインの有無によ�
 | 新しい図面の最初の描画中に `MaxonDocumentBuilder.vlb` の中で落ちた 1 回 | 同じページの「新しい図面の最初の描画——30 回で 1 度も落ちなかった」（[#270](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/270)） |
 | VM ごとの停止（`viogpudo.sys` のバグチェック `0xD1`） | 同じページの「【罠】Windows の VW は起動時にモジュールを一度降ろして読み込み直す」の「読み違えやすいところ」 |
 | 開発元不明のプラグイン | 同じページの「開発元不明のプラグイン」のダイアログ（[#258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)・[#264](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/264)）。このプラグインでの扱いは[構成「拡張機能を登録しない」](architecture.md#拡張機能を登録しない) |
-
-## 分かっていないこと
-
-- **この VM（ARM64 上の x64 エミュレーション・WARP の描画・UTM の GPU のドライバ）に固有のことかどうか。**
-  このページの実測も、移った先の SDK リファレンスの実測（#257・#269・#270）も、上の環境の VM で測った。x64 の実機では
-  測っていない。終了までの時間や落ち方が実機で違っても、それは測っていないことによる。

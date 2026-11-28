@@ -68,7 +68,7 @@ Probe probeTo(const std::string &path);
 
 // probeParent は親のフォルダを、リンクをたどって聞く（mac は stat、Windows は \\?\ を付けて
 // FILE_FLAG_BACKUP_SEMANTICS の CreateFileW と GetFileInformationByHandle。望むアクセスは 0、共有は
-// 読み・書き・消すのすべて）。
+// 読み・書き・消すの全て）。
 Probe probeParent(const std::string &path);
 
 // Checks は状態の確かめに使う関数。
@@ -81,7 +81,7 @@ struct Checks {
 
 // check は保存先の状態を to_is_open → file_exists → parent_missing の順に確かめる（OS の呼び出しが
 // 「無い」以外の理由で失敗すれば、その段で to_check_failed）。通れば真。断るなら status を internal
-// にして偽を返す。openPaths は開いているすべての図面のパス。
+// にして偽を返す。openPaths は開いている全ての図面のパス。
 bool check(const std::string &to, const std::string &parent,
            const std::vector<std::string> &openPaths, const Checks &checks, ToolStatus &status);
 

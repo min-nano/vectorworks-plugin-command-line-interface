@@ -1,7 +1,7 @@
 #!/bin/sh
 # cli のフック（scripts/hooks/*.sh）のテスト（docs/plugin/install-and-update.md「テスト」）。
 # 外部の枠組みを使わない。HOME と VW2026_HOOK_* には一時ディレクトリを渡し、利用者の場所に触れない。
-# 版ごと（2026 の CLI が渡す VW2026_HOOK_* と、2025 の CLI が渡す VW2025_HOOK_*）に、すべてを走らせる
+# 版ごと（2026 の CLI が渡す VW2026_HOOK_* と、2025 の CLI が渡す VW2025_HOOK_*）に、全てを走らせる
 # （docs/plugin/editions.md）。
 #
 #   sh tests/hooks/hooks_test.sh           # 2026 と 2025
@@ -51,7 +51,7 @@ setup() {
 
 # run_hook は scripts/hooks/$1.sh をプラグインのフォルダ（$2）で走らせ、標準出力を out、終了コードを
 # code に置く。HOME・PATH・VW<版>_HOOK_INSTALL_DIR は呼ぶ前に置いた hook_home・hook_path・hook_install_dir。
-# ほかの版の VW<版>_HOOK_* は渡さない（CLI と同じ）。
+# 他の版の VW<版>_HOOK_* は渡さない（CLI と同じ）。
 run_hook() {
 	out="$(cd "$2" && env -u VW2025_HOOK_INSTALL_DIR -u VW2026_HOOK_INSTALL_DIR HOME="$hook_home" PATH="$hook_path" \
 		"VW${year}_HOOK_INSTALL_DIR=$hook_install_dir" "VW${year}_HOOK_PLUGIN_DIR=$2" \
@@ -193,7 +193,7 @@ run_hook install "$plugin"
 expect "install with a relative VW${year}_HOOK_INSTALL_DIR: code" "$code" 1
 [ -e "$home/.local" ] && fail "install without VW${year}_HOOK_INSTALL_DIR made ~/.local"
 
-# 両方の版の名前があれば、何も変えずに断る（CLI はほかの版の名前を渡さない）。
+# 両方の版の名前があれば、何も変えずに断る（CLI は他の版の名前を渡さない）。
 setup both-editions
 out="$(cd "$plugin" && HOME="$home" PATH="$home/.local/bin:/usr/bin:/bin" VW2025_HOOK_INSTALL_DIR="$plugin" \
 	VW2026_HOOK_INSTALL_DIR="$plugin" /bin/sh "$hooks/install.sh" 2>"$work/stderr")"
@@ -210,7 +210,7 @@ expect "install with no edition: output" "$out" ""
 
 # --- uninstall.sh ---
 
-# uninstall のフックは、フォルダを <Work>/old/cli へ移したあとに、移した先で走る。
+# uninstall のフックは、フォルダを <Work>/old/cli へ移した後に、移した先で走る。
 setup uninstall-moved
 install_hook
 moved="$case_dir/work/old/cli"
@@ -226,7 +226,7 @@ uninstall_hook "$moved"
 expect "uninstall again: code" "$code" 0
 expect "uninstall again: output" "$out" '{"path":"none","left":[]}'
 
-# 同じ <Plug-Ins> を別の書き方（シンボリックリンク）で指して入れたものも、移したあとに消す。install の
+# 同じ <Plug-Ins> を別の書き方（シンボリックリンク）で指して入れたものも、移した後に消す。install の
 # 「同じリンクが既にある」も同じ比べ方。
 setup uninstall-other-spelling
 ln -s "$case_dir/Plug-Ins" "$case_dir/Plug-Ins-link"

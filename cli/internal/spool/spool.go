@@ -46,7 +46,7 @@ const (
 	MaxNestingDepth = 64
 )
 
-// idPattern は id として使ってよい綴り。プラグイン側はこれを満たさない要求を受け付けない
+// idPattern は id として使って良い綴り。プラグイン側はこれを満たさない要求を受け付けない
 // （ファイル名に使うので、スプールの外へ書かせないための関門）。
 var idPattern = regexp.MustCompile(`^[0-9A-Za-z_-]{1,64}$`)
 
@@ -83,21 +83,21 @@ const (
 	CodeUnknownTool = "unknown_tool"
 	// 道具の引数が誤っている
 	CodeInvalidArgs = "invalid_args"
-	// そのほか（道具の中の例外など）
+	// その他（道具の中の例外など）
 	CodeInternal = "internal"
 	// 待つ印（<id>.wait）が無いので実行しなかった
 	CodeNoWait = "no_wait"
 	// Vectorworks かプラグインが処理中（終了の依頼の最中・道具の中のダイアログで受け付けが入れ子に
 	// なった）なので実行しなかった。処理中でも刻みが来ない間は busy も返らない
 	CodeBusy = "busy"
-	// ほかの呼ぶ側が占有しているので実行しなかった
+	// 他の呼ぶ側が占有しているので実行しなかった
 	CodeOccupied = "occupied"
-	// 載せた印がいまの占有のものではない・占有の中でしか呼べない道具なので実行しなかった
+	// 載せた印が今の占有のものではない・占有の中でしか呼べない道具なので実行しなかった
 	CodeNoSession = "no_session"
 )
 
 // ErrBusy は、Vectorworks かプラグインが処理中なので実行しなかった（要求は実行されていない）。
-// 理由（終了の依頼・ほかの要求の処理）はプラグインの error に書かれていて、誤りの
+// 理由（終了の依頼・他の要求の処理）はプラグインの error に書かれていて、誤りの
 // 文言に含める。
 var ErrBusy = errors.New("the bridge is busy")
 
@@ -124,7 +124,7 @@ var ErrMalformedResponse = errors.New("malformed response")
 var ErrNoResponse = errors.New("the bridge took the request but no response came")
 
 // takenGrace は、待つのをやめたときに要求をプラグインが受け取っていたら、応答を待つ猶予。
-// 待つのをやめる直前に受け取られた要求の応答を拾うためのもので、道具がこれより長くかかれば
+// 待つのをやめる直前に受け取られた要求の応答を拾うためのもので、道具がこれより長く掛かれば
 // ErrNoResponse（実行されたかもしれない）で終わる（docs/protocol.md「待つのをやめる」）。テストが縮める。
 var takenGrace = 5 * time.Second
 
@@ -181,14 +181,14 @@ func NewID(now time.Time) string {
 // OS が .wait を放すので、残った要求は実行されず、シグナルを受けて後始末をする必要も無い。
 //
 //   - 要求を消せた: 取り出されていないので、実行されない。理由をその時点のロックで
-//     ErrNotRunning / ErrTimeout に分ける（呼ぶ側が起動し直すべきか、待てばよいかを判定
+//     ErrNotRunning / ErrTimeout に分ける（呼ぶ側が起動し直すべきか、待てば良いかを判定
 //     できるように）。
 //   - 消せない（無い・Windows でプラグインが開いている）: プラグインが受け取った。やめる前に
 //     受け取っていれば実行される。takenGrace だけ応答を待ち、届かなければ ErrNoResponse
 //     （実行されたかは分からない）。
 //
 // no_wait の応答は通信規則の種別で「実行しなかった」を意味するので、道具の失敗ではなく ErrNoWait
-// として返す（やめたあとにプラグインが受け取ったときや、.wait が想定外に消えたときに届く）。busy / occupied /
+// として返す（やめた後にプラグインが受け取ったときや、.wait が想定外に消えたときに届く）。busy / occupied /
 // no_session も「実行しなかった」なので、ErrBusy / ErrOccupied / ErrNoSession として返す。
 func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout time.Duration) (*Response, error) {
 	if len(args) == 0 {
@@ -221,7 +221,7 @@ func (b *Bridge) Call(tool string, args json.RawMessage, session string, timeout
 	}
 	stopWaiting := sync.OnceFunc(func() {
 		unlock()
-		// 消せなくても（Windows でプラグインがちょうど開いている）、放してあるので実行されない。
+		// 消せなくても（Windows でプラグインが丁度開いている）、放してあるので実行されない。
 		// 残った .wait はプラグインかロックを取ったときの掃除が消す。
 		_ = os.Remove(waitPath)
 	})

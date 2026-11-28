@@ -48,7 +48,7 @@ func TestInstallSidestepsTheRunningCLI(t *testing.T) {
 }
 
 // 消せないよけた CLI（Windows で動いているもの）は、install では黙って残し、uninstall では left に載せる。
-// <Work>/old/ の直下の vw2026.old-* / vw2026.exe.old-* のほかは消さない。
+// <Work>/old/ の直下の vw2026.old-* / vw2026.exe.old-* の他は消さない。
 func TestCleanOldCLIs(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()

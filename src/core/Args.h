@@ -29,7 +29,7 @@ void failWithReason(ToolStatus &status, std::string_view reason, std::string mes
 // noDocument は図面が無いときの失敗（internal。reason は no_document）。
 void noDocument(ToolStatus &status);
 
-// findOne は items のうち match に合うものがちょうど 1 つなら、その位置を返す。無ければ
+// findOne は items の内 match に合うものが丁度 1 つなら、その位置を返す。無ければ
 // invalid_args（文言は「<tool> の引数が誤っています: <missing()>」）、2 つ以上なら internal
 // （reason は ambiguousReason。文言は ambiguous(一致した数)）で失敗し、空を返す。名前で 1 つを
 // 名指す道具が、同じ名前が 2 つあるときに黙ってどちらかを選ばないための共通の手順。文言は失敗する

@@ -90,7 +90,7 @@ func TestFinishingInstallPassesThePreviousTag(t *testing.T) {
 	}
 }
 
-// 最初に入れた版を残したあと、同じタグで終える回は、前のタグを空にする（最初に入れるのと同じ）。
+// 最初に入れた版を残した後、同じタグで終える回は、前のタグを空にする（最初に入れるのと同じ）。
 func TestFinishingFirstInstallPassesNoPreviousTag(t *testing.T) {
 	h := newHarness(t)
 	keepVersion(t, h, "c1")
@@ -184,7 +184,7 @@ func TestUpdatingAKeptVersionNeedsFinishing(t *testing.T) {
 
 // フックの通っていない版の module が欠けると（隔離された）、同じタグでも入れ直しになる。付け替えの前の片付けが
 // old（フックの通った最後の版）を消さないよう、何も変えずに断り、前の版を戻すか消すかを示す（install と
-// uninstall が互いを指し合わない）。示したとおり前の版を戻せば、ふつうに入れ直せる。
+// uninstall が互いを指し合わない）。示した通り前の版を戻せば、普通に入れ直せる。
 func TestReinstallingAKeptVersionWithoutItsModule(t *testing.T) {
 	h := newHarness(t)
 	keepNewVersion(t, h)
@@ -212,7 +212,7 @@ func TestReinstallingAKeptVersionWithoutItsModule(t *testing.T) {
 	}
 }
 
-// フックが通ったあとに hook_pending を外せなくても、入れたことは変わらず、知らせるだけにする。
+// フックが通った後に hook_pending を外せなくても、入れたことは変わらず、知らせるだけにする。
 func TestCannotClearHookPending(t *testing.T) {
 	h := newHarness(t)
 	keepNewVersion(t, h)
@@ -380,7 +380,7 @@ func TestKeptPreviousVersionWithoutAMovedCLICleansUp(t *testing.T) {
 }
 
 // 前の版を Vectorworks が使っているかもしれないので残すときの案内は、呼ぶ場面で変わる。付け替えの前なら何も変えて
-// いないので走らせ直すだけ、フックのあとなら新しい版が入っているので、入ったタグで走らせ直して片付ける。
+// いないので走らせ直すだけ、フックの後なら新しい版が入っているので、入ったタグで走らせ直して片付ける。
 func TestSettleOldAdviceDependsOnTheStage(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -399,7 +399,7 @@ func TestSettleOldAdviceDependsOnTheStage(t *testing.T) {
 	unlock()
 	os.RemoveAll(old)
 
-	// フックのあと: フックの間に Vectorworks が起動し、フックは通る。
+	// フックの後: フックの間に Vectorworks が起動し、フックは通る。
 	h.publish(release{name: "cli", tag: "c3", install: h.lockingHook(hookPlan{})})
 	done, _ := h.lockWhenHookStarts(h.cliSpool())
 	o, stderr := h.capturing()

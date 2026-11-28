@@ -134,9 +134,9 @@ TEST(WindowsToAcceptsDrivePathsAndUnc) {
 	windowsParent("\\\\server\\share\\a.vwx", "\\\\server\\share\\");
 	windowsParent("\\\\server\\share\\x\\a.vwx", "\\\\server\\share\\x");
 	windowsParent("\\\\localhost\\共有\\図面.vwx", "\\\\localhost\\共有\\");
-	// 予約された名前は断らない（SDK がふつうに保存した）。
+	// 予約された名前は断らない（SDK が普通に保存した）。
 	windowsParent("C:\\x\\CON.vwx", "C:\\x");
-	// 段の途中の . と空白はよい（末尾だけを見る）。
+	// 段の途中の . と空白は良い（末尾だけを見る）。
 	windowsParent("C:\\x.y\\a b\\a.vwx", "C:\\x.y\\a b");
 	windowsParent("C:\\" + repeat("a", 251) + ".vwx", "C:\\");
 }
@@ -481,7 +481,7 @@ TEST(ProbesAskReservedNamesAsFiles) {
 	CHECK(save_target::probeTo(native(dir, "NUL.vwx")).entry == Entry::Missing);
 }
 
-// ほかのプロセスが共有を絞って開いている親でも、共有違反（32）・拒否（5）にならない。
+// 他のプロセスが共有を絞って開いている親でも、共有違反（32）・拒否（5）にならない。
 TEST(ProbesSeeAParentThatIsHeldWithoutSharing) {
 	TempDir dir;
 	std::filesystem::create_directories(dir.path() / "held");

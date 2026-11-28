@@ -49,7 +49,7 @@ func TestCallRefusedBySession(t *testing.T) {
 }
 
 // busy は実行していないので、道具の失敗ではなく ErrBusy になる。理由（プラグインの error）を
-// 誤りの文言に含める（終了の依頼・ほかの要求の処理を呼ぶ側が見分けられるように）。
+// 誤りの文言に含める（終了の依頼・他の要求の処理を呼ぶ側が見分けられるように）。
 func TestCallRefusedAsBusy(t *testing.T) {
 	for _, reason := range []string{"Vectorworks is quitting", ""} {
 		dir := fakeplugin.NewDir(t)

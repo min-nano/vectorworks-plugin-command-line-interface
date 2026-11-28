@@ -21,20 +21,20 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
    プラグインのフォルダは `vw2026` の作業の場所（利用者ごとの一時フォルダの下）と同じドライブにある前提で、その外の場合の扱いを足さない
    （`docs/design.md「決めたこと」`）。プラグインのフォルダの外に置くもの（PATH）は `cli` のフック
    （`scripts/hooks/`）だけが置き、`install` の Go のコード（`cli/internal/install`）は `cli` を特別に扱わない
-   （`cli` の名前を使うのは、ロックの場所と、ほかのプラグインを `cli` のある `<Plug-Ins>` にだけ入れる確かめと、入った CLI が自分の入った `<Plug-Ins>` を求めることだけ）。
+   （`cli` の名前を使うのは、ロックの場所と、他のプラグインを `cli` のある `<Plug-Ins>` にだけ入れる確かめと、入った CLI が自分の入った `<Plug-Ins>` を求めることだけ）。
 4. **SDK 呼び出しはメインスレッドからだけ。** 受け付け用のスレッドや、受け付けの中で非同期の
    処理の完了を待つループを書かない（`docs/protocol.md「予約された道具」`）。
 5. **本番で常駐する前提（`docs/design.md「本番で常駐させる前提」`）を崩さない。** 勝手に
    動く処理を足さない。図面に書く道具は undo の手順に従う。利用者が開いた図面とダイアログも、
    呼ぶ側が指定すれば操作の対象にする（保存せずに閉じる・ダイアログのどのボタンを押すことも含む）。
    プラグインと CLI が勝手には行わない。図面のファイルは消さない（消すコードは 9 に従う）。
-6. **プラグインは 1 から書く。** ほかのプラグイン（構造設計支援など）のコードや決めごとを
+6. **プラグインは 1 から書く。** 他のプラグイン（構造設計支援など）のコードや決めごとを
    引き継がない。根拠にするのは [SDK リファレンス](https://github.com/min-nano/vectorworks-developer-sdk-reference)
    の確かめられた仕様と挙動（`Findings/`・実機確認プラグイン `plugin/`・`scripts/`）だけで、
    参考にしたときは文書にその節を示す（`docs/plugin/README.md「根拠」`）。
 7. **SDK の調査はリファレンス側で行う。** 「この API はあるか・どう振る舞うか」が分からない
    まま実装に入らない。[SDK リファレンス](https://github.com/min-nano/vectorworks-developer-sdk-reference)で
-   issue を立て、`Findings/` に反映されてから実装する。待っているものは `docs/sdk-research.md`。
+   issue を立て、`Findings/` に反映されてから実装する。待っているものは、このリポジトリの issue で追う。
    利用者の判断で調べないと決めたもの（ネットワークの場所でサーバーが届かないときに止まること、保存の途中でつながりが切れたときに
    ダイアログが出るか）は例外とし、
    `docs/sdk-research.md` に書く。
@@ -45,15 +45,15 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
    プラグイン固有のことは `docs/` へ。
 9. **利用者のものを消すコードは、次の場所だけにし、歯止めを緩めない**（`docs/plugin/install-and-update.md「消すコードの歯止め」`）。
 
-   | 消すコード | 消してよいもの |
+   | 消すコード | 消して良いもの |
    | --- | --- |
-   | `install`（組み立て・後始末・フックの失敗の戻し） | `<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ。前方一致では消さない）・`<Work>/old/<name>/`（退避した版と前回の残りは、記録の `name` が一致し、記録の `module` があり、`<Plug-Ins>/<name>/` もあるときだけ。`<Work>/staging/<name>/` へ移してから消す。条件に合わないものは消さずに `<Work>/old/<name>.kept-<時刻>/` へ移す）・フックが失敗したときの新しい `<Plug-Ins>/<name>/`（自分が置いたもの）・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ。よけた CLI と前回までの残り）・中断した `uninstall` の印 `<Work>/old/<name>.uninstalling`（付け替えに成功したあとと、`<Plug-Ins>/<name>/` があるとき。どちらも前の回の残り） |
-   | `uninstall` | 記録の `name` が一致し、記録の `module` がある `<Plug-Ins>/<name>/`（`<Work>/old/<name>/` へ移し、フックのあとで `<Work>/staging/<name>/` へ移してから消す）・`<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ）・自分が書いた印 `<Work>/old/<name>.uninstalling`・`<Plug-Ins>/<name>/` も `<Work>/old/<name>/` も無いときの前の回の印 `<Work>/old/<name>.uninstalling`・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ）・空の `<Work>/staging`・`<Work>/old`・`<Work>`（中身のあるものは消さない） |
+   | `install`（組み立て・後始末・フックの失敗の戻し） | `<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ。前方一致では消さない）・`<Work>/old/<name>/`（退避した版と前回の残りは、記録の `name` が一致し、記録の `module` があり、`<Plug-Ins>/<name>/` もあるときだけ。`<Work>/staging/<name>/` へ移してから消す。条件に合わないものは消さずに `<Work>/old/<name>.kept-<時刻>/` へ移す）・フックが失敗したときの新しい `<Plug-Ins>/<name>/`（自分が置いたもの）・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ。よけた CLI と前回までの残り）・中断した `uninstall` の印 `<Work>/old/<name>.uninstalling`（付け替えに成功した後と、`<Plug-Ins>/<name>/` があるとき。どちらも前の回の残り） |
+   | `uninstall` | 記録の `name` が一致し、記録の `module` がある `<Plug-Ins>/<name>/`（`<Work>/old/<name>/` へ移し、フックの後で `<Work>/staging/<name>/` へ移してから消す）・`<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ）・自分が書いた印 `<Work>/old/<name>.uninstalling`・`<Plug-Ins>/<name>/` も `<Work>/old/<name>/` も無いときの前の回の印 `<Work>/old/<name>.uninstalling`・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ）・空の `<Work>/staging`・`<Work>/old`・`<Work>`（中身のあるものは消さない） |
    | `cli` の `install` のフック | なし |
    | `cli` の `uninstall` のフック | `<Plug-Ins>/cli/bin/vw2026` を指す `~/.local/bin/vw2026`・`Path` の `<Plug-Ins>\cli\bin` と一致する項目（どちらも `VW2026_HOOK_INSTALL_DIR` から決め、同じ場所かはディレクトリの同一性で決める） |
 
    2025 の `cli`（`vw2025`）では、表の名前を `docs/plugin/editions.md` の表で読み替える（`vw2025.old-*`・
-   `~/.local/bin/vw2025`・`VW2025_HOOK_INSTALL_DIR` など）。消してよいものの範囲は同じ。
+   `~/.local/bin/vw2025`・`VW2025_HOOK_INSTALL_DIR` など）。消して良いものの範囲は同じ。
 
 ## 整形と検査
 
@@ -78,15 +78,15 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   - 推移的な依存が少ないか（`go mod graph` で、実行ファイルに入るものを見る）
   - 既知の脆弱性が無いか（`govulncheck ./...`）
   - 版を固定し、`go.sum` をコミットする
-- `tools/go.mod` のツール（整形と検査）も同じように確かめる。ただし実行ファイルに入らないので、
+- `tools/go.mod` のツール（整形と検査）も同じように確かめる。但し実行ファイルに入らないので、
   推移的な依存の数は問わない。
-- いま入っている依存は [kong](https://github.com/alecthomas/kong)（コマンドラインの解析。MIT。
+- 今入っている依存は [kong](https://github.com/alecthomas/kong)（コマンドラインの解析。MIT。
   実行ファイルに入る推移的な依存なし）だけ。
 - 受け渡しは偽のプラグインに対する単体テストで確かめる（`cli/internal/fakeplugin`）。スプールの
   場所は、本番では実行ファイルの場所から求め（`spool.Dir`）、テストでは `env.spool` を差し替えて渡す。
   `install` / `uninstall` の場所も同じで、本番では `main()` だけが `env.workDir`（`install.WorkDir`）・
   `env.pluginsDir`（`install.DefaultPluginsDir`）・`env.executable`（`os.Executable`）を入れ、テストの
-  `invoke` はどれも既定で一時ディレクトリを返す（開発者のマシンの本物の `<Plug-Ins>`・`<Work>` に触れない）。
+  `invoke` はどれも既定で一時ディレクトリを返す（開発者の計算機の本物の `<Plug-Ins>`・`<Work>` に触れない）。
   配置の手順は `cli/internal/install` で、場所と既定のレジストリを `install.Options` で受け取り、偽の
   HTTPS サーバー（`httptest`）と、テストの実行ファイルを偽のフックとして走らせる `Options.Interpreters` で確かめる。
   場所を変える指定（引数・環境変数）は足さない（プラグインは自分のモジュールの場所から求めた
@@ -99,21 +99,21 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   落ちた入力は `internal/spool/testdata/fuzz/` に書かれ、`go test -run` で再現できる。JSON の解析
   そのものは `encoding/json` に任せていて、ファジングしない。
 - **CLI の使い方（コマンド・指定・出力・終了コード）は、コマンドの定義に英語で書く。**
-  1 コマンド 1 ファイル（`cli/cmd/vw2026/call.go` 等）の構造体で、kong のタグ（`help`）と
+  1 コマンド 1 ファイル（`cli/cmd/vw2026/call.go` など）の構造体で、kong のタグ（`help`）と
   `Help()`（詳しい説明）を `run` の隣に書く。全体の説明と終了コードは `main.go` の `cli.Help()`。
   真実は `vw2026 --help`（`vw2026 help <command>`）で、Markdown や godoc に別に書かない。
 - **指定（フラグ）は、環境変数でも与えられるようにする**（kong の `env` タグ）。名前は、使う
   コマンドではなく**値の通じる範囲**で決める。両方あれば引数が勝つ。オン・オフの指定は
   `negatable:""` を付け、`--no-<指定>` で打ち消せるようにする。位置の引数（道具名・引数の JSON）は
-  対象外。付け忘れは `TestEveryFlagHasEnv` が落とす。ただし、初回のスクリプトだけが一時フォルダの CLI に渡す
+  対象外。付け忘れは `TestEveryFlagHasEnv` が落とす。但し、初回のスクリプトだけが一時フォルダの CLI に渡す
   隠した指定（`install` / `uninstall` の `--plugins-dir`。kong の `hidden`）は環境変数を持たない（持つと、入った
   CLI にも効いてしまう。入った CLI は自分の入った `<Plug-Ins>` を使い、この指定を断る）。
   - どのコマンドからも同じものを指す値（占有の印・Vectorworks の場所・レジストリ）は `VW2026_<指定>`
-    （`VW2026_SESSION`・`VW2026_APP`・`VW2026_REGISTRY`）。いま 1 つのコマンドだけが読むものも含む。この名前は
+    （`VW2026_SESSION`・`VW2026_APP`・`VW2026_REGISTRY`）。今 1 つのコマンドだけが読むものも含む。この名前は
     `VW2026_<コマンド>_` で始めない（コマンドごとの名前と重ならないように。`TestEnvNamesDoNotCollide`）。
   - それ以外（待つ上限・出力の形のオン・オフなど、コマンドごとに違う値を与えうるもの）は
     `VW2026_<コマンド>_<指定>`（`VW2026_CALL_TIMEOUT`・`VW2026_CALL_RAW`）。`<コマンド>` は値を共有する
-    コマンドの範囲で決める。いくつかのコマンドが同じ値を共有するなら、それらをまとめる名前を使い
+    コマンドの範囲で決める。幾つかのコマンドが同じ値を共有するなら、それらをまとめる名前を使い
     （`session start` と `session end` の `VW2026_SESSION_TIMEOUT`）、1 つのコマンドだけのものなら
     そのコマンドの名前を使う（`session end` だけなら `VW2026_SESSION_END_<指定>`）。共通の親を
     持たないコマンド（`call` と `session start` など）は値を共有せず、コマンドごとに名前を付ける。
@@ -141,7 +141,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   見本のディレクトリを汚さない）。
   カバレッジは clang（Apple の clang も可）で `-DVW_ENABLE_COVERAGE=ON` を足してテストを走らせ、
   `llvm-profdata merge -sparse build/coverage/*.profraw -o build/coverage.profdata && llvm-cov report build/VwCliTests -instr-profile=build/coverage.profdata src/core`
-  で見る（macOS は `xcrun` を前に付ける。CI は同じものを lcov にして Codecov へ送る）。
+  で見る（mac は `xcrun` を前に付ける。CI は同じものを lcov にして Codecov へ送る）。
   `llvm-profdata`・`llvm-cov` はビルドに使った clang と同じ版を使う（版が違うと結果を読めない
   ことがある。Linux では `llvm-profdata-18` のように版の付いた名前で入っていることが多い）。
   Windows（MSVC）は `-DVW_ENABLE_COVERAGE=ON`（`/PROFILE` を付けてリンクする。
@@ -155,6 +155,8 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 ## 文書
 
 - 日本語。1 ページ 1 トピック。技術文書の語で書き、くだけた言い回し・比喩を使わない。
+- 漢字で書ける語は漢字で書く（他・全て・今・後・通り・間など。意味を読み取りやすくするため）。一般的でない当て字は
+  使わない。形式名詞（こと・とき・もの・ところ）と補助的な語（ている・など・まま）は仮名で書く。コードの注釈も同じ。
 - 決めたことの根拠が SDK の挙動なら、SDK リファレンスの `Findings/` の節へリンクする。
   経緯や実測の数値はここへ写さない。
 - `README.md` は、コードブロックを見るだけで概ねの使い方を想像できるように書く。実行する
@@ -165,7 +167,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 
 - `main` へは直接 push せず、ブランチを切って PR で進める。
 - コミットメッセージには Claude セッションの URL を入れる。
-- **プラグインは、まとまり（道具・機能）ごとに 1 PR で進める。** これから作るものは `docs/design.md「これから」`。
+- **プラグインは、まとまり（道具・機能）ごとに 1 PR で進める。** これから作るものは issue で追う。
   PR には、確かめ方と、確かめた結果（実機で見られなかった項目を含む）を書く。
 - **実機でしか確かめられない変更（プラグイン・スクリプト）は、利用者が実機で「確認できた」と言うまで
   マージしない。** CI が通ることも、道具が応えることも、実機の確認の代わりにはならない。実機の

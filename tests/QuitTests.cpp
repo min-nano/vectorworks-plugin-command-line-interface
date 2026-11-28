@@ -71,7 +71,7 @@ TEST(QuitQuitsWithoutDocuments) {
 	CHECK(status.code == ErrorCode::None);
 	CHECK(status.quit);
 	CHECK_EQ(result, must(R"({"quitting":true})"));
-	// 開いている図面を確かめる 1 回・残った図面を片付ける前に確かめる 1 回・片付けのあとの 1 回。
+	// 開いている図面を確かめる 1 回・残った図面を片付ける前に確かめる 1 回・片付けの後の 1 回。
 	CHECK_EQ(docs.count("list"), 3);
 	CHECK(docs.actions().empty());
 }
@@ -162,7 +162,7 @@ TEST(QuitRefusesWhenClosedDocumentsRemain) {
 }
 
 // 片付けの間に図面が開けば、終了を頼まずに documents_open で断る（片付けは一覧が空でなくなると
-// 止まって「片付いた」と返すので、そのあとにもう一度一覧を見る）。
+// 止まって「片付いた」と返すので、その後にもう一度一覧を見る）。
 TEST(QuitRefusesADocumentOpenedWhileClearing) {
 	FakeDocuments docs;
 	docs.remnants = 2;
@@ -228,7 +228,7 @@ TEST(LifecycleStartsWhenMarked) {
 	CHECK(lifecycle.activity() == Activity::Idle);
 }
 
-// 終了を頼んでいる間は Quitting で、2 度目を頼まない。戻ったら下ろし、次はまた頼める。
+// 終了を頼んでいる間は Quitting で、2 度目を頼まない。戻ったら下ろし、次は又頼める。
 TEST(LifecycleRaisesTheMarkWhileQuitting) {
 	Lifecycle lifecycle;
 	int requests = 0;
@@ -318,7 +318,7 @@ TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	         must(R"({"reason":"starting","notification_registered":true})"));
 	CHECK_EQ(requests, 0);
 
-	// 起動を終えたあと、図面が開いていれば documents_open で、占有は残る。
+	// 起動を終えた後、図面が開いていれば documents_open で、占有は残る。
 	lifecycle.markStarted();
 	docs = twoDocuments();
 	caller.put("c1", quit);
@@ -355,7 +355,7 @@ TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	CHECK_EQ(caller.code("e4"), std::string("unknown_tool"));
 	CHECK(caller.result("e5").isObject());
 	CHECK(!server.inSession());
-	// 戻ったら下ろす（取り消されて Vectorworks が動き続けても、また頼める）。
+	// 戻ったら下ろす（取り消されて Vectorworks が動き続けても、又頼める）。
 	CHECK(lifecycle.activity() == Activity::Idle);
 	caller.put("f1", R"({"tool":"@session_start"})");
 	VwCli::core::tick(server, kTools, kNow, lifecycle, noRequest);

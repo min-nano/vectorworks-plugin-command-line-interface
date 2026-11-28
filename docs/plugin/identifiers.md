@@ -1,12 +1,12 @@
 # 名前と識別子
 
-名前と置き場所の真実はこのページです（ほかのページはここを参照する）。このページは 2026 の値で書き、
+名前と置き場所の真実はこのページです（他のページはここを参照する）。このページは 2026 の値で書き、
 2025 の `cli`（`vw2025`）の値は[版](editions.md)にあります。
 **スプールの場所・コマンド名・リンクの名前・インストール先は変えません**（変えると呼ぶ側や更新が見つけられなくなる）。
 
 **安定版と開発版を区別しません。** PR では変更後のコードでビルドしたものをプレリリースし、
 同じ名前のプラグインとして入れ替えます（`vw2026 install cli@<そのタグ>`。[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
-いま何が動いているかは、`vw2026 call ping` の `version` / `branch` で分かります。
+今何が動いているかは、`vw2026 call ping` の `version` / `branch` で分かります。
 
 | 項目 | 値 |
 | --- | --- |
@@ -17,7 +17,7 @@
 | コマンド | `vw2026` |
 | レジストリの名前（プラグインのフォルダ名） | `cli`（既定のレジストリの名前。[レジストリ](../registry.md)） |
 | CMake のターゲット | `VwCli` |
-| リリースのタグ | **ビルドごとに新しいタグを付け、使い回さない**（[レジストリ「名前・タグ・ターゲット」](../registry.md#名前タグターゲット)）。main は `0.0.0-<短い sha>`（`latest` のリリース。形がある程度決まったら sha を外し、`0.0.1` から順にセマンティック バージョニングに倣って上げる。そのときにこの表を改める）、PR は `dev-<ブランチの slug>-<PR 番号>-<短い sha>`（プレリリース）。短い sha はビルドした sha（PR はブランチの head）。slug はブランチ名の `/`・`:`・`@`・空白を `-` にし、英数字・`-`・`_`・`.` のほかを落とし、続く `.` を 1 つにまとめ、**先頭から 40 文字で切り、末尾の `-`・`_`・`.` を落としたもの**（`..` は git の ref 名に使えない。切るのは、タグを 128 文字の上限（[レジストリ「名前・タグ・ターゲット」](../registry.md#名前タグターゲット)）に収めるため）。slug は読むための飾りで、別のブランチが同じ slug になりうるので一意にするのは PR 番号と sha。slug が空（日本語だけの名前など）なら `dev-<PR 番号>-<短い sha>`。作るのは `scripts/dev-tag.sh` だけで、`build.yml` が使う（`cleanup-dev-release.yml` は末尾の `-<PR 番号>-<短い sha>` で見分ける）。最新は `latest`（GitHub のリリースの最新。`cli@latest`）で指す |
+| リリースのタグ | **ビルドごとに新しいタグを付け、使い回さない**（[レジストリ「名前・タグ・ターゲット」](../registry.md#名前タグターゲット)）。main は `0.0.0-<短い sha>`（`latest` のリリース）、PR は `dev-<ブランチの slug>-<PR 番号>-<短い sha>`（プレリリース）。短い sha はビルドした sha（PR はブランチの head）。slug はブランチ名から git の ref 名に使える文字だけを残して 40 文字までに切ったもの（タグを 128 文字の上限（[レジストリ「名前・タグ・ターゲット」](../registry.md#名前タグターゲット)）に収めるため）で、読むための飾り。別のブランチが同じ slug になりうるので、一意にするのは PR 番号と sha。slug が空（日本語だけの名前など）なら `dev-<PR 番号>-<短い sha>`。作るのは `scripts/dev-tag.sh` だけで（作り方の細目はその注釈）、`build.yml` が使う（`cleanup-dev-release.yml` は末尾の `-<PR 番号>-<短い sha>` で見分ける）。最新は `latest`（GitHub のリリースの最新。`cli@latest`）で指す |
 | ターゲット | `macos-arm64`・`windows-x64`（このプラグインが配るもの。`macos-x64` は配らない。[ビルド「CMake」](build-and-release.md#cmake)） |
 
 ## 置き場所
@@ -40,19 +40,19 @@
   `<Work>` と既定の `<Plug-Ins>` は OS の決まった場所から求め、GUI アプリの Vectorworks と、ssh や別のアプリ
   から起動した `vw2026` とで食い違わないようにします。
   - `<Work>`: Windows は `SHGetKnownFolderPath(FOLDERID_LocalAppData)` の下の `Temp`（`%TEMP%` の既定の場所。環境変数 `TMP` /
-    `TEMP` は読まない。`vw2026` は `syscall` 経由）。mac は `/usr/bin/getconf DARWIN_USER_TEMP_DIR` の出力
+    `TEMP` は読まない。`vw2026` は `syscall` 経由）です。mac は `/usr/bin/getconf DARWIN_USER_TEMP_DIR` の出力
     （`confstr(_CS_DARWIN_USER_TEMP_DIR)`。利用者ごとの一時フォルダ。環境変数 `TMPDIR` は読まない。cgo を使わないので
-    `getconf` を走らせる）。その下の `vectorworks2026-cli-<鍵>`（`<Plug-Ins>` ごと。[インストール「作業の場所」](install-and-update.md#作業の場所)）。
-  - 既定の `<Plug-Ins>`: Windows は `%APPDATA%` の指す場所を `SHGetKnownFolderPath(FOLDERID_RoamingAppData)` で求める
-    （環境変数 `APPDATA` は読まない。`syscall` 経由）。mac はホームディレクトリの `Library/Application Support` の下で、
-    ホームは利用者の passwd の項目（`getpwuid_r(getuid())` の `pw_dir`）から求める（環境変数 `HOME` は読まない。
+    `getconf` を走らせる）です。その下の `vectorworks2026-cli-<鍵>`（`<Plug-Ins>` ごと。[インストール「作業の場所」](install-and-update.md#作業の場所)）に置きます。
+  - 既定の `<Plug-Ins>`: Windows は `%APPDATA%` の指す場所を `SHGetKnownFolderPath(FOLDERID_RoamingAppData)` で
+    求めます（環境変数 `APPDATA` は読まない。`syscall` 経由）。mac はホームディレクトリの `Library/Application Support` の下で、
+    ホームは利用者の passwd の項目（`getpwuid_r(getuid())` の `pw_dir`）から求めます（環境変数 `HOME` は読まない。
     `vw2026` は `os/user`）。
 - `<Plug-Ins>` は Vectorworks の利用者フォルダの中です。Vectorworks の設定で利用者フォルダを
   移せるので、標準以外の場所も、`<Work>` と同じドライブにあれば扱えます（初回のスクリプトに
-  `--plugins-dir` で渡し、そのあとは入った `vw2026` が自分の場所から求める。入れた場所は記録しない。[インストール](install-and-update.md#前提)）。
-  ただし `cli` は利用者ごとの `Plug-Ins` にだけ置きます（ワークグループのフォルダなど、複数の利用者が読み込む
+  `--plugins-dir` で渡し、その後は入った `vw2026` が自分の場所から求める。入れた場所は記録しない。[インストール](install-and-update.md#前提)）。
+  但し `cli` は利用者ごとの `Plug-Ins` にだけ置きます（ワークグループのフォルダなど、複数の利用者が読み込む
   場所に置くとスプールも共有される。[設計「決めたこと」](../design.md#決めたこと)）。
-- `<Work>` は、このプラグインだけでなく、`vw2026` で入れるすべてのプラグインの組み立て・退避の場所です
+- `<Work>` は、このプラグインだけでなく、`vw2026` で入れる全てのプラグインの組み立て・退避の場所です
   （`<name>` ごとに分ける）。CLI とスプールは置きません（`cli` のフォルダの中にある。
   [インストール「CLI とスプールの置き場所」](install-and-update.md#cli-とスプールの置き場所)）。
   PATH はこのプラグインのフックが置きます（[インストール「`cli` のフック」](install-and-update.md#cli-のフック)）。
@@ -61,7 +61,7 @@
 
 ```cpp
 #define PLUGIN_VWR_ID   "cli"
-// VW_BUILD_VERSION / VW_BUILD_BRANCH は CMake が構成のたびに書く BuildStamp.h にある
+// VW_BUILD_VERSION / VW_BUILD_BRANCH は CMake が構成の度に書く BuildStamp.h にある
 // （-D で渡さなければ "local"）
 #include "BuildStamp.h"
 ```
@@ -69,7 +69,7 @@
 スプールの名前（`spool`）は、スプールの場所を求める共通部（SDK に依らない）が使うので、
 `src/core/Protocol.h` の `kSpoolDirName` に置きます。CLI 側の `cli/internal/spool` の `SpoolDirName` と
 対で、両側のテストが[通信規則の見本](../fixtures.md)の `constants.json` に照らします
-（[通信規則](../protocol.md#スプールの場所)）。`<Work>` のディレクトリ名の頭（`vectorworks2026-cli`）は
+（[通信規則](../protocol.md#スプールの場所)）。`<Work>` のフォルダ名の頭（`vectorworks2026-cli`）は
 `vw2026` だけが使うので、`cli/internal/install` の `workDirName` に置きます（見本には載せない）。
 CLI の実行ファイルを置く `bin` は、`vw2026` が実行ファイルのあるフォルダの親をスプールの親とするだけで、
 名前としては使いません。

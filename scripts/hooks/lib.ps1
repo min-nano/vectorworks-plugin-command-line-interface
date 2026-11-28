@@ -47,7 +47,7 @@ public static extern bool CloseHandle(IntPtr handle);
 '@ | Out-Null
 	}
 	$native = [Vw2026Hook.FileMethods]
-	# 読み書きを求めずに開く（属性だけ）。共有はすべて許し、ディレクトリを開くので FILE_FLAG_BACKUP_SEMANTICS。
+	# 読み書きを求めずに開く（属性だけ）。共有は全て許し、ディレクトリを開くので FILE_FLAG_BACKUP_SEMANTICS。
 	$handle = $native::CreateFile($Dir, 0, 7, [IntPtr]::Zero, 3, 0x02000000, [IntPtr]::Zero)
 	if ($handle -eq [IntPtr] -1) {
 		return $null
@@ -75,7 +75,7 @@ public static extern bool CloseHandle(IntPtr handle);
 
 # Get-PathEntryPlace は、比べるための項目 $Key（Get-PathEntryKey の形）の実際の場所。在るいちばん近い
 # ディレクトリを Get-FinalDirectory で解き、その下の在らない部分は名前のまま付ける（uninstall のフックは
-# フォルダを移したあとで走り、<Plug-Ins>\cli\ はもう無いので、在る親までさかのぼる）。%…% を含む項目・
+# フォルダを移した後で走り、<Plug-Ins>\cli\ はもう無いので、在る親までさかのぼる）。%…% を含む項目・
 # 絶対でない項目・解けないものは $null（同じとみなさない）。
 function Get-PathEntryPlace {
 	param([string] $Key)
@@ -113,7 +113,7 @@ function Get-PathEntryPlace {
 
 # Get-PathEntryTarget は、比べる側の $Dir の形（Get-PathEntryKey）・根（Get-PathEntryRoot）・根がこの計算機の
 # 固定ドライブか（Test-LocalFixedDrive）・実際の場所（Get-PathEntryPlace）。Path の項目ごとに $Dir の
-# ディレクトリを開き直さないよう、Path を 1 回たどるあいだ、これを 1 度だけ求めて使う。
+# ディレクトリを開き直さないよう、Path を 1 回たどる間、これを 1 度だけ求めて使う。
 function Get-PathEntryTarget {
 	param([string] $Dir)
 	$key = Get-PathEntryKey $Dir
@@ -158,7 +158,7 @@ function Get-PathEntryRoot {
 
 # Test-PathEntryTarget は、Path の項目 $Entry が $Target（Get-PathEntryTarget）と同じ項目か。まず
 # Get-PathEntryKey の形を大文字と小文字を区別せずに比べ、違えば実際の場所（Get-PathEntryPlace）で比べる（同じ
-# ディレクトリを別の書き方、たとえばジャンクション・8.3 形式・--plugins-dir の書き方で指したものを同じとみなす。
+# ディレクトリを別の書き方、例えばジャンクション・8.3 形式・--plugins-dir の書き方で指したものを同じとみなす。
 # CLI の within と同じ考え方）。
 function Test-PathEntryTarget {
 	param([string] $Entry, [object] $Target)
@@ -173,7 +173,7 @@ function Test-PathEntryTarget {
 		return $false
 	}
 	# <Plug-Ins>\cli\bin がこの計算機の固定ドライブにあるときは、根の違う項目を開かずに違うとみなす（届かない
-	# 共有の項目ごとに SMB の待ちで止まらないため。別の根から同じ固定ドライブのディレクトリを指す書き方、たとえば
+	# 共有の項目ごとに SMB の待ちで止まらないため。別の根から同じ固定ドライブのディレクトリを指す書き方、例えば
 	# subst のドライブや \\localhost\c$ は同じとみなさない）。共有・ネットワークドライブにあるとき（AppData を
 	# リダイレクトしたときなど）は、別の根（共有を割り当てたドライブなど）から届く項目があるので、どれも開いて比べる。
 	$root = Get-PathEntryRoot $key
@@ -200,7 +200,7 @@ function Test-PathValue {
 }
 
 # Get-PathWithEntry は、$Value の末尾に $Dir を足した値。値が空か末尾が ; なら区切りを重ねない
-# （空の項目を増やさない）。ほかの項目の並び・空の項目・前後の空白は変えない。
+# （空の項目を増やさない）。他の項目の並び・空の項目・前後の空白は変えない。
 function Get-PathWithEntry {
 	param([string] $Value, [string] $Dir)
 	if ($Value.Length -eq 0 -or $Value.EndsWith(';')) {
@@ -209,7 +209,7 @@ function Get-PathWithEntry {
 	return $Value + ';' + $Dir
 }
 
-# Get-PathWithoutEntry は、$Value から $Dir と同じ項目をすべて除いた値。項目とその前の区切りの ; を
+# Get-PathWithoutEntry は、$Value から $Dir と同じ項目を全て除いた値。項目とその前の区切りの ; を
 # 除く（先頭の項目なら後ろの ;）。; で分けて除き、残りを ; でつなぐと、この除き方と同じになる。
 function Get-PathWithoutEntry {
 	param([string] $Value, [string] $Dir)
@@ -349,7 +349,7 @@ function Get-RegistryPathStore {
 			$key.Close()
 		}
 		# 書いたことをトップレベルのウィンドウに知らせる（WM_SETTINGCHANGE。Explorer などがそこから
-		# 開く端末に新しい値を渡す）。上限はウィンドウ 1 つずつに順にかかり、全体の上限は持たない。
+		# 開く端末に新しい値を渡す）。上限はウィンドウ 1 つずつに順に掛かり、全体の上限は持たない。
 		Notify = {
 			if (-not ('Vw2026Hook.NativeMethods' -as [type])) {
 				Add-Type -Namespace Vw2026Hook -Name NativeMethods -MemberDefinition @'
@@ -400,8 +400,8 @@ function Install-PathEntry {
 	return 'added'
 }
 
-# Uninstall-PathEntry は利用者の Path から $Dir と同じ項目をすべて除き、結果（removed・none・failed）を
-# 返す。除いて空になっても値は消さず、空の文字列を元の型で書く（消してよいのは一致する項目だけ。守ること 9）。
+# Uninstall-PathEntry は利用者の Path から $Dir と同じ項目を全て除き、結果（removed・none・failed）を
+# 返す。除いて空になっても値は消さず、空の文字列を元の型で書く（消して良いのは一致する項目だけ。守ること 9）。
 # 失敗は例外にせず、結果で返す（uninstall のフックは失敗しない）。
 #
 #   removed  項目を除いた
@@ -415,7 +415,7 @@ function Uninstall-PathEntry {
 		return 'none'
 	}
 	$value = [string] $current.Value
-	# 1 回だけたどる（項目ごとの場所を求めるのは遅い共有で時間がかかる）。除いても同じなら、一致する項目は無い
+	# 1 回だけたどる（項目ごとの場所を求めるのは遅い共有で時間が掛かる）。除いても同じなら、一致する項目は無い
 	# （; で分けてつなぎ直すと元の値に戻る）。
 	$rest = Get-PathWithoutEntry $value $Dir
 	if ($rest -ceq $value) {

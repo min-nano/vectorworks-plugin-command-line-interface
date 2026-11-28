@@ -1,8 +1,8 @@
 #!/bin/sh
 # 初回のスクリプト（mac）。取ってきたリリースの CLI を取り出して vw2026 install cli@<そのリリースのタグ>
-# （または uninstall cli）を走らせるだけで、配置の手順・PATH・判断は install と cli のフックが持つ
+# （又は uninstall cli）を走らせるだけで、配置の手順・PATH・判断は install と cli のフックが持つ
 # （docs/plugin/install-and-update.md「初回のスクリプト」）。入れる・外すタグは、スクリプトを取ってきた
-# リリースのタグに決まっている（ほかのタグはそのタグのスクリプトを取る）。
+# リリースのタグに決まっている（他のタグはそのタグのスクリプトを取る）。
 #
 # このファイルは雛形で、リリースがタグと版を書き込んで get-vw2026.sh と get-vw2025.sh を作る
 # （docs/plugin/editions.md）。2025 のものは vw2025 を取り出して Vectorworks 2025 の cli を入れる・外す。
@@ -51,7 +51,7 @@ main() {
 
 	# 位置の引数は uninstall（uninstall cli）だけ、指定は --plugins-dir（--plugins-dir=<dir> も）だけを
 	# 受け付ける。--registry は持たない（install は既定のレジストリから先に引き、cli は既定のレジストリに
-	# あるので、ほかのレジストリは使われない。uninstall はレジストリを読まない）。指定は、書いた位置に依らず
+	# あるので、他のレジストリは使われない。uninstall はレジストリを読まない）。指定は、書いた位置に依らず
 	# CLI のコマンドの後ろへそのまま渡す（vw2026 はコマンドの前の指定を受け付けない）。
 	command=install
 	positional=0
@@ -91,7 +91,7 @@ main() {
 	# ターゲットは計算機で決める（Rosetta の下の端末でも、Vectorworks は arm64 で動く。
 	# docs/registry.md「名前・タグ・ターゲット」）。
 	[ "$(uname -s)" = Darwin ] || fail "this script is for macOS; on Windows, use $name.ps1"
-	# リリースが配るのは macos-arm64 だけ（docs/plugin/identifiers.md）。ほかは取りに行く前に止める
+	# リリースが配るのは macos-arm64 だけ（docs/plugin/identifiers.md）。他は取りに行く前に止める
 	# （無い zip を取りに行って、分かりにくい「取れない」で終わらないように）。
 	if [ "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" = 1 ]; then
 		target=macos-arm64

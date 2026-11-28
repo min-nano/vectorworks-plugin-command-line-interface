@@ -20,7 +20,7 @@ namespace VwCli::core {
 // 依頼は種類では決めず、道具が ToolStatus::quit で返す。
 enum class ToolKind { Read, Write, App };
 
-// 受け付けの外の状態。タイマー（Clock）が回ごとに渡す。Quitting では、道具の表の道具をすべて
+// 受け付けの外の状態。タイマー（Clock）が回ごとに渡す。Quitting では、道具の表の道具を全て
 // busy で断る（種類 Read と ping も）。SDK を呼ばない 3 つの道具（@tools・@session_start・
 // @session_end）と、表に無い道具の unknown_tool はふだんどおり応える
 // （docs/plugin/architecture.md「Vectorworks が処理中」）。
@@ -66,7 +66,7 @@ struct ToolContext {
 // （失敗したときの戻り値は使わない）、例外は Server が internal で応える。
 using ToolFn = Json (*)(const Json &args, const ToolContext &context, ToolStatus &status);
 
-// ToolSpec は道具の表の 1 行のうち SDK に依らない部分（名前・説明・inputSchema・種類）。道具ごとに
+// ToolSpec は道具の表の 1 行の内 SDK に依らない部分（名前・説明・inputSchema・種類）。道具ごとに
 // src/core に定数で置き、src/tools/ToolTable.cpp が SDK に依る中身と組み合わせる（種類を取り違えて
 // 占有なしで呼べるようにしないことを、無 SDK のテストで確かめるため）。
 struct ToolSpec {
@@ -104,7 +104,7 @@ private:
 enum class Phase {
 	// ロックを掴んで受け付けた
 	Serving,
-	// ほかの Vectorworks がロックを掴んでいるので、何もしなかった
+	// 他の Vectorworks がロックを掴んでいるので、何もしなかった
 	Waiting,
 	// スプールを用意できない・ロックのファイルを開けない（次の回にやり直す）
 	Error,
@@ -127,13 +127,13 @@ public:
 	// serve は受け付け 1 回。nowNanos は Unix 時刻のナノ秒で、占有の印の先頭に使う。
 	//
 	// ロックを掴んでいなければ用意（prepare → lock → sweep）をし、取れなければ何もせずに戻る。
-	// 回の始めに並べた要求を名前の昇順ですべて処理し、取り出した要求には同じ回の中で応える
+	// 回の始めに並べた要求を名前の昇順で全て処理し、取り出した要求には同じ回の中で応える
 	// （受け付けの入れ子が起きたときは、入れ子の回が先に取り出して断った要求を飛ばす）。
 	// 道具が成功して終了の依頼（ToolStatus::quit）を立て、応答を書けたら、その回の残りの要求を
 	// 取り出さずに戻る（終了したら応えられないので、残りは置いたままにする）。
 	//
-	// 道具の中で Vectorworks がイベントを回し、serve の途中でまた serve が呼ばれたら（受け付けの
-	// 入れ子）、外の回の状態に触れず、取り出せる要求をすべて busy で断って戻る。外の回がすでに
+	// 道具の中で Vectorworks がイベントを回し、serve の途中で又 serve が呼ばれたら（受け付けの
+	// 入れ子）、外の回の状態に触れず、取り出せる要求を全て busy で断って戻る。外の回がすでに
 	// 並べていた要求も断る（外の回の一覧を入れ子の側へ見せる状態を持たないため）。
 	//
 	// activity と startup は受け付けの外の状態（タイマーが core/Lifecycle.h から渡す）。startup は
@@ -161,7 +161,7 @@ private:
 	// 居なければ待つ印を消し、待つ印が無ければ no_wait で応えて、どちらも空を返す。
 	std::optional<std::string> held(const std::string &id);
 
-	// refuseAll は受け付けの入れ子の回。取り出せる要求をすべて busy で断る。解析も道具の実行も
+	// refuseAll は受け付けの入れ子の回。取り出せる要求を全て busy で断る。解析も道具の実行も
 	// しない（外の回の占有の印と取り合わない。道具の SDK 呼び出しの途中で SDK を呼ばない）。
 	void refuseAll();
 
@@ -170,7 +170,7 @@ private:
 	// serve の途中か（受け付けの入れ子の判定）。
 	bool serving_ = false;
 	// answer が投げたときの応答。前もって書き出しておき、catch の中では確保しない（メモリが足りない
-	// ときにまた投げて、応えられなくならないように）。
+	// ときに又投げて、応えられなくならないように）。
 	std::string internalFailure_;
 	// 受け付けの入れ子の回が断る応答。前もって書き出しておき、入れ子の回では書くだけにする。
 	std::string nestedRefusal_;
