@@ -15,17 +15,19 @@ type UninstallResult struct {
 	Outcome string          `json:"outcome"`
 	Name    string          `json:"name"`
 	Hook    json.RawMessage `json:"hook,omitempty"`
-	// 残った記録のある <Plug-Ins> の直下のフォルダの名前（どの名前でも出す）
+	// 残存した記録のある <Plug-Ins> の直下のフォルダの名前（全ての名前を出力する）
 	Remaining []string `json:"remaining"`
-	// 消せなかったよけた CLI
+	// 削除できなかった退避した CLI
 	Left []string `json:"left"`
 }
 
-// Uninstall は <name> を外す（docs/plugin/install-and-update.md「アンインストール」）。レジストリは
-// 読まず、記録だけで決める。フックより先にフォルダを <Work>/old/<name>/ へ移し、フックが失敗したら
-// 戻す。Vectorworks が動いていれば何もせずに ErrRunning を返す。
+// Uninstall は <name> をアンインストールする
+// （docs/plugin/install-and-update.md「アンインストール」）。レジストリは読み取らず、
+// 記録のみで決定する。フックより先にフォルダを <Work>/old/<name>/ へ移動し、フックが失敗したら
+// 戻す。Vectorworks が動作していれば何もせずに ErrRunning を返す。
 func Uninstall(o Options, name string) (*UninstallResult, error) {
-	// cmd も同じ CheckName で先に確かめるが、名前から消すパスを組み立てるので、ここでも確かめる（install と同じ）。
+	// cmd も同じ CheckName で先に検証するが、名前から削除するパスを構築するため、
+	// ここでも検証する（install と同様）。
 	if err := CheckName(name); err != nil {
 		return nil, err
 	}
@@ -33,8 +35,9 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	// install と同じ precheck で、cli の記録を Vectorworks が動いているかより先に確かめる。ErrRunning（何も
-	// していない）を返すのはここだけで、後で分かったときは何かを変えた後なので失敗にする。
+	// install と同じ precheck で、cli の記録を Vectorworks が動作しているかより先に検証する。
+	// ErrRunning（何もしていない）を返すのはここのみであり、後で判明した場合は何かを変更した
+	// 後であるため失敗とする。
 	if err := precheck(p, name, true); errors.Is(err, ErrRunning) {
 		return &UninstallResult{Outcome: outcomeRunning, Name: name, Remaining: []string{}, Left: []string{}}, err
 	} else if err != nil {
@@ -46,8 +49,9 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		return nil, err
 	}
 	if record == nil {
-		// 前の回が消しきれなかった組み立ての場所（discard の残り）・続ける先の無い印・よけた CLI・空の <Work> も、
-		// 外したときと同じく片付ける（初回のスクリプトの uninstall が、入っていなくても何も残さないように）。
+		// 前の回が削除しきれなかった構築の場所（discard の残存物）・継続先の無い標識・退避した
+		// CLI・空の <Work> も、アンインストールした場合と同様に整理する（初回スクリプトの
+		// uninstall が、インストールされていなくても何も残置しないように）。
 		_ = removeStaging(p)
 		return finishUninstall(p, name, outcomeNotInstalled, nil), nil
 	}
@@ -56,12 +60,13 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		name: name, tag: record.Tag, target: record.Target, pluginDir: p.oldDir, installDir: p.dest,
 	})
 	if err != nil {
-		// 続きから走った回は戻さない（OS の片付けで一部だけ残ったフォルダかもしれない）。
+		// 続きから実行された回は戻さない（OS の整理で一部のみ残存したフォルダかもしれない）。
 		if resumed {
 			return nil, fmt.Errorf("%w; %s is left as it is (run uninstall again, or delete it and %s)", err, p.oldDir, p.marker)
 		}
-		// 戻す前にロックを見る（install の undoHook と同じ）。フックの間に起動した Vectorworks の下へ
-		// フォルダを戻さず、印を残して、終了してからの uninstall が続きから走れるようにする。
+		// 戻す前にロックを確認する（install の undoHook と同様）。フックの間に起動した
+		// Vectorworks の下へフォルダを戻さず、標識を残置して、終了してからの uninstall が続きから
+		// 実行できるようにする。
 		if running(p) {
 			return nil, fmt.Errorf("%w; %s, so %s stays in %s: quit Vectorworks, then run uninstall again "+
 				"(it goes on from the hook)", err, startedMeanwhile, name, p.oldDir)
@@ -72,28 +77,32 @@ func Uninstall(o Options, name string) (*UninstallResult, error) {
 		_ = removeFile(p.marker)
 		return nil, fmt.Errorf("%w; %s is put back", err, p.dest)
 	}
-	// フックの間に Vectorworks が起動していれば消さない（cli は、移したフォルダのスプールとロックを、動いている
-	// Vectorworks が使っているかもしれない）。印を残すので、終了してからの uninstall が続きから走る。フォルダを
-	// 移してフックも走らせたので、「何もしなかった」の ErrRunning（終了コード 6）ではなく、失敗にする。
+	// フックの間に Vectorworks が起動していれば削除しない（cli は、移動したフォルダのスプールと
+	// ロックを、動作している Vectorworks が使用しているかもしれない）。標識を残置するため、
+	// 終了してからの uninstall が続きから実行される。フォルダを移動してフックも実行したため、
+	// 「何もしなかった」の ErrRunning（終了コード 6）ではなく、失敗とする。
 	if running(p) {
 		return nil, fmt.Errorf("the uninstall hook ran, but %s, so %s stays in %s: quit Vectorworks, then run "+
 			"uninstall again (it goes on from the hook)", startedMeanwhile, name, p.oldDir)
 	}
-	// 組み立ての場所へ移してから消す（消すのが途中で止まっても、記録の消えた半分のフォルダを old に残さない）。
-	// 走らせ直す案内（run uninstall <name> again）は discard の文言にあるので、ここでは足さない。discard の誤りは %v で包み、cmd の見分け
-	// （ErrRunning・RunsInsideError・使い方の誤り）が discard の中まで見に行かないようにする（ErrRunning を返すのは
-	// 始めの確かめだけ）。
+	// 構築の場所へ移動してから削除する（削除が途中で停止しても、記録の削除された半分のフォルダを
+	// old に残置しない）。再実行の案内（run uninstall <name> again）は discard の文言にあるため、
+	// ここでは追加しない。discard の誤りは %v で包み、cmd の区別（ErrRunning・RunsInsideError・
+	// 使用方法の誤り）が discard の中まで参照しないようにする（ErrRunning を返すのは開始時の
+	// 確認のみ）。
 	if err := o.discard(p, name, uninstallCommand(name)); err != nil {
 		return nil, fmt.Errorf("%s is out of the folder of plug-ins, but %s is not deleted yet: %v", name, p.oldDir, err)
 	}
 	return finishUninstall(p, name, outcomeUninstalled, hook), nil
 }
 
-// takeOut は <Plug-Ins>/<name>/ を確かめて、印を書いてから <Work>/old/<name>/ へ移し（手順 2・3）、その記録を返す。
-// 前の uninstall が移した後で止まっていれば、移さずに old の記録を返し、2 つ目を真にする（手順 4 から続ける）。
-// どちらも無ければ record は nil（入っていない）。
+// takeOut は <Plug-Ins>/<name>/ を検証して、標識を書き込んでから <Work>/old/<name>/ へ移動し
+// （手順 2・3）、その記録を返す。前の uninstall が移動した後で停止していれば、移動せずに old の
+// 記録を返し、2 つ目を真とする（手順 4 から継続する）。いずれも無ければ record は
+// nil（インストールされていない）。
 func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
-	// install と同じ pluginFolder で決める（リンク・ファイルは断り、調べられなければ入っていないとみなさない）。
+	// install と同じ pluginFolder で決定する（リンク・ファイルは拒否し、調査できなければ
+	// インストールされていないとはみなさない）。
 	found, err := pluginFolder(p.dest)
 	if err != nil {
 		return nil, false, fmt.Errorf("%w; nothing is removed", err)
@@ -105,7 +114,7 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 	}
 	switch {
 	case found:
-		// 安全弁: 記録の名前がフォルダ名と一致し、記録の module が実在するときだけ進む。
+		// 安全弁: 記録の名前がフォルダ名と一致し、記録の module が実在する場合のみ進行する。
 		record, ok := checkedRecord(p.dest, name)
 		if !ok {
 			reason := "its record is missing, unreadable or for another name, or its module is missing"
@@ -114,24 +123,27 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 			}
 			return nil, false, fmt.Errorf("%s is not a plug-in that "+edition.Command+" installed (%s); nothing is removed", p.dest, reason)
 		}
-		// 走らせている CLI がフォルダの中にあれば（入れた cli の vw2026 で uninstall cli）、外さない。外すと
-		// CLI は使わなくなるので、フォルダの外で動く CLI（初回のスクリプトの一時フォルダのもの）で外す。
-		// Windows で動いている自分を消せずに残すこともない。
+		// 実行している CLI がフォルダの中にあれば（インストールした cli の vw2026 で uninstall
+		// cli）、アンインストールしない。アンインストールすると CLI は使用しなくなるため、
+		// フォルダの外で動作する CLI（初回スクリプトの一時フォルダのもの）でアンインストールする。
+		// Windows で実行中の自身を削除できずに残置することもない。
 		if _, _, inside := o.runsFrom(p.dest); inside {
 			return nil, false, &RunsInsideError{Dir: p.dest, Tag: record.Tag}
 		}
 		if err := mkdirAll(p.old, 0o700); err != nil {
 			return nil, false, err
 		}
-		// uninstall は <Work>/old/<name>/ を消さない（守ること 9）。install のフックが失敗して Vectorworks が
-		// 起動したときの前の版などで、黙って消すと戻せなくなるため。同じタグ・同じレジストリ・同じ
-		// <Plug-Ins> の install が、その install を終えて片付ける。
+		// uninstall は <Work>/old/<name>/ を削除しない（遵守事項 9）。install のフックが失敗して
+		// Vectorworks が起動した場合の前の版などで、通知せずに削除すると戻せなくなるため。
+		// 同じタグ・同じレジストリ・同じ <Plug-Ins> の install が、その install を完了して
+		// 整理する。
 		if oldThere {
 			return nil, false, fmt.Errorf("%s is left by an install that stopped or kept the new version; nothing is removed. "+
 				"Run install %s@%s again (from the registry %s, into %s) to finish that install (it cleans this up), "+
 				"or delete it, then run uninstall again", p.oldDir, name, record.Tag, record.Registry, p.plugins)
 		}
-		// 印を書いてからフォルダを移す（移した後で止まっても、次の uninstall が続きから走れる）。
+		// 標識を書き込んでからフォルダを移動する（移動した後で停止しても、次の uninstall が続きから
+		// 実行できる）。
 		if err := writeFile(p.marker, nil, 0o600); err != nil {
 			return nil, false, err
 		}
@@ -141,9 +153,9 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 		}
 		return record, false, nil
 	case oldThere:
-		// 前の uninstall が、フォルダを移した後で止まった。印が無ければ、install が付け替えの
-		// 途中で止まったのと見分けられない（old が唯一の版かもしれない）。
-		// 印も、調べられなければ何も変えずに失敗にする（無いとみなしても進まないが、理由を取り違えない）。
+		// 前の uninstall が、フォルダを移動した後で停止した。標識が無ければ、install が差し替えの
+		// 途中で停止したのと区別できない（old が唯一の版かもしれない）。
+		// 標識も、確認できなければ何も変更せずに失敗とする（存在しないとみなしても進まないが、理由を取り違えない）。
 		markerThere, err := present(p.marker)
 		if err != nil {
 			return nil, false, fmt.Errorf("%w; nothing is removed", checkError(p.marker, err, uninstallCommand(name)))
@@ -158,8 +170,9 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 	return nil, false, nil
 }
 
-// finishUninstall は、外し終えたとき（uninstalled）と入っていなかったとき（not_installed）の後始末と出力。印を消し、
-// よけた CLI を消してみて、空の <Work> を消す。
+// finishUninstall は、アンインストールを完了した場合（uninstalled）とインストールされていなかった
+// 場合（not_installed）の後処理と出力。標識を削除し、退避した CLI の削除を試み、
+// 空の <Work> を削除する。
 func finishUninstall(p places, name, outcome string, hook json.RawMessage) *UninstallResult {
 	_ = removeFile(p.marker)
 	left := cleanOldCLIs(p.old)
@@ -167,9 +180,9 @@ func finishUninstall(p places, name, outcome string, hook json.RawMessage) *Unin
 	return &UninstallResult{Outcome: outcome, Name: name, Hook: hook, Remaining: installedIn(p.plugins), Left: left}
 }
 
-// removeEmptyWork は、<Work> に staging / old の空のディレクトリしか無ければ、<Work> ごと消す。
-// staging / old は空のディレクトリのときだけ消し、<Work> は空になったときだけ消える（removeFile の os.Remove は
-// 空でないディレクトリを消さない）。
+// removeEmptyWork は、<Work> に staging / old の空のディレクトリしか無ければ、<Work> ごと削除する。
+// staging / old は空のディレクトリの場合のみ削除し、<Work> は空になった場合のみ削除される
+// （removeFile の os.Remove は空でないディレクトリを削除しない）。
 func removeEmptyWork(p places) {
 	for _, dir := range []string{p.staging, p.old} {
 		if entries, err := os.ReadDir(dir); err == nil && len(entries) == 0 {
@@ -179,7 +192,8 @@ func removeEmptyWork(p places) {
 	_ = removeFile(p.work)
 }
 
-// installedIn は、<Plug-Ins> の直下で、名前の一致する記録のあるフォルダの名前を、名前の昇順（os.ReadDir の順）で返す。
+// installedIn は、<Plug-Ins> の直下で、名前の一致する記録のあるフォルダの名前を、
+// 名前の昇順（os.ReadDir の順序）で返す。
 func installedIn(plugins string) []string {
 	names := []string{}
 	entries, err := os.ReadDir(plugins)

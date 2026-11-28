@@ -9,13 +9,13 @@ namespace VwCli::core {
 
 namespace {
 
-// mac のプラグインのバンドル（<name>.vwlibrary）の名前の終わり。
+// mac のプラグインのバンドル（<name>.vwlibrary）の名前の末尾。
 constexpr std::string_view kBundleSuffix = ".vwlibrary";
 
 }
 
 std::optional<std::string> spoolDirOf(const std::string &modulePath) {
-	// 区切りの位置を並べる（先頭から）。
+	// 区切りの位置を列挙する（先頭から）。
 	std::vector<std::size_t> separators;
 	for (std::size_t at = 0; at < modulePath.size(); ++at) {
 		if (files::isSeparator(modulePath[at])) {
@@ -25,30 +25,30 @@ std::optional<std::string> spoolDirOf(const std::string &modulePath) {
 	if (separators.empty()) {
 		return std::nullopt;
 	}
-	// i 番目の区切りの後ろのフォルダの名前（最後の区切りの後ろはモジュールそのもの）。
+	// i 番目の区切りの後方のフォルダの名前（最後の区切りの後方はモジュールそのもの）。
 	auto folderName = [&](std::size_t i) {
 		return std::string_view(modulePath.data() + separators[i] + 1,
 		                        separators[i + 1] - separators[i] - 1);
 	};
 	// 既定はモジュールのあるフォルダ（最後の区切りの前）。mac のバンドルの中の実行ファイル
-	// （<X>.vwlibrary/Contents/MacOS/<実行ファイル>）の形のときだけ、バンドルのあるフォルダまで
-	// 上る。パスの途中に .vwlibrary で終わるフォルダがあっても上らない（呼ぶ側は bin の親を
-	// 取るので、上ると両側の場所が食い違う）。
+	// （<X>.vwlibrary/Contents/MacOS/<実行ファイル>）の形式の場合のみ、バンドルのあるフォルダまで
+	// 遡る。パスの途中に .vwlibrary で終わるフォルダが存在しても遡らない（呼び出し元は bin の親を
+	// 取得するため、遡ると両側の場所が相違する）。
 	std::size_t folderEnd = separators.back();
 	std::size_t n = separators.size();
 	if (n >= 4 && folderName(n - 2) == "MacOS" && folderName(n - 3) == "Contents" &&
 	    folderName(n - 4).ends_with(kBundleSuffix)) {
 		folderEnd = separators[n - 4];
 	}
-	// 根の直下（/cli.vlb など）なら、区切りを残して根を指す。
+	// ルートの直下（/cli.vlb など）ならば、区切りを残してルートを指す。
 	std::string folder = modulePath.substr(0, folderEnd == 0 ? 1 : folderEnd);
 	return files::join(folder, protocol::kSpoolDirName);
 }
 
 std::optional<std::string> defaultSpoolDir() {
-	// モジュールの中の番地なら何でも良いので、関数ではなく静的なデータの番地を渡す（関数の
-	// ポインタを void * にするのは処理系に依る）。
-	// 求められなければ空のパスを渡し、spoolDirOf が空を返す（区切りが無い）。
+	// モジュールの中のアドレスであれば任意でよいため、関数ではなく静的なデータのアドレスを渡す
+	// （関数のポインタを void * に変換することは処理系に依存する）。
+	// 取得できなければ空のパスを渡し、spoolDirOf が空を返す（区切りが無い）。
 	static const char anchor = 0;
 	return spoolDirOf(files::modulePathOf(&anchor).value_or(""));
 }
@@ -91,7 +91,8 @@ std::vector<std::string> Bridge::poll() const {
 			}
 		}
 	}
-	// 通信規則はファイル名の昇順で処理する（id の昇順ではない。綴りに . より小さい - があるため）。
+	// 通信規則はファイル名の昇順で処理する（id の昇順ではない。綴りに . より小さい - が
+	// 含まれるため）。
 	std::sort(requests.begin(), requests.end());
 	for (std::string &name : requests) {
 		name.resize(name.size() - protocol::kRequestSuffix.size());

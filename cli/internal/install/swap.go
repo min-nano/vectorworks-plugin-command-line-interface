@@ -11,7 +11,7 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
 
-// replace は zip を取って組み立て、プラグインのフォルダを付け替えてフックを走らせる
+// replace は zip を取得して構築し、プラグインのフォルダを差し替えてフックを実行する
 // （docs/plugin/install-and-update.md「置換の手順」）。失敗したら <Plug-Ins> を元に戻す。
 func (o *Options) replace(p places, name, source, tag, previous string, asset registry.Asset) (json.RawMessage, error) {
 	for _, dir := range []string{p.staging, p.old} {
@@ -19,9 +19,10 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 			return nil, err
 		}
 	}
-	// 前回の残りの old を片付けてから、組み立ての場所（名前をそのまま組み立てたパスだけ）を消す。
-	// settleOld が消すものは組み立ての場所を通るので、この順にすると、消しきれなかったものがあれば
-	// removeStaging が失敗し、前の版のファイルを新しい版に混ぜて組み立てない。
+	// 前回の残存物の old を整理してから、構築の場所（名前をそのまま用いて構築したパスのみ）を
+	// 削除する。settleOld が削除するものは構築の場所を経由するため、この順序とすると、
+	// 削除しきれなかったものがあれば removeStaging が失敗し、前の版のファイルを新しい版に混入させて
+	// 構築しない。
 	again := installCommand(name, tag)
 	stillOld := "nothing is changed; quit Vectorworks, then run " + again + " again"
 	if _, err := o.settleOld(p, name, again, stillOld); err != nil {
@@ -31,14 +32,14 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 		return nil, err
 	}
 
-	// 組み立て。失敗したら組み立てたものを消す。
+	// 構築。失敗したら構築したものを削除する。
 	record, err := o.assemble(p, name, source, tag, asset)
 	if err != nil {
 		_ = removeStaging(p)
 		return nil, err
 	}
 
-	// 付け替えの直前にロックをもう一度見る（zip を取って組み立てる間に起動した Vectorworks を
+	// 差し替えの直前にロックを再度確認する（zip を取得して構築する間に起動した Vectorworks を
 	// 見落とさないため）。
 	if err := stopped(p); err != nil {
 		_ = removeStaging(p)
@@ -79,18 +80,21 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 	return hook, nil
 }
 
-// finishInstall は install のフックが通った後の後始末（付け替えの後も、同じタグでフックだけを走らせた後も
-// これだけを使う）。退避した版を settleOld の規則で片付け（守ること 9 の歯止め。片付けられなくても入れたことは
-// 変わらないので、知らせるだけにする。次の install が片付ける）、組み立ての場所の残りと中断した uninstall の印を
-// 消し（印を残すと、次の install が付け替えの途中で止まったときに、次の uninstall が唯一残った old/<name>/ を
-// 消してしまう）、よけた CLI を消してみる（動いていて消せなければ残す）。
+// finishInstall は install のフックが通過した後の後処理（差し替えの後も、同じタグでフックのみを
+// 実行した後もこれのみを使用する）。退避した版を settleOld の規則で整理し（遵守事項 9 の制約。
+// 整理できなくてもインストールしたことは変わらないため、通知するのみとする。次の install が
+// 整理する）、構築の場所の残存物と中断した uninstall の標識を削除し（標識を残置すると、
+// 次の install が差し替えの途中で停止した場合に、次の uninstall が唯一残存した old/<name>/ を
+// 削除してしまう）、退避した CLI の削除を試みる（実行中で削除できなければ残置する）。
 func (o *Options) finishInstall(p places, name, tag string, moved *movedCLI, hadOld bool) {
-	// フックが通ったので、記録の hook_pending を外す。外せなければ知らせ、退避した版は片付けない（記録はまだ
-	// 通っていないと言うので、次の同じタグの install が前の版のタグでフックを走らせ直し、そこで外して片付ける）。
-	// 退避した版を残すときは、よけた CLI をその版のフォルダの元の場所へ戻す（undoHook の keep と同じ。利用者が前の版を
-	// 手で戻したときに CLI が欠けず、下の後始末がよけた名前のまま消さないように）。
-	// 記録の無い前の版を <Work>/old/<name>.kept-<時刻>/ へ脇へ移したときも、よけた CLI をそこへ戻す（利用者が戻す
-	// かもしれない）。
+	// フックが通過したため、記録の hook_pending を除去する。除去できなければ通知し、
+	// 退避した版は整理しない（記録はまだ通過していないことを示すため、次の同じタグの install が前の
+	// 版のタグでフックを再実行し、そこで除去して整理する）。
+	// 退避した版を残置する場合は、退避した CLI をその版のフォルダの元の場所へ戻す（undoHook の
+	// keep と同様。利用者が前の版を手作業で戻した場合に CLI が欠落せず、下の後処理が退避した
+	// 名前のまま削除しないように）。
+	// 記録の無い前の版を <Work>/old/<name>.kept-<時刻>/ へ移動して隔離した場合も、
+	// 退避した CLI をそこへ戻す（利用者が戻すかもしれない）。
 	var kept error
 	keptDir := ""
 	again := installCommand(name, tag)
@@ -116,14 +120,15 @@ func (o *Options) finishInstall(p places, name, tag string, moved *movedCLI, had
 	}
 	_ = removeStaging(p)
 	_ = removeFile(p.marker)
-	// この回がよけた CLI を前の版へ戻したとき（戻せなかったときは、手で戻す場所として知らせている。undoHook の keep
-	// と同じ）は、よけた CLI を消さない。次の install・uninstall が消す。よけていなければ、前の回までの残りを消してみる。
+	// この回が退避した CLI を前の版へ戻した場合（戻せなかった場合は、手作業で戻す場所として
+	// 通知している。undoHook の keep と同様）は、退避した CLI を削除しない。次の
+	// install・uninstall が削除する。退避していなければ、前の回までの残存物の削除を試みる。
 	if moved == nil || keptDir == "" {
 		cleanOldCLIs(p.old)
 	}
 }
 
-// undoSwap は付け替えの 2 つ目が失敗したときに、1 つ目とよけた CLI を戻す。
+// undoSwap は差し替えの 2 つ目が失敗した場合に、1 つ目と退避した CLI を戻す。
 func undoSwap(p places, hadOld bool, moved *movedCLI, cause error) error {
 	if hadOld {
 		if err := rename(p.oldDir, p.dest); err != nil {
@@ -136,21 +141,23 @@ func undoSwap(p places, hadOld bool, moved *movedCLI, cause error) error {
 	return fmt.Errorf("cannot put %s into %s: %w%s", p.stageDir, p.dest, cause, note)
 }
 
-// undoHook はフックが失敗したときに前の版へ戻す。戻す前にロックを見て、Vectorworks が起動していれば
-// 新しい版を残す（動いているプラグインのロックごと消さない）。again は、走らせ直すコマンド（install <name>@<tag>）。
+// undoHook はフックが失敗した場合に前の版へ戻す。戻す前にロックを確認し、Vectorworks が
+// 起動していれば新しい版を残置する（動作しているプラグインをロックごと削除しない）。again は、
+// 再実行するコマンド（install <name>@<tag>）。
 func undoHook(p places, hadOld bool, moved *movedCLI, again string, cause error) error {
 	previous := ""
 	if hadOld {
 		previous = fmt.Sprintf(" (the previous one is in %s)", p.oldDir)
 	}
 	keep := func(reason string) error {
-		// よけた CLI は、前の版のフォルダ（old）の元の場所へ戻す（利用者が前の版を手で戻したときに CLI が欠けず、
-		// 後始末がよけた名前のまま消さないように）。戻せなければ、その場所を知らせる。
+		// 退避した CLI は、前の版のフォルダ（old）の元の場所へ戻す（利用者が前の版を手作業で戻した
+		// 場合に CLI が欠落せず、後処理が退避した名前のまま削除しないように）。戻せなければ、
+		// その場所を通知する。
 		note := ""
 		if hadOld {
 			note = moved.restoreInto(p.oldDir)
 		}
-		// 取った zip はもう要らない（同じタグで走らせ直す install は zip を取らない）。
+		// 取得した zip はもう不要である（同じタグで再実行する install は zip を取得しない）。
 		_ = removeFile(p.stageZip)
 		return fmt.Errorf("%w; %s, so the new version stays in %s%s: quit Vectorworks, "+
 			"then run %s again (it runs only the hook)%s",
@@ -159,8 +166,8 @@ func undoHook(p places, hadOld bool, moved *movedCLI, again string, cause error)
 	if running(p) {
 		return keep(startedMeanwhile)
 	}
-	// 新しい版は名前の変更でよける（消すのは後。削除が途中で止まると、半分消えたプラグインが
-	// Plug-Ins に残るため）。
+	// 新しい版は名前の変更で退避する（削除するのは後。削除が途中で停止すると、半分削除された
+	// プラグインが Plug-Ins に残るため）。
 	if err := rename(p.dest, p.stageDir); err != nil {
 		return keep(fmt.Sprintf("it cannot be moved away (%v; Vectorworks may have loaded it)", err))
 	}
@@ -178,7 +185,7 @@ func undoHook(p places, hadOld bool, moved *movedCLI, again string, cause error)
 	return fmt.Errorf("%w; the previous state is restored", cause)
 }
 
-// removeStaging は組み立ての場所（<Work>/staging/<name>/ と <name>.zip）を消す。
+// removeStaging は構築の場所（<Work>/staging/<name>/ と <name>.zip）を削除する。
 func removeStaging(p places) error {
 	if err := removeAll(p.stageDir); err != nil {
 		return err
@@ -189,22 +196,23 @@ func removeStaging(p places) error {
 	return nil
 }
 
-// settleOld は <Work>/old/<name>/ を片付ける。install のどの道（付け替えの前・付け替えの後・同じタグで
-// フックだけを走らせた後）もこれだけを使う（docs/plugin/install-and-update.md「<Work>/old/<name>/ の
-// 整理」）。
+// settleOld は <Work>/old/<name>/ を整理する。install のいずれの経路（差し替えの前・差し替えの後・
+// 同じタグでフックのみを実行した後）もこれのみを使用する
+// （docs/plugin/install-and-update.md「<Work>/old/<name>/ の整理」）。
 //
-//   - <Plug-Ins>/<name>/ が無ければ、old が唯一の版かもしれないので、何も変えずに失敗にする（印があれば、
-//     止まった uninstall の続きを示す）。
-//   - 記録の名前が一致し module があれば、消す（守ること 9）。
-//   - そうでなければ（module の無いフォルダを入れ直した前の版など。利用者のファイルが入っているかも
-//     しれない）、消さずに <Work>/old/<name>.kept-<時刻>/ へ移して知らせる。old/<name>/ に置いたままに
-//     すると、次の install・uninstall が通らないため。
+//   - <Plug-Ins>/<name>/ が無ければ、old が唯一の版かもしれないため、何も変更せずに失敗とする
+//     （標識があれば、停止した uninstall の続きを示す）。
+//   - 記録の名前が一致し module が存在すれば、削除する（遵守事項 9）。
+//   - そうでなければ（module の無いフォルダを再インストールした前の版など。利用者のファイルが
+//     格納されているかもしれない）、削除せずに <Work>/old/<name>.kept-<時刻>/ へ移動して通知する。
+//     old/<name>/ に配置したままにすると、次の install・uninstall が通過しないため。
 //
-// 脇へ移したときは、その場所を返す。
+// 隔離のために移動した場合は、その場所を返す。
 //
-// again は、走らせ直すコマンド（install <name>@<tag>。片付けられないときの案内に使う）。advice は、Vectorworks が
-// 使っているかもしれないので残すときに添える、次にすること（呼ぶ側が決める。付け替えの前は何も変えていない、
-// 付け替えの後は新しい版が入っている）。
+// again は、再実行するコマンド（install <name>@<tag>。整理できない場合の案内に使用する）。
+// advice は、Vectorworks が使用しているかもしれないため残置する場合に付記する、
+// 次に行うこと（呼び出し元が決定する。差し替えの前は何も変更していない、差し替えの後は新しい版が
+// インストールされている）。
 func (o *Options) settleOld(p places, name, again, advice string) (string, error) {
 	// 判定に使うものを調べられなければ、何も変えずに失敗にする（無いとみなすと、唯一の版かもしれない old を
 	// 消しうる）。調べるのは、その判定に要るものだけ（old が無ければ、何も片付けないので他は見ない）。
@@ -232,9 +240,9 @@ func (o *Options) settleOld(p places, name, again, advice string) (string, error
 			"it may be the only copy of %s. Move it back to %s or delete it, then run %s again",
 			p.oldDir, name, p.dest, again)
 	}
-	// 動いている Vectorworks が使っているかもしれないものは、消しも移しもしない（フックの間に起動したとき。
-	// 始めの確かめでは居なかった）。付け替えの前なら、install は ErrRunning（ロックを調べられなければその誤り）で
-	// 何も変えずに終わる。
+	// 動作している Vectorworks が使用しているかもしれないものは、削除も移動もしない（フックの間に
+	// 起動した場合。開始時の確認では存在しなかった）。差し替えの前ならば、install は
+	// ErrRunning（ロックを調査できなければその誤り）で何も変更せずに終了する。
 	if err := stopped(p); err != nil {
 		return "", fmt.Errorf("%w; %s is left because Vectorworks may use it (%s)", err, p.oldDir, advice)
 	}
@@ -250,16 +258,18 @@ func (o *Options) settleOld(p places, name, again, advice string) (string, error
 	return kept, nil
 }
 
-// discard は、確かめた <Work>/old/<name>/ を組み立ての場所（<Work>/staging/<name>/）へ名前の変更で
-// 移してから消す。消すのが途中で止まっても（Windows でウイルス対策がファイルを開いているなど）、半分
-// 消えたフォルダは old に残らず（記録が先に消えて、次の回が唯一の版と見分けられなくなることがない）、
-// 次の install・uninstall が組み立ての場所として消す。移せなければ何も変えずに失敗にする。どの失敗も、command
-// （走らせ直すコマンド。install <name>@<tag> か uninstall <name>）を走らせ直すよう案内する文言で返す（呼ぶ側は案内を足さない）。
+// discard は、検証した <Work>/old/<name>/ を構築の場所（<Work>/staging/<name>/）へ名前の変更で
+// 移動してから削除する。削除が途中で停止しても（Windows でウイルス対策がファイルを
+// 開いているなど）、半分削除されたフォルダは old に残らず（記録が先に削除されて、
+// 次の回が唯一の版と区別できなくなることがない）、次の install・uninstall が構築の場所として
+// 削除する。移動できなければ何も変更せずに失敗とする。いずれの失敗も、command（再実行するコマンド。
+// install <name>@<tag> か uninstall <name>）を再実行するよう案内する文言で返す（呼び出し元は案内を
+// 追加しない）。
 func (o *Options) discard(p places, name, command string) error {
 	if err := removeStaging(p); err != nil {
 		return fmt.Errorf("%w; run %s again", err, command)
 	}
-	// uninstall は空の <Work>/staging を消すので、どの道から来ても、ここで作る。
+	// uninstall は空の <Work>/staging を削除するため、いずれの経路から来ても、ここで作成する。
 	if err := mkdirAll(p.staging, 0o700); err != nil {
 		return fmt.Errorf("%w; run %s again", err, command)
 	}
@@ -273,9 +283,10 @@ func (o *Options) discard(p places, name, command string) error {
 	return nil
 }
 
-// renameError は付け替えの 1 つ目（<Plug-Ins>/<name> を移す）が失敗したときの文言。Windows では、
-// フォルダの中のものを開いているプロセスが居ると名前を変えられない。どれかは見分けられない。command（走らせ直す
-// コマンド。install <name>@<tag> か uninstall <name>）を走らせ直すよう案内する。
+// renameError は差し替えの 1 つ目（<Plug-Ins>/<name> を移動する）が失敗した場合の文言。
+// Windows では、フォルダの中のものを開いているプロセスが存在すると名前を変更できない。
+// いずれであるかは区別できない。command（再実行するコマンド。install <name>@<tag> か uninstall
+// <name>）を再実行するよう案内する。
 func renameError(dir string, err error, command string) error {
 	return fmt.Errorf("cannot rename %s (%w). Close what has files in it open (Explorer, antivirus software, "+
 		"Vectorworks), move the current directory of terminals and other programs out of it, then run %s again",
@@ -289,7 +300,7 @@ func exists(path string) bool {
 }
 
 // present は path が在るか。無い以外の理由で調べられなければ（権限・届かない共有）、その誤りを返す（無いとみなして
-// 進むと、唯一の版かもしれない <Work>/old/<name>/ を見落として、消す・移す判定を誤るため。守ること 9 の歯止め）。
+// 進むと、唯一の版かもしれない <Work>/old/<name>/ を見落として、消す・移す判定を誤るため。遵守事項 9 の制約）。
 func present(path string) (bool, error) {
 	_, err := lstat(path)
 	switch {

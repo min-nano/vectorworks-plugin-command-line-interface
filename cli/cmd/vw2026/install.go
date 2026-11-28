@@ -14,11 +14,11 @@ import (
 type installCmd struct {
 	Plugin string `arg:"" placeholder:"NAME@TAG" help:"Plug-in to install and its tag, such as cli@latest."`
 	Check  bool   `env:"${prefix}INSTALL_CHECK" negatable:"" help:"Only tell whether a new build is available; change nothing."`
-	// sep:"none" で、URL のコンマで分けない（kong は既定で、引数と環境変数の値をコンマで分ける）。空白で
-	// 分けるのは run の中（URL は空白を含まない）。
+	// sep:"none" で、URL をコンマで分割しない（kong は既定で、引数と環境変数の値をコンマで
+	// 分割する）。空白で分割するのは run の中（URL は空白を含まない）。
 	Registry []string `env:"${prefix}REGISTRY" sep:"none" placeholder:"URL" help:"Registry (an https:// or a file:// URL) to look the name up in after the default one (repeatable; spaces separate several; an empty value is wrong usage)."`
 
-	// 初回のスクリプトだけが渡す --plugins-dir（pluginsDirFlag）
+	// 初回スクリプトのみが渡す --plugins-dir（pluginsDirFlag）
 	pluginsDirFlag `embed:""`
 }
 
@@ -122,13 +122,14 @@ func (c *installCmd) run(e *env) int {
 	if !ok {
 		return deployFailed(e, c.Plugin, install.Usagef("%q has no tag: give NAME@TAG, such as cli@latest", c.Plugin))
 	}
-	// 書き方の誤りは、場所を求める前に使い方の誤りにする（場所が分からないときも終了コード 2）。
+	// 記法の誤りは、場所を導出する前に使用方法の誤りとする（場所が不明な場合も終了コード 2）。
 	if err := install.CheckRequest(name, tag); err != nil {
 		return deployFailed(e, name, err)
 	}
-	// URL は空白を含まないので、値の中の空白で分ける（VW2026_REGISTRY に複数を書ける）。空の値（空白だけを
-	// 含む）は使い方の誤りにする（--registry "$UNSET" のような取り違えを黙って通さない）。空の引数と空の
-	// 環境変数は見分けられないので、どちらも断る（環境変数で消すときは unset する）。
+	// URL は空白を含まないため、値の中の空白で分割する（VW2026_REGISTRY に複数を記述できる）。空の
+	// 値（空白のみを含む）は使用方法の誤りとする（--registry "$UNSET" のような取り違えを
+	// 黙認しない）。空の引数と空の環境変数は区別できないため、いずれも拒否する（環境変数で取り消す
+	// 場合は unset する）。
 	var registries []string
 	for _, value := range c.Registry {
 		urls := strings.Fields(value)
@@ -156,20 +157,24 @@ func (c *installCmd) run(e *env) int {
 	return emit(e, result)
 }
 
-// pluginsDirFlag は、初回のスクリプトだけが一時フォルダの CLI に渡す隠した指定（install と uninstall で同じ。help に
-// 出さず、環境変数も持たない。入った CLI は自分の入った <Plug-Ins> を使い、これを断る）。与えていない（nil）と空の値
-// （使い方の誤り）を分けるため、ポインタで受ける。
+// pluginsDirFlag は、初回スクリプトのみが一時フォルダの CLI に渡す隠し指定（install と uninstall で
+// 同一。help に表示せず、環境変数も持たない。インストールされた CLI は自身のインストール先の
+// <Plug-Ins> を使用し、これを拒否する）。与えていない場合（nil）と空の値（使用方法の誤り）を
+// 区別するため、ポインタで受け取る。
 type pluginsDirFlag struct {
 	PluginsDir *string `name:"plugins-dir" hidden:"" placeholder:"DIR" help:"Folder of plug-ins, for the first-time script only."`
 }
 
-// deployOptions は install / uninstall に渡す場所を env から求める。<Plug-Ins> は、入った CLI なら自分の入った
-// フォルダ（install.PluginsDirOf）。フォルダの外の CLI（初回のスクリプトの一時フォルダのもの）なら、初回の
-// スクリプトが渡した --plugins-dir、無ければ既定の場所。入った CLI に --plugins-dir を渡すのと、空の値は使い方の
-// 誤り（入った CLI が別の <Plug-Ins> を扱うと、動いている cli と違う場所の Vectorworks のロックを見てしまう）。
+// deployOptions は install / uninstall に渡す場所を env から導出する。<Plug-Ins> は、
+// インストールされた CLI ならば自身のインストール先のフォルダ（install.PluginsDirOf）。フォルダの
+// 外の CLI（初回スクリプトの一時フォルダのもの）ならば、初回スクリプトが渡した --plugins-dir、
+// 無ければ既定の場所。インストールされた CLI に --plugins-dir を渡すことと、空の値は使用方法の誤り
+// （インストールされた CLI が別の <Plug-Ins> を扱うと、実行中の cli と異なる場所の Vectorworks の
+// ロックを参照してしまう）。
 func deployOptions(e *env, given *string) (install.Options, error) {
-	// 走らせている CLI の場所が分からなければ、入った CLI かを決められないので、--plugins-dir が無ければ失敗に
-	// する（既定の場所へ移らない）。--plugins-dir があれば、よけないだけにする（付け替えが失敗すれば何も変わらない）。
+	// 実行中の CLI の場所が不明であれば、インストールされた CLI か否かを決定できないため、
+	// --plugins-dir が無ければ失敗とする（既定の場所へ移行しない）。--plugins-dir があれば、
+	// 退避しないのみとする（差し替えが失敗すれば何も変わらない）。
 	executable, exeErr := e.executable()
 	own, installed := install.PluginsDirOf(executable)
 	var pluginsDir string
@@ -198,7 +203,7 @@ func deployOptions(e *env, given *string) (install.Options, error) {
 	}
 	return install.Options{
 		PluginsDir: pluginsDir,
-		// <Work> は <Plug-Ins> ごとに分ける（install.WorkDirFor）。
+		// <Work> は <Plug-Ins> ごとに区別する（install.WorkDirFor）。
 		WorkDir:    install.WorkDirFor(work, pluginsDir),
 		Executable: executable,
 		Stderr:     e.stderr,
@@ -206,16 +211,18 @@ func deployOptions(e *env, given *string) (install.Options, error) {
 	}, nil
 }
 
-// isTerminal は、w が端末か。取得の進み具合を同じ行に書き直すかを決める（ログ・パイプ・/dev/null や NUL の
-// ような端末でない文字型のデバイスには 1 行ずつ足す）。端末かは OS に尋ねる（terminal_*.go）。
+// isTerminal は、w が端末か否か。取得の進捗を同じ行に書き直すかを決定する
+// （ログ・パイプ・/dev/null や NUL のような端末でない文字型のデバイスには 1 行ずつ追加する）。
+// 端末か否かは OS に問い合わせる（terminal_*.go）。
 func isTerminal(w io.Writer) bool {
 	file, ok := w.(*os.File)
 	return ok && terminal(file.Fd())
 }
 
-// deployRunning は、Vectorworks が動いていて何もしなかったこと（ErrRunning）を標準エラーと標準出力の JSON（result）に
-// 書き、終了コード 6 を返す。install.Install と install.Uninstall は、ErrRunning を返すとき必ず結果も返す
-// （どこで分かっても同じ形。Uninstall は始めの確かめでだけ ErrRunning を返し、そこで結果を作る）。
+// deployRunning は、Vectorworks が実行中であり何もしなかったこと（ErrRunning）を標準エラーと
+// 標準出力の JSON（result）に書き込み、終了コード 6 を返す。install.Install と
+// install.Uninstall は、ErrRunning を返す場合は必ず結果も返す（いずれの箇所で判明しても同じ形式。
+// Uninstall は最初の確認でのみ ErrRunning を返し、そこで結果を生成する）。
 func deployRunning(e *env, err error, result any) int {
 	fmt.Fprintf(e.stderr, edition.Command+": %v\n", err)
 	emit(e, result)
@@ -227,7 +234,7 @@ func failedJSON(name string, err error) map[string]any {
 	return map[string]any{"outcome": "failed", "name": name, "message": err.Error()}
 }
 
-// deployFailed は失敗を標準出力の JSON（message）と標準エラーに書き、終了コードを返す。
+// deployFailed は失敗を標準出力の JSON（message）と標準エラーに書き込み、終了コードを返す。
 func deployFailed(e *env, name string, err error) int {
 	fmt.Fprintf(e.stderr, edition.Command+": %v\n", err)
 	emit(e, failedJSON(name, err))

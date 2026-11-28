@@ -8,14 +8,14 @@ import (
 	"syscall"
 )
 
-// lockState はロックファイルをプラグインが掴んでいるか（docs/protocol.md「生存の判定」）。
+// lockState はロックファイルをプラグインが取得しているか（docs/protocol.md「生存の判定」）。
 //
-// プラグインは flock(LOCK_EX) を終了まで持つ。こちらは共有ロックを試し、取れたらすぐ放す。
-// 取れなければ掴まれている。flock はプロセスが終われば（異常終了でも）カーネルが放すので、
-// pid やプロセス名を見なくても止まったことが分かる。
+// プラグインは flock(LOCK_EX) を終了まで保持する。こちらは共有ロックを試み、取得できたら直ちに
+// 解放する。取得できなければ取得されている。flock はプロセスが終了すれば（異常終了でも）カーネルが
+// 解放するので、pid やプロセス名を参照しなくても停止したことが判明する。
 //
-// 無い以外の理由でロックを調べられなければ（開けない・flock が
-// EWOULDBLOCK 以外で失敗する）、その誤りも返す（install・uninstall が「動いていない」とみなさないため）。
+// 存在しない以外の理由でロックを調査できなければ（開けない・flock が EWOULDBLOCK 以外で失敗する）、
+// そのエラーも返す（install・uninstall が「動作していない」とみなさないため）。
 func lockState(path string) (bool, error) {
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {

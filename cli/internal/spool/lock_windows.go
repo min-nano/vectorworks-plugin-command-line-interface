@@ -11,14 +11,14 @@ import (
 // errorSharingViolation は ERROR_SHARING_VIOLATION。
 const errorSharingViolation = syscall.Errno(32)
 
-// lockState はロックファイルをプラグインが掴んでいるか（docs/protocol.md「生存の判定」）。
+// lockState はロックファイルをプラグインが取得しているか（docs/protocol.md「生存の判定」）。
 //
-// プラグインは共有なし（share mode 0）で開いたハンドルを終了まで持つ。こちらが開けずに
-// 共有違反になれば掴まれている。開けたらすぐ閉じる。ハンドルはプロセスが終われば（異常終了
-// でも）OS が閉じるので、pid やプロセス名を見なくても止まったことが分かる。
+// プラグインは共有なし（share mode 0）で開いたハンドルを終了まで保持する。こちらが開けずに
+// 共有違反になれば取得されている。開けたら直ちに閉じる。ハンドルはプロセスが終了すれば（異常終了
+// でも）OS が閉じるので、pid やプロセス名を参照しなくても停止したことが判明する。
 //
-// 無い以外の理由でロックを開けなければ（共有違反でない誤り）、その誤りも
-// 返す（install・uninstall が「動いていない」とみなさないため）。
+// 存在しない以外の理由でロックを開けなければ（共有違反でないエラー）、そのエラーも
+// 返す（install・uninstall が「動作していない」とみなさないため）。
 func lockState(path string) (bool, error) {
 	file, err := os.Open(path)
 	switch {

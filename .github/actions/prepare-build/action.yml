@@ -12,8 +12,9 @@ inputs:
 runs:
   using: composite
   steps:
-    # 版（VERSION・build.json）は meta が決めるので、取り出したものが meta の sha と同じかを確かめる。
-    # 取り出しはここに入れない（呼ぶ側のジョブに条件を書く。build.yml の取り出しの手順のコメント）。
+    # 版（VERSION・build.json）は meta が決定するため、取り出したものが meta の sha と同じかを
+    # 確認する。取り出しはここに含めない（呼び出し元のジョブに条件を記述する。build.yml の取り出しの
+    # 手順のコメント）。
     - shell: bash
       env:
         SHA: ${{ inputs.sha }}
@@ -23,7 +24,8 @@ runs:
       run: scripts/vw-sdk-cache-key.sh "$PREFIX"
       env:
         PREFIX: ${{ inputs.sdk-cache-prefix }}
-    # キャッシュする場所は、scripts/fetch-vw-sdk.sh が SDK を置く場所と同じ環境変数から取る（食い違わないように）。
+    # キャッシュする場所は、scripts/fetch-vw-sdk.sh が SDK を配置する場所と同じ環境変数から取得する
+    # （食い違わないように）。
     - uses: actions/cache@v6
       with:
         path: ${{ env.VW_SDK_DIR }}

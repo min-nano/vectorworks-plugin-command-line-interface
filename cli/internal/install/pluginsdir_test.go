@@ -10,13 +10,14 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
-// 入った CLI（<X>/cli/bin/ にあり、<X>/cli/ に記録・モジュール・スプールのどれかがある。中身は読まない）なら <X>。
-// リンクは解く。それ以外は偽。
+// インストールされた CLI（<X>/cli/bin/ にあり、<X>/cli/ に記録・モジュール・
+// スプールのいずれかがある。内容は読み取らない）ならば <X>。リンクは解決する。それ以外は偽。
 func TestPluginsDirOf(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
 	executable := filepath.Join(h.plugins, "cli", "bin", edition.Command)
-	// リンクを解いた場所を返すので、書き方（mac の /var と /private/var、Windows の短い名前）ではなく同一性で比べる。
+	// リンクを解決した場所を返すため、表記（mac の /var と /private/var、Windows の短い名前）
+	// ではなく同一性で比較する。
 	if dir, ok := PluginsDirOf(executable); !ok || !SameDirectory(dir, h.plugins) {
 		t.Fatal(dir, ok)
 	}
@@ -31,31 +32,35 @@ func TestPluginsDirOf(t *testing.T) {
 			t.Error(path, dir)
 		}
 	}
-	// 記録の module が無くても（隔離された）入った CLI とみなす（既定の場所に別の cli を入れない）。
+	// 記録の module が存在しなくても（隔離された）インストールされた CLI とみなす（既定の場所に別の
+	// cli をインストールしない）。
 	os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
 	if _, ok := PluginsDirOf(executable); !ok {
 		t.Fatal("without the module")
 	}
-	// 記録が読めなくても入った CLI とみなす（既定の場所へ移らず、install が自分のフォルダで断る）。
+	// 記録が読み取れなくてもインストールされた CLI とみなす（既定の場所へ移らず、install が自身の
+	// フォルダで拒否する）。
 	os.WriteFile(filepath.Join(h.plugins, "cli", RecordFile), []byte("broken"), 0o644)
 	if _, ok := PluginsDirOf(executable); !ok {
 		t.Fatal("with a broken record")
 	}
-	// 記録が消えても、スプールがあれば入った CLI とみなす（既定の場所に別の cli を入れない）。
+	// 記録が削除されても、スプールがあればインストールされた CLI とみなす（既定の場所に別の cli を
+	// インストールしない）。
 	os.Remove(filepath.Join(h.plugins, "cli", RecordFile))
 	os.MkdirAll(filepath.Join(h.plugins, "cli", "spool"), 0o700)
 	if _, ok := PluginsDirOf(executable); !ok {
 		t.Error("with the spool only")
 	}
-	// どの印も無ければ入った CLI とみなさない（リポジトリの cli/bin/ に手でビルドした CLI）。
+	// 記録・モジュール・スプールのいずれも無ければインストールされた CLI とみなさない
+	// （リポジトリの cli/bin/ に手動でビルドした CLI）。
 	os.RemoveAll(filepath.Join(h.plugins, "cli", "spool"))
 	if _, ok := PluginsDirOf(executable); ok {
 		t.Error("without any mark")
 	}
 }
 
-// <Work> は <Plug-Ins> ごとに分ける。同じフォルダは書き方（リンク・末尾の区切り）に依らず同じ <Work>、別のフォルダは
-// 別の <Work>。
+// <Work> は <Plug-Ins> ごとに分割する。同じフォルダは表記（リンク・末尾の区切り）に依らず同じ
+// <Work>、別のフォルダは別の <Work>。
 func TestWorkDirFor(t *testing.T) {
 	tmp := t.TempDir()
 	a := filepath.Join(tmp, "a", "Plug-Ins")
@@ -71,7 +76,8 @@ func TestWorkDirFor(t *testing.T) {
 	if WorkDirFor(base, b) == work || WorkDirFor(base, a+string(filepath.Separator)) != work {
 		t.Fatal("different folders should differ, and the same folder should not")
 	}
-	// mac と Windows（大文字と小文字を区別しない既定のボリューム）では、綴りの違う同じフォルダも同じ <Work>。
+	// mac と Windows（大文字と小文字を区別しない既定のボリューム）では、綴りの異なる同じフォルダも
+	// 同じ <Work>。
 	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		if WorkDirFor(base, strings.ToUpper(a)) != work {
 			t.Fatal("the same folder written in another case should give the same work folder")
@@ -83,7 +89,8 @@ func TestWorkDirFor(t *testing.T) {
 	}
 }
 
-// cli と bin の名前は、Windows でだけ大文字と小文字を区別しない（区別するボリュームの CLI/bin は別のフォルダ）。
+// cli と bin の名前は、Windows でのみ大文字と小文字を区別しない（区別するボリュームの CLI/bin は
+// 別のフォルダ）。
 func TestPluginsDirOfCase(t *testing.T) {
 	tmp := t.TempDir()
 	dir := filepath.Join(tmp, "CLI")
@@ -96,7 +103,8 @@ func TestPluginsDirOfCase(t *testing.T) {
 	}
 }
 
-// onDiskCase は、ディスクにある綴りにする。そのままの名前があればそれを使い、まだ無い場所から先は書いたまま。
+// onDiskCase は、ディスクにある綴りにする。そのままの名前があればそれを使用し、まだ存在しない
+// 場所から先は記述したまま。
 func TestOnDiskCase(t *testing.T) {
 	tmp, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -109,7 +117,8 @@ func TestOnDiskCase(t *testing.T) {
 	if got, want := onDiskCase(filepath.Join(tmp, "vectorworks", "Missing", "X")), filepath.Join(tmp, "Vectorworks", "Missing", "X"); got != want {
 		t.Errorf("missing: %s, want %s", got, want)
 	}
-	// 大文字と小文字だけが違う 2 つのフォルダ（区別するボリューム）は、そのままの名前を使い、どちらでもなければ書いたまま。
+	// 大文字と小文字のみが異なる 2 つのフォルダ（区別するボリューム）は、そのままの名前を使用し、
+	// いずれでもなければ記述したまま。
 	other := filepath.Join(tmp, "vectorworks")
 	if os.Mkdir(other, 0o755) == nil && !SameDirectory(other, filepath.Join(tmp, "Vectorworks")) {
 		if got := onDiskCase(other); got != other {

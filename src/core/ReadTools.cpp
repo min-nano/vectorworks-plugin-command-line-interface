@@ -26,9 +26,9 @@ Json typeNameJson(std::int16_t type) {
 
 // findLayer は名前が完全に一致するレイヤの、列の中の位置を返す。無ければ invalid_args、2 枚以上なら
 // internal（layer_ambiguous）で失敗し、空を返す。Vectorworks は同じ名前のレイヤを参照で
-// 入れることも断る（Findings「Layers and Stories」の「参照で入ってきたレイヤ」）が、確かめていない
-// 経路で同じ名前が 2 枚になっても、黙ってどちらかを読まない（save・close の document_ambiguous と
-// 同じ扱い）。
+// 取り込むことも拒否する（Findings「Layers and Stories」の「参照で入ってきたレイヤ」）が、検証して
+// いない経路で同じ名前が 2 枚になっても、通知なくいずれかを読み取ることはしない（save・close の
+// document_ambiguous と同様の扱い）。
 std::optional<std::size_t> findLayer(const std::vector<std::string> &names, const std::string &name,
                                      std::string_view tool, ToolStatus &status) {
 	return args::findOne(
@@ -41,7 +41,7 @@ std::optional<std::size_t> findLayer(const std::vector<std::string> &names, cons
 	    status);
 }
 
-// allLayers は前面の図面の全てのレイヤを、直下の列まで読む。
+// allLayers は前面の図面の全てのレイヤを、直下の列まで読み取る。
 std::vector<LayerFacts> allLayers(Drawing &drawing) {
 	std::size_t count = drawing.layerNames().size();
 	std::vector<LayerFacts> layers;
@@ -55,7 +55,8 @@ std::vector<LayerFacts> allLayers(Drawing &drawing) {
 }
 
 std::optional<std::string_view> typeName(std::int16_t type) {
-	// 綴りは docs/plugin/tools.md の表が真実。載せた綴りは変えない（行を足すのは互換の変更）。
+	// 綴りは docs/plugin/tools.md の表が真実。掲載した綴りは変更しない（行の追加は互換性を保つ
+	// 変更）。
 	switch (type) {
 	case 2:
 		return "line";
@@ -167,7 +168,7 @@ Json layerObjects(const Json &args, Drawing &drawing, ToolStatus &status) {
 		args::noDocument(status);
 		return Json();
 	}
-	// 名前で 1 枚を探し、そのレイヤの直下だけを読む（頁ごとに図面全体を辿らない）。
+	// 名前で 1 枚を検索し、そのレイヤの直下のみを読み取る（頁ごとに図面全体を走査しない）。
 	std::optional<std::size_t> found =
 	    findLayer(drawing.layerNames(), layerName, kLayerObjectsSpec.name, status);
 	if (!found) {
@@ -175,7 +176,7 @@ Json layerObjects(const Json &args, Drawing &drawing, ToolStatus &status) {
 	}
 	std::size_t at = *found;
 	LayerFacts layer = drawing.layer(at);
-	// 絞った後の並び（列の中の位置）。
+	// 絞り込んだ後の並び（列の中の位置）。
 	const std::vector<std::int16_t> &types = layer.memberTypes;
 	std::vector<std::size_t> members;
 	for (std::size_t i = 0; i < types.size(); ++i) {
@@ -185,8 +186,8 @@ Json layerObjects(const Json &args, Drawing &drawing, ToolStatus &status) {
 	}
 	auto first = static_cast<std::size_t>(offset);
 	Json objects = Json::array();
-	// 名前・クラス・外形は、絞った後の頁に入る図形についてだけ SDK から読む（レイヤの全部の図形に
-	// ついては読まない。大きなレイヤでも 1 回の受け付けを長引かせないため）。
+	// 名前・クラス・外形は、絞り込んだ後の頁に含まれる図形についてのみ SDK から読み取る（レイヤの
+	// 全ての図形については読み取らない。大きなレイヤでも 1 回の受付処理を長引かせないため）。
 	for (std::size_t i = first; i < members.size() && i - first < static_cast<std::size_t>(limit);
 	     ++i) {
 		std::int16_t memberType = types[members[i]];
@@ -234,7 +235,7 @@ Json objectCounts(const Json &args, Drawing &drawing, ToolStatus &status) {
 	} else {
 		chosen = allLayers(drawing);
 	}
-	// 種別番号の昇順に並べる。
+	// 種別番号の昇順に整列する。
 	std::map<std::int16_t, std::int64_t> counts;
 	std::int64_t total = 0;
 	for (const LayerFacts &layer : chosen) {

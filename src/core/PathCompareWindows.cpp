@@ -17,19 +17,19 @@ namespace VwCli::core::path_compare {
 
 namespace {
 
-// normalized は UTF-8 を NFC の UTF-16 にする。widen は正しくない
-// UTF-8 を U+FFFD に置き換えるので、NormalizeString が文字の誤りで
-// 失敗することはない。それでも失敗したら正規化せずに返す（比べ方が
-// 厳しくなるだけで、警告のダイアログが出るのは完全に一致するときだけ）。
+// normalized は UTF-8 を NFC の UTF-16 に変換する。widen は不正な
+// UTF-8 を U+FFFD に置換するため、NormalizeString が文字の誤りで
+// 失敗することはない。それでも失敗した場合は正規化せずに返す（比較が
+// 厳格になるのみで、警告のダイアログが表示されるのは完全に一致する場合のみ）。
 std::wstring normalized(std::string_view text) {
 	std::wstring wide = windows_path::widen(text);
 	if (wide.empty()) {
 		return wide;
 	}
 	int size = static_cast<int>(wide.size());
-	// NFC で長くなる文字もある（U+0958 は 2 つになる）。領域が足りなければ、返された見積もりと
-	// 今の倍の大きい方で繰り返す（見積もりが今の長さ以下でも、正規化せずに諦めない）。回数に
-	// 上限を置き、止まらなくなることは避ける（2^16 倍で、要求の大きさの上限を十分に超える）。
+	// NFC で長くなる文字も存在する（U+0958 は 2 つになる）。領域が不足すれば、返された見積もりと
+	// 現在の 2 倍の大きい方で繰り返す（見積もりが現在の長さ以下でも、正規化を断念しない）。回数に
+	// 上限を設け、停止しなくなることを防止する（2^16 倍で、要求の大きさの上限を十分に超える）。
 	int length = size;
 	for (int attempt = 0; attempt < 16; ++attempt) {
 		std::wstring out(static_cast<std::size_t>(length), L'\0');

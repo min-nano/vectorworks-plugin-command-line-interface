@@ -1,33 +1,36 @@
 ﻿# PowerShell のファイルを PSScriptAnalyzer で整形・検査し、Pester でテストする（docs/format.md・
-# docs/lint.md・docs/plugin/install-and-update.md「テスト」）。scripts/format.sh と scripts/lint.sh と
-# hooks.yml が呼ぶ。設定はリポジトリのルートの PSScriptAnalyzerSettings.psd1。
+# docs/lint.md・docs/plugin/install-and-update.md「テスト」）。scripts/format.sh と
+# scripts/lint.sh と hooks.yml が呼び出す。設定はリポジトリのルートの
+# PSScriptAnalyzerSettings.psd1。
 #
-#   pwsh scripts/powershell.ps1 -Mode Check <files>  整形が要るファイルを並べて 1 で終わる
+#   pwsh scripts/powershell.ps1 -Mode Check <files>  整形が必要なファイルを列挙して 1 で終了する
 #   pwsh scripts/powershell.ps1 -Mode Fix <files>    整形して書き換える
-#   pwsh scripts/powershell.ps1 -Mode Lint <files>   検査の指摘を並べて、あれば 1 で終わる
-#   pwsh scripts/powershell.ps1 -Mode Test <files>   Pester でテストし、失敗があれば 1 で終わる
-#   pwsh scripts/powershell.ps1 -Mode Install        固定した版の PSScriptAnalyzer と Pester を入れる
-#   pwsh scripts/powershell.ps1 -Mode Install -Module Pester   渡したモジュールだけを入れる
+#   pwsh scripts/powershell.ps1 -Mode Lint <files>   検査の指摘を列挙し、あれば 1 で終了する
+#   pwsh scripts/powershell.ps1 -Mode Test <files>   Pester でテストし、失敗があれば 1 で終了する
+#   pwsh scripts/powershell.ps1 -Mode Install        固定版の PSScriptAnalyzer と Pester を導入する
+#   pwsh scripts/powershell.ps1 -Mode Install -Module Pester   渡したモジュールのみを導入する
 #
-# -Mode LintFile <file> は -Mode Lint が子のプロセスで使う（指摘があれば 1、解析器が落ちたら 3 で終わる）。
+# -Mode LintFile <file> は -Mode Lint が子プロセスで使用する（指摘があれば 1、解析器が異常終了した
+# 場合は 3 で終了する）。
 param(
 	[Parameter(Mandatory, Position = 0)]
 	[ValidateSet('Check', 'Fix', 'Lint', 'LintFile', 'Test', 'Install')]
 	[string] $Mode,
 	[Parameter(Position = 1, ValueFromRemainingArguments)]
 	[string[]] $Path = @(),
-	# -Mode Install で入れるモジュール。整形と検査は PSScriptAnalyzer だけ、フックのテストは Pester だけを使う。
-	# $Mode と $Path に Position を書き、これを名前でだけ渡せるようにする（Position を書かないと宣言の順に
-	# 位置が割り当てられ、ファイルの名前を受け取ってしまう）。
+	# -Mode Install でインストールするモジュール。整形と検査は PSScriptAnalyzer のみ、フックの
+	# テストは Pester のみを使用する。$Mode と $Path に Position を記述し、これを名前でのみ
+	# 渡せるようにする（Position を記述しないと宣言の順に位置が割り当てられ、ファイルの名前を
+	# 受け取ってしまう）。
 	[ValidateSet('PSScriptAnalyzer', 'Pester')]
 	[string[]] $Module = @('PSScriptAnalyzer', 'Pester')
 )
 
 $ErrorActionPreference = 'Stop'
 
-# 版を固定する（手元と CI で結果を揃える）。上げるときはここだけを直す。
+# 版を固定する（ローカル環境と CI で結果を統一する）。上げる場合はここのみを修正する。
 $version = '1.25.0'
-# Pester は Windows に入っている 3.4 を使わない（フックのテストは Pester 5 で書く）。
+# Pester は Windows に同梱されている 3.4 を使用しない（フックのテストは Pester 5 で記述する）。
 $pesterVersion = '5.7.1'
 
 if ($Mode -eq 'Install') {
@@ -35,7 +38,8 @@ if ($Mode -eq 'Install') {
 		Install-Module PSScriptAnalyzer -RequiredVersion $version -Scope CurrentUser -Force
 	}
 	if ($Module -contains 'Pester') {
-		# Windows に入っている Pester 3.4 と発行元が違うので、発行元の確かめを飛ばして横に入れる。
+		# Windows に同梱されている Pester 3.4 と発行元が異なるため、発行元の確認を省略して並存させて
+		# インストールする。
 		Install-Module Pester -RequiredVersion $pesterVersion -Scope CurrentUser -Force -SkipPublisherCheck
 	}
 	exit 0
@@ -51,11 +55,12 @@ if ($Mode -eq 'Test') {
 	exit 0
 }
 
-# Lint は、ファイルごとに子の pwsh（-Mode LintFile）で検査する。PSScriptAnalyzer は、同じファイルでもときどき
-# 解析器の中で落ちる（NullReferenceException・PowerShell の実行時の「An item with the same key has already been
-# added」でプロセスごと終わる。指摘ではなく、走らせ直すと通る。PSScriptAnalyzer #1351・#1511）。プロセスごと
-# 落ちるとスクリプトの中では受け止められないので、子が指摘（1）でも通る（0）でもなく終わったときだけ、そう書いて
-# から 3 回まで走らせ直す。指摘は走らせ直さない。
+# Lint は、ファイルごとに子の pwsh（-Mode LintFile）で検査する。PSScriptAnalyzer は、同じ
+# ファイルでも時折解析器の中で異常終了する（NullReferenceException・PowerShell の実行時の
+# 「An item with the same key has already been added」でプロセスごと終了する。指摘ではなく、
+# 再実行すると通過する。PSScriptAnalyzer #1351・#1511）。プロセスごと異常終了するとスクリプトの
+# 中では捕捉できないため、子が指摘（1）でも通過（0）でもなく終了した場合のみ、その旨を書き込んでから
+# 3 回まで再実行する。指摘は再実行しない。
 if ($Mode -eq 'Lint') {
 	$pwsh = (Get-Process -Id $PID).Path
 	$status = 0
@@ -63,7 +68,8 @@ if ($Mode -eq 'Lint') {
 		for ($attempt = 1; ; $attempt++) {
 			& $pwsh -NoProfile -File $PSCommandPath -Mode LintFile $file
 			$code = $LASTEXITCODE
-			# 0 と 1 の他は落ちたとみなす（Windows で .NET の例外のまま終わった pwsh は負の終了コードを返す）。
+			# 0 と 1 の他は異常終了とみなす（Windows で .NET の例外のまま終了した pwsh は負の
+			# 終了コードを返す）。
 			if ($code -eq 0 -or $code -eq 1 -or $attempt -ge 3) {
 				break
 			}
@@ -78,13 +84,13 @@ if ($Mode -eq 'Lint') {
 
 Import-Module PSScriptAnalyzer -RequiredVersion $version
 $settings = Join-Path (Split-Path $PSScriptRoot) 'PSScriptAnalyzerSettings.psd1'
-# 書き戻すときは BOM を付ける（.editorconfig）。
+# 書き戻す際は BOM を付ける（.editorconfig）。
 $utf8 = [System.Text.UTF8Encoding]::new($true)
 
-# 子のプロセス（LintFile）では、解析器の中の失敗（止まる誤り）を 3 で終わらせ、指摘（1）と分ける。他の
-# モードでは、これまでどおり止まる（break は誤りをそのまま投げる）。exit ではなく [Environment]::Exit で
-# プロセスをすぐ終わらせる（exit は後片付けで、落ちた解析器のまだ動いているスレッドを待ち、15 分ほど
-# 戻らないことがあった）。
+# 子プロセス（LintFile）では、解析器の中の失敗（停止する誤り）を 3 で終了させ、指摘（1）と区別する。
+# 他のモードでは、従来通り停止する（break は誤りをそのまま投げる）。exit ではなく
+# [Environment]::Exit でプロセスを直ちに終了させる（exit は後処理で、異常終了した解析器のまだ
+# 動作しているスレッドを待機し、15 分ほど戻らないことがあった）。
 trap {
 	if ($Mode -ne 'LintFile') {
 		break
@@ -96,9 +102,10 @@ trap {
 $status = 0
 foreach ($file in $Path) {
 	if ($Mode -eq 'LintFile') {
-		# PSUseCorrectCasing は検査から外す。整形（Invoke-Formatter）が同じ設定で当てる規則なので、
-		# 大文字と小文字の違いは format.sh の確かめが見つける。検査では、この規則がコマンドの情報を引く
-		# ところでときどき落ちる（CommandInfo.get_Parameters の NullReferenceException）。
+		# PSUseCorrectCasing は検査から除外する。整形（Invoke-Formatter）が同じ設定で適用する
+		# 規則であるため、大文字と小文字の違いは format.sh の確認が検出する。検査では、この規則が
+		# コマンドの情報を参照する箇所で時折異常終了する（CommandInfo.get_Parameters の
+		# NullReferenceException）。
 		$found = Invoke-ScriptAnalyzer -Path $file -Settings $settings -ExcludeRule PSUseCorrectCasing
 		if ($found) {
 			$found | ForEach-Object {
@@ -113,7 +120,7 @@ foreach ($file in $Path) {
 	if ($formatted -ceq $text) {
 		continue
 	}
-	# else を書かない（整形の規則が } と else の間で改行し、else を空白で字下げするため）。
+	# else を記述しない（整形の規則が } と else の間で改行し、else を空白で字下げするため）。
 	if ($Mode -eq 'Fix') {
 		[System.IO.File]::WriteAllText($file, $formatted, $utf8)
 		continue

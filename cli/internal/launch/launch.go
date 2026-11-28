@@ -1,12 +1,13 @@
 // Package launch は Vectorworks を起動する。
 //
-// 起動は OS の標準の方法にだけ頼る。macOS は `open -a`（既に動いていれば前面に出すだけで、
-// 2 つ目は起動しない）。Windows は既定のインストール先の実行ファイルを起動し、既に
-// 動いていれば起動しない（実行ファイルを直接起動すると 2 つ目が立ち上がりうる）。どちらも
-// 既に動いていたときを成功とし、OS によって結果を変えない。
-// 既定の場所を探し回らない（他の場所は app で明示する）。
-// app で明示でき、.app で終わらなければ実行ファイルとしてそのまま起動する（テスト用の代替プログラムも
-// この経路）。app をどの指定（フラグ・環境変数）で受けるかは呼ぶ側が決め、誤りの案内も呼ぶ側が付ける。
+// 起動は OS の標準の方法のみに依存する。macOS は `open -a`（既に動作していれば前面に表示
+// するのみで、2 つ目は起動しない）。Windows は既定のインストール先の実行ファイルを起動し、既に
+// 動作していれば起動しない（実行ファイルを直接起動すると 2 つ目が起動しうる）。いずれも
+// 既に動作していた場合を成功とし、OS によって結果を変更しない。
+// 既定の場所を探索しない（他の場所は app で明示する）。
+// app で明示でき、.app で終わらなければ実行ファイルとしてそのまま起動する（テスト用の代替
+// プログラムもこの経路）。app をいずれの指定（フラグ・環境変数）で受け取るかは呼び出し元が決定し、
+// エラーの案内も呼び出し元が付ける。
 package launch
 
 import (
@@ -21,8 +22,9 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
-// DefaultMacApp は macOS で起動するアプリの名前（Vectorworks 2026。2025 の CLI は Vectorworks 2025）。
-// プラグインはその版用なので、その版だけを起動する（別の版ではプラグインが読み込まれない）。
+// DefaultMacApp は macOS で起動するアプリの名前（Vectorworks 2026。2025 の CLI は
+// Vectorworks 2025）。プラグインはその版用なので、その版のみを起動する（別の版ではプラグインが
+// 読み込まれない）。
 const DefaultMacApp = edition.Product
 
 // defaultWindowsExe は Windows の既定のインストール先の実行ファイル（%ProgramFiles% の下の
@@ -34,8 +36,9 @@ func Command(app string) ([]string, error) {
 	return command(runtime.GOOS, app)
 }
 
-// command は goos での Command（テストが、走っている OS に依らない道 ― macOS・未対応の OS ― をどの OS でも
-// 確かめる。Windows の道は %ProgramFiles% と区切りに依るので、Windows でだけ確かめる）。
+// command は goos での Command（テストが、実行中の OS に依存しない経路 ― macOS・未対応の OS
+// ― をいずれの OS でも検証する。Windows の経路は %ProgramFiles% と区切り文字に
+// 依存するので、Windows でのみ検証する）。
 func command(goos, app string) ([]string, error) {
 	if app != "" && !(goos == "darwin" && strings.HasSuffix(strings.TrimRight(app, "/"), ".app")) {
 		if info, err := os.Stat(app); err != nil || info.IsDir() {
@@ -60,9 +63,9 @@ func command(goos, app string) ([]string, error) {
 	}
 }
 
-// Start は起動して切り離す（CLI が終わっても Vectorworks は残る）。Windows で同じ実行ファイルが
-// 既に動いていれば、2 つ目を立ち上げずに成功とする（macOS の open -a が前面に出すだけで成功する
-// のと揃え、呼ぶ側が OS ごとに分けなくて済むように）。
+// Start は起動して切り離す（CLI が終了しても Vectorworks は残る）。Windows で同一の実行ファイルが
+// 既に動作していれば、2 つ目を起動せずに成功とする（macOS の open -a が前面に表示するのみで成功する
+// のと統一し、呼び出し元が OS ごとに区別しなくて済むように）。
 func Start(argv []string) error {
 	if runtime.GOOS == "windows" && windowsRunning(argv[0]) {
 		return nil
@@ -75,7 +78,7 @@ func Start(argv []string) error {
 	return cmd.Process.Release()
 }
 
-// windowsRunning は Windows で同じ実行ファイルが動いているか（分からなければ false）。
+// windowsRunning は Windows で同一の実行ファイルが動作しているか（判明しなければ false）。
 func windowsRunning(exe string) bool {
 	name := filepath.Base(exe)
 	out, err := exec.Command("tasklist", "/FI", "IMAGENAME eq "+name, "/NH", "/FO", "CSV").Output()

@@ -1,9 +1,9 @@
-// core/Json の解析のファジングの入口（libFuzzer）。ASan・UBSan と共にビルドし、CI（cpp.yml）が
-// 決まった時間だけ回す。種は protocol/fixtures/requests（深い入れ子・長い文字列・不正な UTF-8 を
-// 含む）。
+// core/Json の解析のファジングのエントリポイント（libFuzzer）。ASan・UBSan と共にビルドし、
+// CI（cpp.yml）が定められた時間のみ実行する。シードは protocol/fixtures/requests（深い入れ子・
+// 長い文字列・不正な UTF-8 を含む）。
 //
-// 確かめること: どんな入力でも落ちない（スタックを溢れさせない）。読めたものは書き出して読み直すと
-// 同じ値になり、もう一度書き出しても同じ綴りになる。
+// 検証事項: いかなる入力でも異常終了しない（スタックを溢れさせない）。読み取れたものは書き出して
+// 読み直すと同じ値になり、再度書き出しても同じ綴りになる。
 
 #include "core/Json.h"
 #include "core/Protocol.h"

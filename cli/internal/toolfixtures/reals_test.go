@@ -1,6 +1,7 @@
-// Package toolfixtures_test は、道具の結果の決まりの見本（tests/fixtures。通信規則の見本とは別。
-// docs/plugin/tools.md「共通の規則」）を Go の側から確かめる。プラグイン（C++）の
-// テストも同じ見本を読むので、片側のテストに書いた期待だけで綴りを決めずに済む。
+// Package toolfixtures_test は、ツールの結果の規則のフィクスチャ（tests/fixtures。通信規則の
+// フィクスチャとは別。docs/plugin/tools.md「共通の規則」）を Go の側から検証する。プラグイン（C++）
+// のテストも同一のフィクスチャを読み込むので、片側のテストに記述した期待のみで綴りを決定せずに
+// 済む。
 package toolfixtures_test
 
 import (
@@ -12,8 +13,8 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/fixturetest"
 )
 
-// TestRealsMatchEncodingJSON は、見本の実数と綴りの組が json.Marshal の綴りと一致することを
-// 確かめる（プラグインの結果の実数の綴りを Go の encoding/json に合わせる決まり）。
+// TestRealsMatchEncodingJSON は、フィクスチャの実数と綴りの組が json.Marshal の綴りと一致することを
+// 検証する（プラグインの結果の実数の綴りを Go の encoding/json に合致させる規則）。
 func TestRealsMatchEncodingJSON(t *testing.T) {
 	var fixture struct {
 		Reals []struct {
