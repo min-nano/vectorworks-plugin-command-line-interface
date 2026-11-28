@@ -1,11 +1,11 @@
 #pragma once
 
-// 起動を終えた印と、終了の依頼の最中の印（docs/plugin/architecture.md「エントリポイント」
-// 「Vectorworks が処理中」）。SDK に依らない。タイマー（src/Clock.cpp）は刻みごとに tick を呼び、
-// SDK で行うのは通知の登録と終了の呼び出し（CloseAllFilesAndQuitVectorworks）だけにする。印の
-// 立て下ろしをここに置くのは、保存の確認が開く競合（quit が図面を確かめてから終了を頼むまでに
-// 図面が開く）を実機の確認で起こせず、無 SDK のテストでしか確かめられないため
-// （docs/plugin/bridge.md「分割の方針」）。
+// 起動の完了を示すフラグと、終了の依頼の処理中を示すフラグ（docs/plugin/architecture.md
+// 「エントリポイント」「Vectorworks が処理中」）。SDK に依存しない。タイマー（src/Clock.cpp）は
+// 周期処理ごとに tick を呼び出し、SDK で行うのは通知の登録と終了の呼び出し
+// （CloseAllFilesAndQuitVectorworks）のみとする。フラグの設定と解除をここに配置するのは、保存の
+// 確認が表示される競合（quit が図面を確認してから終了を依頼するまでに図面が開かれる）を実機の
+// 確認で再現できず、無 SDK のテストでのみ検証できるため（docs/plugin/bridge.md「分割の方針」）。
 
 #include "core/Serve.h"
 
@@ -17,26 +17,27 @@ namespace VwCli::core {
 
 class Lifecycle {
 public:
-	// markStarted は「起動を終えた」印を立てる。最初の kNotifyBeforePendingUpdate から呼ぶ（以後も
-	// 届くが、立ったままで下ろさない。docs/plugin/tools.md「quit」）。
+	// markStarted は「起動を終えた」フラグを設定する。最初の kNotifyBeforePendingUpdate から
+	// 呼び出す（以後も通知されるが、設定したまま解除しない。docs/plugin/tools.md「quit」）。
 	void markStarted() { started_ = true; }
 
-	// markNotificationRegistered は、その通知を登録できたときに呼ぶ。
+	// markNotificationRegistered は、その通知を登録できた場合に呼び出す。
 	void markNotificationRegistered() { notificationRegistered_ = true; }
 
 	bool notificationRegistered() const { return notificationRegistered_; }
 
-	// startup は起動の状態（道具 quit が ToolContext で見る）。
+	// startup は起動の状態（ツール quit が ToolContext で参照する）。
 	Startup startup() const { return Startup{started_, notificationRegistered_}; }
 
-	// activity は受け付けに渡す状態。終了の依頼の最中なら Quitting。
+	// activity は受付処理に渡す状態。終了の依頼の処理中であれば Quitting。
 	Activity activity() const { return quitting_ ? Activity::Quitting : Activity::Idle; }
 
-	// quit は request を呼んで終了を頼む。印が立っていれば（終了の呼び出しの途中に入り直した刻み。
-	// Windows は保存の確認の間も刻む）何もせずに偽を返す（終了の依頼を重ねない）。立っていなければ
-	// 立てて request を呼び、戻ったら（投げても）下ろして真を返す。戻ったら下ろすのは、取り消された
-	// （Vectorworks が動き続ける）かを見分けられず、下ろさないと取り消した後も断り続けるため
-	// （戻った後の刻みから 2 度目を頼んでも何も起きない。SDK リファレンス #313）。
+	// quit は request を呼び出して終了を依頼する。フラグが設定されていれば（終了の呼び出しの途中に
+	// 再入した周期処理。Windows は保存の確認の間も周期処理を実行する）何もせずに偽を返す（終了の
+	// 依頼を重ねない）。設定されていなければ設定して request を呼び出し、戻ったら（例外が送出され
+	// ても）解除して真を返す。戻ったら解除するのは、取り消された（Vectorworks が動作を継続する）か
+	// 否かを判別できず、解除しないと取り消された後も拒否し続けるため（戻った後の周期処理から
+	// 2 度目を依頼しても何も起きない。SDK リファレンス #313）。
 	template <typename Request> bool quit(Request &&request) {
 		if (quitting_) {
 			return false;
@@ -52,10 +53,11 @@ private:
 	bool quitting_ = false;
 };
 
-// tick は刻み 1 回。受け付けを 1 回走らせ（lifecycle の状態を渡す）、道具が終了の依頼を返して
-// 応答を書けたら、受け付けの外で request を呼んで終了を頼む（docs/plugin/architecture.md
-// 「受付処理の流れ」）。終了の依頼の最中に入り直した刻みでは、受け付けが Quitting で表の道具を
-// 断るので、終了の依頼は返らない（返っても lifecycle が 2 度目を頼まない）。
+// tick は 1 回の周期処理。受付処理を 1 回実行し（lifecycle の状態を渡す）、ツールが終了の依頼を
+// 返して応答を書き込めたら、受付処理の外で request を呼び出して終了を依頼する
+// （docs/plugin/architecture.md「受付処理の流れ」）。終了の依頼の処理中に再入した周期処理では、
+// 受付処理が Quitting で一覧のツールを拒否するため、終了の依頼は返らない（返っても lifecycle が
+// 2 度目を依頼しない）。
 template <typename Request>
 ServeResult tick(Server &server, std::span<const Tool> tools, std::int64_t nowNanos,
                  Lifecycle &lifecycle, Request &&request) {

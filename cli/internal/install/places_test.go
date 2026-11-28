@@ -9,7 +9,8 @@ import (
 	"testing"
 )
 
-// Windows は windows-x64 だけ（Windows on ARM でも Vectorworks は x64 で動く）。mac は places_darwin_test.go。
+// Windows は windows-x64 のみ（Windows on ARM でも Vectorworks は x64 で実行される）。mac は
+// places_darwin_test.go。
 func TestTarget(t *testing.T) {
 	got := Target()
 	want := map[string]string{"windows": "windows-x64", "darwin": "macos-"}[runtime.GOOS]
@@ -18,7 +19,7 @@ func TestTarget(t *testing.T) {
 	}
 }
 
-// 場所の根は環境変数を読まずに求める（走らせ方で場所が変わらないように）。
+// 場所の根は環境変数を読み取らずに導出する（実行方法によって場所が変わらないように）。
 func TestPlacesIgnoreEnvironment(t *testing.T) {
 	work, err := WorkDir()
 	if err != nil {

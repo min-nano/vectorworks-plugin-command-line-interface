@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// extendedPath は \\?\ を付けた絶対パスにする。プラグインと同じく、CON・NUL などの名前を
+// extendedPath は \\?\ を付けた絶対パスにする。プラグインと同様に、CON・NUL などの名前を
 // デバイスではなくファイルとして開くため（docs/protocol.md「id」）。
 func extendedPath(dir string) string {
 	if strings.HasPrefix(dir, `\\?\`) {

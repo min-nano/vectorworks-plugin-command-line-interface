@@ -14,7 +14,7 @@ namespace {
 
 constexpr char32_t kReplacement = 0xFFFD;
 
-// 同じキーを並びの順に探すのは、キーがこの数より少ない間だけ。
+// 同一のキーを順序の通りに探索するのは、キーがこの数より少ない間のみ。
 constexpr std::size_t kLinearSearch = 16;
 
 void appendUtf8(std::string &out, char32_t c) {
@@ -37,8 +37,8 @@ void appendUtf8(std::string &out, char32_t c) {
 
 // utf8Length は text[at] から始まる UTF-8 の 1 文字の長さ。正しくなければ 0。
 //
-// Go の utf8.DecodeRune と同じ判定（長すぎる綴り・サロゲート・U+10FFFF を超えるものは誤り）。
-// 誤りは 1 バイトずつ U+FFFD に置き換えるので、encoding/json と同じ数の U+FFFD になる。
+// Go の utf8.DecodeRune と同じ判定（冗長な綴り・サロゲート・U+10FFFF を超えるものは誤り）。
+// 誤りは 1 バイトずつ U+FFFD に置換するため、encoding/json と同じ数の U+FFFD となる。
 std::size_t utf8Length(std::string_view text, std::size_t at) {
 	auto byte = [&](std::size_t i) -> unsigned {
 		return at + i < text.size() ? static_cast<unsigned char>(text[at + i]) : 0x100;
@@ -67,7 +67,7 @@ std::size_t utf8Length(std::string_view text, std::size_t at) {
 	return 0;
 }
 
-// appendValidUtf8 は text[at] の 1 文字を out へ写し、進んだバイト数を返す。正しくない UTF-8 は
+// appendValidUtf8 は text[at] の 1 文字を out へ複製し、進んだバイト数を返す。正しくない UTF-8 は
 // U+FFFD にして 1 バイト進む。
 std::size_t appendValidUtf8(std::string &out, std::string_view text, std::size_t at) {
 	std::size_t length = utf8Length(text, at);
@@ -126,17 +126,18 @@ void dumpString(std::string &out, std::string_view text) {
 
 bool isDigit(char c) { return c >= '0' && c <= '9'; }
 
-// 整数の引数の指数を飽和させる境（±2^31）。要求は 1 MiB までなので、仮数の桁の位置は ±2^20 程度に
-// 収まり、指数がこれを超えれば仮数が 0 でない限り答えは決まる。int64 の端で飽和させないのは、
-// その後で仮数の桁の位置を足すと溢れるため（docs/plugin/tools.md「共通の規則」）。
+// 整数の引数の指数を飽和させる境界（±2^31）。要求は 1 MiB までであるため、仮数の桁の位置は
+// ±2^20 程度に収まり、指数がこれを超えれば仮数が 0 でない限り結果は確定する。int64 の端で飽和
+// させないのは、その後で仮数の桁の位置を加算すると溢れるため
+// （docs/plugin/tools.md「共通の規則」）。
 constexpr std::int64_t kExponentLimit = 2147483648;
 
-// kMaxIntegerArg の桁の位置（2147483647 は 10 桁なので、最上位は 10^9 の位）。
+// kMaxIntegerArg の桁の位置（2147483647 は 10 桁であるため、最上位は 10^9 の位）。
 constexpr std::int64_t kMaxIntegerPlace = 9;
 
 }
 
-// JsonParser は再帰下降で読む。深さは入れ子に入る前に数え、上限を超えたら降りずに失敗する。
+// JsonParser は再帰下降で読み取る。深さは入れ子に入る前に数え、上限を超えたら降りずに失敗する。
 class JsonParser {
 public:
 	JsonParser(std::string_view text, int maxDepth) : text_(text), maxDepth_(maxDepth) {}
@@ -166,7 +167,7 @@ private:
 		switch (text_[at_]) {
 		case '{':
 		case '[':
-			// 入れ子に入る前に深さを数え、上限を超えたら降りない（オブジェクトと配列で同じ）。
+			// 入れ子に入る前に深さを数え、上限を超えたら降りない（オブジェクトと配列で同様）。
 			if (depth + 1 > maxDepth_) {
 				return fail("入れ子が深すぎます（上限 " + std::to_string(maxDepth_) + "）");
 			}
@@ -192,8 +193,9 @@ private:
 	std::optional<Json> parseObject(int depth) {
 		++at_;
 		Json::Object members;
-		// 同じキーを探す索引（キー → members の位置）。キーが少ない内は並びを順に見るだけにし、
-		// 増えたら作る（1 MiB の要求に何万ものキーを並べても、解析が 2 乗の時間にならないように）。
+		// 同一のキーを探索する索引（キー → members の位置）。キーが少ない間は順に参照するのみとし、
+		// 増加したら作成する（1 MiB の要求に数万のキーを列挙しても、解析が 2 乗の時間に
+		// ならないように）。
 		std::unordered_map<std::string, std::size_t> index;
 		skipSpace();
 		if (consume('}')) {
@@ -217,7 +219,7 @@ private:
 			if (!value) {
 				return std::nullopt;
 			}
-			// 同じキーは後のものを使う（encoding/json と同じ）。
+			// 同一のキーは後のものを使用する（encoding/json と同様）。
 			std::size_t found = members.size();
 			if (members.size() < kLinearSearch) {
 				for (std::size_t i = 0; i < members.size(); ++i) {
@@ -274,7 +276,7 @@ private:
 		}
 	}
 
-	// parseString は text_[at_] の " から読み、閉じる " の次へ進む。
+	// parseString は text_[at_] の " から読み取り、閉じる " の次へ進む。
 	bool parseString(std::string &out) {
 		++at_;
 		while (at_ < text_.size()) {
@@ -348,8 +350,8 @@ private:
 		at_ += 4;
 		char32_t code = *unit;
 		if (code >= 0xD800 && code <= 0xDFFF) {
-			// 高いサロゲートのすぐ後に低いサロゲートの \u があるときだけ組にする。それ以外は
-			// U+FFFD とし、続くエスケープは別に読む（encoding/json と同じ）。
+			// 上位サロゲートの直後に下位サロゲートの \u がある場合のみ組にする。それ以外は
+			// U+FFFD とし、後続のエスケープは別途読み取る（encoding/json と同様）。
 			std::optional<char32_t> low;
 			if (code <= 0xDBFF && at_ + 1 < text_.size() && text_[at_] == '\\' &&
 			    text_[at_ + 1] == 'u') {
@@ -370,7 +372,8 @@ private:
 		if (from + 4 > text_.size()) {
 			return std::nullopt;
 		}
-		// 符号の無い型に読むので、from_chars は符号も 0x も受けず、16 進の数字だけを読む。
+		// 符号の無い型に読み取るため、from_chars は符号も 0x も受け付けず、16 進の数字のみを
+		// 読み取る。
 		const char *first = text_.data() + from;
 		std::uint32_t value = 0;
 		auto [end, ec] = std::from_chars(first, first + 4, value, 16);
@@ -381,7 +384,7 @@ private:
 	}
 
 	// parseNumber は JSON の数の文法（-? (0 | [1-9][0-9]*) (.[0-9]+)? ([eE][+-]?[0-9]+)?）を
-	// 確かめ、綴りのまま持つ。
+	// 検証し、綴りのまま保持する。
 	std::optional<Json> parseNumber() {
 		std::size_t start = at_;
 		consume('-');
@@ -443,7 +446,7 @@ private:
 	}
 
 	std::nullopt_t fail(std::string reason) {
-		// 最初に見つけた誤りを残す（内側の誤りを外側が上書きしない）。
+		// 最初に検出した誤りを保持する（内側の誤りを外側が上書きしない）。
 		if (reason_.empty()) {
 			reason_ = std::move(reason);
 			failedAt_ = at_;
@@ -471,16 +474,17 @@ Json Json::real(double value) {
 	if (!std::isfinite(value)) {
 		return Json();
 	}
-	// 桁は精度を指定しない
-	// to_chars（元の値に戻る最も短いもの）の指数の形から取る。書き方（固定小数点
-	// か指数か・指数の綴り）は Go に合わせて組み立て直す。指数の形を選ぶのは、形を指定しない
-	// to_chars は短い方を選び（100000 が 1e+05 になる）、固定小数点は大きな値を最も短い桁では
-	// なく正確な値で書く実装がある（999999999999999900000 が 999999999999999868928 になる）ため。
+	// 桁は精度を指定しない to_chars（元の値に戻る最短のもの）の指数の形式から取得する。表記
+	// （固定小数点か指数か・指数の綴り）は Go に合わせて再構築する。指数の形式を選択するのは、
+	// 形式を指定しない to_chars は短い方を選択し（100000 が 1e+05 になる）、固定小数点は大きな値を
+	// 最短の桁ではなく正確な値で記述する実装がある（999999999999999900000 が
+	// 999999999999999868928 になる）ため。
 	char buffer[64];
 	auto [end, ec] =
 	    std::to_chars(buffer, buffer + sizeof buffer, value, std::chars_format::scientific);
-	// double の指数の形は 64 文字に収まるので失敗しない。下の取り出しはこれと、指数の 'e' が
-	// あることを前提にする（無ければ指数を仮数の先頭から読み、誤りにならずに違う数を返す）。
+	// double の指数の形式は 64 文字に収まるため失敗しない。下の取り出しはこれと、指数の 'e' が
+	// 存在することを前提とする（無ければ指数を仮数の先頭から読み取り、誤りとならずに異なる数を
+	// 返す）。
 	assert(ec == std::errc{});
 	(void)ec;
 	std::string_view shortest(buffer, static_cast<std::size_t>(end - buffer));
@@ -488,10 +492,10 @@ Json Json::real(double value) {
 	if (negative) {
 		shortest.remove_prefix(1);
 	}
-	// 仮数の数字と指数に分ける（d[.ddd]e±XX）。精度を指定しない to_chars は元の値に戻る最も
-	// 短い文字数を選び（[charconv.to.chars]）、scientific は printf の %e の形（小数点の前は
-	// 1 桁で、値が 0 でなければ 0 ではない）なので、小数点の前は常に 1 桁で、仮数の末尾に 0 は
-	// 付かない（付けば文字数が最も短くない）。先頭と末尾の 0 を除く処理は要らない。
+	// 仮数の数字と指数に分割する（d[.ddd]e±XX）。精度を指定しない to_chars は元の値に戻る最短の
+	// 文字数を選択し（[charconv.to.chars]）、scientific は printf の %e の形式（小数点の前は
+	// 1 桁で、値が 0 でなければ 0 ではない）であるため、小数点の前は常に 1 桁で、仮数の末尾に 0 は
+	// 付かない（付けば文字数が最短ではない）。先頭と末尾の 0 を除去する処理は不要である。
 	const std::size_t e = shortest.find('e');
 	assert(e != std::string_view::npos);
 	std::string digits(1, shortest[0]);
@@ -500,18 +504,18 @@ Json Json::real(double value) {
 	}
 	std::string out = negative ? "-" : "";
 	if (digits == "0") {
-		// 0 と -0（Go と同じく符号を残す）。
+		// 0 と -0（Go と同様に符号を保持する）。
 		out += '0';
 		return Json(Value(Number{std::move(out)}));
 	}
-	// from_chars は指数の '+' を受け付けないので除いて読む。
+	// from_chars は指数の '+' を受け付けないため除去して読み取る。
 	std::string_view exponentText = shortest.substr(e + 1);
 	if (exponentText.starts_with('+')) {
 		exponentText.remove_prefix(1);
 	}
 	std::int64_t exponent = 0;
 	(void)std::from_chars(exponentText.data(), exponentText.data() + exponentText.size(), exponent);
-	// 値は 0.<digits> × 10^decimalPoint、指数で書くときの指数は decimalPoint - 1。
+	// 値は 0.<digits> × 10^decimalPoint、指数で記述する場合の指数は decimalPoint - 1。
 	const std::int64_t scientific = exponent;
 	const std::int64_t decimalPoint = scientific + 1;
 	const auto length = static_cast<std::int64_t>(digits.size());
@@ -557,8 +561,8 @@ std::optional<Json> Json::parse(std::string_view text, int maxDepth, std::string
 }
 
 Json::Type Json::type() const {
-	// index をそのまま Type にするので、Type の並びを Value の候補の並びに縛る
-	// （片方だけを並べ替えるとビルドが通らない）。
+	// index をそのまま Type にするため、Type の順序を Value の候補の順序に拘束する
+	// （片方のみを並べ替えるとビルドが通らない）。
 	constexpr auto at = [](Type type) { return static_cast<std::size_t>(type); };
 	static_assert(std::variant_size_v<Value> == at(Type::Object) + 1);
 	static_assert(
@@ -616,7 +620,7 @@ IntegerValue Json::integerValue() const {
 			negativeExponent = text[at] == '-';
 			++at;
 		}
-		// 先頭の 0 は値を変えないので、そのまま数えて良い（0 の間は 0 のまま）。
+		// 先頭の 0 は値を変えないため、そのまま数えてよい（0 の間は 0 のまま）。
 		for (; at < text.size(); ++at) {
 			exponent = std::min(exponent * 10 + (text[at] - '0'), kExponentLimit);
 		}
@@ -625,7 +629,7 @@ IntegerValue Json::integerValue() const {
 		}
 	}
 
-	// 仮数の数字を整数部と小数部をつないだ列として見る。i 番目の数字の位は
+	// 仮数の数字を整数部と小数部を連結した列として扱う。i 番目の数字の位は
 	// （整数部の桁数 - 1 - i）+ 指数。
 	const auto integerDigits = static_cast<std::int64_t>(integerPart.size());
 	const std::size_t count = integerPart.size() + fractionPart.size();
@@ -653,7 +657,7 @@ IntegerValue Json::integerValue() const {
 	if (negative || placeOf(first) > kMaxIntegerPlace) {
 		return {IntegerCheck::OutOfRange, 0};
 	}
-	// ここでは数字は高々 10 桁で、最下位の位も 9 以下なので、int64 に収まる。
+	// ここでは数字は高々 10 桁で、最下位の位も 9 以下であるため、int64 に収まる。
 	std::int64_t value = 0;
 	for (std::size_t i = first; i <= last; ++i) {
 		value = value * 10 + (digitAt(i) - '0');
@@ -762,7 +766,7 @@ bool operator==(const Json &a, const Json &b) {
 		if (a.members().size() != b.members().size()) {
 			return false;
 		}
-		// キーは重ならないので、片側のキーをもう片側で引けば足りる。
+		// キーは重複しないため、片側のキーをもう片側で検索すれば足りる。
 		for (const Json::Member &member : a.members()) {
 			const Json *other = b.find(member.first);
 			if (!other || !(*other == member.second)) {

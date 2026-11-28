@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// Vectorworks の無い OS では、場所もターゲットも決めずに失敗にする。
+// Vectorworks の無い OS では、場所もターゲットも決定せずに失敗とする。
 func TestPlacesOnAnotherOS(t *testing.T) {
 	if _, err := WorkDir(); !errors.Is(err, errUnsupported) {
 		t.Error(err)

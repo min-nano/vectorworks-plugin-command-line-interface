@@ -120,9 +120,9 @@ func (c *callCmd) run(e *env) int {
 			}
 			text = string(data)
 		}
-		// 中身は道具ごとに解釈しない（プラグイン側の仕事）。オブジェクトであることだけを確かめる。
-		// 値は RawMessage のまま受け、数に直さない（float64 に収まらない 1e400 のような正しい JSON も
-		// プラグインへ渡し、プラグインが引数の誤りとして断る）。
+		// 内容はツールごとに解釈しない（プラグイン側の責務）。オブジェクトであることのみを
+		// 検証する。値は RawMessage のまま受け取り、数値に変換しない（float64 に収まらない
+		// 1e400 のような正しい JSON もプラグインへ渡し、プラグインが引数の誤りとして拒否する）。
 		var probe map[string]json.RawMessage
 		if json.Unmarshal([]byte(text), &probe) != nil || probe == nil {
 			fmt.Fprint(e.stderr, edition.Command+": args must be a JSON object\n")
@@ -155,22 +155,25 @@ func (c *callCmd) run(e *env) int {
 	case response.OK:
 		code = emitRaw(e, response.Result)
 	case len(response.Detail) > 0:
-		// 呼ぶ側が失敗の原因を機械的に読めるように（docs/protocol.md「応答」の detail）。
+		// 呼び出し元が失敗の原因を機械的に読み取れるように（docs/protocol.md「応答」の detail）。
 		code = emitRaw(e, response.Detail)
 	}
-	// 道具が失敗したときは、出力（detail）を書けなくても道具の終了コードを残す（呼ぶ側がやり直すかを決める
-	// 手がかりなので。書けなかったことは標準エラーに書いてある）。
+	// ツールが失敗した場合は、出力（detail）を書き込めなくてもツールの終了コードを保持する
+	// （呼び出し元が再試行するかを決定する手がかりであるため。書き込めなかったことは標準エラーに
+	// 書き込んである）。
 	if !response.OK {
 		fmt.Fprintf(e.stderr, edition.Command+": %s: %s: %s\n", c.Tool, response.Code, response.Error)
 		return toolCodeFor(response.Code)
 	}
-	// 成功したのに結果を書けなければ、その失敗で終わる（空や途中までの出力を正しいものとして扱わせない）。
+	// 成功したにもかかわらず結果を書き込めなければ、その失敗で終了する（空や途中までの出力を
+	// 正しいものとして扱わせない）。
 	return code
 }
 
-// failed は err を標準エラーに書き、終了コードを返す。止まっていると答えるとき（5）は、求めた
-// スプールの場所を添える。フォルダの外で動かした vw2026 は Vectorworks が動いていても止まって
-// いると答えるので、場所の取り違えと見分けられるように（docs/protocol.md「スプールの場所」）。
+// failed は err を標準エラーに書き込み、終了コードを返す。停止していると応答する場合（5）は、
+// 導出したスプールの場所を添える。フォルダの外で実行した vw2026 は Vectorworks が実行中でも
+// 停止していると応答するため、場所の取り違えと区別できるように
+// （docs/protocol.md「スプールの場所」）。
 func failed(e *env, bridge *spool.Bridge, err error) int {
 	code := codeFor(err)
 	if code == exitDown {
@@ -181,7 +184,7 @@ func failed(e *env, bridge *spool.Bridge, err error) int {
 	return code
 }
 
-// toolCodeFor は道具の失敗の code を終了コードにする。
+// toolCodeFor はツールの失敗の code を終了コードに変換する。
 func toolCodeFor(code string) int {
 	switch code {
 	case spool.CodeInvalidRequest, spool.CodeUnknownTool, spool.CodeInvalidArgs:
@@ -189,7 +192,7 @@ func toolCodeFor(code string) int {
 	case spool.CodeInternal:
 		return exitToolFailure
 	default:
-		// spool が新しい code を通すようになってここを直し忘れたら、壊れた応答と同じに扱う。
+		// spool が新しい code を通すようになり、ここを修正し忘れた場合は、壊れた応答と同様に扱う。
 		return exitFailure
 	}
 }
@@ -211,9 +214,10 @@ func codeFor(err error) int {
 	}
 }
 
-// callReserved は予約された道具（@tools・@session_start・@session_end）を引数なしで呼び、結果を出す。
-// 出力・終了コードは call と同じ。call は名前をそのまま渡すので call @tools なども通るが、呼ぶ側が
-// 予約された道具の名前を綴らずに済むように、それぞれのコマンド（tools・session start・session end）を置く。
+// callReserved は予約ツール（@tools・@session_start・@session_end）を引数なしで呼び出し、結果を
+// 出力する。出力・終了コードは call と同一。call は名前をそのまま渡すため call @tools なども
+// 通るが、呼び出し元が予約ツールの名前を綴る必要がないように、それぞれの
+// コマンド（tools・session start・session end）を設ける。
 func callReserved(e *env, tool, session string, wait timeout) int {
 	c := callCmd{Tool: tool, Session: session, Timeout: wait}
 	return c.run(e)

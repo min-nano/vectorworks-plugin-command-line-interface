@@ -1,6 +1,7 @@
 #pragma once
 
-// 道具の表（docs/plugin/bridge.md「ツールの一覧」）。道具を足すときは表の 1 行と中身 1 つを足す。
+// ツールの一覧（docs/plugin/bridge.md「ツールの一覧」）。ツールを追加する場合は一覧の 1 行と実装
+// 1 つを追加する。
 
 #include "core/Serve.h"
 

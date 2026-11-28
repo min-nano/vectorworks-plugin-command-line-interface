@@ -16,9 +16,9 @@
 #include <utility>
 #include <vector>
 
-// 通信規則の見本（protocol/fixtures。形は docs/fixtures.md）を読み、共通部がその通りに
-// 振る舞うかを確かめる。CLI 側（cli/internal/spool・cli/internal/fakeplugin）のテストも
-// 同じ見本を読む。
+// 通信規則のフィクスチャ（protocol/fixtures。形式は docs/fixtures.md）を読み込み、共通部が
+// その通りに振る舞うかを検証する。CLI 側（cli/internal/spool・cli/internal/fakeplugin）の
+// テストも同じフィクスチャを読み込む。
 
 namespace protocol = VwCli::core::protocol;
 namespace files = VwCli::core::files;
@@ -41,8 +41,8 @@ void failAt(const std::string &where, const std::string &what) {
 	VwCli::test::fail(__FILE__, __LINE__, where + ": " + what);
 }
 
-// load は見本のファイルを読む。見本は要求を入れ子に含む（深さ 64 の要求の結果など）ので、要求の
-// 上限より深く読む。
+// load はフィクスチャのファイルを読み込む。フィクスチャは要求を入れ子に含む（深さ 64 の要求の結果
+// など）ため、要求の上限より深く読み取る。
 Json load(const std::filesystem::path &path) {
 	std::optional<Json> value = Json::parse(VwCli::test::readFile(path), 128);
 	if (!value) {
@@ -63,14 +63,15 @@ std::string text(const Json &object, const char *key) {
 	return value.isString() ? value.asString() : "";
 }
 
-// Key は見本のオブジェクトに書いて良いキーと、その値の型（空なら型を問わない）。
+// Key はフィクスチャのオブジェクトに記述してよいキーと、その値の型（空なら型を問わない）。
 struct Key {
 	std::string_view name;
 	std::optional<Json::Type> type;
 };
 
-// shaped は見本のオブジェクトが、知らないキーと型の違う値を持たないかを確かめる。見本のキーの
-// 綴りを誤ると、その確かめが黙って省かれるため（Go 側は DisallowUnknownFields で読む）。
+// shaped はフィクスチャのオブジェクトが、未知のキーと型の異なる値を持たないかを検証する。
+// フィクスチャのキーの綴りを誤ると、その検証が暗黙に省略されるため（Go 側は DisallowUnknownFields
+// で読み取る）。
 bool shaped(const Json &value, std::initializer_list<Key> keys, const std::string &where) {
 	if (!value.isObject()) {
 		failAt(where, "not an object: " + value.dump());
@@ -95,7 +96,7 @@ bool shaped(const Json &value, std::initializer_list<Key> keys, const std::strin
 	return good;
 }
 
-// strings は配列の要素かオブジェクトの値が、全て文字列かを確かめる。
+// strings は配列の要素かオブジェクトの値が、全て文字列かを検証する。
 bool strings(const Json &value, const std::string &where) {
 	bool good = true;
 	auto check = [&](const Json &item) {
@@ -116,7 +117,7 @@ bool strings(const Json &value, const std::string &where) {
 	return good;
 }
 
-// checkCase は受け付けの見本の形（docs/fixtures.md）を確かめる。
+// checkCase は受付処理のフィクスチャの形式（docs/fixtures.md）を検証する。
 bool checkCase(const Json &fixture, const std::string &where) {
 	using T = Json::Type;
 	bool good = shaped(fixture, {{"description", T::String}, {"steps", T::Array}}, where);
@@ -193,7 +194,7 @@ bool checkCase(const Json &fixture, const std::string &where) {
 	return good;
 }
 
-// --- 偽の道具の表（fake-tools.json） ---------------------------------------------------------
+// --- 擬似ツールの一覧（fake-tools.json） -------------------------------------------------------
 
 struct Fake {
 	std::string name;
@@ -201,7 +202,7 @@ struct Fake {
 	std::string inputSchema;
 	ToolKind kind;
 	std::string does;
-	// 失敗したときに返す detail（無ければ null）と、終了の依頼を立てるか。
+	// 失敗した場合に返す detail（無ければ null）と、終了の依頼を立てるか。
 	Json detail;
 	bool quit = false;
 };
@@ -214,7 +215,7 @@ struct Call {
 std::vector<Fake> gFakes;
 std::vector<Call> gCalls;
 
-// runFake は I 番目の偽の道具。道具の中身は自分の名前を受け取らないので、番号ごとに作る。
+// runFake は I 番目の擬似ツール。ツールの内容は自身の名前を受け取らないため、番号ごとに作成する。
 template <std::size_t I> Json runFake(const Json &args, const ToolContext &, ToolStatus &status) {
 	const Fake &fake = gFakes.at(I);
 	gCalls.push_back({fake.name, args});
@@ -254,8 +255,8 @@ constexpr std::array<ToolFn, sizeof...(I)> makeRunners(std::index_sequence<I...>
 	return {runFake<I>...};
 }
 
-// 偽の道具の数の上限。fake-tools.json の道具がこれより多ければ loadTools が失敗にするので、
-// 足りなくなったら増やす（docs/fixtures.md「擬似ツールの一覧」）。
+// 擬似ツールの数の上限。fake-tools.json のツールがこれより多ければ loadTools が失敗とするため、
+// 不足した場合は増やす（docs/fixtures.md「擬似ツールの一覧」）。
 constexpr auto kRunners = makeRunners(std::make_index_sequence<32>{});
 
 std::vector<Tool> loadTools() {
@@ -297,13 +298,13 @@ std::vector<Tool> loadTools() {
 	return tools;
 }
 
-// --- 受け付けの見本（serve/*.json） -----------------------------------------------------------
+// --- 受付処理のフィクスチャ（serve/*.json） ------------------------------------------------------
 
 using VwCli::test::kNow;
 constexpr std::string_view kSessionMark = "$session";
 
-// match は期待する値と実際の値を比べる。期待する値の文字列 $session は、id の綴りを満たす
-// 文字列に合い、その値を発行された印として覚える。
+// match は期待する値と実際の値を比較する。期待する値の文字列 $session は、id の綴りを満たす
+// 文字列に合致し、その値を発行されたセッション ID として記録する。
 bool match(const Json &expected, const Json &actual, std::string &session) {
 	if (expected.isString() && expected.asString() == kSessionMark) {
 		if (!actual.isString() || !protocol::validId(actual.asString())) {
@@ -350,7 +351,8 @@ public:
 	}
 
 	~CaseRunner() {
-		// 一時ディレクトリを消す前に、掴んでいる待つ印を放す（Windows は開いたままでは消せない）。
+		// 一時ディレクトリを削除する前に、保持している待機標識を解放する（Windows は開いたままでは
+		// 削除できない）。
 		held_.clear();
 	}
 
@@ -414,7 +416,7 @@ private:
 			      files::Lock::Result::Taken);
 		}
 
-		// 置く: 待つ印 → ファイル → 要求。要求の待つ印は、waits に無ければ掴む。
+		// 配置する: 待機標識 → ファイル → 要求。要求の待機標識は、waits に無ければ保持する。
 		std::map<std::string, std::string> waits;
 		if (get(step, "waits").isObject()) {
 			for (const Json::Member &member : get(step, "waits").members()) {
@@ -483,7 +485,7 @@ private:
 			}
 		}
 
-		// 呼ぶ側が応答を受け取ったことを真似る（応答を消し、待つ印を放して消す）。
+		// 呼び出し元が応答を受け取ったことを模倣する（応答を削除し、待機標識を解放して削除する）。
 		for (const std::string &id : answered) {
 			files::remove(path(id + std::string(protocol::kResponseSuffix)));
 			held_.erase(id);
@@ -509,8 +511,8 @@ private:
 		}
 	}
 
-	// checkResponses は応答を確かめ、確かめた id を返す。この回より前に置いたファイルを除き、
-	// スプールにある応答は全て期待に載っていなければならない。
+	// checkResponses は応答を検証し、検証した id を返す。この回より前に配置したファイルを除き、
+	// スプールにある応答は全て期待に含まれていなければならない。
 	std::vector<std::string> checkResponses(const Json &expected,
 	                                        const std::set<std::string> &put) {
 		std::string suffix(protocol::kResponseSuffix);
@@ -541,7 +543,7 @@ private:
 			bool ok = VwCli::test::isTrue(get(*response, "ok"));
 			bool wantOk = VwCli::test::isTrue(get(want, "ok"));
 			bool good = ok == wantOk;
-			// detail は期待に書いたときだけ持ち、書いたものと一致する（無ければ持たない）。
+			// detail は期待に記述した場合のみ保持し、記述したものと一致する（無ければ保持しない）。
 			const Json *detail = response->find("detail");
 			good = good &&
 			       (want.find("detail") ? detail && match(get(want, "detail"), *detail, session_)

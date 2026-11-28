@@ -18,7 +18,8 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/install"
 )
 
-// fakeInstalled は <Plug-Ins>/<name>/ に vw2026 が入れたプラグイン（記録とモジュール）を作る。
+// fakeInstalled は <Plug-Ins>/<name>/ に vw2026 がインストールしたプラグイン（記録とモジュール）を
+// 作成する。
 func fakeInstalled(t *testing.T, plugins, name string) {
 	t.Helper()
 	dir := filepath.Join(plugins, name)
@@ -51,9 +52,10 @@ func TestInstallUsageErrors(t *testing.T) {
 	}
 }
 
-// 入っていなければ何もせずに成功する。remaining には、残った記録のあるフォルダの名前が載る。
-// 場所は、入った CLI なら自分の入った <Plug-Ins>、フォルダの外の CLI なら --plugins-dir（初回のスクリプトが
-// 渡す）、無ければ既定の場所（env.pluginsDir）。
+// インストールされていなければ何もせずに成功する。remaining には、残存する記録のあるフォルダの
+// 名前が含まれる。場所は、インストールされた CLI ならば自身のインストール先の <Plug-Ins>、
+// フォルダの外の CLI ならば --plugins-dir（初回スクリプトが渡す）、無ければ既定の
+// 場所（env.pluginsDir）。
 func TestUninstallNotInstalled(t *testing.T) {
 	flag := t.TempDir()
 	own := t.TempDir()
@@ -61,12 +63,14 @@ func TestUninstallNotInstalled(t *testing.T) {
 	fakeInstalled(t, flag, "from-flag")
 	fakeInstalled(t, own, "from-own")
 	fakeInstalled(t, fallback, "from-default")
-	// 入った CLI は、自分の入った <Plug-Ins>（<own>/cli/bin/vw2026 と cli の記録）を使う。
+	// インストールされた CLI は、自身のインストール先の <Plug-Ins>（<own>/cli/bin/vw2026 と cli の
+	// 記録）を使用する。
 	fakeInstalled(t, own, "cli")
 	installed := filepath.Join(own, "cli", "bin", edition.Command)
 	os.MkdirAll(filepath.Dir(installed), 0o755)
 	os.WriteFile(installed, nil, 0o700)
-	// cli でない名前は cli のある <Plug-Ins> でだけ扱うので、フォルダの外の CLI の場合は cli を外す（入っていない）。
+	// cli 以外の名前は cli のある <Plug-Ins> でのみ扱うため、フォルダの外の CLI の場合は cli を
+	// 除外する（インストールされていない）。
 	for _, c := range []struct {
 		o    opts
 		name string
@@ -85,7 +89,8 @@ func TestUninstallNotInstalled(t *testing.T) {
 	}
 }
 
-// コマンドの側で見つけた使い方の誤りも、install の中で見つけたものと同じく failed の JSON を 1 行出す。
+// コマンドの側で検出した使用方法の誤りも、install の中で検出したものと同様に failed の JSON を
+// 1 行出力する。
 func TestUsageErrorsPrintJSON(t *testing.T) {
 	for _, c := range []struct {
 		o    opts
@@ -104,8 +109,9 @@ func TestUsageErrorsPrintJSON(t *testing.T) {
 	}
 }
 
-// 空の --plugins-dir は使い方の誤り（既定の場所を使わない）。入った CLI は --plugins-dir を受け付けない
-// （初回のスクリプトだけが一時フォルダの CLI に渡す）。どちらも何も変えない。
+// 空の --plugins-dir は使用方法の誤り（既定の場所を使用しない）。インストールされた CLI は
+// --plugins-dir を受け付けない（初回スクリプトのみが一時フォルダの CLI に渡す）。いずれも何も
+// 変更しない。
 func TestPluginsDirFlag(t *testing.T) {
 	fallback := t.TempDir()
 	fakeInstalled(t, fallback, "cli")
@@ -134,7 +140,8 @@ func TestPluginsDirFlag(t *testing.T) {
 	}
 }
 
-// Vectorworks が動いている（<Plug-Ins>/cli/spool のロックが掴まれている）と、何もせずに 6 で終わる。
+// Vectorworks が実行中である（<Plug-Ins>/cli/spool のロックが保持されている）場合、何もせずに 6 で
+// 終了する。
 func TestUninstallWhileRunning(t *testing.T) {
 	plugins := t.TempDir()
 	fakeInstalled(t, plugins, "cli")
@@ -148,7 +155,7 @@ func TestUninstallWhileRunning(t *testing.T) {
 	}
 }
 
-// 失敗は標準出力の message と標準エラーに書き、1 で終わる。
+// 失敗は標準出力の message と標準エラーに書き込み、1 で終了する。
 func TestUninstallRefusal(t *testing.T) {
 	plugins := t.TempDir()
 	fakeInstalled(t, plugins, "cli")
@@ -160,7 +167,8 @@ func TestUninstallRefusal(t *testing.T) {
 	}
 }
 
-// 場所を求められなければ 1 で終わる（初回のスクリプトの --plugins-dir があれば既定の場所は要らない）。
+// 場所を導出できなければ 1 で終了する（初回スクリプトの --plugins-dir があれば既定の場所は
+// 不要である）。
 func TestDeployPlacesNotLocated(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	failing := func() (string, error) { return "", os.ErrNotExist }
@@ -172,7 +180,7 @@ func TestDeployPlacesNotLocated(t *testing.T) {
 	if code := run([]string{"install", "cli@latest"}, e); code != exitFailure || !strings.Contains(stderr.String(), "folder of plug-ins") {
 		t.Fatalf("%d %s", code, stderr.String())
 	}
-	// 走らせている CLI の場所が分かっても（フォルダの外）、既定の場所を求められなければ 1。
+	// 実行中の CLI の場所が判明しても（フォルダの外）、既定の場所を導出できなければ 1。
 	stderr.Reset()
 	outside := e
 	outside.executable = func() (string, error) { return filepath.Join(t.TempDir(), edition.Command), nil }
@@ -187,9 +195,10 @@ func TestDeployPlacesNotLocated(t *testing.T) {
 	}
 }
 
-// 手元のファイル（file:// の URL）のレジストリ（VW2026_REGISTRY でも渡せる）から入れ、--check で新しいかを
-// 確かめる。マニフェストには、計算機から決めたターゲットを書く。値は空白で分け（VW2026_REGISTRY に 2 つ）、
-// コンマでは分けない。パスの空白は %20。パスのままは使い方の誤り。
+// ローカル環境のファイル（file:// の URL）のレジストリ（VW2026_REGISTRY でも渡せる）から
+// インストールし、--check で新しいか否かを検証する。マニフェストには、計算機から決定した
+// ターゲットを記述する。値は空白で分割し（VW2026_REGISTRY に 2 つ）、コンマでは分割しない。パスの
+// 空白は %20。パスのままは使用方法の誤り。
 func TestInstallFromLocalRegistry(t *testing.T) {
 	target := install.Target()
 	module := "demo.vlb"
@@ -226,7 +235,7 @@ func TestInstallFromLocalRegistry(t *testing.T) {
 	if r := invoke(t, opts{plugins: plugins}, "install", "demo@d1", "--registry", filepath.Join(tmp, "plugins.json")); r.code != exitUsage {
 		t.Fatalf("a path: %+v", r)
 	}
-	// 空の値（空白だけを含む）は、引数でも環境変数でも使い方の誤り。
+	// 空の値（空白のみを含む）は、引数でも環境変数でも使用方法の誤り。
 	r := invoke(t, opts{plugins: plugins, vars: map[string]string{edition.EnvPrefix + "REGISTRY": " "}}, "install", "demo@d1")
 	if r.code != exitUsage || !strings.Contains(r.stderr, "the registry is empty") {
 		t.Fatalf("an empty "+edition.EnvPrefix+"REGISTRY: %+v", r)
@@ -234,7 +243,7 @@ func TestInstallFromLocalRegistry(t *testing.T) {
 	if r := invoke(t, opts{plugins: plugins}, "install", "demo@d1", "--registry", ""); r.code != exitUsage {
 		t.Fatalf("an empty --registry: %+v", r)
 	}
-	// どのレジストリにも無ければ、引いたレジストリを示す。
+	// いずれのレジストリにも無ければ、参照したレジストリを示す。
 	r = invoke(t, opts{plugins: plugins}, "install", "demo@d1", "--registry", fileURL(other))
 	if r.code != exitFailure || !strings.Contains(r.stdout, "looked in: default "+fileURL(other)+")") {
 		t.Fatalf("in no registry: %+v", r)
@@ -254,7 +263,7 @@ func TestInstallFromLocalRegistry(t *testing.T) {
 	if r.code != exitOK || !strings.Contains(r.stdout, `"outcome":"up_to_date"`) {
 		t.Fatalf("again: %+v", r)
 	}
-	// ロックが掴まれていれば、同じタグでも 6。
+	// ロックが保持されていれば、同じタグでも 6。
 	spoolDir := filepath.Join(plugins, "cli", "spool")
 	os.Mkdir(spoolDir, 0o700)
 	fakeplugin.HoldLock(t, spoolDir)
@@ -269,8 +278,8 @@ func exist(path string) bool {
 	return err == nil
 }
 
-// 入れた cli の vw2026（フォルダの中の実行ファイル）で uninstall cli を走らせると、何も変えずに 2 で
-// 終わり、外すための初回のスクリプトを示す。
+// インストールした cli の vw2026（フォルダの中の実行ファイル）で uninstall cli を実行すると、何も
+// 変更せずに 2 で終了し、アンインストールするための初回スクリプトを示す。
 func TestUninstallFromInsideShowsTheScript(t *testing.T) {
 	plugins := t.TempDir()
 	fakeInstalled(t, plugins, "cli")
@@ -287,7 +296,7 @@ func TestUninstallFromInsideShowsTheScript(t *testing.T) {
 	if !exist(filepath.Join(plugins, "cli", install.RecordFile)) {
 		t.Fatal("removed cli")
 	}
-	// 既定の場所を求められないときも、場所が分からないので --plugins-dir を載せる。
+	// 既定の場所を導出できない場合も、場所が不明であるため --plugins-dir を含める。
 	var stdout, stderr bytes.Buffer
 	failing := func() (string, error) { return "", os.ErrNotExist }
 	e := env{stdout: &stdout, stderr: &stderr, pluginsDir: failing, workDir: func() (string, error) { return t.TempDir(), nil },
@@ -295,8 +304,9 @@ func TestUninstallFromInsideShowsTheScript(t *testing.T) {
 	if code := run([]string{"uninstall", "cli"}, e); code != exitUsage || !strings.Contains(stdout.String(), "--plugins-dir") {
 		t.Fatalf("%d %s %s", code, stdout.String(), stderr.String())
 	}
-	// 入った <Plug-Ins> が既定の場所でなければ、初回のスクリプトに渡す --plugins-dir を示すコマンドに載せる
-	// （場所はリンクを解いたもの。mac の /private/var など、一時フォルダの書き方と違いうる）。
+	// インストール先の <Plug-Ins> が既定の場所でなければ、初回スクリプトに渡す --plugins-dir を、
+	// 示すコマンドに含める（場所はリンクを解決したもの。mac の /private/var など、一時フォルダの
+	// 表記と異なりうる）。
 	own, _ := install.PluginsDirOf(executable)
 	r = invoke(t, opts{executable: executable}, "uninstall", "cli")
 	if r.code != exitUsage || json.Unmarshal([]byte(r.stdout), &out) != nil ||
@@ -305,7 +315,8 @@ func TestUninstallFromInsideShowsTheScript(t *testing.T) {
 	}
 }
 
-// fileURL は、絶対パス path を指す file:// の URL（Windows は file:///C:/…。空白などは %XX にする）。
+// fileURL は、絶対パス path を指す file:// の URL（Windows は file:///C:/…。空白などは %XX に
+// 変換する）。
 func fileURL(path string) string {
 	slashed := filepath.ToSlash(path)
 	if !strings.HasPrefix(slashed, "/") {
@@ -323,7 +334,7 @@ func TestUninstallScript(t *testing.T) {
 		{"darwin", "t1", "/a b/it's", "curl -fsSL " + tagged + edition.Bootstrap + `.sh | sh -s -- uninstall --plugins-dir '/a b/it'\''s'`},
 		{"windows", "t1", "", "& ([scriptblock]::Create((irm " + tagged + edition.Bootstrap + ".ps1))) uninstall"},
 		{"windows", "latest", `C:\a b\it's`, "& ([scriptblock]::Create((irm " + latest + edition.Bootstrap + `.ps1))) uninstall --plugins-dir 'C:\a b\it''s'`},
-		// PowerShell は活字の引用符も単一引用符の区切りにするので、それも重ねる。
+		// PowerShell は活字の引用符も単一引用符の区切りとするため、それも重ねる。
 		{"windows", "t1", "C:\\O\u2019B\u2018r\u201ai\u201bn", "& ([scriptblock]::Create((irm " + tagged +
 			edition.Bootstrap + ".ps1))) uninstall --plugins-dir 'C:\\O\u2019\u2019B\u2018\u2018r\u201a\u201ai\u201b\u201bn'"},
 	} {
@@ -333,7 +344,7 @@ func TestUninstallScript(t *testing.T) {
 	}
 }
 
-// 端末（文字型のデバイス）のときだけ、取得の進み具合を同じ行に書き直す。
+// 端末（文字型のデバイス）の場合のみ、取得の進捗を同じ行に書き直す。
 func TestIsTerminal(t *testing.T) {
 	if isTerminal(&bytes.Buffer{}) {
 		t.Error("a buffer is not a terminal")
@@ -349,7 +360,7 @@ func TestIsTerminal(t *testing.T) {
 	if isTerminal(file) {
 		t.Error("a closed file is not a terminal")
 	}
-	// os.DevNull は文字型のデバイス（/dev/null・NUL）だが、端末ではない。
+	// os.DevNull は文字型のデバイス（/dev/null・NUL）であるが、端末ではない。
 	device, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -364,7 +375,8 @@ func TestIsTerminal(t *testing.T) {
 	}
 }
 
-// 書き方の誤り（名前・タグ・--registry）は、場所を求められなくても使い方の誤り（場所を求める前に確かめる）。
+// 記法の誤り（名前・タグ・--registry）は、場所を導出できなくても使用方法の誤り（場所を導出する前に
+// 検証する）。
 func TestUsageBeforeLocating(t *testing.T) {
 	fail := func() (string, error) { return "", errors.New("unknown") }
 	for _, args := range [][]string{

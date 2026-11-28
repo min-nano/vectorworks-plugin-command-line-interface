@@ -1,4 +1,4 @@
-# Claude Code が新しい worktree を作るときに写す、コミットしないファイル（.gitignore の書式）。
-# 手元のビルドの設定（SDK の場所など。各自の Mac に固有）。/vw-sdk/ などは写らないので、
-# その中の VW_SDK_DIR はリポジトリの外の絶対パスで書く。
+# Claude Code が新しい worktree を作成する際に複製する、コミットしないファイル
+# （.gitignore の書式）。ローカル環境でのビルドの設定（SDK の場所など。各自の Mac に固有）。
+# /vw-sdk/ などは複製されないため、その中の VW_SDK_DIR はリポジトリの外の絶対パスで記述する。
 CMakeUserPresets.json

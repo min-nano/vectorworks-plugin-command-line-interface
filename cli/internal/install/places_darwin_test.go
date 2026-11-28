@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// getconf と passwd の項目が答えないとき・絶対パスでないときは、場所を決めずに失敗にする。
+// getconf と passwd の項目が応答しない場合・絶対パスでない場合は、場所を決定せずに失敗とする。
 func TestPlacesWhenTheOSDoesNotAnswer(t *testing.T) {
 	originalGetconf, originalUser := getconf, currentUser
 	t.Cleanup(func() { getconf, currentUser = originalGetconf, originalUser })
@@ -31,8 +31,8 @@ func TestPlacesWhenTheOSDoesNotAnswer(t *testing.T) {
 	}
 }
 
-// mac は計算機の種類で決め、プロセスの種類では決めない（universal の CLI が Rosetta の下で x86_64 として
-// 動いても、Vectorworks は arm64 で動く）。
+// mac は計算機の種類で決定し、プロセスの種類では決定しない（universal の CLI が Rosetta の下で
+// x86_64 として実行されても、Vectorworks は arm64 で実行される）。
 func TestTargetFollowsTheMachine(t *testing.T) {
 	for arm64, want := range map[bool]string{true: "macos-arm64", false: "macos-x64"} {
 		if got := targetOf(func() bool { return arm64 }); got != want {

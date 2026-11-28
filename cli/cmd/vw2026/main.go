@@ -30,62 +30,66 @@ import (
 // version はビルド時に -ldflags "-X main.version=…" で埋め込む。
 var version = "dev"
 
-// 終了コード（cli.Help の一覧と対）。1 は慣例どおり汎用の失敗に充て、呼ぶ側が分岐する
-// 必要のある結果だけに別の番号を与える。道具が返した失敗は 20 番台に置き、1 の位を CLI 側と
-// 合わせる（21 は汎用の失敗、22 は使い方の誤り、23 は受け付けたが実行されない）。20 番台は
-// 道具や占有の失敗としてプラグインが答えたもの、1 桁はそれ以外（no_wait と壊れた応答を含む）。
+// 終了コード（cli.Help の一覧と対）。1 は慣例の通り汎用の失敗に充て、呼び出し元が分岐する必要のある
+// 結果のみに別の番号を与える。ツールが返した失敗は 20 番台に配置し、1 の位を CLI 側と統一する
+// （21 は汎用の失敗、22 は使用方法の誤り、23 は受け付けたが実行されない）。20 番台はツールや占有の
+// 失敗としてプラグインが応答したもの、1 桁はそれ以外（no_wait と壊れた応答を含む）。
 //
-// 番号は呼ぶ側との約束なので、この振り直し（リリース前）の後は変えない。使わなくなった番号は
-// 別の意味に再利用しない（旧い表に従う呼ぶ側の分岐が、黙って別の意味になるため）。
+// 番号は呼び出し元との取り決めであるため、この振り直し（リリース前）の後は変更しない。
+// 使用しなくなった番号は別の意味に再利用しない（旧い一覧に従う呼び出し元の分岐が、黙って別の
+// 意味になるため）。
 const (
 	exitOK = 0
 	// その他（書き込めない・起動できないなど）
 	exitFailure = 1
-	// 使い方の誤り
+	// 使用方法の誤り
 	exitUsage = 2
-	// 待ちきれなかった（no_wait を含む）。要求は実行されない。Vectorworks は動いている
-	// （刻みが届かない重い処理の最中など）。exitDown と分けるのは、呼ぶ側が起動し直さずに
-	// 待てば良いと判定できるように。
+	// 待機しきれなかった（no_wait を含む）。要求は実行されない。Vectorworks は実行中である
+	// （周期処理が届かない重い処理の最中など）。exitDown と区別するのは、呼び出し元が再起動せずに
+	// 待機すればよいと判定できるようにするため。
 	exitTimeout = 3
-	// 待つのをやめたときに要求をプラグインが既に受け取っていて、応答が届かなかった。exitTimeout
-	// （実行されない）と分けるのは、書く道具を呼んだ側が二重に操作しないように。
+	// 待機を中止した時点で要求をプラグインが既に受け取っており、応答が届かなかった。
+	// exitTimeout（実行されない）と区別するのは、書き込みツールを呼び出した側が二重に
+	// 操作しないようにするため。
 	exitNoResponse = 4
 	// ブリッジが見つからない
 	exitDown = 5
-	// Vectorworks が動いているので、install / uninstall が何もしなかった（呼ぶ側が終了させてから
-	// 走らせ直す）。
+	// Vectorworks が実行中であるため、install / uninstall が何もしなかった（呼び出し元が
+	// 終了させてから再実行する）。
 	exitRunning = 6
 
-	// 以下はプラグインが失敗を答えた（応答は届いている）。
+	// 以下はプラグインが失敗を応答した（応答は届いている）。
 
-	// internal を答えた。
+	// internal を応答した。
 	exitToolFailure = 21
-	// invalid_request・unknown_tool・invalid_args を答えた。
+	// invalid_request・unknown_tool・invalid_args を応答した。
 	exitToolUsage = 22
-	// 実行せずに断られた（occupied・no_session・busy。他が占有している・載せた占有が終わって
-	// いる・占有の中でだけ呼べる道具を占有せずに呼んだ・Vectorworks が処理中）。要求は実行されて
-	// いない。
+	// 実行せずに拒否された（occupied・no_session・busy。他が占有している・付与した占有が
+	// 終了している・占有の中でのみ呼び出せるツールを占有せずに呼び出した・Vectorworks が処理中）。
+	// 要求は実行されていない。
 	exitBusy = 23
 )
 
-// env は外の世界との接点。テストが差し替える。
+// env は外部との接点。テストが差し替える。
 type env struct {
 	stdin  io.Reader
 	stdout io.Writer
 	stderr io.Writer
 	start  func(argv []string) error
-	// スプールの場所。本番は常に spool.Dir（実行ファイルの場所から求める）で、外から変える指定は
-	// 持たない（プラグインはモジュールの場所から求めた <Plug-Ins>/cli/spool しか見ないので、別の
-	// 場所を指せても要求が届かない。docs/protocol.md「スプールの場所」）。テストは偽のプラグインの
-	// スプールを返す。
+	// スプールの場所。本番環境では常に spool.Dir（実行ファイルの場所から導出する）であり、外部から
+	// 変更する指定は持たない（プラグインはモジュールの場所から導出した <Plug-Ins>/cli/spool のみを
+	// 参照するため、別の場所を指定できても要求が届かない。docs/protocol.md「スプールの場所」）。
+	// テストは擬似プラグインのスプールを返す。
 	spool func() (string, error)
-	// install / uninstall の作業の場所（<Work>）。本番は install.WorkDir（利用者ごとの一時フォルダの下）。
+	// install / uninstall の作業領域（<Work>）。本番環境では install.WorkDir（利用者ごとの
+	// 一時フォルダの下）。
 	workDir func() (string, error)
-	// 既定の <Plug-Ins>。本番は install.DefaultPluginsDir。入った CLI（自分の入った <Plug-Ins> を使う）と、
-	// 初回のスクリプトが --plugins-dir を渡したときは使わない。
+	// 既定の <Plug-Ins>。本番環境では install.DefaultPluginsDir。インストールされた CLI（自身の
+	// インストール先の <Plug-Ins> を使用する）と、初回スクリプトが --plugins-dir を渡した場合は
+	// 使用しない。
 	pluginsDir func() (string, error)
-	// 走らせている CLI の実行ファイル。本番は os.Executable。install / uninstall が、付け替える
-	// フォルダの中にあればよける。
+	// 実行中の CLI の実行ファイル。本番環境では os.Executable。install / uninstall が、差し替える
+	// フォルダの中にあれば退避する。
 	executable func() (string, error)
 }
 
@@ -93,7 +97,8 @@ func main() {
 	os.Exit(run(os.Args[1:], defaultEnv()))
 }
 
-// defaultEnv は本番の外の世界。テストは使わず、場所をどれも一時ディレクトリに差し替える。
+// defaultEnv は本番環境における外部との接点。テストは使用せず、場所をいずれも一時ディレクトリに
+// 差し替える。
 func defaultEnv() env {
 	return env{
 		stdin:      os.Stdin,
@@ -239,8 +244,8 @@ Tell 3 and 4 apart before calling a tool that changes the drawing again: after
 `)
 }
 
-// grammarOptions は、コマンドの定義を読むのに要る kong の指定（名前と、タグに差し込む版ごとの値）。
-// テストも同じものでコマンドの定義を読む。
+// grammarOptions は、コマンドの定義を読み込むのに必要な kong の指定（名前と、タグに差し込む版ごとの
+// 値）。テストも同じものでコマンドの定義を読み込む。
 func grammarOptions() []kong.Option {
 	return []kong.Option{kong.Name(edition.Command), kong.Vars(edition.Vars())}
 }
@@ -296,8 +301,8 @@ func run(args []string, e env) int {
 	return cmd.run(&e)
 }
 
-// open はスプールを決めて、ブリッジの状態を判定する。場所が決まらなければ標準エラーへ
-// 理由を書いて nil。
+// open はスプールを決定し、ブリッジの状態を判定する。場所を決定できなければ標準エラーへ理由を
+// 書き込んで nil。
 func open(e *env) *spool.Bridge {
 	dir, err := e.spool()
 	if err != nil {
@@ -307,8 +312,8 @@ func open(e *env) *spool.Bridge {
 	return spool.Open(dir)
 }
 
-// emit は値を JSON 1 行で標準出力へ書く。< > & を \u003c などに書き換えない（HTML に埋め込む出力ではなく、
-// --raw の有無で同じ値の綴りが変わらないように）。
+// emit は値を JSON 1 行で標準出力へ書き込む。< > & を \u003c などに書き換えない（HTML に埋め込む出力では
+// なく、--raw の有無で同じ値の表記が変わらないように）。
 func emit(e *env, value any) int {
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
@@ -320,11 +325,11 @@ func emit(e *env, value any) int {
 	return emitRaw(e, bytes.TrimSuffix(buffer.Bytes(), []byte("\n")))
 }
 
-// emitRaw は JSON の data を詰めて（空白と改行を除いて）1 行で書く。通信規則は応答を詰めて書くとは
-// 決めていないので、プラグインが改行を入れても出力を 1 行に保つ（数や文字列の綴りは変えない）。
-// 書けなければ（ディスクが一杯など）失敗の終了コードを返す（呼ぶ側の
-// スクリプトが、空や途中までの出力を正しいものとして扱わないように）。読む側が閉じたパイプへの書き込みは、
-// macOS と Linux では Go の既定どおり SIGPIPE で終わり、ここへは来ない（Windows では誤りとして来る）。
+// emitRaw は JSON の data を詰めて（空白と改行を除いて）1 行で書き込む。通信規則は応答を詰めて書き込むとは
+// 定めていないため、プラグインが改行を入れても出力を 1 行に保つ（数や文字列の表記は変えない）。
+// 書き込めなければ（ディスクが一杯など）失敗の終了コードを返す（呼び出し元のスクリプトが、空や途中までの出力を
+// 正しいものとして扱わないように）。読み取る側が閉じたパイプへの書き込みは、macOS と Linux では Go の既定の通り
+// SIGPIPE で終了し、ここへは到達しない（Windows では誤りとして到達する）。
 func emitRaw(e *env, data []byte) int {
 	var compact bytes.Buffer
 	if err := json.Compact(&compact, data); err != nil {

@@ -10,7 +10,8 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// put は呼ぶ側を真似て、待つ印を掴んでから要求を置く。待つ印はテストの終わりに放す。
+// put は呼び出し元を模倣し、待機標識を取得してから要求を配置する。待機標識はテストの終了時に
+// 解放する。
 func put(t *testing.T, dir, id, text string) {
 	t.Helper()
 	unlock, err := lock(filepath.Join(dir, id+spool.WaitSuffix))
@@ -42,7 +43,8 @@ func count(t *testing.T, dir, suffix string) int {
 	return len(matches)
 }
 
-// 回の始めに並べた要求は全て処理し（件数の上限は無い）、その後に置かれた要求は次の回に回す。
+// 回の開始時に並んでいた要求は全て処理し（件数の上限は無い）、その後に配置された要求は次の回に
+// 回す。
 func TestServeTakesOnlyRequestsListedAtStart(t *testing.T) {
 	dir := NewDir(t)
 	const listed = 20
@@ -67,7 +69,8 @@ func TestServeTakesOnlyRequestsListedAtStart(t *testing.T) {
 	}
 }
 
-// blockResponse は id の応答の書きかけの名前に、空でないディレクトリを置く（応答を書けなくする）。
+// blockResponse は id の応答の書き込み途中の名前に、空でないディレクトリを配置する（応答を
+// 書き込めなくする）。
 func blockResponse(t *testing.T, dir, id string) {
 	t.Helper()
 	temp := filepath.Join(dir, id+spool.ResponseSuffix+spool.TempSuffix)
@@ -76,7 +79,7 @@ func blockResponse(t *testing.T, dir, id string) {
 	}
 }
 
-// 占有の印と終了は、応答を書けたときだけ反映する（docs/protocol.md「占有」）。
+// 占有のセッション ID と終了は、応答を書き込めた場合のみ反映する（docs/protocol.md「占有」）。
 func TestServeAppliesSessionAndQuitOnlyWhenTheResponseIsWritten(t *testing.T) {
 	dir := NewDir(t)
 	s := &server{dir: dir, handle: func(string, json.RawMessage) spool.Response {
@@ -113,7 +116,7 @@ func TestServeAppliesSessionAndQuitOnlyWhenTheResponseIsWritten(t *testing.T) {
 	}
 }
 
-// 応答はプラグインと同じに整える。detail は失敗にだけ載せ、オブジェクトでなければ internal
+// 応答はプラグインと同一に整える。detail は失敗にのみ含め、オブジェクトでなければ internal
 // （docs/protocol.md「応答」）。
 func TestServeShapesTheDetail(t *testing.T) {
 	dir := NewDir(t)

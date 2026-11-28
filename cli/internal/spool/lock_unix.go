@@ -9,19 +9,18 @@ import (
 	"syscall"
 )
 
-// lockState はロックファイルをプラグインが掴んでいるか（docs/protocol.md「生存の判定」）。
+// lockState はロックファイルをプラグインが取得しているか（docs/protocol.md「生存の判定」）。
 //
-// プラグインは flock(LOCK_EX) を終了まで持つ。こちらは共有ロックを試し、取れたらすぐ放す。
-// 取れなければ掴まれている。flock はプロセスが終われば（異常終了でも）カーネルが放すので、
-// pid やプロセス名を見なくても止まったことが分かる。
+// プラグインは flock(LOCK_EX) を終了まで保持する。こちらは共有ロックを試み、取得できたら直ちに
+// 解放する。取得できなければ取得されている。flock はプロセスが終了すれば（異常終了でも）カーネルが
+// 解放するので、pid やプロセス名を参照しなくても停止したことが判明する。
 //
-// 無い以外の理由でロックを調べられなければ（開けない・通常のファイルでない・flock が
-// EWOULDBLOCK 以外で失敗する）、その誤りも返す（install・uninstall が「動いていない」とみなさないため）。
+// 存在しない以外の理由でロックを調査できなければ（開けない・通常のファイルでない・flock が EWOULDBLOCK 以外で
+// 失敗する）、そのエラーも返す（install・uninstall が「動作していない」とみなさないため）。
 //
-// プラグインと同じく、開いて待たない（docs/protocol.md「ロック（bridge.lock）」と
-// 「プラグイン側の義務」）。FIFO を O_NONBLOCK なしで開くと書き手を待って止まるので O_NONBLOCK で開き、
-// リンクは O_NOFOLLOW でたどらず（リンクの先のデバイスやパイプを開かない）、開いた後に通常のファイルかを
-// 確かめる。
+// プラグインと同じく、開いて待機しない（docs/protocol.md「ロック（bridge.lock）」と「プラグイン側の義務」）。
+// FIFO を O_NONBLOCK なしで開くと書き込み側を待機して停止するため O_NONBLOCK で開き、リンクは O_NOFOLLOW で
+// たどらず（リンク先のデバイスやパイプを開かない）、開いた後に通常のファイルかを検証する。
 func lockState(path string) (bool, error) {
 	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0)
 	if errors.Is(err, os.ErrNotExist) {

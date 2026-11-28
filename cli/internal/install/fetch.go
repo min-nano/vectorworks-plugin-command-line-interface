@@ -14,25 +14,27 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
 
-// maxDocument はレジストリとマニフェストの大きさの上限（どちらも小さな JSON）。
+// maxDocument はレジストリとマニフェストの大きさの上限（いずれも小さな JSON）。
 const maxDocument = 1 << 20
 
-// maxAsset は資産（zip）の大きさの上限（docs/registry.md「zip の構成」）。終わらない本文で <Plug-Ins> と
-// 同じドライブを埋めないため。テストが縮める。
+// maxAsset は資産（zip）の大きさの上限（docs/registry.md「zip の構成」）。終了しない本文で
+// <Plug-Ins> と同一のドライブを埋めないため。テストが縮小する。
 var maxAsset int64 = 512 << 20
 
-// maxExtracted は zip を展開した大きさの合計の上限（docs/registry.md「zip の構成」）。小さな zip が大きく
-// 展開されて、<Work> のあるドライブを埋めないため。テストが縮める。
+// maxExtracted は zip を展開した大きさの合計の上限（docs/registry.md「zip の構成」）。
+// 小さな zip が大きく展開されて、<Work> のあるドライブを埋めないため。テストが縮小する。
 var maxExtracted int64 = 2 << 30
 
-// maxEntries は zip の項目の数の上限（docs/registry.md「zip の構成」）。空のファイル・フォルダの多い小さな zip が、
-// 大きさの上限に掛からずに、<Work> のあるドライブにファイルを作り続けないため。テストが縮める。
+// maxEntries は zip の項目の数の上限（docs/registry.md「zip の構成」）。空のファイル・フォルダの
+// 多い小さな zip が、大きさの上限に掛からずに、<Work> のあるドライブにファイルを
+// 作成し続けないため。テストが縮小する。
 var maxEntries = 100000
 
-// lookup はレジストリを順に引き、名前の項目と、そのレジストリの名前（記録の registry）を返す
-// （docs/registry.md「レジストリの優先順位」）。既定のレジストリが先頭で、名前が見つかった時点で止める。
-// 見つかる前に取れない・読めないレジストリがあれば、そこで失敗にする（飛ばすと、どの項目が勝つかが
-// ネットワークの状態で変わる）。--registry の書き方は、呼ぶ側（install）が先に CheckRegistries で確かめている。
+// lookup はレジストリを順に参照し、名前の項目と、そのレジストリの名前（記録の registry）を返す
+// （docs/registry.md「レジストリの優先順位」）。既定のレジストリが先頭で、名前が見つかった時点で
+// 停止する。見つかる前に取得できない・読み取れないレジストリがあれば、そこで失敗とする（飛ばすと、
+// いずれの項目が優先されるかがネットワークの状態で変わる）。--registry の記法は、
+// 呼び出し元（install）が先に CheckRegistries で検証している。
 func (o *Options) lookup(name string) (registry.Entry, string, error) {
 	def := o.Default
 	if def == nil {
@@ -54,13 +56,15 @@ func (o *Options) lookup(name string) (registry.Entry, string, error) {
 			return entry, source, nil
 		}
 	}
-	// 引いたレジストリを示す（名前の誤りか、--registry・VW2026_REGISTRY の足りなさかを見分けられるように）。
+	// 参照したレジストリを示す（名前の誤りか、--registry・VW2026_REGISTRY の不足かを
+	// 区別できるように）。
 	return registry.Entry{}, "", fmt.Errorf("%s is in no registry (looked in: %s)", name,
 		strings.Join(append([]string{registry.DefaultName}, o.Registries...), " "))
 }
 
-// CheckRegistries は、--registry に渡したもの全ての書き方を確かめる（checkRegistry。誤りは使い方の誤り）。呼ぶ側
-// （cmd）は、場所を求める前にこれで確かめる（CheckRequest と同じ）。
+// CheckRegistries は、--registry に渡したもの全ての記法を検証する（checkRegistry。
+// 誤りは使用方法の誤り）。呼び出し元（cmd）は、場所を導出する前にこれで検証する（CheckRequest と
+// 同様）。
 func CheckRegistries(refs []string) error {
 	for _, ref := range refs {
 		if err := checkRegistry(ref); err != nil {
@@ -70,9 +74,9 @@ func CheckRegistries(refs []string) error {
 	return nil
 }
 
-// checkRegistry は --registry に渡したものが https:// か file:// の URL かを確かめる（docs/registry.md
-// 「参照の記法」）。パスはそのままでは受け付けない（file:///… と書く）。記録の registry には、渡した
-// 文字列をそのまま残し、比べるのもその文字列どうしだけ。
+// checkRegistry は --registry に渡したものが https:// か file:// の URL かを検証する
+// （docs/registry.md「参照の記法」）。パスはそのままでは受け付けない（file:///… と記述する）。
+// 記録の registry には、渡した文字列をそのまま保持し、比較するのもその文字列同士のみ。
 func checkRegistry(ref string) error {
 	if err := registry.CheckRef(ref, false); err != nil {
 		return Usagef("the registry: %v (write a path as file:///..., with %%20 for a space)", err)
@@ -80,19 +84,19 @@ func checkRegistry(ref string) error {
 	return nil
 }
 
-// open は参照（https:// か file:// の URL）を開き、大きさ（分からなければ -1）も返す。
+// open は参照（https:// か file:// の URL）を開き、大きさ（不明ならば -1）も返す。
 func (o *Options) open(ref string) (io.ReadCloser, int64, error) {
 	if !registry.IsURL(ref) {
 		path, err := registry.FilePath(ref)
 		if err != nil {
 			return nil, 0, err
 		}
-		// 手元のファイルはすぐに読めるので、大きさは示さない。
+		// ローカル環境のファイルは即座に読み取れるため、大きさは示さない。
 		file, err := os.Open(path)
 		return file, -1, err
 	}
 	client := cmp.Or(o.Client, http.DefaultClient)
-	// 転送（releases/latest/download/… など）は追うが、行き先も https:// に限る。
+	// 転送（releases/latest/download/… など）には追従するが、転送先も https:// に限定する。
 	safe := *client
 	safe.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if req.URL.Scheme != "https" {
@@ -114,7 +118,7 @@ func (o *Options) open(ref string) (io.ReadCloser, int64, error) {
 	return resp.Body, resp.ContentLength, nil
 }
 
-// fetch はレジストリかマニフェストを読む。
+// fetch はレジストリかマニフェストを読み取る。
 func (o *Options) fetch(ref string) ([]byte, error) {
 	body, _, err := o.open(ref)
 	if err != nil {
@@ -131,14 +135,16 @@ func (o *Options) fetch(ref string) ([]byte, error) {
 	return data, nil
 }
 
-// download は資産を path へ取り、sha256 を照らす。合わなければ取ったものを消して失敗にする。
+// download は資産を path へ取得し、sha256 を照合する。一致しなければ取得したものを削除して
+// 失敗とする。
 func (o *Options) download(ref, path, want string) error {
 	body, size, err := o.open(ref)
 	if err != nil {
 		return err
 	}
 	defer body.Close()
-	// 大きさが分かっていて上限を超えるなら、書く前に断る（LimitReader は大きさの分からない応答のため）。
+	// 大きさが判明していて上限を超えるならば、書き込む前に拒否する（LimitReader は大きさの
+	// 不明な応答のため）。
 	if size > maxAsset {
 		return fmt.Errorf("%s: larger than %d bytes (%d)", ref, maxAsset, size)
 	}
@@ -147,7 +153,8 @@ func (o *Options) download(ref, path, want string) error {
 		return err
 	}
 	hash := sha256.New()
-	// 取った量を標準エラーに示す（待つ上限は持たないので、止まっているかを呼ぶ側が見分けられるように）。
+	// 取得した量を標準エラーに示す（待機の上限は設けないため、停止しているかを呼び出し元が
+	// 区別できるように）。
 	progress := o.startProgress(ref, size)
 	written, err := io.Copy(io.MultiWriter(file, hash, progress), io.LimitReader(body, maxAsset+1))
 	if err == nil && written > maxAsset {
@@ -161,7 +168,8 @@ func (o *Options) download(ref, path, want string) error {
 	} else if got := hex.EncodeToString(hash.Sum(nil)); got != want {
 		err = fmt.Errorf("the sha256 of %s is %s, not %s as the manifest says", ref, got, want)
 	}
-	// 終わりの行は、大きさの上限・書き込み・sha256 を確かめてから書く（失敗したのに取り終えたとは書かない）。
+	// 終了の行は、大きさの上限・書き込み・sha256 を検証してから書き込む（失敗したにもかかわらず
+	// 取得を完了したとは書き込まない）。
 	progress.finish(err)
 	if err != nil {
 		_ = removeFile(path)

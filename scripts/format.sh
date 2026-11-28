@@ -1,8 +1,8 @@
 #!/bin/sh
-# ソースコードの書式（インデント・空白・改行など）を、言語ごとの標準の書式に揃える。
+# ソースコードの書式（インデント・空白・改行など）を、言語ごとの標準の書式に統一する。
 # 検査は行わない（検査は scripts/lint.sh）。整形ツールと整形対象は docs/format.md。
-# 既定では書き換えずに確認し、整形が必要なファイルを表示してコード 1 で終了する（CI も同じ）。
-# --fix を指定したときだけファイルを書き換える。
+# 既定では書き換えずに確認し、整形が必要なファイルを表示してコード 1 で終了する（CI も同様）。
+# --fix を指定した場合のみファイルを書き換える。
 set -eu
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -10,7 +10,7 @@ cd "$root"
 # shellcheck source=scripts/common.sh
 . "$root/scripts/common.sh"
 
-# 書き換えは --fix を指定したときだけ行う（打ち間違いで書き換えないため）。
+# 書き換えは --fix を指定した場合のみ行う（打ち間違いで書き換えないため）。
 case "$#:${1-}" in
 0:) fix=false ;;
 1:--fix) fix=true ;;
@@ -20,20 +20,21 @@ case "$#:${1-}" in
 	;;
 esac
 
-# PATH 上の gofmt は手元の Go の版になるので、tools/go.mod の Go の gofmt を使う（CI と同じ版）。
+# PATH 上の gofmt はローカル環境の Go の版になるため、tools/go.mod の Go の gofmt を使用する（CI と
+# 同じ版）。
 gofmt="$(go -C tools env GOROOT)/bin/gofmt"
 
 require_clang clang-format
 
-# 対象は git が追う・無視しないファイル（ビルドの出力や SDK の写しを含めない）。ファイル名に
-# 空白を含めない前提で、行ごとに引数へ分ける。
+# 対象は git が追跡し、無視しないファイル（ビルドの出力や SDK の複製を含めない）。ファイル名に
+# 空白を含めない前提で、行ごとに引数へ分割する。
 cpp="$(tracked_files '*.cpp' '*.h' '*.mm')"
 powershell="$(powershell_files)"
 
 if [ "$fix" = true ]; then
 	"$gofmt" -w cli
 	shfmt_scripts -w
-	# clang-format は対象が無いと標準入力を読むので、対象があるときだけ走らせる。
+	# clang-format は対象が無いと標準入力を読み取るため、対象がある場合のみ実行する。
 	# shellcheck disable=SC2086
 	[ -z "$cpp" ] || clang-format -i $cpp
 	# shellcheck disable=SC2086
@@ -42,15 +43,16 @@ if [ "$fix" = true ]; then
 fi
 
 status=0
-# gofmt -l は整形が必要でもコード 0 で終了するので、出力の有無で判定する。
+# gofmt -l は整形が必要でもコード 0 で終了するため、出力の有無で判定する。
 files="$("$gofmt" -l cli)"
 if [ -n "$files" ]; then
 	echo "$files"
 	status=1
 fi
-# shfmt は .editorconfig の設定を読む（フラグで上書きしない）。整形が必要ならコード 1 で終了する。
+# shfmt は .editorconfig の設定を読み込む（フラグで上書きしない）。整形が必要ならばコード 1 で
+# 終了する。
 shfmt_scripts -l || status=1
-# clang-format は整形が必要なファイルを並べないので、1 つずつ確かめて並べる。
+# clang-format は整形が必要なファイルを列挙しないため、1 つずつ確認して列挙する。
 for file in $cpp; do
 	clang-format --dry-run --Werror "$file" 2>/dev/null || {
 		echo "$file"
