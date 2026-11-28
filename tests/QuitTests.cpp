@@ -370,3 +370,62 @@ TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	CHECK(docs.actions().empty());
 	gDocs = nullptr;
 }
+
+namespace {
+
+// 通知の登録を、受け付けの途中（道具の中）から試す道具（入れ子の刻みで登録を試すことを真似る）。
+Lifecycle *gRegisterLifecycle = nullptr;
+Server *gRegisterServer = nullptr;
+int gRegisters = 0;
+
+bool countRegister() {
+	++gRegisters;
+	return true;
+}
+
+Json registersInside(const Json & /*args*/, const ToolContext & /*context*/,
+                     ToolStatus & /*status*/) {
+	gRegisterLifecycle->registerNotification(*gRegisterServer, &countRegister);
+	return Json();
+}
+
+const Tool kRegisterTools[] = {{{"registers", "", "{}", ToolKind::Read}, registersInside}};
+
+}
+
+// 通知の登録は、受け付けの途中と終了の依頼の最中には試さない。
+// どちらも SDK の呼び出しの途中のため。
+// 前者は、道具の SDK 呼び出しが回すイベントから入り直した刻み。
+// 登録できなければ印を立てずに次で試し直し、登録できたら 2 度と試さない。
+TEST(LifecycleRegistersTheNotificationOnlyOutsideServeAndQuit) {
+	TempDir dir;
+	Server server(dir.utf8Path());
+	Caller caller(dir);
+	Lifecycle lifecycle;
+	gRegisterLifecycle = &lifecycle;
+	gRegisterServer = &server;
+	gRegisters = 0;
+
+	caller.put("a", R"({"tool":"registers"})");
+	server.serve(kRegisterTools, kNow);
+	CHECK(caller.ok("a"));
+	CHECK_EQ(gRegisters, 0);
+
+	(void)lifecycle.quit([&] { lifecycle.registerNotification(server, &countRegister); });
+	CHECK_EQ(gRegisters, 0);
+	CHECK(!lifecycle.notificationRegistered());
+
+	lifecycle.registerNotification(server, [] {
+		++gRegisters;
+		return false;
+	});
+	CHECK_EQ(gRegisters, 1);
+	CHECK(!lifecycle.notificationRegistered());
+	lifecycle.registerNotification(server, &countRegister);
+	CHECK_EQ(gRegisters, 2);
+	CHECK(lifecycle.notificationRegistered());
+	lifecycle.registerNotification(server, &countRegister);
+	CHECK_EQ(gRegisters, 2);
+	gRegisterLifecycle = nullptr;
+	gRegisterServer = nullptr;
+}

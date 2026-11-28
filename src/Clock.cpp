@@ -47,15 +47,11 @@ void onNotify(StatusID id, StatusData /*data*/) {
 // （Windows の Vectorworks は起動時にモジュールを一度アンロードして読み込み直すため、固定する前に
 // 渡したアドレスは残らない。周期処理はモジュールを固定してから作成したタイマーから届く。
 // docs/plugin/architecture.md「エントリポイント」）。登録できなければ次の周期処理で再試行する
-// （その間 quit は starting で拒否し、detail に登録できていないことを示す）。
-void registerNotify() {
-	if (gLifecycle.notificationRegistered()) {
-		return;
-	}
-	if (gSDK->RegisterNotificationProcedure(&onNotify,
-	                                        static_cast<OSType>(kNotifyBeforePendingUpdate))) {
-		gLifecycle.markNotificationRegistered();
-	}
+// （その間 quit は starting で拒否し、detail に登録できていないことを示す）。受付処理の入れ子の
+// 周期処理と終了の依頼の最中は呼び出さない（core::Lifecycle）。
+bool registerNotify() {
+	return gSDK->RegisterNotificationProcedure(&onNotify,
+	                                           static_cast<OSType>(kNotifyBeforePendingUpdate));
 }
 
 // requestQuit は終了を依頼する。保存の確認を表示するか否かは図面に依存し（quit は図面が 0 枚の
@@ -71,9 +67,8 @@ void tick() {
 		return;
 	}
 	try {
-		registerNotify();
 		// 受付処理は Vectorworks が終了するまで 1 つ。スプールの場所を導出できなければ、次の
-		// 周期処理で再試行する。
+		// 周期処理で再試行する（通知も登録しない。受付処理を行わなければ quit も呼び出されない）。
 		static std::optional<core::Server> server;
 		if (!server) {
 			std::optional<std::string> dir = core::defaultSpoolDir();
@@ -82,6 +77,7 @@ void tick() {
 			}
 			server.emplace(std::move(*dir));
 		}
+		gLifecycle.registerNotification(*server, &registerNotify);
 		core::tick(*server, tools::table(), nowNanos(), gLifecycle, &requestQuit);
 	} catch (...) {
 		// 次の周期処理で再試行する。

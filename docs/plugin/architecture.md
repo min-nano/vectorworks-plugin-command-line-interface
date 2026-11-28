@@ -14,7 +14,7 @@ Vectorworks ──読み込む──▶ cli.vwlibrary / cli.vlb     … 起動�
 | エントリポイント | 処理 |
 | --- | --- |
 | `plugin_module_main`（起動時） | VCOM の初期化・SDK のコールバックの記憶・**OS タイマーの開始**（拡張機能は登録しない） |
-| OS タイマー（250 ms ごと） | 1 回の受付処理（`core::Server::serve`）→ `quit` による終了の依頼があれば終了を要求する（手順は `core::tick`）。最初の周期処理で下記の通知を登録する（登録できなければ次回の周期処理で再試行する） |
+| OS タイマー（250 ms ごと） | 1 回の受付処理（`core::Server::serve`）→ `quit` による終了の依頼があれば終了を要求する（手順は `core::tick`）。スプールの場所が判明した最初の周期処理で下記の通知を登録する（登録できなければ次回の周期処理で再試行する。受付処理の入れ子の周期処理と終了の依頼の最中は登録しない。いずれも SDK の呼び出しの途中であるため。手順は `core::Lifecycle::registerNotification`） |
 | 通知 `kNotifyBeforePendingUpdate`（Vectorworks のアイドルから） | 最初の 1 回で「起動完了」のフラグを立てるのみ（以後は何もしない。ここから終了を要求しない）。`quit` はこのフラグが立つまで拒否する（[ツール「quit」](tools.md#quit)。[SDK リファレンス #317](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/317)） |
 
 **受付処理は OS タイマーが 1 回ずつ呼び出します。** ISDK に周期的に呼び出される口は無く、OS のタイマーからは `gSDK` を
