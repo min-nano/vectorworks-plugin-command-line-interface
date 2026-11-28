@@ -231,13 +231,38 @@ bool remove(const std::string &path) { return ::DeleteFileW(extended(path).c_str
 
 WaitState probe(const std::string &path) {
 	// 共有なしで開ければ、呼び出し元は解放している。共有違反ならば保持している。通常のファイルで
-	// ない待機標識は存在しないものとする（実行しない側に倒す）。
+	// ない待機標識は存在しないものとする（実行しない側に倒す）。絶対パスでなければ開かない（\\?\ を
+	// 付けられない）ため、存在しないものとする。
+	std::wstring wide = extended(path);
+	if (wide.empty()) {
+		return WaitState::Missing;
+	}
 	Opened opened = openFile(path, GENERIC_READ, 0, OPEN_EXISTING);
 	if (opened.handle != INVALID_HANDLE_VALUE) {
 		::CloseHandle(opened.handle);
 		return WaitState::Released;
 	}
-	return opened.error == ERROR_SHARING_VIOLATION ? WaitState::Held : WaitState::Missing;
+	switch (opened.error) {
+	case ERROR_SHARING_VIOLATION:
+		return WaitState::Held;
+	// 0 は断った（通常のファイルでない・中身がローカルにない）。他は無い（名前が長すぎて置けない・
+	// 名前に使えないものも）。
+	case 0:
+	case ERROR_FILE_NOT_FOUND:
+	case ERROR_PATH_NOT_FOUND:
+	case ERROR_INVALID_NAME:
+	case ERROR_FILENAME_EXCED_RANGE:
+		return WaitState::Missing;
+	case ERROR_ACCESS_DENIED:
+		// フォルダは、POSIX（開けてから通常のファイルでないと分かる）と同じく無いものとする（Windows
+		// では FILE_FLAG_BACKUP_SEMANTICS なしにフォルダを開けず、断られる）。
+		if (isDirectory(wide)) {
+			return WaitState::Missing;
+		}
+		break;
+	}
+	// 無い以外の理由で開けなければ、確かめられない（掃除が、待っている呼び出し元のものを消さないように）。
+	return WaitState::Unknown;
 }
 
 Lock::Result Lock::take(const std::string &path, std::string &error) {

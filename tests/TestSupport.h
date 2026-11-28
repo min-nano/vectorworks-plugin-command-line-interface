@@ -65,6 +65,13 @@ std::string readFile(const std::filesystem::path &path);
 // utf8 はパスを UTF-8 の文字列にする。
 std::string utf8(const std::filesystem::path &path);
 
+// denyRead は path（ファイル）を、このプロセスから読み取れないようにする。
+// 開くと権限のエラーになる。POSIX は chmod 000 とし、Windows は Everyone の読み取りを
+// 拒否する ACE を追加する。できなければ偽を返す（POSIX の root は権限を無視して開ける）。
+// allowRead で戻す（一時ディレクトリを削除できるように）。
+bool denyRead(const std::filesystem::path &path);
+void allowRead(const std::filesystem::path &path);
+
 // must は読み取れるはずのテキストを、要求と同じ深さの上限で読み取る。読み取れなければ呼び出した
 // 箇所で失敗を記録して null を返す。値で返すため、式の中で使用しても寿命を考慮しなくてよい。
 core::Json must(std::string_view text,

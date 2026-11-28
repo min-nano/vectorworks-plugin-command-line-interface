@@ -2,11 +2,17 @@
 
 #include "core/Protocol.h"
 
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <random>
 #include <vector>
+
+#ifndef _WIN32
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 namespace VwCli::test {
 
@@ -51,6 +57,25 @@ TempDir::~TempDir() {
 std::string TempDir::utf8Path() const { return utf8(path_); }
 
 std::string TempDir::sub(const std::string &name) const { return utf8(path_ / name); }
+
+bool denyRead(const std::filesystem::path &path) {
+#ifdef _WIN32
+	// S-1-1-0 は Everyone。拒む ACE は許す ACE より先に効くので、所有者でも開けない。
+	std::string command = "icacls \"" + utf8(path) + "\" /deny *S-1-1-0:(R) >NUL";
+	return std::system(command.c_str()) == 0;
+#else
+	return ::geteuid() != 0 && ::chmod(path.c_str(), 0) == 0;
+#endif
+}
+
+void allowRead(const std::filesystem::path &path) {
+#ifdef _WIN32
+	std::string command = "icacls \"" + utf8(path) + "\" /remove:d *S-1-1-0 >NUL";
+	(void)std::system(command.c_str());
+#else
+	(void)::chmod(path.c_str(), 0600);
+#endif
+}
 
 std::string readFile(const std::filesystem::path &path) {
 	std::ifstream in(path, std::ios::binary);

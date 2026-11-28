@@ -189,12 +189,16 @@ bool rename(const std::string &from, const std::string &to) {
 bool remove(const std::string &path) { return ::unlink(path.c_str()) == 0; }
 
 WaitState probe(const std::string &path) {
-	// 通常のファイルでない待機標識は存在しないものとする（実行しない側に倒す）。
-	int fd = openRegular(path, O_RDONLY).fd;
-	if (fd < 0) {
-		return WaitState::Missing;
+	// 通常のファイルでない待機標識は存在しないものとする（実行しない側に倒す）。存在しない（名前が長すぎて
+	// 配置できないものも）以外の理由で開けなければ、確認できない（掃除が、待機している呼び出し元のものを削除しない
+	// ように）。
+	Opened opened = openRegular(path, O_RDONLY);
+	if (opened.fd < 0) {
+		bool missing = opened.notRegular || opened.error == ENOENT || opened.error == ENAMETOOLONG;
+		return missing ? WaitState::Missing : WaitState::Unknown;
 	}
-	WaitState state = WaitState::Missing;
+	int fd = opened.fd;
+	WaitState state = WaitState::Unknown;
 	if (::flock(fd, LOCK_EX | LOCK_NB) == 0) {
 		state = WaitState::Released;
 	} else if (errno == EWOULDBLOCK) {

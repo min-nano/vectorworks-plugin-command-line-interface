@@ -42,7 +42,8 @@
 - `lock`: `bridge.lock` を取得し、取得できたら終了まで解放しません（取得の方法と、拒否された `bridge.lock` を
   1 度だけ再作成することは[通信規則「ロック」](../protocol.md#ロックbridgelock)）。
 - `sweep`: **ロックを取得した直後に 1 度だけ**、待機標識を取得できる・存在しない id のファイルを削除します
-  （[通信規則「ロック」](../protocol.md#ロックbridgelock)）。
+  （[通信規則「ロック」](../protocol.md#ロックbridgelock)）。待機標識を確認できない id のファイル
+  （`files::WaitState::Unknown`）は残置します。
 
 ## 1 回の受付処理（`core::Server::serve`）
 

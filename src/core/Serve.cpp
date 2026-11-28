@@ -288,6 +288,12 @@ std::optional<std::string> Server::held(const std::string &id) {
 		                          "待つ印（" + id + ".wait）が無いので実行しませんでした")
 		                      .dump());
 		return std::nullopt;
+	case files::WaitState::Unknown:
+		// 待っているかが分からないので、無いときと同じく実行しない側に倒す。
+		bridge_.reply(id, failure(protocol::kCodeNoWait,
+		                          "待つ印（" + id + ".wait）を確かめられないので実行しませんでした")
+		                      .dump());
+		return std::nullopt;
 	case files::WaitState::Held:
 		break;
 	}

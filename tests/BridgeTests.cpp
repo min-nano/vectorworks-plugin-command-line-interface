@@ -213,6 +213,47 @@ TEST(BridgeWaitStateFollowsTheCaller) {
 	CHECK(!exists(dir, "y.wait"));
 }
 
+// 名前が長すぎて待つ印を置けない id は、待つ印が無いものとして掃除が消す。
+// 書きかけの名前が上限の長さのとき。確かめられないものとして残し続けない。
+TEST(BridgeSweepRemovesFilesWhoseWaitCannotExist) {
+	TempDir dir;
+	std::string id(251, 'a');
+	put(dir, id + ".tmp");
+	Bridge bridge(dir.utf8Path());
+	CHECK(bridge.waitState(id) == files::WaitState::Missing);
+	bridge.sweep();
+	CHECK(!exists(dir, id + ".tmp"));
+}
+
+// フォルダの待つ印は、通常のファイルでないので無いものとする（どの OS でも同じ）。
+// Windows ではフォルダを開けずに断られるが、確かめられないものとはしない。
+TEST(BridgeWaitThatIsAFolderIsMissing) {
+	TempDir dir;
+	std::filesystem::create_directory(dir.path() / "d.wait");
+	Bridge bridge(dir.utf8Path());
+	CHECK(bridge.waitState("d") == files::WaitState::Missing);
+}
+
+// 無い以外の理由で開けない待機標識は、確かめられない（Unknown）。
+// 掃除はその id のファイルを残す（待っている呼び出し元のものかもしれない）。
+// 読めなくできない環境（POSIX の root）では確かめない（CI の mac と Windows では確かめる）。
+TEST(BridgeKeepsTheFilesOfAWaitItCannotCheck) {
+	TempDir dir;
+	put(dir, "u.wait");
+	put(dir, "u.req.json", R"({"tool":"ping"})");
+	put(dir, "u.res.json", R"({"ok":true})");
+	if (!VwCli::test::denyRead(dir.path() / "u.wait")) {
+		return;
+	}
+	Bridge bridge(dir.utf8Path());
+	CHECK(bridge.waitState("u") == files::WaitState::Unknown);
+	bridge.sweep();
+	CHECK(exists(dir, "u.wait"));
+	CHECK(exists(dir, "u.req.json"));
+	CHECK(exists(dir, "u.res.json"));
+	VwCli::test::allowRead(dir.path() / "u.wait");
+}
+
 TEST(BridgeReplyPublishesWithoutLeavingTemp) {
 	TempDir dir;
 	Bridge bridge(dir.utf8Path());

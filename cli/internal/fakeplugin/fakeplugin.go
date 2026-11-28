@@ -34,8 +34,10 @@ const (
 	waitHeld waitState = iota
 	// 呼び出し元が解放した・異常終了した
 	waitReleased
-	// 存在しない（通信規則に反する）
+	// 存在しない（通信規則に反する。通常のファイルでない場合も）
 	waitMissing
+	// 確かめられない（無い以外の理由で開けない・試せない）。実行せず、掃除では消さない
+	waitUnknown
 )
 
 // Handler はツール 1 つの呼び出しに応答する。
@@ -126,7 +128,7 @@ func StartWithKinds(t *testing.T, dir string, kinds map[string]string, handle Ha
 
 // sweep はロックを取得した直後の掃除（docs/protocol.md「ロック」）。待機標識を
 // 取得できる・存在しない id の要求・応答・待機標識・書き込み途中のファイルを削除し、待機している
-// 呼び出し元のものは残す。id は最初の . より前。
+// 呼び出し元のもの（確認できないものも）は残す。id は最初の . より前。
 func sweep(dir string) {
 	entries, _ := os.ReadDir(dir)
 	for _, entry := range entries {
@@ -136,7 +138,7 @@ func sweep(dir string) {
 			continue
 		}
 		id, _, _ := strings.Cut(name, ".")
-		if waitStateOf(filepath.Join(dir, id+spool.WaitSuffix)) != waitHeld {
+		if state := waitStateOf(filepath.Join(dir, id+spool.WaitSuffix)); state == waitReleased || state == waitMissing {
 			_ = os.Remove(filepath.Join(dir, name))
 		}
 	}
@@ -221,7 +223,7 @@ func (s *server) serveOnce() (serving, quit bool) {
 		var response spool.Response
 		var tool string
 		var session *string
-		if state == waitMissing {
+		if state == waitMissing || state == waitUnknown {
 			response = spool.Response{OK: false, Code: spool.CodeNoWait, Error: "no wait file"}
 		} else if name, args, held, ok := parseRequest(data); !ok {
 			response = spool.Response{OK: false, Code: spool.CodeInvalidRequest, Error: "unreadable request"}
