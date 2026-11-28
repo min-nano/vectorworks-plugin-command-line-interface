@@ -15,10 +15,15 @@ import (
 // 守るのは、記録（vw2026-install.json）・uninstall の印・展開したプラグインのファイル。zip そのものは展開した後に
 // 消すので Sync しない（途中で電源が落ちても、次の回が組み立ての場所ごと消して取り直す）。
 
-// syncFile と syncDir は、テストが差し替えて、呼ばれる順を確かめる（電源断は再現できないため）。
+// syncFile・syncEntry・syncDir は、テストが差し替えて、呼ばれる順を確かめる（電源断は再現できないため）。
+//
+// mac の File.Sync（F_FULLFSYNC）は装置のキャッシュごと書き出すので重い。展開したファイル（数が多い）は syncEntry
+// （mac は fsync だけ）にし、その後の syncTree のディレクトリの Sync（F_FULLFSYNC）でまとめて書き出す。付け替えは
+// 最後の F_FULLFSYNC の後なので、どのファイルのデータも名前の変更より先に残る。
 var (
-	syncFile = (*os.File).Sync
-	syncDir  = syncDirectory
+	syncFile  = (*os.File).Sync
+	syncEntry = fsyncEntry
+	syncDir   = syncDirectory
 )
 
 // writeSynced は os.WriteFile と同じに書き、閉じる前に Sync する（writeFile の既定）。
@@ -56,7 +61,8 @@ func syncDirectory(dir string) error {
 }
 
 // syncTree は root とその下の全てのディレクトリを syncDir する（展開したプラグインを付け替えで公開する前に、
-// 項目が全て残るように）。ファイルのデータは、書いたときに Sync している。
+// 項目が全て残るように）。ファイルのデータは、書いたときに syncEntry している（mac では、ここの F_FULLFSYNC が
+// 装置のキャッシュから書き出す）。
 func syncTree(root string) error {
 	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {

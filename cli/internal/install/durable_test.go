@@ -38,16 +38,20 @@ func recordSyncs(t *testing.T, fail func(path string) error) *syncLog {
 	if fail == nil {
 		fail = func(string) error { return nil }
 	}
-	originalFile, originalDir := syncFile, syncDir
-	swap(t, &syncFile, func(file *os.File) error {
-		if err := fail(file.Name()); err != nil {
-			return err
+	originalFile, originalEntry, originalDir := syncFile, syncEntry, syncDir
+	logFile := func(original func(*os.File) error) func(*os.File) error {
+		return func(file *os.File) error {
+			if err := fail(file.Name()); err != nil {
+				return err
+			}
+			log.mu.Lock()
+			log.files[file.Name()] = true
+			log.mu.Unlock()
+			return original(file)
 		}
-		log.mu.Lock()
-		log.files[file.Name()] = true
-		log.mu.Unlock()
-		return originalFile(file)
-	})
+	}
+	swap(t, &syncFile, logFile(originalFile))
+	swap(t, &syncEntry, logFile(originalEntry))
 	swap(t, &syncDir, func(dir string) error {
 		if err := fail(dir); err != nil {
 			return err
@@ -83,6 +87,25 @@ func TestReplaceFileSyncsBeforeRename(t *testing.T) {
 	}
 	if !renamed || !log.dir(dir) {
 		t.Fatalf("renamed %v, synced the folder %v", renamed, log.dir(dir))
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != "new" {
+		t.Fatal(string(data), err)
+	}
+}
+
+// 置き換えた後に親のディレクトリを Sync できなくても、置き換えは済んでいるので成功にする（ディレクトリの Sync を
+// 断るファイルシステムで、置き換えたのに失敗と答えない）。
+func TestReplaceFileIgnoresTheFolderSync(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, RecordFile)
+	recordSyncs(t, func(at string) error {
+		if at == dir {
+			return errInjected
+		}
+		return nil
+	})
+	if err := replaceFile(path, []byte("new")); err != nil {
+		t.Fatal(err)
 	}
 	if data, err := os.ReadFile(path); err != nil || string(data) != "new" {
 		t.Fatal(string(data), err)

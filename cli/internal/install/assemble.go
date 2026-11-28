@@ -80,9 +80,12 @@ func replaceFile(path string, data []byte) error {
 	if err == nil {
 		err = rename(temp, path)
 	}
-	// 置き換えたことも残す（親のディレクトリを Sync しないと、電源が落ちたときに前の記録へ戻りうる）。
+	// 置き換えたことも残す（親のディレクトリを Sync しないと、電源が落ちたときに前の記録へ戻りうる）。できなくても
+	// 置き換えは済んでいて、戻っても前の記録は読めるので、誤りは見ない（ディレクトリの Sync を断るファイルシステムで、
+	// 置き換えたのに失敗と答えないように）。
 	if err == nil {
-		return syncDir(filepath.Dir(path))
+		_ = syncDir(filepath.Dir(path))
+		return nil
 	}
 	// 書けなかった・置き換えられなかった隣のファイル（このとき書いたもの）は、プラグインのフォルダに残さない。
 	if err != nil {
@@ -289,7 +292,7 @@ func writeEntry(file *zip.File, path string) error {
 	_, err = io.Copy(out, in)
 	// 付け替えで公開する前にデータを書き終える（durable.go）。
 	if err == nil {
-		err = syncFile(out)
+		err = syncEntry(out)
 	}
 	if closeErr := out.Close(); err == nil {
 		err = closeErr
