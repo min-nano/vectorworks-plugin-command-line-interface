@@ -19,10 +19,8 @@ Vectorworks の中で動くプラグイン（`cli`）の設計です。全体の
 
 ## 根拠
 
-**プラグインは 1 から書きます。** 構造設計支援プラグイン
-（`min-nano/vectorworks-plugin-import-ifc-homeskz`）を含め、他のプラグインのコードや決めごとは
-引き継がず、ソースも移しません。根拠にするのは、
-[SDK リファレンス](https://github.com/min-nano/vectorworks-developer-sdk-reference)の次のものだけです。
+**プラグインは 1 から書きます。** 他のプラグインのコードや決めごとは引き継がず、ソースも移しません。
+根拠にするのは、[SDK リファレンス](https://github.com/min-nano/vectorworks-developer-sdk-reference)の次のものだけです。
 参照した節は各ページに示します。
 
 | 置き場所 | 使い方 |

@@ -33,7 +33,7 @@ func TestDefaultRegistry(t *testing.T) {
 }
 
 func TestValidName(t *testing.T) {
-	for _, name := range []string{"cli", "a", "import-ifc-homeskz", "a1", strings.Repeat("a", 64), "com10"} {
+	for _, name := range []string{"cli", "a", "my-plugin", "a1", strings.Repeat("a", 64), "com10"} {
 		if !ValidName(name) {
 			t.Errorf("%q should be valid", name)
 		}
