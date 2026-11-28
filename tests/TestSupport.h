@@ -65,9 +65,10 @@ std::string readFile(const std::filesystem::path &path);
 // utf8 はパスを UTF-8 の文字列にする。
 std::string utf8(const std::filesystem::path &path);
 
-// denyRead は path（ファイル）を、このプロセスから読み取れないようにする（開くと権限のエラーになる）。
-// POSIX は chmod 000、Windows は Everyone の読み取りを拒否する ACE を追加する。できなければ偽を返す
-// （POSIX の root は権限を無視して開けるため偽）。allowRead で戻す（一時ディレクトリを削除できるように）。
+// denyRead は
+// path（ファイル）を、このプロセスから読み取れないようにする（開くと権限のエラーになる）。 POSIX は
+// chmod 000、Windows は Everyone の読み取りを拒否する ACE を追加する。できなければ偽を返す （POSIX
+// の root は権限を無視して開けるため偽）。allowRead で戻す（一時ディレクトリを削除できるように）。
 bool denyRead(const std::filesystem::path &path);
 void allowRead(const std::filesystem::path &path);
 
