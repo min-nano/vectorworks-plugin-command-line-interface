@@ -19,7 +19,7 @@
 | `src/core/Ping`・`ReadTools`・`DocumentTools`・`Quit`（`.{h,cpp}`） | 依らない | ツールの処理内容の内、SDK に依らない部分（一覧の行 `ToolSpec`・引数の検査・検証の順序・結果の形式）。SDK から読み取る値と SDK の呼び出しは、ツールごとのインタフェース（`Drawing`・`Documents`）で受け取る |
 | `src/core/Lifecycle.h` | 依らない | 起動の完了を示すフラグと終了の依頼の処理中を示すフラグ（`core::Lifecycle`）と、1 回の周期処理の手順（`core::tick`） |
 | `src/tools/ToolTable.cpp` | 依る | ツールの一覧 |
-| `src/tools/<道具>.cpp`・`Text.h` | 依る | ツールの処理内容の内、SDK を呼び出す部分（`Drawing`・`Documents` を SDK で生成する）と、`TXString` を UTF-8 に変換する `utf8` |
+| `src/tools/<ツール>.cpp`・`Text.h` | 依る | ツールの処理内容の内、SDK を呼び出す部分（`Drawing`・`Documents` を SDK で生成する）と、`TXString` を UTF-8 に変換する `utf8` |
 | `src/Clock.cpp` | 依る | OS タイマー・通知の登録・終了の呼び出し（[構成「エントリポイント」](architecture.md#エントリポイント)） |
 
 - **SDK を呼び出す処理と、その前後の手順を分離します。** 手順は `src/core` に配置し、SDK の呼び出しは
