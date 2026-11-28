@@ -1,6 +1,6 @@
 #pragma once
 
-// スプールに使う OS の呼び出し（docs/protocol.md「ロック」「待つ印」）。SDK に依らない。
+// スプールに使う OS の呼び出し（docs/protocol.md「ロック」「待機標識」）。SDK に依らない。
 // 実装は OS ごとのファイル（FilesPosix.cpp・FilesWindows.cpp）。OS に依らない部分（isSeparator・
 // join・Lock::~Lock）は Files.cpp に置き、OS ごとの違いは kSeparator と isSeparator の中で分ける。
 //
@@ -75,7 +75,7 @@ bool rename(const std::string &from, const std::string &to);
 // remove はファイルを消す。消せたときだけ真。
 bool remove(const std::string &path);
 
-// WaitState は待つ印（<id>.wait）の状態（通信規則「待つ印」）。
+// WaitState は待つ印（<id>.wait）の状態（通信規則「待機標識」）。
 enum class WaitState {
 	// 呼ぶ側が掴んでいる（待っている）
 	Held,

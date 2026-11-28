@@ -23,7 +23,7 @@ const Version = 1
 // manifestVersion は読めるマニフェストの manifest_version。
 const manifestVersion = 1
 
-// DefaultName は、記録の registry に書く既定のレジストリの名前（docs/registry.md「入れたときの記録」）。
+// DefaultName は、記録の registry に書く既定のレジストリの名前（docs/registry.md「インストールの記録」）。
 const DefaultName = "default"
 
 // tagPlaceholder は規則の path の中で、@ の後ろの文字列に置き換わる部分。
@@ -159,7 +159,7 @@ func isFileURL(ref string) bool {
 	return strings.HasPrefix(ref, "file://")
 }
 
-// FilePath は file:// の URL を、この OS のパスにする（docs/registry.md「参照の書き方」）。
+// FilePath は file:// の URL を、この OS のパスにする（docs/registry.md「参照の記法」）。
 func FilePath(ref string) (string, error) {
 	return filePath(ref, runtime.GOOS == "windows")
 }
@@ -287,7 +287,7 @@ func ParseManifest(data []byte, remote bool) (*Manifest, error) {
 	return manifest, nil
 }
 
-// Check はフックの書き方を確かめる（docs/registry.md「書き方」）。zip の中に実在するかは、
+// Check はフックの書き方を確かめる（docs/registry.md「記法」）。zip の中に実在するかは、
 // 展開した後で install が確かめる。
 func (h Hooks) Check() error {
 	for _, hook := range []struct {

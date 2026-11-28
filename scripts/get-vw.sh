@@ -1,7 +1,7 @@
 #!/bin/sh
 # 初回のスクリプト（mac）。取ってきたリリースの CLI を取り出して vw2026 install cli@<そのリリースのタグ>
 # （又は uninstall cli）を走らせるだけで、配置の手順・PATH・判断は install と cli のフックが持つ
-# （docs/plugin/install-and-update.md「初回のスクリプト」）。入れる・外すタグは、スクリプトを取ってきた
+# （docs/plugin/install-and-update.md「初回スクリプト」）。入れる・外すタグは、スクリプトを取ってきた
 # リリースのタグに決まっている（他のタグはそのタグのスクリプトを取る）。
 #
 # このファイルは雛形で、リリースがタグと版を書き込んで get-vw2026.sh と get-vw2025.sh を作る

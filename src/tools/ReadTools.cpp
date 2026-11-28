@@ -11,7 +11,7 @@
 
 // 読む道具（layers・classes・layer_objects・object_counts）の SDK の側。SDK から値を読んで
 // core::Drawing として渡すだけで、数え方・絞り込み・結果の形は src/core/ReadTools.cpp
-// （docs/plugin/tools.md「読む道具」。使う呼び出しは docs/sdk-research.md の 4）。
+// （docs/plugin/tools.md「読み取りツール」。使う呼び出しは docs/sdk-research.md の 4）。
 
 namespace VwCli::tools {
 

@@ -20,7 +20,7 @@ func lock(path string) (func(), error) {
 	return func() { file.Close() }, nil
 }
 
-// waitStateOf は <id>.wait の状態（docs/protocol.md「待つ印」）。掴めれば呼ぶ側が放した・死んだ。
+// waitStateOf は <id>.wait の状態（docs/protocol.md「待機標識」）。掴めれば呼ぶ側が放した・死んだ。
 func waitStateOf(path string) waitState {
 	file, err := os.Open(path)
 	if err != nil {

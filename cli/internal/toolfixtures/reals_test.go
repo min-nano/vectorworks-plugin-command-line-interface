@@ -1,5 +1,5 @@
 // Package toolfixtures_test は、道具の結果の決まりの見本（tests/fixtures。通信規則の見本とは別。
-// docs/plugin/tools.md「共通の決まり」）を Go の側から確かめる。プラグイン（C++）の
+// docs/plugin/tools.md「共通の規則」）を Go の側から確かめる。プラグイン（C++）の
 // テストも同じ見本を読むので、片側のテストに書いた期待だけで綴りを決めずに済む。
 package toolfixtures_test
 
