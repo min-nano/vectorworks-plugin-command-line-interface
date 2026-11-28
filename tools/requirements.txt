@@ -6,3 +6,5 @@ clang-tidy==23.1.4
 # shellcheck の実行ファイルを配布するもの（第三者が再梱包したもの。内容は shellcheck のリリースの
 # バイナリ）。版は <shellcheck の版>.<再梱包の番号>（scripts/common.sh の require_shellcheck）。
 shellcheck-py==0.11.0.1
+# Python の整形と検査（scripts/review/review.py。docs/format.md・docs/lint.md）。
+ruff==0.17.6

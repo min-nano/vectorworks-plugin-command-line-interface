@@ -27,7 +27,8 @@
 | `.github/workflows/review.yml` | `plugin` ジョブ（プラグインを取り出せるかの確認）と `review` ジョブ（レビューと判定） |
 | `scripts/review/wait.sh` | PR の head に対する他のワークフローの完了を待機する |
 | `scripts/review/status.sh` | 前回の判定の有無と、この実行で付与されたレビューの件数・PR の状態を取得する |
-| `scripts/review/review.mjs` | Claude Agent SDK でプラグインを実行する。インラインコメントのツールを提供する |
+| `scripts/review/review.py` | Claude Agent SDK でプラグインを実行する。インラインコメントのツールを提供する |
+| `scripts/review/requirements.txt` | Agent SDK とその推移的な依存の版の固定 |
 | `scripts/review/submit.sh` | 判定のレビューを出す（GitHub の API の 5xx は出し直す） |
 | `scripts/review/plugin.sh` | 固定した commit からプラグインを取り出す |
 | `.github/claude-plugins-official` | プラグインの固定（submodule。チェックアウトは不要） |
@@ -37,7 +38,7 @@
 - **Claude Agent SDK で実行します。** `anthropics/claude-code-action` は、その実体が Claude Code であり、
   [Max / Team プランに付属する API クレジット](https://platform.claude.com/docs/ja/about-claude/api-credits-for-subscribers)の
   対象外であるため使用しません。アクションが提供していたものの内、プラグインが必要とするインラインコメントの
-  ツールは `review.mjs` が提供します。
+  ツールは `review.py` が提供します。
 - **プラグインと SDK の版を固定します。** プラグインの固定は git の submodule（`.gitmodules`）で行います。取得元
   には tag も release も無く、Actions でも npm のパッケージでもないため、Dependabot（`gitsubmodule`）が追跡
   できるのは submodule のみであるためです。Dependabot は週 1 回、`main` の最新の commit へ更新する PR を作成します
@@ -45,9 +46,15 @@
   `plugins/code-review` に触れるものを確認します）。
 - Dependabot の PR では `review` ジョブが実行されないため、更新した commit にプラグインが存在するかは `plugin`
   ジョブが毎回確認します。
-- **モデルは Opus の別名（`opus`）を指定します**（`review.mjs` の `MODEL`）。版を固定せず、最新の版を使用します。
-- JavaScript は `review.mjs` のみであるため、整形と検査の対象としません（[整形](format.md)・[検査](lint.md)）。
-  シェルスクリプトは `scripts/` の配下であるため、他のものと同様に shfmt と shellcheck の対象です。
+- **モデルは Opus の別名（`opus`）を指定します**（`review.py` の `MODEL`）。版を固定せず、最新の版を使用します。
+- **Python（`claude-agent-sdk`）で記述します。** Agent SDK が提供されているのは Python と TypeScript のみです。
+  いずれも本リポジトリに新たに加わる言語であり、Python は整形と検査のツール（ruff）を既存の
+  `tools/requirements.txt` で固定でき、Node と npm を追加せずに済むため、Python を選択しました（portal は
+  TypeScript）。`review.py` は ruff の、シェルスクリプトは shfmt と shellcheck の対象です（[整形](format.md)・
+  [検査](lint.md)）。
+- SDK は推移的な依存も含めて `scripts/review/requirements.txt` で固定し、Dependabot（pip）が更新します。
+  インストールするのは CI の実行時のみで、`vw2026` には含まれません。SDK の wheel には Claude Code の CLI が
+  同梱されています。Python はランナーのもの（3.10 以上）を使用します。
 
 ## 実行の条件
 
@@ -117,7 +124,7 @@
 
 - プラグインの手順は、そのままでは最初に「レビューが不要（自明な変更）」「Claude が既にコメントした PR」と判断
   すると、何も書き込まずに終了します。その場合は判定の材料が無いため、その判断で停止してよい場合を「閉じている・
-  下書き」に限定し、手順の本文（`commands/code-review.md`）を渡します（`review.mjs`）。レビューするか否かは
+  下書き」に限定し、手順の本文（`commands/code-review.md`）を渡します（`review.py`）。レビューするか否かは
   ワークフローが決定している（判定がまだ無い head に対してのみ実行する）ため、重ねて判断させません。
 - 最後まで終了しなかった場合は、確認していない変更を Approve しないよう、承認しない側に倒します。この Request
   changes には標識を付けないため、ジョブを再実行するか次に push すれば、再度（PR 全体を）レビューして判定を出し
@@ -165,7 +172,7 @@ Federation rule の match は**本リポジトリのみ**に限定します。
 | 項目 | 値 | 理由 |
 | --- | --- | --- |
 | `subject_prefix` | `repo:min-nano@299874061/vectorworks-plugin-command-line-interface@1409984109:pull_request` | `pull_request` のイベントの `sub`（所有者とリポジトリの名前の後に数値の ID が付く形式）。レビューは PR のイベントでのみ実行するため、ここまで限定できる |
-| `audience` | `https://api.anthropic.com` | `review.mjs` が OIDC トークンを要求する際の audience |
+| `audience` | `https://api.anthropic.com` | `review.py` が OIDC トークンを要求する際の audience |
 | `claims` | `repository_owner_id: 299874061`、`repository_id: 1409984109` | `sub` の解釈に依存しない確認。数値の ID は名前を変更しても変化しない |
 | `oauth_scope` | `workspace:developer`（既定） | |
 | `token_lifetime_seconds` | `600` 以上 | 実際の寿命は「OIDC トークンの残りの寿命の 2 倍」（約 10 分）が上限となるため、それより長くしても延長されない |

@@ -57,6 +57,19 @@ require_shellcheck() {
 	fi
 }
 
+# require_ruff は、PATH の ruff が tools/requirements.txt の版でなければ停止する（版により出力と指摘が
+# 変わるため）。版は全体で比較する。
+require_ruff() {
+	requirements_pin ruff
+	common_found="$(ruff --version 2>/dev/null | tr -d '\r' |
+		sed -n 's/^ruff \([0-9][0-9.]*\)$/\1/p' | head -n 1)"
+	if [ "$common_found" != "$common_pin" ]; then
+		echo "ruff $common_pin is required (found ${common_found:-none}):" \
+			"pip install -r tools/requirements.txt" >&2
+		exit 1
+	fi
+}
+
 # requirements_pin は、tools/requirements.txt の $1（パッケージの名前）を固定した版を common_pin に
 # 格納する。行末の CR は除去する（Windows で autocrlf の checkout）。== の行が無い場合と、== の
 # 行から版（数字とドット）を読み取れない場合（接尾辞の付いた版・行末のコメント）は停止し、
@@ -80,6 +93,11 @@ requirements_pin() {
 # （ビルドの出力や SDK の複製を含めない）。
 tracked_files() {
 	git ls-files -co --exclude-standard -- "$@"
+}
+
+# python_files は、整形と検査の対象の Python のファイルを列挙する。
+python_files() {
+	tracked_files '*.py'
 }
 
 # powershell_files は、整形と検査の対象の PowerShell のファイルを列挙する。

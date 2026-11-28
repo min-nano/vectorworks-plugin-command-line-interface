@@ -16,7 +16,7 @@
 # Request changes には MARKER を含めない）。
 #
 # この実行で付与されたレビューとして数えるのは、SINCE（ISO 8601。UTC）以降に REVIEWER（既定は
-# github-actions[bot]。review.mjs が GITHUB_TOKEN で付与する）が付与した次のものである。
+# github-actions[bot]。review.py が GITHUB_TOKEN で付与する）が付与した次のものである。
 #
 #   inline   インラインコメントの内、スレッドの起点のもの（返信は除く。利用者とのやり取りの返信を
 #            指摘として数えないため）

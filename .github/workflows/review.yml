@@ -38,7 +38,7 @@ jobs:
     # レビューの内容は Anthropic の公式の code-review プラグイン（`/code-review:code-review`）の手順に
     # 委ねる。何を確認し、どの指摘を除外するかはプラグインが決定する（並列のエージェントが CLAUDE.md
     # への準拠とバグを確認し、確信度の低い指摘を除外する）。追記するのは、手順の最初の判断で停止して
-    # よい場合を「閉じている・下書き」に限定することのみである（scripts/review/review.mjs）。
+    # よい場合を「閉じている・下書き」に限定することのみである（scripts/review/review.py）。
     # リポジトリ固有の観点は CLAUDE.md に記述し、プラグインはそれに照らして確認する。
     #
     # プラグインは Claude Agent SDK で実行する（claude-code-action は Max / Team プランに付属する API
@@ -69,7 +69,7 @@ jobs:
     #
     # 再レビューでは、差分の内、PR の差分にも含まれる行のみを確認する（ベースブランチを取り込んだ分は
     # 確認しない）。前回までの指摘が修正されていなければ再度付与する。force push で前回の head が祖先
-    # でなくなっていた場合は PR 全体を確認する（scripts/review/review.mjs）。新しい判定は前の判定を
+    # でなくなっていた場合は PR 全体を確認する（scripts/review/review.py）。新しい判定は前の判定を
     # 置き換える（GitHub は同じレビュアーの最新の判定を有効とする）。
     #
     # 判定はレビューの結果からここで機械的に決定する。指摘があればプラグインはインラインコメントを付与し、
@@ -201,29 +201,21 @@ jobs:
         id: start
         if: steps.plan.outputs.mode != 'none'
         run: echo "since=$(date -u -d '-1 minute' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-      - name: Set up Node.js
-        if: steps.plan.outputs.mode != 'none'
-        uses: actions/setup-node@v7
-        with:
-          node-version: '24'
       - name: Install the Agent SDK and the plugin
         # SDK とプラグインは版を固定する（上流で置き場所が変更されると、固定していなければ次の
-        # レビューから失敗するため）。プラグインの固定は submodule（.github/claude-plugins-official）で
-        # あり、Dependabot が更新する。取り出すのはプラグインのディレクトリのみ
-        # （scripts/review/plugin.sh）。いずれもワークスペースの外（RUNNER_TEMP）に配置する（レビューの
-        # 対象に混入させない）。
+        # レビューから失敗するため）。SDK は推移的な依存も含めて scripts/review/requirements.txt で
+        # 固定する。プラグインの固定は submodule（.github/claude-plugins-official）であり、いずれも
+        # Dependabot が更新する。取り出すのはプラグインのディレクトリのみ（scripts/review/plugin.sh）。
+        # いずれもワークスペースの外（RUNNER_TEMP）に配置する（レビューの対象に混入させない）。
+        # Python はランナーのもの（setup-checks と同様）。SDK が要求する 3.10 以上であればよい。
         if: steps.plan.outputs.mode != 'none'
         run: |
           set -euo pipefail
           dir="$RUNNER_TEMP/claude-review"
-          mkdir -p "$dir"
-          cp scripts/review/review.mjs "$dir/"
-          (
-            cd "$dir"
-            npm init -y > /dev/null
-            npm install --no-audit --no-fund --ignore-scripts \
-              @anthropic-ai/claude-agent-sdk@0.3.310 zod@4.6.7
-          )
+          python3 -m venv "$dir/venv"
+          "$dir/venv/bin/pip" install --quiet --disable-pip-version-check \
+            -r scripts/review/requirements.txt
+          cp scripts/review/review.py "$dir/"
           plugin="$(scripts/review/plugin.sh "$dir/plugins")"
           echo "PLUGIN_DIR=$plugin" >> "$GITHUB_ENV"
       - name: Review with the code-review plugin
@@ -243,7 +235,9 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PREVIOUS_SHA: ${{ steps.plan.outputs.previous }}
           REVIEW_BASE: ${{ steps.plan.outputs.base }}
-        run: node "$RUNNER_TEMP/claude-review/review.mjs"
+        # -I（隔離モード）で実行する。ワークスペースや PYTHONPATH のモジュールを読み込まないように
+        # （PR の側で配置されたファイルを SDK の代わりに読み込まない）。
+        run: '"$RUNNER_TEMP/claude-review/venv/bin/python" -I "$RUNNER_TEMP/claude-review/review.py"'
       - name: Check that the review was posted
         # レビューが途中で失敗した場合も数える（判定の段が、その場合も判定を出す）。
         id: after
