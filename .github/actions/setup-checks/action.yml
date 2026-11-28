@@ -12,7 +12,7 @@ runs:
         cache-dependency-path: |
           tools/go.sum
           cli/go.sum
-    # clang-format・clang-tidy・shellcheck は tools/requirements.txt の版を pip でインストールする
+    # clang-format・clang-tidy・shellcheck・ruff は tools/requirements.txt の版を pip でインストールする
     # （ランナーの版は定まらない）。
     - name: pip
       shell: bash

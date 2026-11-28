@@ -192,6 +192,7 @@ vw2026 uninstall cli
 | `vw2026 --help` | `vw2026` のコマンド・指定・終了コード（定義は [cli/cmd/vw2026/](cli/cmd/vw2026/)。`vw2026 help <command>` で各コマンド） |
 | [docs/format.md](docs/format.md) | 整形規則と整形ツール（`scripts/format.sh`） |
 | [docs/lint.md](docs/lint.md) | 検査ツール（`scripts/lint.sh`） |
+| [docs/review.md](docs/review.md) | PR の自動レビュー（`review.yml`）の動作と初回の設定 |
 | [docs/sdk-research.md](docs/sdk-research.md) | SDK リファレンスでの調査の索引と、調査しないと決定した事項 |
 
 今後作成するもの・未決定の事項・未検証の事項は [issue](https://github.com/min-nano/vectorworks-plugin-command-line-interface/issues) に記載されています。

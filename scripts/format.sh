@@ -25,11 +25,13 @@ esac
 gofmt="$(go -C tools env GOROOT)/bin/gofmt"
 
 require_clang clang-format
+require_ruff
 
 # 対象は git が追跡し、無視しないファイル（ビルドの出力や SDK の複製を含めない）。ファイル名に
 # 空白を含めない前提で、行ごとに引数へ分割する。
 cpp="$(tracked_files '*.cpp' '*.h' '*.mm')"
 powershell="$(powershell_files)"
+python="$(python_files)"
 
 if [ "$fix" = true ]; then
 	"$gofmt" -w cli
@@ -37,6 +39,9 @@ if [ "$fix" = true ]; then
 	# clang-format は対象が無いと標準入力を読み取るため、対象がある場合のみ実行する。
 	# shellcheck disable=SC2086
 	[ -z "$cpp" ] || clang-format -i $cpp
+	# ruff は対象が無いとカレントディレクトリの全体を対象とするため、対象がある場合のみ実行する。
+	# shellcheck disable=SC2086
+	[ -z "$python" ] || ruff format $python
 	# shellcheck disable=SC2086
 	pwsh -NoProfile -File scripts/powershell.ps1 -Mode Fix $powershell
 	exit 0
@@ -59,6 +64,9 @@ for file in $cpp; do
 		status=1
 	}
 done
+# ruff format --check は整形が必要なファイルを列挙し、コード 1 で終了する。
+# shellcheck disable=SC2086
+[ -z "$python" ] || ruff format --check $python || status=1
 # shellcheck disable=SC2086
 pwsh -NoProfile -File scripts/powershell.ps1 -Mode Check $powershell || status=1
 if [ "$status" -ne 0 ]; then

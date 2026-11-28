@@ -40,6 +40,13 @@ files="$(sed -n 's/^ *"file": "\(.*\)",*$/\1/p' build/lint/compile_commands.json
 # shellcheck disable=SC2086
 clang-tidy -p build/lint --quiet $files || status=1
 
+# Python は git が追跡し、無視しないファイルを検査する（format.sh と同じ対象）。ruff は対象が無いと
+# カレントディレクトリの全体を対象とするため、対象がある場合のみ実行する。
+require_ruff
+files="$(python_files)"
+# shellcheck disable=SC2086
+[ -z "$files" ] || ruff check $files || status=1
+
 # PowerShell は git が追跡し、無視しないファイルを検査する（format.sh と同じ対象）。
 files="$(powershell_files)"
 # shellcheck disable=SC2086

@@ -28,7 +28,7 @@
 | 改行 | LF。`.gitattributes` でも LF に統一する | `.vwstrings` は CRLF。git に変換させない（`-text`） |
 | 末尾 | 改行で終了する。行末に空白を含めない | |
 | インデント | **タブ（表示幅 4）** | YAML（タブを使用できない）と Markdown はスペース 2 |
-| 1 行の長さ | 100 桁を目安とする。強制するのは C++（clang-format）のみ | Markdown は制限しない |
+| 1 行の長さ | 100 桁を目安とする。強制するのは C++（clang-format）と Python（ruff）のみ | Markdown は制限しない |
 
 インデントをタブとするのは、Go（gofmt）が必須とし、shfmt の既定でもあり、clang-format と
 PSScriptAnalyzer でも選択できるためです。これにより YAML と Markdown を除く全ての言語が統一されます。
@@ -45,9 +45,10 @@ PSScriptAnalyzer でも選択できるためです。これにより YAML と Ma
 | Go | gofmt | なし（設定できない） | `tools/go.mod` の Go の gofmt（PATH のものは使用しない） |
 | sh | shfmt | `.editorconfig` を読み込む。フラグで上書きしない | `tools/go.mod` |
 | C++ / Objective-C++ | clang-format | `.clang-format`（LLVM の既定から変更する項目と理由は、その先頭の注釈。ブレースは既定の `Attach`） | `tools/requirements.txt`（pip の `clang-format==X`。3 OS で同一の出力。clang-tidy と同じ版にする。[検査](lint.md)） |
+| Python | `ruff format` | `ruff.toml`（ruff は `.editorconfig` を読み込まないため、既定と異なるタブと 100 桁のみを記述する） | `tools/requirements.txt`（pip の `ruff==X`） |
 | PowerShell | `Invoke-Formatter`（PSScriptAnalyzer） | `PSScriptAnalyzerSettings.psd1`（`CodeFormatting` と同じ規則で、インデントのみタブ） | `scripts/powershell.ps1` の `$version`（`-Mode Install` でインストールされる） |
 
-対象は、Go は `cli/`、sh は `scripts/` と `tests/hooks/`、C++ と PowerShell は git が追跡し、無視しないファイル
+対象は、Go は `cli/`、sh は `scripts/` と `tests/hooks/`、C++・Python・PowerShell は git が追跡し、無視しないファイル
 （ビルドの出力や SDK の複製を含めない）です。PowerShell の整形と検査は `scripts/powershell.ps1` を介して
 行います（`format.sh` と `lint.sh` が呼び出す。フックのテストに使用する Pester の版もここで定める）。
 

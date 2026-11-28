@@ -21,6 +21,7 @@
 | GitHub Actions | actionlint（`run:` の内部も shellcheck で検査する） | `tools/go.mod` |
 | sh | shellcheck（shfmt が整形するのと同じ、`scripts/` と `tests/hooks/` 配下のシェルスクリプト） | `tools/requirements.txt` の `shellcheck-py`（shellcheck のリリースのバイナリを pip で配布するもの。版の読み取り方と確認方法は `scripts/common.sh` の `require_shellcheck` の注釈） |
 | C++ | clang-tidy（SDK に依存しない部分。`.clang-tidy` で既定の `clang-analyzer` に `bugprone` を追加するのみとし、指摘は失敗として扱う。除外する規則と規則の設定は、理由とともに `.clang-tidy` に記述する。検査するのは、`-DVW_BUILD_PLUGIN=OFF` で構成したビルドに含まれるファイルのみで、SDK に依存するファイル（`src/*.cpp`・`src/tools/*`）は含まれない。OS ごとの実装は、その OS で構成した場合のみ含まれる。CI の `lint.yml` は ubuntu で実行されるため、mac と Windows の実装を検査しない。ローカル環境の mac で `lint.sh` を実行すると `PathCompareMac.cpp` も検査される（ローカル環境でのみ指摘が出ることがある）。Windows の `.cpp` はどの環境でも検査しない（Windows の既定の Visual Studio の生成器では `compile_commands.json` が出力されない）） | `tools/requirements.txt`（clang-format と同じ版。2 つの版が異なる場合と PATH の版が異なる場合に停止する理由は、`scripts/common.sh` の `require_clang` の注釈） |
+| Python | `ruff check`（既定の規則。設定は `ruff.toml`。対象は git が追跡し、無視しないファイルで、現在は自動レビューの `scripts/review/review.py` のみ） | `tools/requirements.txt`（整形と同じ ruff。版の確認は `scripts/common.sh` の `require_ruff`） |
 | PowerShell | PSScriptAnalyzer（既定の規則と、整形の規則。設定は `PSScriptAnalyzerSettings.psd1`） | `scripts/powershell.ps1` の `$version` |
 
 PSScriptAnalyzer は、同一のファイルでも時折解析器の内部で異常終了します（[PSScriptAnalyzer #1351](https://github.com/PowerShell/PSScriptAnalyzer/issues/1351)・[#1511](https://github.com/PowerShell/PSScriptAnalyzer/issues/1511)）。
@@ -41,6 +42,6 @@ Go の他に次のものが必要です。版は CI のものに合わせます�
 
 | 必要なもの | 導入方法 |
 | --- | --- |
-| clang-format・clang-tidy・shellcheck | `pip install -r tools/requirements.txt`（venv の中など。PATH に配置する） |
+| clang-format・clang-tidy・shellcheck・ruff | `pip install -r tools/requirements.txt`（venv の中など。PATH に配置する） |
 | CMake と C++ のコンパイラー | clang-tidy がコンパイルの指定を読み込むため |
 | PowerShell（`pwsh`）と PSScriptAnalyzer | `pwsh` をインストールしてから `pwsh scripts/powershell.ps1 -Mode Install`（フックのテストに使用する Pester もインストールされる） |

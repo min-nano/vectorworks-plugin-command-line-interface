@@ -63,7 +63,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
 - 言語共通の規則（UTF-8・LF・タブ・100 桁の目安）は `.editorconfig` に
   のみ記述する。各言語の設定には、その言語固有の項目のみを記述する（`docs/format.md`）。
 - ツールは言語ごとに標準のもの 1 つを、ほぼ既定の設定のまま使用し、版を固定する。Go で記述されたツールは
-  `tools/go.mod`、pip のツール（clang-format・clang-tidy・shellcheck）は `tools/requirements.txt`、
+  `tools/go.mod`、pip のツール（clang-format・clang-tidy・shellcheck・ruff）は `tools/requirements.txt`、
   PSScriptAnalyzer と Pester（`cli` のフックのテスト。`hooks.yml`）は `scripts/powershell.ps1` に版を記述する。ツールと対象は `docs/format.md`・`docs/lint.md`。
 - **コメントは対象のコードの直前の行に配置し、コードと同じ行の末尾には記述しない**（全ての言語で同様。
   1 行で足りるものも同様。複数行と 1 行で配置場所が混在すると読みにくいため）。
@@ -178,6 +178,8 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   妨げとしない。妨げとなる指摘があれば修正してから再度レビューし、それが無くなるまで下書きのままにする。
   レビュー準備完了の状態の PR に push する場合も、push の前に同様にレビューし、妨げとなる
   指摘が無いことを確認してから push する。
+- レビュー準備完了の状態の PR は、`review.yml` が自動でレビューし、判定（Approve / Request changes）を付与する
+  （`docs/review.md`）。自動レビューは `/code-review` の代替としない。
 - **実機でのみ検証できる変更（プラグイン・スクリプト）は、利用者が実機で「確認できた」と述べるまで
   マージしない。** CI を通過することも、ツールが応答することも、実機での確認の代替にはならない。実機での
   検証方法は `docs/plugin/verification.md`（PR のプレリリースをインストールし、`vw2026` で呼び出す）。

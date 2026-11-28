@@ -1,0 +1,6 @@
+# Python の整形と検査（ruff。docs/format.md・docs/lint.md）。ruff は .editorconfig を読み込まないため、
+# .editorconfig の規則の内、ruff の既定と異なるもの（タブ・100 桁）のみをここに記述する。他は既定のまま。
+line-length = 100
+
+[format]
+indent-style = "tab"
