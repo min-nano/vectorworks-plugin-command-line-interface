@@ -189,8 +189,8 @@ func codeFor(err error) int {
 }
 
 // callReserved は予約された道具（@tools・@session_start・@session_end）を引数なしで呼び、結果を出す。
-// 出力・終了コードは call と同じ。予約された道具は call の名前の空間に無い（道具の名前の綴りでは
-// 書けない）ので、それぞれのコマンド（tools・session start・session end）から呼ぶ。
+// 出力・終了コードは call と同じ。call は名前をそのまま渡すので call @tools なども通るが、呼ぶ側が
+// 予約された道具の名前を綴らずに済むように、それぞれのコマンド（tools・session start・session end）を置く。
 func callReserved(e *env, tool, session string, timeout float64) int {
 	c := callCmd{Tool: tool, Session: session, Timeout: timeout}
 	return c.run(e)

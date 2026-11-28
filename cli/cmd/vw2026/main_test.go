@@ -298,8 +298,8 @@ func TestCallUsageErrors(t *testing.T) {
 }
 
 // tools は予約された道具 @tools を呼び、その結果を出す。call は名前をそのまま渡すので、
-// call tools は予約された道具ではなく、名前が tools の道具を呼ぶ（予約された道具は道具の名前の
-// 綴りでは書けない名前にあり、call の名前の空間に予約語を作らない）。
+// call tools は予約された道具ではなく、名前が tools の道具を呼ぶ（予約された道具の名前は @ で始まり、
+// 道具の表の名前と重ならない）。
 func TestTools(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, opts{dir: dir}, "tools")
@@ -372,7 +372,7 @@ func fakeApp(t *testing.T) string {
 func TestVersion(t *testing.T) {
 	for _, arg := range []string{"version", "--version"} {
 		r := invoke(t, opts{}, arg)
-		if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":7`) {
+		if r.code != exitOK || !strings.Contains(r.stdout, fmt.Sprintf(`"protocol":%d`, spool.ProtocolVersion)) {
 			t.Fatalf("%s: %+v", arg, r)
 		}
 	}
