@@ -80,18 +80,15 @@ func replaceFile(path string, data []byte) error {
 	if err == nil {
 		err = rename(temp, path)
 	}
-	// 置き換えたことも残す（親のディレクトリを Sync しないと、電源が落ちたときに前の記録へ戻りうる）。できなくても
-	// 置き換えは済んでいて、戻っても前の記録は読めるので、誤りは見ない（ディレクトリの Sync を断るファイルシステムで、
-	// 置き換えたのに失敗と答えないように）。
-	if err == nil {
-		_ = syncDir(filepath.Dir(path))
-		return nil
-	}
 	// 書けなかった・置き換えられなかった隣のファイル（このとき書いたもの）は、プラグインのフォルダに残さない。
 	if err != nil {
 		_ = removeFile(temp)
+		return err
 	}
-	return err
+	// 置き換えたことも残す（親のディレクトリを Sync しないと、電源が落ちたときに前の記録へ戻りうる）。できなくても
+	// 置き換えは済んでいて、戻っても前の記録は読めるので、誤りは見ない。
+	_ = syncDir(filepath.Dir(path))
+	return nil
 }
 
 // readRecord はフォルダの記録を読む。無ければ os.ErrNotExist を包んだ誤り。知らない項目は

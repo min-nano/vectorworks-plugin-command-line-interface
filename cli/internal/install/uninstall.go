@@ -115,7 +115,7 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 		if _, _, inside := o.runsFrom(p.dest); inside {
 			return nil, false, &RunsInsideError{Dir: p.dest, Tag: record.Tag}
 		}
-		if err := mkdirAll(p.old, 0o700); err != nil {
+		if err := mkdirAllSynced(p.old, 0o700); err != nil {
 			return nil, false, err
 		}
 		// uninstall は <Work>/old/<name>/ を消さない（守ること 9）。install のフックが失敗して Vectorworks が
@@ -139,6 +139,10 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 			_ = removeFile(p.marker)
 			return nil, false, renameError(p.dest, err, uninstallCommand(name))
 		}
+		// 移したことを、フックが外のもの（PATH など）を変える前に残す（install の付け替えの後と同じ。できなくても
+		// 移すことは済んでいて、電源が落ちて移す前に戻っても、印が残るので次の uninstall が続きから走る）。
+		_ = syncDir(p.plugins)
+		_ = syncDir(p.old)
 		return record, false, nil
 	case exists(p.oldDir):
 		// 前の uninstall が、フォルダを移した後で止まった。印が無ければ、install が付け替えの

@@ -15,7 +15,7 @@ import (
 // （docs/plugin/install-and-update.md「置換の手順」）。失敗したら <Plug-Ins> を元に戻す。
 func (o *Options) replace(p places, name, source, tag, previous string, asset registry.Asset) (json.RawMessage, error) {
 	for _, dir := range []string{p.staging, p.old} {
-		if err := mkdirAll(dir, 0o700); err != nil {
+		if err := mkdirAllSynced(dir, 0o700); err != nil {
 			return nil, err
 		}
 	}
@@ -57,7 +57,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 			return nil, fmt.Errorf("%w%s", renameError(p.dest, err, again), note)
 		}
 	}
-	if err := mkdirAll(p.plugins, 0o755); err != nil {
+	if err := mkdirAllSynced(p.plugins, 0o755); err != nil {
 		return nil, undoSwap(p, hadOld, moved, err)
 	}
 	if err := rename(p.stageDir, p.dest); err != nil {

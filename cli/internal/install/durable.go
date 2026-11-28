@@ -4,7 +4,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 )
 
 // 電源が落ちても、名前の変更で公開したファイルが空や半分にならないようにする。APFS と ext4 などは、データの
@@ -42,22 +41,32 @@ func writeSynced(name string, data []byte, perm fs.FileMode) error {
 	return err
 }
 
-// syncDirectory は dir の項目（作った・消した・名前を変えたもの）を永続させる。Windows では何もしない（読むだけで
-// 開いたディレクトリのハンドルは FlushFileBuffers で断られる。NTFS はメタデータをジャーナルに書くので、ファイルの
-// データを Sync してから名前を変えれば足りる）。mac の File.Sync は F_FULLFSYNC。
-func syncDirectory(dir string) error {
-	if runtime.GOOS == "windows" {
-		return nil
+// mkdirAllSynced は mkdirAll と同じに作り、作った段の項目も親のディレクトリを Sync して残す（作った直後の
+// フォルダへ移したものが、電源が落ちた後にフォルダごと失われないように。中身は、移す側が Sync する）。
+func mkdirAllSynced(path string, perm fs.FileMode) error {
+	path = filepath.Clean(path)
+	// 作る前に、無い段のうち一番上を求める（調べられない段は、無いものとして親から Sync する。根は在る）。
+	first := ""
+	for current := path; filepath.Dir(current) != current; current = filepath.Dir(current) {
+		if _, err := os.Lstat(current); err == nil {
+			break
+		}
+		first = current
 	}
-	file, err := os.Open(dir)
-	if err != nil {
+	if err := mkdirAll(path, perm); err != nil {
 		return err
 	}
-	err = file.Sync()
-	if closeErr := file.Close(); err == nil {
-		err = closeErr
+	if first == "" {
+		return nil
 	}
-	return err
+	for current := path; ; current = filepath.Dir(current) {
+		if err := syncDir(filepath.Dir(current)); err != nil {
+			return err
+		}
+		if current == first {
+			return nil
+		}
+	}
 }
 
 // syncTree は root とその下の全てのディレクトリを syncDir する（展開したプラグインを付け替えで公開する前に、

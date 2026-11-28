@@ -247,3 +247,64 @@ func TestSyncHelpersReportErrors(t *testing.T) {
 		t.Error("syncTree of a missing folder should fail")
 	}
 }
+
+// mkdirAllSynced は、作った段の親のディレクトリを全て Sync する（作った直後のフォルダへ移したものが、電源が
+// 落ちた後にフォルダごと失われないように）。既にあれば Sync しない。作れない・Sync できなければ、その誤りを返す。
+func TestMkdirAllSyncedSyncsTheParentsOfWhatItMakes(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "a", "b", "c")
+	log := recordSyncs(t, nil)
+	if err := mkdirAllSynced(target, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, parent := range []string{dir, filepath.Join(dir, "a"), filepath.Join(dir, "a", "b")} {
+		if !log.dir(parent) {
+			t.Errorf("%s is not synced", parent)
+		}
+	}
+	if log.dir(filepath.Dir(dir)) {
+		t.Error("synced the parent of a folder that was already there")
+	}
+	again := recordSyncs(t, nil)
+	if err := mkdirAllSynced(target, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if len(again.dirs) != 0 {
+		t.Errorf("synced %v for a folder that was already there", again.dirs)
+	}
+	recordSyncs(t, func(string) error { return errInjected })
+	if err := mkdirAllSynced(filepath.Join(dir, "d"), 0o700); !errors.Is(err, errInjected) {
+		t.Errorf("sync: %v", err)
+	}
+	failMkdirAll(t, filepath.Join(dir, "e"))
+	if err := mkdirAllSynced(filepath.Join(dir, "e"), 0o700); !errors.Is(err, errInjected) {
+		t.Errorf("mkdir: %v", err)
+	}
+}
+
+// uninstall が <Work>/old を作るときは、その項目（<Work> の中）も Sync してから、プラグインのフォルダを移す。
+// 移した後にも、移したことを Sync してからフックを走らせる。
+func TestUninstallSyncsANewOldFolder(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	if err := os.RemoveAll(filepath.Join(h.work, "old")); err != nil {
+		t.Fatal(err)
+	}
+	log := recordSyncs(t, nil)
+	moved := false
+	renameWhen(t, func(from, to string) error {
+		if from == filepath.Join(h.plugins, "cli") {
+			moved = true
+			if !log.dir(h.work) {
+				t.Error("moved the folder before the new old folder was synced in <Work>")
+			}
+		}
+		return nil
+	})
+	if _, err := Uninstall(h.options(), "cli"); err != nil {
+		t.Fatal(err)
+	}
+	if !moved || !log.dir(h.plugins) {
+		t.Fatalf("moved %v, synced the folder of plug-ins %v", moved, log.dir(h.plugins))
+	}
+}
