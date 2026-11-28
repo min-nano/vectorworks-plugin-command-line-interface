@@ -687,3 +687,21 @@ TEST(SaveAndCloseRestoreTheFrontWhenTheListThrows) {
 		CHECK(docs.calls == c.calls);
 	}
 }
+
+// 前面を戻すための読み直しも失敗するときは、戻さずに、元の例外をそのまま投げる（壊すときに投げない）。
+TEST(SaveKeepsTheOriginalExceptionWhenTheFrontCannotBeRestored) {
+	FakeDocuments docs = sample();
+	docs.listThrowsAt = 2;
+	docs.listKeepsThrowing = true;
+	Fs fs;
+	ToolStatus status;
+	std::string message;
+	try {
+		VwCli::core::save(saveArgs(kUntitled, "/Users/me/tmp/a.vwx"), docs, fs.environment(),
+		                  status);
+	} catch (const std::runtime_error &error) {
+		message = error.what();
+	}
+	CHECK_EQ(message, std::string("cannot read the list"));
+	CHECK(docs.calls == calls({"list", "switch 22", "list", "list"}));
+}

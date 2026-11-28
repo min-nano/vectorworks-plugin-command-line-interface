@@ -41,6 +41,8 @@ public:
 	// この回目（1 から数える）の一覧の読み出しで投げる。0 なら投げない。
 	// パスを読めない・確保できないことを真似る。投げた回も calls に残す。
 	int listThrowsAt = 0;
+	// listThrowsAt の回より後の読み出しでも投げ続ける（前面を戻すための読み直しも失敗する場合）。
+	bool listKeepsThrowing = false;
 
 	// count は name の呼び出しの回数（"list" など）。
 	int count(std::string_view name) const {
@@ -60,7 +62,9 @@ public:
 
 	std::vector<core::OpenDocument> list() override {
 		calls.emplace_back("list");
-		if (listThrowsAt > 0 && count("list") == listThrowsAt) {
+		int nth = count("list");
+		if (listThrowsAt > 0 &&
+		    (nth == listThrowsAt || (listKeepsThrowing && nth > listThrowsAt))) {
 			throw std::runtime_error("cannot read the list");
 		}
 		return open;
