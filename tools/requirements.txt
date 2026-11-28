@@ -1,6 +1,6 @@
 # pip で入れる整形と検査のツール（docs/format.md・docs/lint.md）。pip の版で 3 OS の出力を揃える。
 # 手元: pip install -r tools/requirements.txt（venv の中など）。
-clang-format==23.1.4
+clang-format==23.1.5
 clang-tidy==23.1.4
 # shellcheck の実行ファイルを配るもの（第三者が包み直したもの。中身は shellcheck のリリースのバイナリ）。
 # 版は <shellcheck の版>.<包み直しの番号>（scripts/common.sh の require_shellcheck）。
