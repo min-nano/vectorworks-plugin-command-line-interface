@@ -213,9 +213,8 @@ TEST(BridgeWaitStateFollowsTheCaller) {
 	CHECK(!exists(dir, "y.wait"));
 }
 
-// 名前が長すぎて待つ印を置けない
-// id（書きかけの名前が上限の長さ）は、待つ印が無いものとして掃除が消す（確かめ
-// られないものとして残し続けない）。
+// 名前が長すぎて待つ印を置けない id は、待つ印が無いものとして掃除が消す。
+// 書きかけの名前が上限の長さのとき。確かめられないものとして残し続けない。
 TEST(BridgeSweepRemovesFilesWhoseWaitCannotExist) {
 	TempDir dir;
 	std::string id(251, 'a');
@@ -224,6 +223,15 @@ TEST(BridgeSweepRemovesFilesWhoseWaitCannotExist) {
 	CHECK(bridge.waitState(id) == files::WaitState::Missing);
 	bridge.sweep();
 	CHECK(!exists(dir, id + ".tmp"));
+}
+
+// フォルダの待つ印は、通常のファイルでないので無いものとする（どの OS でも同じ）。
+// Windows ではフォルダを開けずに断られるが、確かめられないものとはしない。
+TEST(BridgeWaitThatIsAFolderIsMissing) {
+	TempDir dir;
+	std::filesystem::create_directory(dir.path() / "d.wait");
+	Bridge bridge(dir.utf8Path());
+	CHECK(bridge.waitState("d") == files::WaitState::Missing);
 }
 
 TEST(BridgeReplyPublishesWithoutLeavingTemp) {
@@ -269,9 +277,9 @@ TEST(BridgeDoesNotWaitOnFifos) {
 	CHECK_EQ(VwCli::test::readFile(dir.path() / "g.res.json"), std::string(R"({"ok":true})"));
 }
 
-// 無い以外の理由で開けない待つ印は、確かめられない（Unknown）。掃除はその id
-// のファイルを残す（待っている 呼ぶ側のものかもしれない）。root
-// は権限を無視して開けるので、確かめられない（CI の mac は root でない）。
+// 無い以外の理由で開けない待つ印は、確かめられない（Unknown）。
+// 掃除はその id のファイルを残す（待っている呼ぶ側のものかもしれない）。
+// root は権限を無視して開けるので、確かめない（CI の mac は root でない）。
 TEST(BridgeKeepsTheFilesOfAWaitItCannotCheck) {
 	if (::geteuid() == 0) {
 		return;
