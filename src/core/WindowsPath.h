@@ -2,7 +2,7 @@
 
 // Windows のパスの変換（src/core の内部用。WIN32 のときだけビルドする）。
 // スプール（FilesWindows.cpp）と save の保存先の確かめ（SaveTargetWindows.cpp）が
-// 同じ処理を使い、\\?\ を付ける処理を書き写さない（docs/plugin/bridge.md「分け方」）。
+// 同じ処理を使い、\\?\ を付ける処理を書き写さない（docs/plugin/bridge.md「分割の方針」）。
 
 #include <string>
 #include <string_view>

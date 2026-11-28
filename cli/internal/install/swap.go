@@ -12,7 +12,7 @@ import (
 )
 
 // replace は zip を取って組み立て、プラグインのフォルダを付け替えてフックを走らせる
-// （docs/plugin/install-and-update.md「入れ替えの手順」）。失敗したら <Plug-Ins> を元に戻す。
+// （docs/plugin/install-and-update.md「置換の手順」）。失敗したら <Plug-Ins> を元に戻す。
 func (o *Options) replace(p places, name, source, tag, previous string, asset registry.Asset) (json.RawMessage, error) {
 	for _, dir := range []string{p.staging, p.old} {
 		if err := mkdirAll(dir, 0o700); err != nil {
@@ -191,7 +191,7 @@ func removeStaging(p places) error {
 
 // settleOld は <Work>/old/<name>/ を片付ける。install のどの道（付け替えの前・付け替えの後・同じタグで
 // フックだけを走らせた後）もこれだけを使う（docs/plugin/install-and-update.md「<Work>/old/<name>/ の
-// 片付け」）。
+// 整理」）。
 //
 //   - <Plug-Ins>/<name>/ が無ければ、old が唯一の版かもしれないので、何も変えずに失敗にする（印があれば、
 //     止まった uninstall の続きを示す）。

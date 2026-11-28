@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-// 読む道具の内 SDK に依らない部分（docs/plugin/tools.md「読む道具」）。
+// 読む道具の内 SDK に依らない部分（docs/plugin/tools.md「読み取りツール」）。
 
 using VwCli::core::Drawing;
 using VwCli::core::ErrorCode;

@@ -17,20 +17,20 @@ import (
 // maxDocument はレジストリとマニフェストの大きさの上限（どちらも小さな JSON）。
 const maxDocument = 1 << 20
 
-// maxAsset は資産（zip）の大きさの上限（docs/registry.md「zip の形」）。終わらない本文で <Plug-Ins> と
+// maxAsset は資産（zip）の大きさの上限（docs/registry.md「zip の構成」）。終わらない本文で <Plug-Ins> と
 // 同じドライブを埋めないため。テストが縮める。
 var maxAsset int64 = 512 << 20
 
-// maxExtracted は zip を展開した大きさの合計の上限（docs/registry.md「zip の形」）。小さな zip が大きく
+// maxExtracted は zip を展開した大きさの合計の上限（docs/registry.md「zip の構成」）。小さな zip が大きく
 // 展開されて、<Work> のあるドライブを埋めないため。テストが縮める。
 var maxExtracted int64 = 2 << 30
 
-// maxEntries は zip の項目の数の上限（docs/registry.md「zip の形」）。空のファイル・フォルダの多い小さな zip が、
+// maxEntries は zip の項目の数の上限（docs/registry.md「zip の構成」）。空のファイル・フォルダの多い小さな zip が、
 // 大きさの上限に掛からずに、<Work> のあるドライブにファイルを作り続けないため。テストが縮める。
 var maxEntries = 100000
 
 // lookup はレジストリを順に引き、名前の項目と、そのレジストリの名前（記録の registry）を返す
-// （docs/registry.md「レジストリの順」）。既定のレジストリが先頭で、名前が見つかった時点で止める。
+// （docs/registry.md「レジストリの優先順位」）。既定のレジストリが先頭で、名前が見つかった時点で止める。
 // 見つかる前に取れない・読めないレジストリがあれば、そこで失敗にする（飛ばすと、どの項目が勝つかが
 // ネットワークの状態で変わる）。--registry の書き方は、呼ぶ側（install）が先に CheckRegistries で確かめている。
 func (o *Options) lookup(name string) (registry.Entry, string, error) {
@@ -71,7 +71,7 @@ func CheckRegistries(refs []string) error {
 }
 
 // checkRegistry は --registry に渡したものが https:// か file:// の URL かを確かめる（docs/registry.md
-// 「参照の書き方」）。パスはそのままでは受け付けない（file:///… と書く）。記録の registry には、渡した
+// 「参照の記法」）。パスはそのままでは受け付けない（file:///… と書く）。記録の registry には、渡した
 // 文字列をそのまま残し、比べるのもその文字列どうしだけ。
 func checkRegistry(ref string) error {
 	if err := registry.CheckRef(ref, false); err != nil {

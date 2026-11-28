@@ -4,7 +4,7 @@
 #include <sys/stat.h>
 
 // save の保存先をファイルシステムに聞く関数の POSIX の実装（docs/plugin/save-target.md「状態の
-// 確かめ」）。出荷するのは mac で、Linux のテストも同じ実装を通る。
+// 検証」）。出荷するのは mac で、Linux のテストも同じ実装を通る。
 
 namespace VwCli::core::save_target {
 
