@@ -289,11 +289,26 @@ func TestCallCannotWriteOutput(t *testing.T) {
 }
 
 func TestCallUsageErrors(t *testing.T) {
-	for _, args := range [][]string{{"call"}, {"call", "x", "[1]"}, {"call", "x", "not json"}, {"call", "x", "null"}, {"call", "x", `{"a":1e}`}, {"tools"}, {"nope"}, {}} {
+	for _, args := range [][]string{{"call"}, {"call", "x", "[1]"}, {"call", "x", "not json"}, {"call", "x", "null"}, {"call", "x", `{"a":1e}`}, {"tools", "x"}, {"nope"}, {}} {
 		r := invoke(t, opts{}, args...)
 		if r.code != exitUsage {
 			t.Errorf("%v: code %d", args, r.code)
 		}
+	}
+}
+
+// tools は予約された道具 @tools を呼び、その結果を出す。call は名前をそのまま渡すので、
+// call tools は予約された道具ではなく、名前が tools の道具を呼ぶ（予約された道具は道具の名前の
+// 綴りでは書けない名前にあり、call の名前の空間に予約語を作らない）。
+func TestTools(t *testing.T) {
+	dir := echoBridge(t)
+	r := invoke(t, opts{dir: dir}, "tools")
+	if r.code != exitOK || strings.TrimSpace(r.stdout) != `{"args":{},"tool":"`+spool.ToolTools+`"}` {
+		t.Fatalf("%+v", r)
+	}
+	r = invoke(t, opts{dir: dir}, "call", "tools")
+	if r.code != exitOK || strings.TrimSpace(r.stdout) != `{"args":{},"tool":"tools"}` {
+		t.Fatalf("call tools should call a tool named tools: %+v", r)
 	}
 }
 
@@ -357,7 +372,7 @@ func fakeApp(t *testing.T) string {
 func TestVersion(t *testing.T) {
 	for _, arg := range []string{"version", "--version"} {
 		r := invoke(t, opts{}, arg)
-		if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":6`) {
+		if r.code != exitOK || !strings.Contains(r.stdout, `"protocol":7`) {
 			t.Fatalf("%s: %+v", arg, r)
 		}
 	}
@@ -573,6 +588,7 @@ func TestNotRunningShowsTheSpool(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "spool")
 	for _, args := range [][]string{
 		{"call", "ping"},
+		{"tools"},
 		{"session", "start"},
 		{"session", "end", "--session", "x"},
 	} {
@@ -623,6 +639,7 @@ func TestSpoolNotLocated(t *testing.T) {
 	for _, args := range [][]string{
 		{"status"},
 		{"call", "ping"},
+		{"tools"},
 		{"launch"},
 		{"session", "start"},
 		{"session", "end", "--session", "x"},

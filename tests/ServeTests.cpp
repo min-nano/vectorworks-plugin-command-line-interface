@@ -107,7 +107,7 @@ const Tool kTools[] = {
 
 // startSession は占有の印を受け取る。
 std::string startSession(Server &server, Caller &caller, const std::string &id) {
-	caller.put(id, R"({"tool":"session_start"})");
+	caller.put(id, R"({"tool":"@session_start"})");
 	server.serve(kTools, kNow);
 	std::string session = caller.session(id);
 	CHECK(!session.empty());
@@ -175,7 +175,7 @@ TEST(ServeRefusesEveryRequestWhileNested) {
 	server.serve(kTools, kNow);
 	caller.put("a", R"({"tool":"nests"})");
 	caller.put("b", R"({"tool":"first"})");
-	caller.put("s", R"({"tool":"session_start"})");
+	caller.put("s", R"({"tool":"@session_start"})");
 	CHECK(files::write(dir.sub("r.wait"), ""));
 	CHECK(files::write(dir.sub("r.req.json"), R"({"tool":"first"})"));
 	CHECK(files::write(dir.sub("w.req.json"), R"({"tool":"first"})"));
@@ -248,7 +248,7 @@ TEST(ServeIssuesSessionsSpelledLikeIds) {
 	std::string head = std::to_string(kNow) + "-";
 	CHECK_EQ(session.substr(0, head.size()), head);
 	// 2 つ目の印は別の乱数になる。
-	caller.put("2", R"({"tool":"session_end","session":")" + session + R"("})");
+	caller.put("2", R"({"tool":"@session_end","session":")" + session + R"("})");
 	server.serve(kTools, kNow);
 	CHECK(startSession(server, caller, "3") != session);
 }
@@ -260,13 +260,13 @@ TEST(ServeKeepsTheSessionWhenTheReplyCannotBeWritten) {
 	Server server(dir.utf8Path());
 	Caller caller(dir);
 	std::filesystem::create_directory(dir.path() / "1.res.json.tmp");
-	caller.put("1", R"({"tool":"session_start"})");
+	caller.put("1", R"({"tool":"@session_start"})");
 	server.serve(kTools, kNow);
 	CHECK(!server.inSession());
 	std::string session = startSession(server, caller, "2");
 	CHECK(server.inSession());
 	std::filesystem::create_directory(dir.path() / "3.res.json.tmp");
-	caller.put("3", R"({"tool":"session_end","session":")" + session + R"("})");
+	caller.put("3", R"({"tool":"@session_end","session":")" + session + R"("})");
 	server.serve(kTools, kNow);
 	CHECK(server.inSession());
 }
@@ -296,7 +296,7 @@ TEST(ServeAnswersInternalForABrokenInputSchema) {
 	TempDir dir;
 	Server server(dir.utf8Path());
 	Caller caller(dir);
-	caller.put("1", R"({"tool":"tools"})");
+	caller.put("1", R"({"tool":"@tools"})");
 	server.serve(broken, kNow);
 	CHECK_EQ(caller.code("1"), std::string("internal"));
 }

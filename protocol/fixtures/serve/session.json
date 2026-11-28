@@ -6,7 +6,7 @@
 			"expect": {"files": ["bridge.lock"]}
 		},
 		{
-			"description": "誰も占有していない。session_end と種類 write・app は no_session、印を載せた session_start も no_session。種類 read は印を見ずに実行する",
+			"description": "誰も占有していない。@session_end と種類 write・app は no_session、印を載せた @session_start も no_session。種類 read は印を見ずに実行する",
 			"requests": {
 				"1-quit": "quit.json",
 				"2-end": "session-end.json",
@@ -55,7 +55,7 @@
 			}
 		},
 		{
-			"description": "占有されている。session_start と、その印の無い session_end・種類 write・app は occupied。種類 read と tools は誰にでも答え、表に無い道具は占有に照らさずに unknown_tool",
+			"description": "占有されている。@session_start と、その印の無い @session_end・種類 write・app は occupied。種類 read と @tools は誰にでも答え、表に無い道具は占有に照らさずに unknown_tool",
 			"requests": {
 				"a-start": "session-start.json",
 				"b-echo": "echo.json",

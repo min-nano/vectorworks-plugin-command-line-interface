@@ -97,7 +97,7 @@ public:
 	// ok は応答が成功か。応答が無ければ偽。
 	bool ok(const std::string &id) const { return isTrue(member(id, "ok")); }
 	std::string code(const std::string &id) const;
-	// session は session_start の応答の占有の印。無ければ空。
+	// session は @session_start の応答の占有の印。無ければ空。
 	std::string session(const std::string &id) const;
 
 private:

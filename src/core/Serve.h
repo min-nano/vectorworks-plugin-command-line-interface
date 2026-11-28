@@ -14,15 +14,15 @@
 
 namespace VwCli::core {
 
-// 道具の種類（tools の結果の kind）。Read は図面を変えず、占有に照らさない。Write は図面の中身を
+// 道具の種類（@tools の結果の kind）。Read は図面を変えず、占有に照らさない。Write は図面の中身を
 // 変える（図面を変えるかが分からない道具も Write とする）。App は Vectorworks・図面のファイルや窓に
 // 働き、図面の中身は変えない（save・close・quit など）。Write と App は占有の中でだけ呼べる。終了の
 // 依頼は種類では決めず、道具が ToolStatus::quit で返す。
 enum class ToolKind { Read, Write, App };
 
 // 受け付けの外の状態。タイマー（Clock）が回ごとに渡す。Quitting では、道具の表の道具をすべて
-// busy で断る（種類 Read と ping も）。SDK を呼ばない 3 つの道具（tools・session_start・
-// session_end）と、表に無い道具の unknown_tool はふだんどおり応える
+// busy で断る（種類 Read と ping も）。SDK を呼ばない 3 つの道具（@tools・@session_start・
+// @session_end）と、表に無い道具の unknown_tool はふだんどおり応える
 // （docs/plugin/architecture.md「Vectorworks が処理中」）。
 enum class Activity {
 	Idle,
@@ -75,7 +75,7 @@ struct ToolSpec {
 	std::string_view name;
 	// 日本語。呼ぶ側がそのまま読む。
 	const char *description;
-	// JSON Schema（文字列）。tools の結果にそのまま載る。
+	// JSON Schema（文字列）。@tools の結果にそのまま載る。
 	const char *inputSchema;
 	ToolKind kind;
 };
@@ -176,7 +176,7 @@ private:
 	std::string nestedRefusal_;
 };
 
-// kindName は tools の結果に載せる種類の綴り。
+// kindName は @tools の結果に載せる種類の綴り。
 std::string_view kindName(ToolKind kind);
 
 }

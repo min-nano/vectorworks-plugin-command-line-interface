@@ -84,12 +84,12 @@ func TestServeAppliesSessionAndQuitOnlyWhenTheResponseIsWritten(t *testing.T) {
 	}}
 	t.Cleanup(s.release)
 	blockResponse(t, dir, "1")
-	put(t, dir, "1", `{"tool":"session_start"}`)
+	put(t, dir, "1", `{"tool":"@session_start"}`)
 	s.serveOnce()
 	if s.session != "" {
 		t.Fatal("a session was issued although its response could not be written")
 	}
-	put(t, dir, "2", `{"tool":"session_start"}`)
+	put(t, dir, "2", `{"tool":"@session_start"}`)
 	s.serveOnce()
 	if s.session == "" {
 		t.Fatal("no session was issued")
@@ -106,7 +106,7 @@ func TestServeAppliesSessionAndQuitOnlyWhenTheResponseIsWritten(t *testing.T) {
 		t.Fatal("the request after the unanswered quit was not served")
 	}
 	blockResponse(t, dir, "4")
-	put(t, dir, "4", fmt.Sprintf(`{"tool":"session_end","session":%q}`, session))
+	put(t, dir, "4", fmt.Sprintf(`{"tool":"@session_end","session":%q}`, session))
 	s.serveOnce()
 	if s.session != session {
 		t.Fatal("the session ended although its response could not be written")

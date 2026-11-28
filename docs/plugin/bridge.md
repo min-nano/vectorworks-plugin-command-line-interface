@@ -80,9 +80,9 @@ OS に依らない部分は `Files.cpp` に置きます。** OS ごとの違い�
    ない。スタックを溢れさせないことが目的）。文字列は、読むときに U+FFFD へ置き換えたものを書き出すときも
    同じにする（応答を常に UTF-8 にする。道具が返す例外の文言が UTF-8 でなくてもよい）。
 4. 要求ごとに（[通信規則「占有」](../protocol.md#占有セッション)の表）:
-   - `tools` → 道具の一覧を返す（表を検索しない。占有に照らさない）。
-   - `session_start` → 占有されていなければ印を発行して返す（されていれば `occupied`）。
-     `session_end` → 占有に照らしてから印を消す（表を検索しない）。どちらも終了の依頼の最中かには照らさない（`tools` も）。
+   - `@tools` → 道具の一覧を返す（表を検索しない。占有に照らさない）。
+   - `@session_start` → 占有されていなければ印を発行して返す（されていれば `occupied`）。
+     `@session_end` → 占有に照らしてから印を消す（表を検索しない）。どちらも終了の依頼の最中かには照らさない（`@tools` も）。
      占有の印は `core::Server` が持つ状態（1 つだけ。メモリだけで、ファイルに書かない）で、
      Vectorworks が終われば消える。印は `<時刻のナノ秒 19 桁>-<乱数 16 桁の 16 進>` で、乱数は
      `std::random_device` から作る。
@@ -189,8 +189,8 @@ struct Tool : ToolSpec {
 - **道具を足すときに触るのは表の 1 行と中身 1 つだけ**です。CLI は道具を知らないので直しません。
   名前・説明・`inputSchema`・種類は `src/core` の `ToolSpec`（`Ping.h`・`ReadTools.h`・`DocumentTools.h`・`Quit.h`）に置き、表は
   `core::toolOf(spec, &中身)` で組み立てます（種類を無 SDK のテストで確かめるため）。
-- `tools` の結果の形と `kind` の意味は[通信規則「予約された道具」](../protocol.md#予約された道具)にあります。
-  予約された道具のうち `tools`・`session_start`・`session_end` は表に載せず、`ping` と `quit` は表に載せます。
+- `@tools` の結果の形と `kind` の意味は[通信規則「予約された道具」](../protocol.md#予約された道具)にあります。
+  予約された道具のうち `@tools`・`@session_start`・`@session_end` は表に載せず、`ping` と `quit` は表に載せます。
 - 道具の結果は JSON のオブジェクトで返します（[通信規則「応答」](../protocol.md#応答idresjson)）。返す値が無ければ
   `Json()` でよく、`Server` が `{}` にします。オブジェクトでない値は道具の不具合として、`Server` が
   `internal` で応えます。

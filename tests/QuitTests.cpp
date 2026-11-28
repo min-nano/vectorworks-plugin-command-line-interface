@@ -281,8 +281,8 @@ constexpr Tool kTools[] = {VwCli::core::toolOf(VwCli::core::kDocumentsSpec, &doc
 
 // 刻み（core::tick）を通した quit: 占有の外では断られ、起動を終えるまでと図面が開いている間は
 // 終了を頼まず、図面が 0 枚なら応答を書いてから終了を頼む。頼んでいる間に入り直した刻み（Windows の
-// 保存の確認の間）では、表の道具（quit と読む道具も）を busy で断って 2 度目を頼まず、tools・
-// session_start・session_end は応え、表に無い道具は unknown_tool。戻ったら印を下ろす。
+// 保存の確認の間）では、表の道具（quit と読む道具も）を busy で断って 2 度目を頼まず、@tools・
+// @session_start・@session_end は応え、表に無い道具は unknown_tool。戻ったら印を下ろす。
 TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	TempDir dir;
 	Server server(dir.utf8Path());
@@ -298,7 +298,7 @@ TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	VwCli::core::tick(server, kTools, kNow, lifecycle, noRequest);
 	CHECK_EQ(caller.code("a1"), std::string("no_session"));
 
-	caller.put("a2", R"({"tool":"session_start"})");
+	caller.put("a2", R"({"tool":"@session_start"})");
 	VwCli::core::tick(server, kTools, kNow, lifecycle, noRequest);
 	std::string session = caller.session("a2");
 	REQUIRE(!session.empty());
@@ -339,9 +339,9 @@ TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 		CHECK(lifecycle.activity() == Activity::Quitting);
 		caller.put("e1", quit);
 		caller.put("e2", R"({"tool":"documents"})");
-		caller.put("e3", R"({"tool":"tools"})");
+		caller.put("e3", R"({"tool":"@tools"})");
 		caller.put("e4", R"({"tool":"no_such_tool"})");
-		caller.put("e5", R"({"tool":"session_end","session":")" + session + R"("})");
+		caller.put("e5", R"({"tool":"@session_end","session":")" + session + R"("})");
 		VwCli::core::ServeResult inner =
 		    VwCli::core::tick(server, kTools, kNow, lifecycle, [&] { ++requests; });
 		CHECK(!inner.quit);
@@ -357,7 +357,7 @@ TEST(TickQuitsOnlyAfterStartingWithoutDocuments) {
 	CHECK(!server.inSession());
 	// 戻ったら下ろす（取り消されて Vectorworks が動き続けても、また頼める）。
 	CHECK(lifecycle.activity() == Activity::Idle);
-	caller.put("f1", R"({"tool":"session_start"})");
+	caller.put("f1", R"({"tool":"@session_start"})");
 	VwCli::core::tick(server, kTools, kNow, lifecycle, noRequest);
 	session = caller.session("f1");
 	REQUIRE(!session.empty());

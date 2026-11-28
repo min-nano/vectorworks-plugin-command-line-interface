@@ -111,6 +111,7 @@ func defaultEnv() env {
 type cli struct {
 	Status    statusCmd    `cmd:"" help:"Report whether the bridge is running."`
 	Call      callCmd      `cmd:"" help:"Call one tool."`
+	Tools     toolsCmd     `cmd:"" help:"List the tools that call can call."`
 	Launch    launchCmd    `cmd:"" help:"Start Vectorworks."`
 	Session   sessionCmd   `cmd:"" help:"Occupy the bridge, or end the occupation."`
 	Install   installCmd   `cmd:"" help:"Install or update a plug-in (NAME@TAG)."`
@@ -150,7 +151,7 @@ an empty timeout is wrong usage. For a switch such as --raw, the variable takes
 true or false (or 1 or 0), and --no-raw turns it off again.
 
 	${cmd} status
-	${cmd} call tools
+	${cmd} tools
 	${cmd} launch
 
 ${cmd} does not wait for the bridge to start or stop: the caller runs status
