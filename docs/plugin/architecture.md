@@ -9,7 +9,7 @@ Vectorworks ──読み込む──▶ cli.vwlibrary / cli.vlb     … 起動�
 - **更新は Vectorworks を終了してから行います**（[インストール](install-and-update.md#インストールと更新vw2026-install)）。
 - 新しい版は次の起動から効きます。版を確かめるには `vw2026 call ping` の `version` を見ます。
 
-## 入口
+## エントリポイント
 
 | 入口 | 処理 |
 | --- | --- |
@@ -23,7 +23,7 @@ Vectorworks ──読み込む──▶ cli.vwlibrary / cli.vlb     … 起動�
 留める前に渡した関数の番地は残らない。下記「Windows ではタイマーを作る前にモジュールを留めます」）。通知は起動を終えた後も
 短い間隔で届き続けるので、中では印を立てるだけにします（同 4 の 9「起動を終えた目印」）。
 
-## 受け付けの流れ
+## 受付処理の流れ
 
 ```
 OS タイマー（刻み 1 回。core::tick）
@@ -34,11 +34,11 @@ OS タイマー（刻み 1 回。core::tick）
 ```
 
 `serve` の中の手順（ロック・取り出し・待つ印・占有・処理中の判定・道具の実行）は
-[ブリッジ「受け付け 1 回」](bridge.md#受け付け-1-回coreserverserve)にあります。
+[ブリッジ「受け付け 1 回」](bridge.md#1-回の受付処理coreserverserve)にあります。
 
 - **SDK 呼び出しはメインスレッドからだけ**行います。受け付け用のスレッドは持ちません。
 - **受け付けの中で非同期の処理の完了を待ちません。** 同期の呼び出しが長く掛かる道具は持ちます
-  （規則と理由は[通信規則「予約された道具」](../protocol.md#予約された道具)）。
+  （規則と理由は[通信規則「予約された道具」](../protocol.md#予約ツール)）。
 - **終了の依頼は受け付けの外で行います。** `CloseAllFilesAndQuitVectorworks` は図面が開いていると
   保存の確認を出すので、応答を書き終え、受け付けから戻ってからタイマーが呼びます（[道具「quit」](tools.md#quit)）。
   **`quit` は図面が 1 枚でも開いていれば先に断ります**（保存済みの図面の未保存の変更は読めないため。
@@ -62,7 +62,7 @@ OS タイマー（刻み 1 回。core::tick）
   閉じた文書のレイヤと、後で開いた別の文書のレイヤが同じアドレスで返ることがあり、持ち越すと
   別の文書を指しうるためです（同 4 の 8）。
 
-## 受け付けを止めない
+## 受付処理を停止させない
 
 **利用者が受け付けを止める手段は持ちません**（止めたければアンインストールする）。要求を受け付けの
 外に溜め込むこともしません。Vectorworks の処理の妨げになる要求は、次の「Vectorworks が処理中」で
@@ -73,7 +73,7 @@ OS タイマー（刻み 1 回。core::tick）
   `GetCurrentLayer()` と `GetOpenFilesList()` を呼んで落ちないことは確かめてあります（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 8）。
 - Vectorworks が刻みを配らない間（重い処理・一部のダイアログの最中）は応えません。そのとき要求は
   スプールに残り、刻みが戻れば処理されます（呼ぶ側の待ち時間の内なら応答が届く。過ぎた・呼ぶ側が
-  強制終了された要求は、待つ印を掴める（又は無い）ので実行しない。[通信規則「待つ印」](../protocol.md#待つ印idwait)）。
+  強制終了された要求は、待つ印を掴める（又は無い）ので実行しない。[通信規則「待つ印」](../protocol.md#待機標識idwait)）。
   その間もロックは掴んだままです（呼ぶ側から見た扱いは[通信規則「生存の判定」](../protocol.md#生存の判定)）。
 
 ## Vectorworks が処理中
@@ -83,13 +83,13 @@ OS タイマー（刻み 1 回。core::tick）
 
 | 場面 | 判定 |
 | --- | --- |
-| 終了の依頼の最中 | `CloseAllFilesAndQuitVectorworks` の前後で印を立てて下ろし、その間の刻みで `core::Server::serve` に `Quitting` を渡す（印は `core::Lifecycle` が持つ。[ブリッジ「分け方」](bridge.md#分け方)） |
+| 終了の依頼の最中 | `CloseAllFilesAndQuitVectorworks` の前後で印を立てて下ろし、その間の刻みで `core::Server::serve` に `Quitting` を渡す（印は `core::Lifecycle` が持つ。[ブリッジ「分け方」](bridge.md#分割の方針)） |
 | 受け付けの入れ子 | `core::Server` が `serve` の途中かを持つ |
 
 - **受け付けの入れ子**は、道具の SDK 呼び出しが中でイベントを回したとき（モーダルダイアログ・進捗の
   `DoYield` など）に、そのループの中で次の刻みが届いて起きます（[Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4）。
   `close` は保存の確認を出さないので回しません。`save` は、保存先のフォルダに `VW Backup` を作れないときの警告で
-  回しえます（[道具「図面を扱う道具」](tools.md#図面を扱う道具documentssaveclose)）。ダイアログの出ない保存と
+  回しえます（[道具「図面を扱う道具」](tools.md#図面を操作するツールdocumentssaveclose)）。ダイアログの出ない保存と
   閉じるは、大きな図面でも最中にイベントを回しません
   （[SDK リファレンス #290](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/290)）。
 - **このプラグインのタイマーは 1 本なので、受け付けの入れ子が起きるのは Windows だけです。** Windows はダイアログの
@@ -114,10 +114,10 @@ OS タイマー（刻み 1 回。core::tick）
   記録、[Undo](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Undo.md) の PIO・`CreateLocus`・スクリプトエンジンもプローブが呼んだもの）。
   Vectorworks の GUI の操作は、刻みが入らない区間で記録を開いて閉じます（ドラッグ中・レンダリング中の
   刻みでも開いていなかった。同 Findings の 7）。このプラグインの書く道具は自分で記録を開き、
-  戻る前に閉じる（[ブリッジ「道具の表」](bridge.md#道具の表)）ので、記録が混ざることはありません。
+  戻る前に閉じる（[ブリッジ「道具の表」](bridge.md#ツールの一覧)）ので、記録が混ざることはありません。
   他のプラグインが閉じ忘れた記録には備えません（CLI を使っている間は GUI を操作しない前提）。
 
-## 拡張機能を登録しない
+## 拡張機能の非登録
 
 **メニューもパレットも PIO も登録しません。** 操作は全て CLI から行い、更新も CLI が行う
 （[インストール](install-and-update.md#インストールと更新vw2026-install)）ので、利用者の入口は要りません。
@@ -132,7 +132,7 @@ OS タイマー（刻み 1 回。core::tick）
   更新では許可は要りません。但し記録はダイアログを閉じる度にそのとき居たプラグインだけで
   書き直されるので、`cli` が居ない状態で Vectorworks を起動してダイアログを閉じると、同じパスでも
   もう一度要ります
-  （[SDK の調査 0](../sdk-research.md#0-拡張機能を-1-つも登録しないプラグインの読み込み分かった)）。
+  （[SDK の調査 0](../sdk-research.md#0-拡張機能を-1-つも登録しないプラグインの読み込み判明)）。
 - **全部のプラグインが有効でも、ダイアログは約 24 時間おきに出ます。プラグインと CLI は、そのダイアログを
   勝手に閉じず、日時の書き換えで出なくすることもしません。** ダイアログのどのボタンを押すかは呼ぶ側が
   選びます（「無効にする」を押すと、次の起動から `cli` 自身が外れうる）。
@@ -165,4 +165,4 @@ cli/                                       … vw2026・vw2025（Go）。イン�
 
 - 名前空間は `VwCli`（`VwCli::core` / `VwCli::tools`）。図面にも配布物にも現れない内部の綴りで、
   改名しても据え置きます。
-- 各ファイルの受け持ちは[ブリッジ「分け方」](bridge.md#分け方)にあります。
+- 各ファイルの受け持ちは[ブリッジ「分け方」](bridge.md#分割の方針)にあります。

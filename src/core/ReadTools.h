@@ -1,7 +1,7 @@
 #pragma once
 
 // 読む道具（layers・classes・layer_objects・object_counts）の内 SDK に依らない部分
-// （docs/plugin/tools.md「読む道具」）。引数の検査・no_document の判定・数え方・type_name の表・
+// （docs/plugin/tools.md「読み取りツール」）。引数の検査・no_document の判定・数え方・type_name の表・
 // 絞り込みと頁送り・結果の形をここに置き、SDK から読む値は Drawing（src/tools/ReadTools.cpp が
 // SDK で作る）から受け取るので、無 SDK でテストできる。
 

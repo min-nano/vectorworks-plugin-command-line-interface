@@ -16,7 +16,7 @@ import (
 )
 
 // workDirName は、利用者ごとの一時フォルダの下の <Work> の名前の頭（docs/plugin/install-and-update.md
-// 「作業の場所」。WorkDirFor が <Plug-Ins> ごとの鍵を足す）。vw2026 だけが使うので、通信規則の見本には載せない。
+// 「作業領域」。WorkDirFor が <Plug-Ins> ごとの鍵を足す）。vw2026 だけが使うので、通信規則の見本には載せない。
 // 版ごとに分ける（2025 は vectorworks2025-cli。docs/plugin/editions.md）。
 const workDirName = "vectorworks" + edition.Year + "-cli"
 
@@ -90,7 +90,7 @@ func nameOnDisk(entries []os.DirEntry, name string) string {
 	return match
 }
 
-// DefaultPluginsDir は既定の <Plug-Ins> を返す（docs/plugin/identifiers.md「置き場所」）。
+// DefaultPluginsDir は既定の <Plug-Ins> を返す（docs/plugin/identifiers.md「配置場所」）。
 func DefaultPluginsDir() (string, error) {
 	return defaultPluginsDir()
 }

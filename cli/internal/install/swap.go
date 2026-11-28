@@ -12,7 +12,7 @@ import (
 )
 
 // replace は zip を取って組み立て、プラグインのフォルダを付け替えてフックを走らせる
-// （docs/plugin/install-and-update.md「入れ替えの手順」）。失敗したら <Plug-Ins> を元に戻す。
+// （docs/plugin/install-and-update.md「置換の手順」）。失敗したら <Plug-Ins> を元に戻す。
 func (o *Options) replace(p places, name, source, tag, previous string, asset registry.Asset) (json.RawMessage, error) {
 	for _, dir := range []string{p.staging, p.old} {
 		if err := mkdirAll(dir, 0o700); err != nil {

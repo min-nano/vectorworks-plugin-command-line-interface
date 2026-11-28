@@ -6,7 +6,7 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
-// 予約された道具（docs/protocol.md「予約された道具」）。占有の印はプラグインが発行してメモリに
+// 予約された道具（docs/protocol.md「予約ツール」）。占有の印はプラグインが発行してメモリに
 // 持つので、CLI の側に持つものは無い。予約された道具の名前と、断られたときの誤りだけを置く。
 const (
 	// 道具の一覧を返す

@@ -99,7 +99,7 @@ func CheckRequest(name, tag string) error {
 	return nil
 }
 
-// Install は <name>@<requested> を 1 回入れる（docs/plugin/install-and-update.md「流れ」）。
+// Install は <name>@<requested> を 1 回入れる（docs/plugin/install-and-update.md「処理の流れ」）。
 // check なら入れずに、新しいビルドがあるかだけを返す。Vectorworks が動いていれば何もせずに
 // ErrRunning を返す（結果の outcome も vectorworks_running）。
 func Install(o Options, name, requested string, check bool) (*InstallResult, error) {
@@ -239,7 +239,7 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 }
 
 // manifestAsset は、規則 rule の指すマニフェストを取り、そのタグと今のターゲットの asset を返す
-// （docs/plugin/install-and-update.md「流れ」の 4）。
+// （docs/plugin/install-and-update.md「処理の流れ」の 4）。
 func (o *Options) manifestAsset(rule registry.Rule, name, requested string) (string, registry.Asset, error) {
 	location := rule.Location(requested)
 	data, err := o.fetch(location)
@@ -260,7 +260,7 @@ func (o *Options) manifestAsset(rule registry.Rule, name, requested string) (str
 	return manifest.Tag, asset, nil
 }
 
-// inspect は入れる先のフォルダを確かめる（docs/plugin/install-and-update.md「入れる先のフォルダ」）。
+// inspect は入れる先のフォルダを確かめる（docs/plugin/install-and-update.md「インストール先のフォルダ」）。
 // 無ければ nil。記録が無い・読めない・名前か出どころが違えば、何も変えないように失敗にする。
 func inspect(dest, name, source string) (*Record, error) {
 	if found, err := pluginFolder(dest); err != nil || !found {

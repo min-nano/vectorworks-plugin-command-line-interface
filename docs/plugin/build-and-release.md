@@ -9,12 +9,12 @@ SDK のリンクとバンドルの形は、SDK リファレンスの実機確認
 | --- | --- |
 | プロジェクト | `project(VwCli CXX)`（Apple では OBJCXX も）。CMake は 3.24 以上（[CMake の版](#cmake-の版)） |
 | 選択肢 | `VW_BUILD_PLUGIN`（ON）・`VW_BUILD_TESTS`（OFF）・`VW_BUILD_FUZZERS`（OFF。clang の libFuzzer が要る）・`VW_ENABLE_SANITIZERS`（OFF）・`VW_ENABLE_COVERAGE`（OFF）・`VW_ENABLE_PCH`（ON）。`VW_BUILD_PLUGIN` が ON で `VW_SDK_DIR` が無ければ構成で止める（黙ってプラグインを外さない）。SDK の無いところ（テスト・検査・ファジング。ubuntu を含む）は `-DVW_BUILD_PLUGIN=OFF` を付ける |
-| SDK | `VW_SDK_DIR`（`SDKLib` を含む）。mac は `libVWSDK.a`＋VWMM・`BuildVWR`、Windows は x64 だけ（`VWSDK.lib`・`VWMM.lib`・`buildvwr.exe`）。どれかが無ければ構成で止める。配るプラグイン（CI）は Release でビルドする。SDK の Release のライブラリに合わせる指定（`RELEASE_BLD`・Windows の `/MD`）は構成によらず付くので、[手元のビルド](#手元のビルド)の `RelWithDebInfo` でも SDK とずれない |
+| SDK | `VW_SDK_DIR`（`SDKLib` を含む）。mac は `libVWSDK.a`＋VWMM・`BuildVWR`、Windows は x64 だけ（`VWSDK.lib`・`VWMM.lib`・`buildvwr.exe`）。どれかが無ければ構成で止める。配るプラグイン（CI）は Release でビルドする。SDK の Release のライブラリに合わせる指定（`RELEASE_BLD`・Windows の `/MD`）は構成によらず付くので、[手元のビルド](#ローカル環境でのビルド)の `RelWithDebInfo` でも SDK とずれない |
 | 警告 | SDK に依らないターゲット（共通部・テスト・ファジング）にだけ付け、プラグインには付けない |
-| 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。プラグインとテストがリンクする）。OS ごとの実装はその OS の分だけを入れる（[保存先の確かめ「実装とテストの分け方」](save-target.md#実装とテストの分け方)） |
+| 共通部 | `VwCliCore`（STATIC。`src/core/*`。SDK に依らない。プラグインとテストがリンクする）。OS ごとの実装はその OS の分だけを入れる（[保存先の確かめ「実装とテストの分け方」](save-target.md#実装とテストの分担)） |
 | テスト | `VwCliTests`（`tests/*Tests.cpp`。外部のテストの枠組みに依らない）・`JsonFuzzer`（`tests/JsonFuzzer.cpp`）。テストは `protocol/fixtures` を読む |
 | プラグイン | `add_library(<target> MODULE)`。`VW_PLUGIN_SOURCES`（`src/*.cpp`・`src/tools/*`） |
-| 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH`。PR では、ブランチの head の sha とブランチの名前（[リリースの形](#リリースの形)）。CI では `meta` が決め、ビルドのジョブが `-D` で渡す。渡さなければ `local`。`ping` の結果に載る。ファイルとしての版の情報は `build.json` だけ（[梱包](#梱包)） |
+| 刻印 | `VW_BUILD_VERSION`（短い sha）・`VW_BUILD_BRANCH`。PR では、ブランチの head の sha とブランチの名前（[リリースの形](#リリースの構成)）。CI では `meta` が決め、ビルドのジョブが `-D` で渡す。渡さなければ `local`。`ping` の結果に載る。ファイルとしての版の情報は `build.json` だけ（[梱包](#梱包)） |
 | mac | `Module-Info.plist.in`（版の鍵は持たない）・`.vwlibrary` バンドル・リソースは `Contents/Resources/<name>.vwr`。arm64 だけ（SDK リファレンスの `plugin/` が実機で読み込まれている形に合わせ、確かめていない形を配らない。CLI は universal。Intel の mac（`macos-x64`）は、実機で確かめる環境が無いので対応を見送る）。配備の下限は mac 14。ソースは Objective-C++ としてコンパイルする |
 | Windows | `.vlb`・隣に `.vwr` |
 | ターゲット | `add_vw_plugin(VwCli "cli" io.github.min-nano.cli)` の 1 つだけ（安定版と開発版を区別しない） |
@@ -46,7 +46,7 @@ ubuntu（CMake 3.28・clang 18）で、テストの構成（`-DVW_BUILD_PLUGIN=O
 最小の構成で上の版の指定が同じであることを確かめています。プラグインの構成（SDK が要る）は
 CI の `build.yml` と実機で確かめます。
 
-### 手元のビルド
+### ローカル環境でのビルド
 
 mac の手元でプラグインをビルドするときは、プリセット `vw2026`（Vectorworks の版）を使います。
 共通の設定は、コミットしてある `CMakePresets.json` の隠しプリセット `vw2026-base` にあります
@@ -108,7 +108,7 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
 | `meta` | ビルドする sha・刻印・公開先のタグ（`0.0.0-<短い sha>` / `dev-<slug>-<PR 番号>-<短い sha>` / 公開しない）を決め、`build.json` を書く（mac と Windows の zip に同じものを入れる） |
 | `build-mac` | `macos-15`・Xcode 16.2（SDK リファレンスの `plugin/` と同じ）。プラグインのビルドとアドホック署名、Go の arm64 と amd64 を `lipo` で universal に、zip。版の行列で走る（ジョブの名前と版ごとの違いは[版「ビルド」](editions.md#ビルド)） |
 | `build-windows` | `windows-latest`・MSVC。プラグインのビルド、Go の amd64、zip。版の行列で走る（同上） |
-| `release` | 公開するときだけ。版ごとにマニフェスト（`vw2026.json`・`vw2025.json`。[レジストリ「マニフェスト」](../registry.md#マニフェストvw2026json)）を書き、**下書きのリリース**に zip・マニフェスト・初回のスクリプトを上げ終えてから公開する（下書きは利用者の URL から見えないので、資産が揃わない間を見せない）。同じタグのリリースが既にあるときの扱いは[リリースの形](#リリースの形) |
+| `release` | 公開するときだけ。版ごとにマニフェスト（`vw2026.json`・`vw2025.json`。[レジストリ「マニフェスト」](../registry.md#マニフェストvw2026json)）を書き、**下書きのリリース**に zip・マニフェスト・初回のスクリプトを上げ終えてから公開する（下書きは利用者の URL から見えないので、資産が揃わない間を見せない）。同じタグのリリースが既にあるときの扱いは[リリースの形](#リリースの構成) |
 | `verify` | 公開した資産を利用者と同じ道筋（既定のレジストリの `cli` の規則が指すマニフェスト → その `asset`）で、mac と Windows で版ごとに取ってきて、マニフェスト・zip の形・`build.json` と CLI の版を確かめる。mac では、公開した初回のスクリプトで一時の `<Plug-Ins>` に入れて外す。`--latest` を付けて公開したときは、`latest` の規則でも取る |
 | `verify-result` | `verify` の結果を 1 つのチェックにまとめる（行列のジョブは、飛ばされると必須のチェックにできないため） |
 | `install-windows` | PR のプレリリースを公開したときだけ。`windows-latest` で、公開した PR のビルドを実物の exe とレジストリで入れ替え・外す（手順は[インストール「テスト」](install-and-update.md#テスト)の「実物の exe の入れ替え」）。版の行列のジョブ `install-windows-editions` の結果を、必須のチェック `install-windows` がまとめる（`verify-result` と同じ理由） |
@@ -156,14 +156,14 @@ cli-macos-arm64.zip                     cli-windows-x64.zip
 （`vw2025.exe`）です（[版](editions.md)）。
 
 zip の中身はそのまま `<Plug-Ins>/cli/` に置かれ、`bin/` の CLI もそこから動かします。`hooks/` のフックは
-PATH だけを置きます（[インストール「CLI とスプールの置き場所」](install-and-update.md#cli-とスプールの置き場所)）。zip の項目の区切りは
-`/` にします（`\` を区切りに使った zip を `install` は断ります。[レジストリ「zip の形」](../registry.md#zip-の形)）。
+PATH だけを置きます（[インストール「CLI とスプールの置き場所」](install-and-update.md#cli-とスプールの配置場所)）。zip の項目の区切りは
+`/` にします（`\` を区切りに使った zip を `install` は断ります。[レジストリ「zip の形」](../registry.md#zip-の構成)）。
 
 `build.json`（`{"version","branch"}`）は CI が書きます。`ping` の `version` / `branch` と同じ値で、
 `bin/vw2026 version` と突き合わせるためのものです。`vw2026 install` が新しいかを比べるのは
-`build.json` ではなく、タグです（[インストール「流れ」](install-and-update.md#流れ)）。
+`build.json` ではなく、タグです（[インストール「流れ」](install-and-update.md#処理の流れ)）。
 
-## リリースの形
+## リリースの構成
 
 **タグはビルドごとに新しく付け、使い回しません**（[レジストリ「名前・タグ・ターゲット」](../registry.md#名前タグターゲット)）。
 `vw2026 install` は既定のレジストリの `cli` の規則（`latest` は `releases/latest/download/vw2026.json`、
@@ -197,13 +197,13 @@ PATH だけを置きます（[インストール「CLI とスプールの置き�
 - CI は `pull_request` のマージのためのコミットで走り、プレリリースは head でビルドするので、
   ブランチが main から遅れていると両者の中身は違います。ブランチを main に追いつかせることは
   求めません（並行して進める PR ごとに取り込みを強いないため）。扱いは
-  [実機の確かめ方「確かめること」](verification.md#確かめること)にあります。
+  [実機の確かめ方「確かめること」](verification.md#検証事項)にあります。
 - 資産は、`vw2026.json`（マニフェスト）・`cli-macos-arm64.zip` / `cli-windows-x64.zip`・
   `get-vw2026.{sh,ps1}`（初回のスクリプト。利用者は `releases/latest/download/` のものを使う）と、2025 の
   同じもの（`vw2025.json`・`cli-vw2025-macos-arm64.zip` / `cli-vw2025-windows-x64.zip`・`get-vw2025.{sh,ps1}`。[版](editions.md)）です。
   初回のスクリプトはビルドしたコミットの雛形 `scripts/get-vw.{sh,ps1}` の `@VW_TAG@` をそのリリースのタグに、`@VW_YEAR@` を
   版に置き換えて上げます（どのリリースから取ったスクリプトも、そのリリースのその版の `cli` を入れる・外す。
-  [インストール「初回のスクリプト」](install-and-update.md#初回のスクリプトget-vw2026sh--ps1)）。PowerShell のものは ASCII だけで書き、
+  [インストール「初回のスクリプト」](install-and-update.md#初回スクリプトget-vw2026sh--ps1)）。PowerShell のものは ASCII だけで書き、
   BOM を除いて上げます（理由は `build.yml` の注釈）。本文に機械が読む情報は載せません
   （入れるのに要る情報はマニフェストが持つ）。CLI 単体の資産は持ちません（zip の `bin/` にあり、
   初回のスクリプトもそこから取り出す）。

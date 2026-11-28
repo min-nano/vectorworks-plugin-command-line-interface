@@ -11,7 +11,7 @@ cmake_minimum_required(VERSION 3.24)
 #   cmake -S . -B build -A x64 -DVW_SDK_DIR=<SDKLib を含むフォルダ>                     # Windows
 #   cmake --build build --config Release --target VwCli
 # 手元（mac）では CMakePresets.json のプリセット vw2026 を使う（RelWithDebInfo。
-# docs/plugin/build-and-release.md「手元のビルド」）。
+# docs/plugin/build-and-release.md「ローカル環境でのビルド」）。
 #
 # 単体テスト（SDK は要らない。CLAUDE.md「C++」の手元のテストと同じ指定。CI の cpp.yml はカバレッジも測る）:
 #   cmake -S . -B build -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=ON \
@@ -154,7 +154,7 @@ if(VW_BUILD_PLUGIN)
 		endif()
 	endforeach()
 
-	# 刻印（docs/plugin/build-and-release.md「リリースの形」）。ping の結果にだけ載る。
+	# 刻印（docs/plugin/build-and-release.md「リリースの構成」）。ping の結果にだけ載る。
 	# -DVW_BUILD_VERSION / -DVW_BUILD_BRANCH で渡したときだけその値を使い、渡さなければ local。
 	# キャッシュに残さない（残ると、後で渡さずに構成し直しても古い sha のまま ping に載る）。
 	# C の文字列に書くので \ と " を逃がす（git はブランチ名に " を許す）。生成したヘッダに書き、

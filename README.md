@@ -50,7 +50,7 @@ irm https://github.com/min-nano/vectorworks-plugin-command-line-interface/releas
 
 Vectorworks 2025 に入れるときは、URL の `get-vw2026` を `get-vw2025` に替えます（コマンドは `vw2025`）。
 
-## 使い方
+## 使用方法
 
 結果は JSON で標準出力に返ります。
 
@@ -88,7 +88,7 @@ vw2026 call layer_objects '{"layer":"1F","limit":10}'
 # {"layer":"1F","unit":"mm","objects":[{"index":0,"type":3,"type_name":"box","pio_name":null,"name":"","class":"…","bounds":{…}},…],"returned":10,"total":13}
 ```
 
-### 図面を保存する・閉じる、Vectorworks を終了する
+### 図面の保存・終了と Vectorworks の終了
 
 Vectorworks に指示する操作（`save`・`close`・`quit`）は、他のプログラムの操作と混ざらないように、
 **セッションを使って占有した中でだけ**実行できます（占有していないとき・他が占有しているときは、標準出力に何も返さず終了コード 23 で断られます。理由は標準エラーに出ます）。
@@ -178,7 +178,7 @@ vw2026 uninstall cli
 # {"outcome":"uninstalled","name":"cli","hook":{…},"remaining":[],"left":[]}
 ```
 
-## ドキュメント
+## 関連文書
 
 開発者向けの文書です。
 

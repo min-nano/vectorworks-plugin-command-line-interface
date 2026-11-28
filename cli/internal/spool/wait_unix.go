@@ -7,7 +7,7 @@ import (
 	"syscall"
 )
 
-// holdWait は <id>.wait を作って掴む（docs/protocol.md「待つ印」）。返す関数で放す。
+// holdWait は <id>.wait を作って掴む（docs/protocol.md「待機標識」）。返す関数で放す。
 //
 // 掴み方は bridge.lock と同じ flock(LOCK_EX)。プロセスが終われば（異常終了でも）カーネルが
 // 放すので、プラグインは掴めるかどうかで呼ぶ側の生死を判定できる。Go の os.OpenFile は

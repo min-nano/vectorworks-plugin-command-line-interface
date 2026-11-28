@@ -1,5 +1,5 @@
-// プラグインの入口（docs/plugin/architecture.md「入口」）。拡張機能は登録せず、VCOM を初期化して
-// OS タイマーを始めるだけ（docs/plugin/architecture.md「拡張機能を登録しない」）。
+// プラグインの入口（docs/plugin/architecture.md「エントリポイント」）。拡張機能は登録せず、VCOM を初期化して
+// OS タイマーを始めるだけ（docs/plugin/architecture.md「拡張機能の非登録」）。
 //
 // SDK の静的ライブラリをリンクするモジュールが定義するもの（plugin_module_ver と
 // DefaultPluginVWRIdentifier）は SDK リファレンスの Findings「Plug-in Modules」による。

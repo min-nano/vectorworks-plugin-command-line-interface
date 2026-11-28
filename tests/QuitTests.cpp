@@ -17,7 +17,7 @@
 #include <vector>
 
 // 道具 quit と、起動を終えた印・終了の依頼の最中の印（docs/plugin/tools.md「quit」・
-// docs/plugin/architecture.md「入口」「Vectorworks が処理中」）。SDK の代わりに偽の Documents と
+// docs/plugin/architecture.md「エントリポイント」「Vectorworks が処理中」）。SDK の代わりに偽の Documents と
 // 偽の終了の呼び出しを渡す。保存の確認が開いて呼び出しが戻らない間に刻みが入り直すこと（Windows）は、
 // 偽の終了の呼び出しの中から刻みを呼んで真似る。
 
@@ -193,7 +193,7 @@ TEST(QuitDoesNotClearBeforeStartingOrWithDocumentsOpen) {
 	CHECK_EQ(open.remnants, 1);
 }
 
-// 引数の形は、起動を終えたかより先に確かめる（docs/plugin/tools.md「共通の決まり」の
+// 引数の形は、起動を終えたかより先に確かめる（docs/plugin/tools.md「共通の規則」の
 // 確かめの順の 1）。
 TEST(QuitRejectsArguments) {
 	for (bool hasStarted : {false, true}) {

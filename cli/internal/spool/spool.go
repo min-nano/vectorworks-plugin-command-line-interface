@@ -6,7 +6,7 @@
 //
 // このパッケージは排他を持たない。排他はプラグインの占有（docs/protocol.md「占有」）だけで、
 // CLI は印を要求に載せるだけである。占有しない呼ぶ側どうしが同時に要求を置いても受け渡しは
-// 壊れないが、図面に対する操作の順序は呼ぶ側の責任である（docs/design.md「CLI はプリミティブに保つ」）。
+// 壊れないが、図面に対する操作の順序は呼ぶ側の責任である（docs/design.md「CLI のプリミティブ性の維持」）。
 package spool
 
 import (
@@ -125,7 +125,7 @@ var ErrNoResponse = errors.New("the bridge took the request but no response came
 
 // takenGrace は、待つのをやめたときに要求をプラグインが受け取っていたら、応答を待つ猶予。
 // 待つのをやめる直前に受け取られた要求の応答を拾うためのもので、道具がこれより長く掛かれば
-// ErrNoResponse（実行されたかもしれない）で終わる（docs/protocol.md「待つのをやめる」）。テストが縮める。
+// ErrNoResponse（実行されたかもしれない）で終わる（docs/protocol.md「待機の中止」）。テストが縮める。
 var takenGrace = 5 * time.Second
 
 // Bridge はスプール 1 つと、その状態。
@@ -176,7 +176,7 @@ func NewID(now time.Time) string {
 //
 // 刻みが届かずに応えない間も要求を置いて timeout まで待つ（刻みが戻れば処理される）。
 // 待つ間は <id>.wait を掴み、プラグインに呼ぶ側が待っていることを示す（docs/protocol.md
-// 「待つ印」）。待つのをやめるときは .wait を放して消してから、要求を消す。先に .wait を
+// 「待機標識」）。待つのをやめるときは .wait を放して消してから、要求を消す。先に .wait を
 // やめるので、要求を消す前にプラグインが取り出しても実行されない。呼ぶ側が強制終了されても
 // OS が .wait を放すので、残った要求は実行されず、シグナルを受けて後始末をする必要も無い。
 //

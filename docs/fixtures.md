@@ -1,4 +1,4 @@
-# 通信規則の見本
+# 通信規則のフィクスチャ
 
 [通信規則](protocol.md)を、プラグイン側（C++）と CLI 側（Go）が同じに実装しているかを
 確かめるための見本です（`protocol/fixtures/`）。**両側のテストが同じ見本を読み、通信規則の定数を
@@ -9,7 +9,7 @@
 | プラグイン（`src/core`） | `tests/FixtureTests.cpp`（定数・id・受け付け）。ファジング（`tests/JsonFuzzer.cpp`）は `requests/` を種にする |
 | CLI | `cli/internal/spool/fixtures_test.go`（定数・id）・`cli/internal/fakeplugin/fixtures_test.go`（受け付け）。ファジング（`cli/internal/spool/fuzz_test.go`）は `requests/` を種にする |
 
-## 置き場所
+## 配置場所
 
 | ファイル | 中身 |
 | --- | --- |
@@ -20,16 +20,16 @@
 | `serve/*.json` | 受け付けの見本（1 ファイル 1 件） |
 
 道具の結果の決まり（実数の綴り）は通信規則ではないので、ここではなく `tests/fixtures/` に置きます
-（C++ は `tests/NumberTests.cpp`、Go は `cli/internal/toolfixtures`。[道具「共通の決まり」](plugin/tools.md#共通の決まり)）。
+（C++ は `tests/NumberTests.cpp`、Go は `cli/internal/toolfixtures`。[道具「共通の決まり」](plugin/tools.md#共通の規則)）。
 
-見本の中身は整形も検査もせず（[整形](format.md#整形しないもの)）、git にも改行を変えさせません
+見本の中身は整形も検査もせず（[整形](format.md#整形の対象外)）、git にも改行を変えさせません
 （`.gitattributes` の `-text`）。
 
 **両側のテストは、見本の知らないキーと型の違う値を誤りとして読みます**（Go は
 `cli/internal/fixturetest`）。キーの綴りを誤ると、その確かめが黙って省かれるためです。手順（`steps`）の
 無い見本も誤りです。
 
-## 偽の道具の表（`fake-tools.json`）
+## 擬似ツールの一覧（`fake-tools.json`）
 
 `tools` の各要素は、道具の表の 1 行（`name`・`description`・`inputSchema`・`kind`）と、振る舞い
 `does` を持ちます。省略できるキーとして、道具が返す詳細 `detail`（オブジェクト。失敗なら応答の
@@ -49,7 +49,7 @@
 
 知らない `does` は、その道具が呼ばれたときにテストの誤りになります（両側とも）。
 
-## 受け付けの見本（`serve/*.json`）
+## 受付処理のフィクスチャ（`serve/*.json`）
 
 1 件は、同じプラグイン（ロックと占有の印を持ち続ける）に対する受け付けの回（`steps`）の並びです。
 回ごとに、スプールへファイルを置き、受け付けを 1 回走らせ、残ったファイルと応答を確かめます。

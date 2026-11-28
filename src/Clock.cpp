@@ -45,7 +45,7 @@ void onNotify(StatusID id, StatusData /*data*/) {
 
 // registerNotify は onNotify を登録する。plugin_module_main ではなく刻みから呼ぶ（Windows の
 // Vectorworks は起動時にモジュールを一度降ろして読み込み直すので、留める前に渡した番地は残らない。
-// 刻みはモジュールを留めてから作ったタイマーから来る。docs/plugin/architecture.md「入口」）。
+// 刻みはモジュールを留めてから作ったタイマーから来る。docs/plugin/architecture.md「エントリポイント」）。
 // 登録できなければ次の刻みでやり直す（その間 quit は starting で断り、detail に登録できて
 // いないことを示す）。
 void registerNotify() {
@@ -64,7 +64,7 @@ void registerNotify() {
 void requestQuit() { gSDK->CloseAllFilesAndQuitVectorworks(true, false); }
 
 // tick は受け付け 1 回と、頼まれていれば終了の依頼。例外は Vectorworks へ通さない
-// （docs/plugin/bridge.md「受け付け 1 回」）。
+// （docs/plugin/bridge.md「1 回の受付処理」）。
 void tick() {
 	if (gSDK == nullptr) {
 		return;

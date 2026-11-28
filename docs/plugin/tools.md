@@ -1,4 +1,4 @@
-# 道具
+# ツール
 
 プラグインが提供する道具の仕様です。版と状態を返す `ping`、図面を**読むだけ**の道具（`layers`・`classes`・
 `layer_objects`・`object_counts`）、図面を保存して閉じる道具（`documents`・`save`・`close`）、Vectorworks を終わらせる
@@ -12,18 +12,18 @@
 
 | 道具 | 種類 | 引数 | 結果 |
 | --- | --- | --- | --- |
-| `@tools` | （予約。`vw2026 tools` が呼ぶ） | なし | [通信規則「予約された道具」](../protocol.md#予約された道具) |
+| `@tools` | （予約。`vw2026 tools` が呼ぶ） | なし | [通信規則「予約された道具」](../protocol.md#予約ツール) |
 | `ping` | read | なし | 下記 |
-| `layers` | read | `include_sheets`（既定 true） | `{"layers":[{"name","kind":"design"\|"sheet","referenced","scale","objects","current"}],"count"}`（[読む道具](#読む道具layersclasseslayer_objectsobject_counts)） |
+| `layers` | read | `include_sheets`（既定 true） | `{"layers":[{"name","kind":"design"\|"sheet","referenced","scale","objects","current"}],"count"}`（[読む道具](#読み取りツールlayersclasseslayer_objectsobject_counts)） |
 | `classes` | read | なし | `{"classes":[名前…],"count"}`（同上） |
 | `layer_objects` | read | `layer`（必須）・`limit`（既定 50）・`offset`（既定 0）・`type`（種別の番号。省略＝全ての種別） | `{"layer","unit":"mm","objects":[{"index","type","type_name","pio_name","name","class","bounds":{"left","right","top","bottom"}}],"returned","total"}`（同上） |
 | `object_counts` | read | `layer`（省略＝図面全体） | `{"layer"?,"types":[{"type","type_name","count"}],"total"}`（種別番号の昇順。同上） |
-| `documents` | read | なし | [図面を扱う道具](#図面を扱う道具documentssaveclose) |
+| `documents` | read | なし | [図面を扱う道具](#図面を操作するツールdocumentssaveclose) |
 | `save` | app | `document`（必須）・`to`（必須） | 同上 |
 | `close` | app | `document`（必須） | 同上 |
 | `quit` | app | なし | `{"quitting":true}`。図面が開いていれば `internal` で失敗し、`detail` に一覧（下記） |
 
-## 共通の決まり
+## 共通の規則
 
 引数は、省略できるものに既定を設けます（表の「既定」）。知らない引数と、知っている引数の
 未知の値（型の違い・決まった綴り以外の値）は `invalid_args` で返します（[通信規則「互換性」](../protocol.md#互換性)）。
@@ -58,7 +58,7 @@
   ないので、通信規則の見本（`protocol/fixtures`。[通信規則の見本](../fixtures.md)）とは分けて置きます。
 
 **引数の確かめは次の順に行い、最初に当たったもので返します**（どの `reason` を返すかを決めておくため）。
-1. 引数の形（知らない引数・型・値の範囲・必須の欠け・`save` の `to` の形。[保存先の確かめ](save-target.md#to-の形)）→ `invalid_args`。
+1. 引数の形（知らない引数・型・値の範囲・必須の欠け・`save` の `to` の形。[保存先の確かめ](save-target.md#to-の形式)）→ `invalid_args`。
 2. 図面が無い → `internal`（`no_document`）。**「図面が無い」は、道具が使うものの有無で決めます。** 前面の図面を読む
    道具（`layers`・`classes`・`layer_objects`・`object_counts`）は `GetCurrentLayer()` が `nullptr` か（`ping` の
    `document_open` と同じ基準）、図面を名指す道具（`save`・`close`）は `GetOpenFilesList` の件数が 0 か（名指す図面を
@@ -68,7 +68,7 @@
 3. 引数が名指すもの（`document`・`layer`）が実在しない → `invalid_args`。名指すものが 1 つに決まらない
    （`document` に一致する図面が 2 枚以上 → `internal`（`document_ambiguous`）、`layer` に一致するレイヤが 2 枚以上 →
    `internal`（`layer_ambiguous`））。
-4. 道具ごとの状態（`save` は[保存先の確かめ「状態の確かめ」](save-target.md#状態の確かめ)の順）→ `internal`。
+4. 道具ごとの状態（`save` は[保存先の確かめ「状態の確かめ」](save-target.md#状態の検証)の順）→ `internal`。
 
 **道具が返す失敗の `invalid_args` と `internal` は、次のように分けます**（[通信規則「応答」](../protocol.md#応答idresjson)）。
 
@@ -98,7 +98,7 @@
 | `protocol` | 通信規則の版（[通信規則「版」](../protocol.md#版)） |
 | `pid` | 受け付けている Vectorworks のプロセス ID（2 つ起動しているときにどちらが受け付けているかが分かる） |
 | `session` | 占有の印を発行しているか（[通信規則「占有」](../protocol.md#占有セッション)）。`ping` は占有によらず誰にでも答える |
-| `document_open` | 図面が開いているか（`GetCurrentLayer()` が `nullptr` でないか。[共通の決まり](#共通の決まり)の確かめの順の 2） |
+| `document_open` | 図面が開いているか（`GetCurrentLayer()` が `nullptr` でないか。[共通の決まり](#共通の規則)の確かめの順の 2） |
 | `current_layer` | 現在のレイヤの名前。図面が開いていなければ `null` |
 
 図面が無いときは次のように答えます（`GetCurrentLayer()` は落ちずに `nullptr` を返します）。
@@ -109,15 +109,15 @@
 
 例の `protocol` は書いた時点の版です（[通信規則「版」](../protocol.md#版)）。
 
-## 読む道具（`layers`・`classes`・`layer_objects`・`object_counts`）
+## 読み取りツール（`layers`・`classes`・`layer_objects`・`object_counts`）
 
 図面を読むだけの道具です。使う SDK 呼び出しと挙動は SDK リファレンスで
-確かめてあります（[SDK の調査 4](../sdk-research.md#4-道具が使う-sdk-呼び出し)）。どれも前面の図面
+確かめてあります（[SDK の調査 4](../sdk-research.md#4-ツールが使用する-sdk-呼び出し)）。どれも前面の図面
 （アクティブな図面）を読みます。
 
 **共通の決めごと:**
 
-- **図面が開かれていなければ（[共通の決まり](#共通の決まり)の確かめの順の 2）`internal` で失敗し、`detail` に `{"reason":"no_document"}` を付けます。**
+- **図面が開かれていなければ（[共通の決まり](#共通の規則)の確かめの順の 2）`internal` で失敗し、`detail` に `{"reason":"no_document"}` を付けます。**
   SDK は図面が無くても落ちずに空の列を返します（[Findings「Layers and Stories」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md)の「OS タイマーの刻みの中・図面 0 枚」・
   [Findings「Attributes and Classes」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Attributes%20and%20Classes.md)の「タイマーの刻みから呼べる。図面 0 枚でも落ちない」）が、
   空の結果（`object_counts` の `total:0` など）を「中身の無い図面」と見分けられなくなるので、失敗にします。
@@ -140,7 +140,7 @@
 | `name` | レイヤの名前（`GetObjectName`）。リソースの参照で入ってきたレイヤは `NNA#<n>_<元の名前>`、レイヤの参照で入ってきたレイヤは元の名前のまま（下記） |
 | `kind` | `design`（`ovLayerType` が 1 か 3）・`sheet`（2）。それ以外の値（Findings で確かめていない種類）は `null` |
 | `referenced` | 参照で入ってきたレイヤか（`IsObjectFromReferencedFile(layer)`。参照の方法によらず真。下記） |
-| `scale` | 縮尺の分母（`GetLayerScaleN`。1/50 なら `50`、1:1 なら `1`）。SDK は `double_gs` で返すので実数として書きます（[Findings「レイヤの縮尺」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md#レイヤの縮尺setlayerscalen-は黙って効かないことがある)。確かめた縮尺はどれも整数で、整数でない縮尺は確かめていない）。**シートレイヤは SDK の返す通り常に `1`**。有限でなければ `null`（[共通の決まり](#共通の決まり)） |
+| `scale` | 縮尺の分母（`GetLayerScaleN`。1/50 なら `50`、1:1 なら `1`）。SDK は `double_gs` で返すので実数として書きます（[Findings「レイヤの縮尺」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layers%20and%20Stories.md#レイヤの縮尺setlayerscalen-は黙って効かないことがある)。確かめた縮尺はどれも整数で、整数でない縮尺は確かめていない）。**シートレイヤは SDK の返す通り常に `1`**。有限でなければ `null`（[共通の決まり](#共通の規則)） |
 | `objects` | レイヤの直下の図形の数（下記「数え方」） |
 | `current` | 現在のレイヤか（`GetCurrentLayer()` とハンドルが一致するか） |
 
@@ -198,7 +198,7 @@
   配列の中の位置を足したもの）。消去・取り消し・並べ替えで変わるので、図形の識別子には使えません。レイヤ全体の
   前後関係が要るなら、`type` を省いて取ります。
 - **`limit` は 1〜1000、`offset` は 0 以上、`type` は 0 以上の整数です。** 範囲の外と、小数部のある値（`2.5`）は
-  `invalid_args` で断ります（数の受け方は[共通の決まり](#共通の決まり)）。`offset` が `total` 以上なら `objects` は空で
+  `invalid_args` で断ります（数の受け方は[共通の決まり](#共通の規則)）。`offset` が `total` 以上なら `objects` は空で
   成功します。表に無い番号の `type` も断らず、合う図形が無ければ `total` は 0 です。`limit` に上限を設けるのは、
   1 回の受け付けと応答を大きくしすぎないためです。
 - **`type`** は `GetObjectTypeN` の番号です（引数の `type` も番号）。**`type_name`** は、番号から名前を引く口が
@@ -235,7 +235,7 @@
   区別が無い）。**`class`** はクラスの名前（`GetObjectClass` → `ClassIDToName`）です。
 - **`bounds`** は `GetObjectBounds` の外形で、**単位は常に mm**です。結果の **`unit`** は常に `"mm"` で、
   単位の取り違えを防ぐために置きます。値は図面の単位にもレイヤの縮尺にもよらない世界座標の実数です。`GetObjectBounds` が偽を
-  返した図形と、4 つの値のどれかが有限でない図形は `null` です（[共通の決まり](#共通の決まり)）。偽を返すと確かめたのは
+  返した図形と、4 つの値のどれかが有限でない図形は `null` です（[共通の決まり](#共通の規則)）。偽を返すと確かめたのは
   undo の置き石だけで（[Findings「Layer Objects」の 2](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Layer%20Objects.md#2-列に混ざる図形でないもの)）、置き石は数える図形から除いてあるので、
   列に残る図形で偽を返すものは確かめていません。返したときに備えて `null` にします。
   - **`left ≤ right`・`bottom ≤ top` です。** `left`・`right` は X の小さい側と大きい側、`bottom`・`top` は Y の
@@ -270,7 +270,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
     Cineware の起動待ち・「開発元不明のプラグイン」のダイアログの間には届かず、ホーム画面が出た後に初めて届く。その後の
     刻みから終了を頼むと普通に終わる。[SDK リファレンス #317](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/317)。同 4 の 9「起動を終えた目印」）。ダイアログの間は、
     利用者が「続ける」を押すまで `starting` で断られ続けます。呼び直すか・いつまで待つかは呼ぶ側が決めます
-    （[設計「CLI はプリミティブに保つ」](../design.md#cli-はプリミティブに保つ)）。
+    （[設計「CLI はプリミティブに保つ」](../design.md#cli-のプリミティブ性の維持)）。
   - Windows の起動の途中の振る舞いは測っていません（[#316](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/316)。仮想環境で DirectX を有効にできない）。
     mac と同じ作りにしてあり、起動を終えた後に通知が届いて `quit` が受け付けられることは Windows の実機で確かめました
     （起動の途中に `starting` で断られることは Windows では確かめられていない）。
@@ -291,19 +291,19 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
   | `documents[].path` | 図面のパス（`documents` と同じ。`untitled` が真の図面は「アプリケーションのフォルダ＋名前」（「名称未設定 N」・「<元の名前> コピー 1」など）でファイルとしては存在しない） |
   | `documents[].untitled` | ディスクのファイルに結び付いていない図面か（`documents` の `untitled` と同じ） |
 - **一覧が空でも、`close` で閉じた図面が Vectorworks の中に残っていれば、終了を頼む前に片付けます**
-  （[閉じた図面の片付け](#閉じた図面の片付け)）。上限の回数までに片付かなければ、終了を頼まずに `internal` で失敗し、
+  （[閉じた図面の片付け](#閉じた図面の後処理)）。上限の回数までに片付かなければ、終了を頼まずに `internal` で失敗し、
   `detail` に `{"reason":"closed_documents_remain"}` を付けます。片付けの後にもう一度一覧を見て、図面が開いていれば
   （片付けの間に開いたもの）、終了を頼まずに `documents_open` で断ります。
 - **図面が 0 枚（残った図面も無い）なら、保存の確認は出ません。** 応答を書いてから、受け付けの外で
-  `CloseAllFilesAndQuitVectorworks(true, false)` を頼みます（[構成「受け付けの流れ」](architecture.md#受け付けの流れ)）。
+  `CloseAllFilesAndQuitVectorworks(true, false)` を頼みます（[構成「受け付けの流れ」](architecture.md#受付処理の流れ)）。
   第 1 引数は常に真です（`quit` は図面を保存するか捨てるかを決めません。決めるのは呼ぶ側で、`save`（新しいパスへ）・
   `close`（変更を捨てる）で先に片付けます）。第 2 引数は常に偽です（下記「再起動の手段は持ちません」）。
   確かめてから頼むまでの間に利用者が
   図面を開くと、保存の確認が出うる競合が残りますが、`quit` は占有の中でだけ呼べ、呼ぶ側が図面を閉じた直後に
   呼ぶ使い方なので、通常は起きません。
 - **図面を保存して閉じるのは呼ぶ側です。** 保存するか捨てるかも呼ぶ側が決めます（`quit` に保存する・捨てる指定は持たず、
-  CLI にも足さない。[設計](../design.md#cli-はプリミティブに保つ)）。残したい図面（変更）は `save` で新しいパスへ保存してから、
-  どの図面も[下記の `close`](#図面を扱う道具documentssaveclose)で閉じます。`close` は保存の確認を出さず、未保存の変更を捨てます。
+  CLI にも足さない。[設計](../design.md#cli-のプリミティブ性の維持)）。残したい図面（変更）は `save` で新しいパスへ保存してから、
+  どの図面も[下記の `close`](#図面を操作するツールdocumentssaveclose)で閉じます。`close` は保存の確認を出さず、未保存の変更を捨てます。
 - **`close` で名指せない図面が開いていると、CLI だけでは終了できません。** パスを読めなかった図面（`path` が空）と、
   `path` が他の図面と重なる図面（`document_ambiguous`。別々のフォルダにある同じ名前の古い版のファイルを開いたものなど）は
   `close` で閉じられないので、開いている間 `quit` は `documents_open` で断られ続けます。その図面は利用者が Vectorworks で閉じます
@@ -316,11 +316,11 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
   （[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
 - **再起動の手段は持ちません**。起動し直すのは呼ぶ側で、`session start` で占有を
   取ってから `quit`（`--session` を付ける）・止まるのを待つ・`launch`・動き出すのを待つ、を組み合わせます（更新を
-  挟む形を含めて[インストール「流れ」](install-and-update.md#流れ)）。
+  挟む形を含めて[インストール「流れ」](install-and-update.md#処理の流れ)）。
 - 終了を見届けるのは呼ぶ側の役割です（`vw2026 status` を止まっていると答えるまで繰り返す。保存の確認を開いている間の扱いは
   [通信規則「生存の判定」](../protocol.md#生存の判定)）。
 
-## 図面を扱う道具（`documents`・`save`・`close`）
+## 図面を操作するツール（`documents`・`save`・`close`）
 
 `quit` の前に図面を片付ける（残したい図面を新しいパスへ保存する・図面を閉じる）ための道具です。使う SDK 呼び出しは SDK
 リファレンスで確かめてあります（[Findings「指定した図面を保存する・閉じる」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#指定した図面を保存する閉じる前面に依存せず)。
@@ -347,7 +347,7 @@ Vectorworks 2026 / mac。Windows も振る舞いは同じで、違うのはパ�
 上から `documents`・無題の図面を `to` へ保存した `save`・`close` の結果です。
 
 - **図面が 1 枚も開いていなければ、`save`・`close` は `internal` で失敗し、`detail` に `{"reason":"no_document"}` を
-  付けます**（[共通の決まり](#共通の決まり)の確かめの順の 2。`document` を確かめる前に返す）。
+  付けます**（[共通の決まり](#共通の規則)の確かめの順の 2。`document` を確かめる前に返す）。
   `documents` は失敗にせず、空の一覧を返します。
 - **`documents`** は `GetOpenFilesList` の項目を、その順のまま並べます（並べ替えない）。**`count`** はその数です。
   順の意味（開いた順・前面からの順など）は確かめていないので、呼ぶ側は順に頼らず `active` と `path` で見分けます。
@@ -381,14 +381,14 @@ Vectorworks 2026 / mac。Windows も振る舞いは同じで、違うのはパ�
     （「コピー N」）は重ならないことを見ただけです。利用者がアプリケーションの
     フォルダに同じ名前のファイルを保存して開いていれば、`untitled` が偽の図面とも重なりえます。**`untitled` によらず、
     一致する図面が 2 枚以上あれば、どれも保存・閉じずに `internal` で失敗し、`detail` に `{"reason":"document_ambiguous"}`
-    を付けます**（名指すものは実在するので `invalid_args` にしない。[共通の決まり](#共通の決まり)の 3 で、名指すものの
+    を付けます**（名指すものは実在するので `invalid_args` にしない。[共通の決まり](#共通の規則)の 3 で、名指すものの
     実在の直後に確かめる）。黙ってどれか 1 枚に効かせると、呼ぶ側の思っていない図面を閉じうるためです。
     呼ぶ側は、利用者に一方を閉じてもらうなどして見分けられるようにします。
   - **`path` は正規化しません。** SDK が返した文字列をそのまま返します。Windows では、保存したときに渡された
     文字列がそのまま残り、区切りだけが `\` に揃います（ドライブ文字の大小・名前の大小・8.3 の短い名前は直らない）。
     同じファイルでも、保存したときの渡し方しだいで別の文字列になります。
 - **`save`** は、名指した図面を `to` の新しいパスへ保存します。種類は `app` です（図面の中身は変えず、ファイルに書く。
-  [ブリッジ「道具の表」](bridge.md#道具の表)）。`to` は必須で（省くと `invalid_args`）、既にあるファイルは断ります（下記。[保存先の確かめ](save-target.md)）。
+  [ブリッジ「道具の表」](bridge.md#ツールの一覧)）。`to` は必須で（省くと `invalid_args`）、既にあるファイルは断ります（下記。[保存先の確かめ](save-target.md)）。
   `untitled` によらず、どの図面にも使え、同じ図面に何度でも使えます（その度に新しいファイルができる）。
   - **上書き保存（図面自身のパスへの保存）は提供しません。** 上書き保存は、自分のファイルが移された・消された、開いた後で
     読み取り専用になったなどの場面で警告のダイアログを出し、人が押すまで戻りません
@@ -418,7 +418,7 @@ Vectorworks 2026 / mac。Windows も振る舞いは同じで、違うのはパ�
     - **上書き保存をやめた理由（警告のダイアログで止まる）との違い:** 上書き保存の警告は、利用者が図面のファイルを
       動かした・読み取り専用にしたなど、普通に起きうる場面で出て、保存も通らないことがありました。この警告は保存は通り、
       バックアップのフォルダを作れない特別な保存先でだけ出て、出るかどうかは利用者の環境設定で変わります。
-    - **警告が出ている間は、ダイアログを出す道具と同じく人が答えるまで戻りません**（[通信規則「予約された道具」](../protocol.md#予約された道具)の「長く掛かる道具」）。Windows では、呼んだタイマー自身が入り直して
+    - **警告が出ている間は、ダイアログを出す道具と同じく人が答えるまで戻りません**（[通信規則「予約された道具」](../protocol.md#予約ツール)の「長く掛かる道具」）。Windows では、呼んだタイマー自身が入り直して
       受け付けが入れ子になり、他の要求は全て `busy` で断られます。mac ではタイマーが入り直さず、何も応えません
       （[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。`save` を呼んだ `vw2026 call` は、既定の待つ上限
       （30 秒）を過ぎると「実行されたかもしれない」（終了コード 4）で終わり、応答を読めません。そうした保存先に保存しうる
@@ -430,7 +430,7 @@ Vectorworks 2026 / mac。Windows も振る舞いは同じで、違うのはパ�
     [同「すでに開かれています」の比べ方（mac）](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#このファイルはすでに開かれていますの比べ方macwindows-と同じ文字列の完全一致)）。
   - **`to` は、保存を呼ぶ前に形と状態を確かめます**（規則と理由は[保存先の確かめ](save-target.md)が真実）。
     - **形**（`invalid_args`）: 絶対パスで、拡張子が `.vwx` であること。`.`・`..`・空の段・制御文字、OS ごとの
-      使えない文字と長さの上限を超えるものも断ります（規則は[保存先の確かめ「`to` の形」](save-target.md#to-の形)）。
+      使えない文字と長さの上限を超えるものも断ります（規則は[保存先の確かめ「`to` の形」](save-target.md#to-の形式)）。
       プラグインは正規化して渡さず、断ります。
     - **状態**（`internal`）: 次の順に確かめ、最初に当たったものの `reason` を `detail` に付けます。
       1. `to_is_open`: `to` が開いている図面のパスと一致する（NFC に正規化し、大文字と小文字を区別せずに比べる）。
@@ -483,14 +483,14 @@ Vectorworks 2026 / mac。Windows も振る舞いは同じで、違うのはパ�
     - **Windows では呼び出しが数秒を超えると、Vectorworks が「応答なし」と表示されます。** 図面は壊れていないので、失敗と
       読みません。
   - **最後の図面を閉じたら（閉じた後の一覧が空なら）、中に残った図面を片付けます**
-    （[閉じた図面の片付け](#閉じた図面の片付け)）。片付かなくても、名指した図面は閉じたので失敗にせず、結果に
+    （[閉じた図面の片付け](#閉じた図面の後処理)）。片付かなくても、名指した図面は閉じたので失敗にせず、結果に
     `"closed_documents_remain":true` を足して知らせます（`{"closed":true,"closed_documents_remain":true}`。片付いたとき・
     片付けが要らなかったときは載せない）。呼ぶ側は、利用者がメニューで終了する前に `quit` で終了するか、人に知らせます
     （`quit` は終了を頼む前にもう一度片付け、片付かなければ断る）。
   - 閉じた後に前面になるのは、最後に開いた図面です（mac も Windows も）。`close` の前の前面の図面が残っていれば、
     その図面へ戻します（カレントレイヤも戻る。前面を閉じたときは戻せない。[Findings「Windows と、「閉じる」で確認が出る図面」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows-と閉じるで確認が出る図面305mac-も)）。
 
-## 閉じた図面の片付け
+## 閉じた図面の後処理
 
 `CloseDocument()` は、先に開いた図面を後に開いた図面が開いている間に閉じると、閉じた図面を Vectorworks の中に
 残します（以下「残った図面」。[Findings「閉じた図面が残り、終了で保存の確認が出る」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#閉じた図面が残り終了で保存の確認が出る321323macwindows)。
@@ -502,7 +502,7 @@ Vectorworks 2026 / mac。Windows も振る舞いは同じで、違うのはパ�
   `CloseDocument()` で 1 枚ずつ消します（確認は出ません。残った図面は `close` が変更を捨てると指定されて閉じたものなので、
   変更を捨てます）。回数の上限は 64 回です。
 - **`close` は、最後の図面を閉じたとき（閉じた後の一覧が空のとき）に片付けます**（利用者がメニューで終了しても
-  確認が出ないように）。片付かなければ、成功のまま結果で知らせます（[`close`](#図面を扱う道具documentssaveclose)）。
+  確認が出ないように）。片付かなければ、成功のまま結果で知らせます（[`close`](#図面を操作するツールdocumentssaveclose)）。
 - **`quit` は、終了を頼む前に片付けます。** `close` の側の片付けが届かない道への備えです（他のプラグインやスクリプトの
   `CloseDocument()` が最後の図面を閉じた・`close` の片付けが上限で止まった、など）。外すと、`quit` が
   `{"quitting":true}` を返した後に見えない図面の保存の確認が出て、人が答えるまで Vectorworks が止まります。残った

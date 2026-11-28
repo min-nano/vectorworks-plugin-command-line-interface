@@ -5,7 +5,7 @@
 **スプールの場所・コマンド名・リンクの名前・インストール先は変えません**（変えると呼ぶ側や更新が見つけられなくなる）。
 
 **安定版と開発版を区別しません。** PR では変更後のコードでビルドしたものをプレリリースし、
-同じ名前のプラグインとして入れ替えます（`vw2026 install cli@<そのタグ>`。[ビルド「リリースの形」](build-and-release.md#リリースの形)）。
+同じ名前のプラグインとして入れ替えます（`vw2026 install cli@<そのタグ>`。[ビルド「リリースの形」](build-and-release.md#リリースの構成)）。
 今何が動いているかは、`vw2026 call ping` の `version` / `branch` で分かります。
 
 | 項目 | 値 |
@@ -20,7 +20,7 @@
 | リリースのタグ | **ビルドごとに新しいタグを付け、使い回さない**（[レジストリ「名前・タグ・ターゲット」](../registry.md#名前タグターゲット)）。main は `0.0.0-<短い sha>`（`latest` のリリース）、PR は `dev-<ブランチの slug>-<PR 番号>-<短い sha>`（プレリリース）。短い sha はビルドした sha（PR はブランチの head）。slug はブランチ名から git の ref 名に使える文字だけを残して 40 文字までに切ったもの（タグを 128 文字の上限（[レジストリ「名前・タグ・ターゲット」](../registry.md#名前タグターゲット)）に収めるため）で、読むための飾り。別のブランチが同じ slug になりうるので、一意にするのは PR 番号と sha。slug が空（日本語だけの名前など）なら `dev-<PR 番号>-<短い sha>`。作るのは `scripts/dev-tag.sh` だけで（作り方の細目はその注釈）、`build.yml` が使う（`cleanup-dev-release.yml` は末尾の `-<PR 番号>-<短い sha>` で見分ける）。最新は `latest`（GitHub のリリースの最新。`cli@latest`）で指す |
 | ターゲット | `macos-arm64`・`windows-x64`（このプラグインが配るもの。`macos-x64` は配らない。[ビルド「CMake」](build-and-release.md#cmake)） |
 
-## 置き場所
+## 配置場所
 
 | 置くもの | mac | Windows |
 | --- | --- | --- |
@@ -28,11 +28,11 @@
 | 入れたときの記録 | `<Plug-Ins>/<name>/vw2026-install.json` | `<Plug-Ins>\<name>\vw2026-install.json` |
 | CLI（PATH に載せる） | `<Plug-Ins>/cli/bin/vw2026` | `<Plug-Ins>\cli\bin\vw2026.exe` |
 | スプール（プラグインが作る） | `<Plug-Ins>/cli/spool/` | `<Plug-Ins>\cli\spool\` |
-| `vw2026` の作業の場所（`<Work>`。[インストール「作業の場所」](install-and-update.md#作業の場所)） | `/var/folders/…/T/vectorworks2026-cli-<鍵>/` | `%LOCALAPPDATA%\Temp\vectorworks2026-cli-<鍵>\` |
+| `vw2026` の作業の場所（`<Work>`。[インストール「作業の場所」](install-and-update.md#作業領域)） | `/var/folders/…/T/vectorworks2026-cli-<鍵>/` | `%LOCALAPPDATA%\Temp\vectorworks2026-cli-<鍵>\` |
 | 組み立ての場所 | `<Work>/staging/<name>/`（zip は `<Work>/staging/<name>.zip`） | `<Work>\staging\<name>\` |
 | 退避の場所 | `<Work>/old/<name>/` | `<Work>\old\<name>\` |
 | `uninstall` の途中の印 | `<Work>/old/<name>.uninstalling` | `<Work>\old\<name>.uninstalling` |
-| よけた CLI（[インストール「動いている CLI のよけ方」](install-and-update.md#動いている-cli-のよけ方)） | `<Work>/old/vw2026.old-<時刻>` | `<Work>\old\vw2026.exe.old-<時刻>` |
+| よけた CLI（[インストール「動いている CLI のよけ方」](install-and-update.md#実行中の-cli-の退避)） | `<Work>/old/vw2026.old-<時刻>` | `<Work>\old\vw2026.exe.old-<時刻>` |
 | PATH | `~/.local/bin/vw2026`（`<Plug-Ins>/cli/bin/vw2026` へのリンク） | 利用者の `Path` に `<Plug-Ins>\cli\bin` |
 
 - **場所の根は環境変数を読まずに求めます。** スプールは、プラグインは自分のモジュールの場所から、
@@ -42,7 +42,7 @@
   - `<Work>`: Windows は `SHGetKnownFolderPath(FOLDERID_LocalAppData)` の下の `Temp`（`%TEMP%` の既定の場所。環境変数 `TMP` /
     `TEMP` は読まない。`vw2026` は `syscall` 経由）です。mac は `/usr/bin/getconf DARWIN_USER_TEMP_DIR` の出力
     （`confstr(_CS_DARWIN_USER_TEMP_DIR)`。利用者ごとの一時フォルダ。環境変数 `TMPDIR` は読まない。cgo を使わないので
-    `getconf` を走らせる）です。その下の `vectorworks2026-cli-<鍵>`（`<Plug-Ins>` ごと。[インストール「作業の場所」](install-and-update.md#作業の場所)）に置きます。
+    `getconf` を走らせる）です。その下の `vectorworks2026-cli-<鍵>`（`<Plug-Ins>` ごと。[インストール「作業の場所」](install-and-update.md#作業領域)）に置きます。
   - 既定の `<Plug-Ins>`: Windows は `%APPDATA%` の指す場所を `SHGetKnownFolderPath(FOLDERID_RoamingAppData)` で
     求めます（環境変数 `APPDATA` は読まない。`syscall` 経由）。mac はホームディレクトリの `Library/Application Support` の下で、
     ホームは利用者の passwd の項目（`getpwuid_r(getuid())` の `pw_dir`）から求めます（環境変数 `HOME` は読まない。
@@ -51,10 +51,10 @@
   移せるので、標準以外の場所も、`<Work>` と同じドライブにあれば扱えます（初回のスクリプトに
   `--plugins-dir` で渡し、その後は入った `vw2026` が自分の場所から求める。入れた場所は記録しない。[インストール](install-and-update.md#前提)）。
   但し `cli` は利用者ごとの `Plug-Ins` にだけ置きます（ワークグループのフォルダなど、複数の利用者が読み込む
-  場所に置くとスプールも共有される。[設計「決めたこと」](../design.md#決めたこと)）。
+  場所に置くとスプールも共有される。[設計「決めたこと」](../design.md#決定事項)）。
 - `<Work>` は、このプラグインだけでなく、`vw2026` で入れる全てのプラグインの組み立て・退避の場所です
   （`<name>` ごとに分ける）。CLI とスプールは置きません（`cli` のフォルダの中にある。
-  [インストール「CLI とスプールの置き場所」](install-and-update.md#cli-とスプールの置き場所)）。
+  [インストール「CLI とスプールの置き場所」](install-and-update.md#cli-とスプールの配置場所)）。
   PATH はこのプラグインのフックが置きます（[インストール「`cli` のフック」](install-and-update.md#cli-のフック)）。
 
 ## `src/BuildConfig.h`

@@ -39,8 +39,8 @@ Vectorworks の中で動くプラグイン（`cli`）の設計です。全体の
 | --- | --- |
 | `src/core/*`（Protocol・Json・Files・Bridge・Serve・Lifecycle・道具の SDK に依らない部分） | [通信規則](../protocol.md)・[ブリッジ](bridge.md)・[道具](tools.md)。SDK に依らない |
 | `src/ModuleMain.cpp`・`PluginPrefix.h`・`Module-Info.plist.in`・`resources/cli.vwr`・`CMakeLists.txt` | SDK リファレンスの `plugin/`（実機で読み込まれている形）・[Findings「Plug-in Modules」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Plug-in%20Modules.md)（VCOM の初期化・SDK の静的ライブラリをリンクするモジュールが定義するもの） |
-| `src/Clock.{h,cpp}` | [Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4・6・7（[構成](architecture.md#受け付けの流れ)）。終了の依頼と起動を終えた目印は同 4 の 9（刻みから終了を頼む・「終了の呼び出しの最中」の旗・戻った後の 2 度目・起動を終えた目印。`RegisterNotificationProcedure` で `kNotifyBeforePendingUpdate` を登録する） |
-| `src/tools/*` | [SDK の調査 4](../sdk-research.md#4-道具が使う-sdk-呼び出し) |
+| `src/Clock.{h,cpp}` | [Findings「Timers and Notifications」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4・6・7（[構成](architecture.md#受付処理の流れ)）。終了の依頼と起動を終えた目印は同 4 の 9（刻みから終了を頼む・「終了の呼び出しの最中」の旗・戻った後の 2 度目・起動を終えた目印。`RegisterNotificationProcedure` で `kNotifyBeforePendingUpdate` を登録する） |
+| `src/tools/*` | [SDK の調査 4](../sdk-research.md#4-ツールが使用する-sdk-呼び出し) |
 | `scripts/fetch-vw-sdk.sh` と CI の共通部 | SDK リファレンスの `scripts/`（`fetch-vw-sdk.sh`・`ci-common.sh`・`ci-wait.sh`） |
 | `.github/workflows/*` | [ビルドとリリース](build-and-release.md) |
 | 整形と検査の設定 | [整形](../format.md)・[検査](../lint.md) |

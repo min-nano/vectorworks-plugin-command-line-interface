@@ -1,5 +1,5 @@
 ﻿# cli の install・uninstall のフック（install.ps1・uninstall.ps1）が読み込む関数
-# （docs/plugin/install-and-update.md「`cli` のフック」「Windows の `Path` の読み書き」）。
+# （docs/plugin/install-and-update.md「`cli` のフック」「Windows の `Path` の読み取りと書き込み」）。
 # Path の項目の比べ方・足し方・除き方を 1 か所に置き、install と uninstall が同じ比べ方を使うようにする。
 #
 # 利用者の Path の読み書きは「置き場所」（Read・Write・Notify のスクリプトブロックを持つ

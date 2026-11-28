@@ -1,18 +1,18 @@
-# `save` の保存先（`to`）の確かめ
+# `save` の保存先（`to`）の検証
 
-道具 `save`（[道具「図面を扱う道具」](tools.md#図面を扱う道具documentssaveclose)）は、保存を呼ぶ前に保存先 `to` を
+道具 `save`（[道具「図面を扱う道具」](tools.md#図面を操作するツールdocumentssaveclose)）は、保存を呼ぶ前に保存先 `to` を
 確かめます。Vectorworks は保存先の形を確かめずにその名前で保存し、成功と見分けが付かないものがあり、保存先に
 よっては人が押すまで戻らない警告を出すためです（[SDK リファレンス #288](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/288)）。
 このページは、その確かめの規則と理由の真実です。
 
 | 確かめ | 失敗 | 節 |
 | --- | --- | --- |
-| 形 | `invalid_args` | [`to` の形](#to-の形) |
-| 状態 | `internal`（`to_is_open` → `file_exists` → `parent_missing`。確かめられなければ `to_check_failed`） | [状態の確かめ](#状態の確かめ)・[ネットワークの場所](#ネットワークの場所) |
+| 形 | `invalid_args` | [`to` の形](#to-の形式) |
+| 状態 | `internal`（`to_is_open` → `file_exists` → `parent_missing`。確かめられなければ `to_check_failed`） | [状態の確かめ](#状態の検証)・[ネットワークの場所](#ネットワークの場所) |
 
 どの確かめも前面を切り替える前に行うので、断ったときに前面の図面は動きません。
 
-## `to` の形
+## `to` の形式
 
 **`to` の形は、保存を呼ぶ前に確かめて `invalid_args` で断ります。** プラグインはパスを書き換えず（正規化して
 渡さず）、次のどれかに当たる `to` を断ります。
@@ -55,9 +55,9 @@
   Windows の予約された名前（`CON.vwx` など）は、SDK が普通に保存したので断りません
   （[Findings「Windows——測れた範囲」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Documents.md#windows測れた範囲288)。`CON` 以外は確かめていない）。
 
-## 状態の確かめ
+## 状態の検証
 
-**`save` の状態の確かめ（`internal`）は、`to_is_open` → `file_exists` → `parent_missing` の順に行います**（OS の呼び出しが「無い」以外の理由で失敗すれば、その段で `to_check_failed`。[道具「共通の決まり」](tools.md#共通の決まり)の確かめの順の 4）。開いている図面と
+**`save` の状態の確かめ（`internal`）は、`to_is_open` → `file_exists` → `parent_missing` の順に行います**（OS の呼び出しが「無い」以外の理由で失敗すれば、その段で `to_check_failed`。[道具「共通の決まり」](tools.md#共通の規則)の確かめの順の 4）。開いている図面と
 一致する `to` は、そのフォルダが消されていても `to_is_open` を返します。
 
 **`to` に既にあるファイルを渡しても保存できません**（SDK が `GSError` 50331649 を返し、何も起きない。
@@ -72,7 +72,7 @@ mac・Windows とも、どの形で渡しても）。**保存先が別の図面�
 
 上書きしたければ、呼ぶ側が先にファイルを消します。**呼ぶ側が機械的に見分けられるよう、失敗の `detail` に
 `reason` を付けます:** `to_is_open`（保存先が開いている図面）・`file_exists`（保存先が既にある）。どちらも
-`internal` です（`invalid_args` と `internal` の分け方は[道具「共通の決まり」](tools.md#共通の決まり)）。
+`internal` です（`invalid_args` と `internal` の分け方は[道具「共通の決まり」](tools.md#共通の規則)）。
 確かめてから保存するまでの間にファイルができた場合は、SDK のエラーを `internal` で返します
 （開いている図面でなければダイアログは出ない）。
 
@@ -119,11 +119,11 @@ UNC のサーバーの名前を綴り誤ったときも、Windows は名前の�
   共有が無い（67）と無いサーバー（53）は Windows の実機で確かめました（無い共有は `parent_missing`、無いサーバーは
   約 9 秒待ってから `to_check_failed` の 53）。表に無い番号が「無い」の場面で返れば、表に足します。
 - **保存そのものの途中でつながりが切れたとき**に Vectorworks がエラーのダイアログを出すかは、確かめていません
-  （[SDK の調査「調べないと決めたもの」](../sdk-research.md#調べないと決めたもの)）。出たときは、他のダイアログと同じく
-  呼ぶ側が扱います（[設計「本番で常駐させる前提」](../design.md#本番で常駐させる前提安全)）。
+  （[SDK の調査「調べないと決めたもの」](../sdk-research.md#調査しないと決定した事項)）。出たときは、他のダイアログと同じく
+  呼ぶ側が扱います（[設計「本番で常駐させる前提」](../design.md#本番環境で常駐させる前提安全性)）。
 
 **止まることは SDK リファレンスでは調べません**（OS の呼び出しがネットワークを待つことは SDK の挙動ではなく、止まるのは
-明らかなので、利用者の判断で CLAUDE.md の 7 の例外とした。[SDK の調査「調べないと決めたもの」](../sdk-research.md#調べないと決めたもの)。
+明らかなので、利用者の判断で CLAUDE.md の 7 の例外とした。[SDK の調査「調べないと決めたもの」](../sdk-research.md#調査しないと決定した事項)。
 保存の途中で切れたときのダイアログも同じ例外で、出ればダイアログのコマンド（[#133](https://github.com/min-nano/vectorworks-plugin-command-line-interface/issues/133)）で扱うので、出るかどうかで実装は変わらない）。
 
 ## パスの一致の判定
@@ -156,13 +156,13 @@ NFD で返ることがある）し、**大文字と小文字を区別せず**に
     ドライブ、ジャンクション・シンボリックリンクを通る綴り、mac の `/var` と `/private/var` です（どれも、開いている
     図面のファイルがディスクから移されているときだけ。ファイルがあれば `file_exists` で断られる）。
 
-## 実装とテストの分け方
+## 実装とテストの分担
 
 確かめは `src/core` に置き、**mac の規則と Windows の規則を別々の関数にして、どちらもどの OS でもビルドし、
 どの OS の CI でも両方をテストします**（中身は文字列の処理だけで、OS で分ける必要がないため。Windows の規則にも
 ASan・UBSan と clang-tidy が掛かる）。プラグインがどちらを使うかは `_WIN32` で選び、選ぶのは 1 か所だけです
 （出荷するプラグインは OS ごとのビルドなので、各 OS のプラグインの規則はビルドで決まる）。ファイルの分け方は
-[ブリッジ「分け方」](bridge.md#分け方)と `src/core/SaveTarget.h`・`src/core/PathCompare.h` の注釈にあります。
+[ブリッジ「分け方」](bridge.md#分割の方針)と `src/core/SaveTarget.h`・`src/core/PathCompare.h` の注釈にあります。
 
 - **OS で分けてビルドするのは、比べ方の包みと、ファイルシステムに聞く関数の包みの 2 つだけです。** 確かめの手順
   （`to_is_open` → `file_exists` → `parent_missing` の順）は両方を引数で受け、どの OS でもビルド・テストします

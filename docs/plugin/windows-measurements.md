@@ -1,10 +1,10 @@
-# Windows の実機での確かめ方
+# Windows の実機での検証方法
 
 Windows の Vectorworks の起動・終了と、プラグインの有無による違いを実機で確かめる手順です。プラグインの骨格
 （道具が `ping` だけの版）の実機の確認で使い、[実機の確かめ方](verification.md#windows)から指しています。
 
 そのとき測った結果は SDK リファレンスの `Findings/` へ移しました（下記「結果の移った先」）。このプラグインでの扱いは
-[SDK の調査 0](../sdk-research.md#0-拡張機能を-1-つも登録しないプラグインの読み込み分かった) にあります。
+[SDK の調査 0](../sdk-research.md#0-拡張機能を-1-つも登録しないプラグインの読み込み判明) にあります。
 
 ## 環境
 
@@ -23,7 +23,7 @@ Windows の Vectorworks の起動・終了と、プラグインの有無によ�
   ネットワーク・ストレージの補助プロセス）。二重に起動したのではありません。
 - 起動からホーム画面までは数分掛かります。
 
-## 確かめ方
+## 検証方法
 
 - **起動・終了**: Vectorworks を起動し（`Start-Process` か `vw2026 launch`）、ホーム画面まで待ってから
   メインウィンドウへ閉じる指示を送り（`CloseMainWindow`。メニューの「終了」と同じ）、終了コードを読む。
@@ -36,7 +36,7 @@ Windows の Vectorworks の起動・終了と、プラグインの有無によ�
   に `DumpType=2`。`%LOCALAPPDATA%\CrashDumps\` に 1 つ 2.5 GB 前後の完全なダンプが書かれる）を読む。
   VM ごと止まったかは System のイベント 1001（バグチェック）で見る。
 
-## 結果の移った先
+## 結果の移転先
 
 そのときの実測（上の環境。プラグインは `0683df0` と `296a797`）は、次の調査で `Findings/` に反映しました。
 
@@ -46,4 +46,4 @@ Windows の Vectorworks の起動・終了と、プラグインの有無によ�
 | 終了時の `0xC0000005`（すでに外された `libcef.dll` の中で落ちる） | 同じページの「OS タイマーを持つ常駐プラグイン（留めたモジュール）は、終了時の落ち方を変えない」（[#257](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/257)） |
 | 新しい図面の最初の描画中に `MaxonDocumentBuilder.vlb` の中で落ちた 1 回 | 同じページの「新しい図面の最初の描画——30 回で 1 度も落ちなかった」（[#270](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/270)） |
 | VM ごとの停止（`viogpudo.sys` のバグチェック `0xD1`） | 同じページの「【罠】Windows の VW は起動時にモジュールを一度降ろして読み込み直す」の「読み違えやすいところ」 |
-| 開発元不明のプラグイン | 同じページの「開発元不明のプラグイン」のダイアログ（[#258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)・[#264](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/264)）。このプラグインでの扱いは[構成「拡張機能を登録しない」](architecture.md#拡張機能を登録しない) |
+| 開発元不明のプラグイン | 同じページの「開発元不明のプラグイン」のダイアログ（[#258](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/258)・[#264](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/264)）。このプラグインでの扱いは[構成「拡張機能を登録しない」](architecture.md#拡張機能の非登録) |
