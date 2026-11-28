@@ -15,14 +15,14 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// 通信規則の見本（protocol/fixtures。形は docs/fixtures.md）を読み、偽のプラグインがプラグイン
-// （src/core の Server。同じ見本を読む）と同じに振る舞うかを確かめる。
+// 通信規則のフィクスチャ（protocol/fixtures。形式は docs/fixtures.md）を読み込み、擬似プラグインが
+// プラグイン（src/core の Server。同一のフィクスチャを読み込む）と同一に振る舞うかを検証する。
 
-// fixtures は通信規則の見本の場所。
+// fixtures は通信規則のフィクスチャの場所。
 const fixtures = fixturetest.ProtocolDir
 
-// sessionMark は、要求の見本では発行された印に置き換え、期待する応答では id の綴りを満たす
-// 文字列に合わせてその値を覚える印。
+// sessionMark は、要求のフィクスチャでは発行されたセッション ID に置換し、期待する応答では id の
+// 綴りを満たす文字列に合致させてその値を記録する標識。
 const sessionMark = "$session"
 
 type fakeTool struct {
@@ -64,8 +64,8 @@ type fixtureStep struct {
 	} `json:"expect"`
 }
 
-// expectedResponse は期待する応答。ok は必須で、result は書いたときだけ比べる。detail は書いた
-// ときだけ持ち、書いたものと一致する（無ければ持たない）。
+// expectedResponse は期待する応答。ok は必須で、result は記述した場合のみ比較する。detail は
+// 記述した場合のみ保持し、記述したものと一致する（無ければ保持しない）。
 type expectedResponse struct {
 	OK     *bool           `json:"ok"`
 	Code   string          `json:"code"`
@@ -73,13 +73,13 @@ type expectedResponse struct {
 	Detail json.RawMessage `json:"detail"`
 }
 
-// readFixture は見本のファイルを、知らないキーを誤りとして読む。
+// readFixture はフィクスチャのファイルを、未知のキーをエラーとして読み込む。
 func readFixture(t *testing.T, name string, v any) {
 	t.Helper()
 	fixturetest.ReadStrict(t, filepath.Join(fixtures, name), v)
 }
 
-// decode は数を綴りのまま読む（見本とプラグインは数を丸めない）。
+// decode は数を綴りのまま読み取る（フィクスチャとプラグインは数を丸めない）。
 func decode(t *testing.T, data []byte) any {
 	t.Helper()
 	decoder := json.NewDecoder(bytes.NewReader(data))
@@ -91,7 +91,8 @@ func decode(t *testing.T, data []byte) any {
 	return v
 }
 
-// fakeHandler は見本の偽の道具の表（fake-tools.json）で応える。呼ばれた道具を calls に残す。
+// fakeHandler はフィクスチャの擬似ツールの一覧（fake-tools.json）で応答する。呼び出されたツールを
+// calls に記録する。
 func fakeHandler(t *testing.T, tools []fakeTool, calls *[]call) Handler {
 	return func(tool string, args json.RawMessage) spool.Response {
 		if tool == spool.ToolTools {
@@ -131,13 +132,13 @@ func fakeHandler(t *testing.T, tools []fakeTool, calls *[]call) Handler {
 			case "internal":
 				response = spool.Response{Code: spool.CodeInternal, Error: "the tool failed"}
 			case "throw":
-				// Go の偽の道具は例外を投げないので、プラグインが例外を受けたときの応答を返す。
+				// Go の擬似ツールは例外を送出しないので、プラグインが例外を受けた場合の応答を返す。
 				return spool.Response{Code: spool.CodeInternal, Error: "the tool threw"}
 			default:
 				t.Fatalf("fake-tools.json: unknown does %q", fake.Does)
 			}
-			// C++ の偽の道具（tests/FixtureTests.cpp の runFake）と同じく、detail は does に依らず
-			// 返す。成功に載せないのは偽のプラグインの仕事。
+			// C++ の擬似ツール（tests/FixtureTests.cpp の runFake）と同様に、detail は does に
+			// 依存せず返す。成功に含めないのは擬似プラグインの役割。
 			response.Detail = fake.Detail
 			return response
 		}
@@ -145,8 +146,8 @@ func fakeHandler(t *testing.T, tools []fakeTool, calls *[]call) Handler {
 	}
 }
 
-// match は期待する値と実際の値を比べる。期待する値の $session は id の綴りを満たす文字列に合い、
-// その値を発行された印として覚える。
+// match は期待する値と実際の値を比較する。期待する値の $session は id の綴りを満たす文字列に
+// 合致し、その値を発行されたセッション ID として記録する。
 func match(expected, actual any, session *string) bool {
 	if s, ok := expected.(string); ok && s == sessionMark {
 		got, ok := actual.(string)
@@ -252,7 +253,7 @@ func (r *caseRunner) step(step fixtureStep) {
 		defer unlock()
 	}
 
-	// 置く: 待つ印 → ファイル → 要求。要求の待つ印は、waits に無ければ掴む。
+	// 配置する: 待機標識 → ファイル → 要求。要求の待機標識は、waits に無ければ取得する。
 	waits := map[string]string{}
 	for id, state := range step.Waits {
 		waits[id] = state
@@ -313,7 +314,8 @@ func (r *caseRunner) step(step fixtureStep) {
 		}
 	}
 
-	// この回より前に置いたファイルを除き、スプールにある応答は全て期待に載っていなければならない。
+	// この回より前に配置したファイルを除き、スプールにある応答は全て期待に含まれて
+	// いなければならない。
 	for _, name := range r.listing() {
 		if _, put := step.Files[name]; put || !strings.HasSuffix(name, spool.ResponseSuffix) {
 			continue
@@ -362,7 +364,7 @@ func (r *caseRunner) step(step fixtureStep) {
 		}
 	}
 
-	// 呼ぶ側が応答を受け取ったことを真似る（応答を消し、待つ印を放して消す）。
+	// 呼び出し元が応答を受け取ったことを模倣する（応答を削除し、待機標識を解放して削除する）。
 	for id := range want.Responses {
 		_ = os.Remove(filepath.Join(r.dir, id+spool.ResponseSuffix))
 		if unlock, found := r.held[id]; found {
@@ -382,8 +384,8 @@ func TestFixtureServeCases(t *testing.T) {
 		if fake.Kind != "read" && fake.Kind != "write" && fake.Kind != "app" {
 			t.Fatalf("fake-tools.json: unknown kind %q", fake.Kind)
 		}
-		// C++ の読み込みと同じく、detail はオブジェクトに限る（null や配列を書くと、両側が違う場合を
-		// 確かめることになる）。
+		// C++ の読み込みと同様に、detail はオブジェクトに限る（null や配列を記述すると、両側が
+		// 異なる場合を検証することになる）。
 		if fake.Detail != nil && !spool.IsObject(fake.Detail) {
 			t.Fatalf("fake-tools.json: the detail of %s is not an object", fake.Name)
 		}
@@ -407,7 +409,8 @@ func TestFixtureServeCases(t *testing.T) {
 					}
 				}
 			}
-			// 予約された名前の id（reserved-ids.json）もファイルとして置けるように、\\?\ を付ける。
+			// 予約された名前の id（reserved-ids.json）もファイルとして配置できるように、\\?\ を
+			// 付ける。
 			r := &caseRunner{t: t, dir: extendedPath(NewDir(t)), held: map[string]func(){}}
 			kinds := map[string]string{}
 			quits := map[string]bool{}
@@ -418,7 +421,8 @@ func TestFixtureServeCases(t *testing.T) {
 			r.server = &server{
 				dir: r.dir, handle: fakeHandler(t, table.Tools, &r.calls), kinds: kinds, quits: quits,
 			}
-			// 一時ディレクトリを消す前に、ロックと待つ印を放す（Windows は開いたままでは消せない）。
+			// 一時ディレクトリを削除する前に、ロックと待機標識を解放する（Windows は開いたままでは
+			// 削除できない）。
 			t.Cleanup(func() {
 				r.server.release()
 				for _, unlock := range r.held {

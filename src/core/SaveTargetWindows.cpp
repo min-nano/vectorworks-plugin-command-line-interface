@@ -10,9 +10,9 @@
 #endif
 #include <windows.h>
 
-// save の保存先をファイルシステムに聞く関数の Windows の実装（docs/plugin/save-target.md「状態の
-// 検証」）。どちらも \\?\ を付けて聞くので、CON.vwx などを装置ではなくファイルの名前として聞き、
-// MAX_PATH で失敗することもない。
+// save の保存先をファイルシステムに問い合わせる関数の Windows の実装
+// （docs/plugin/save-target.md「状態の検証」）。いずれも \\?\ を付けて問い合わせるため、CON.vwx
+// などをデバイスではなくファイルの名前として問い合わせ、MAX_PATH で失敗することもない。
 
 namespace VwCli::core::save_target {
 
@@ -27,14 +27,14 @@ Probe failure(DWORD error) {
 
 bool isMissing(std::int64_t osError) {
 	// 2 ERROR_FILE_NOT_FOUND・3 ERROR_PATH_NOT_FOUND・67 ERROR_BAD_NET_NAME（サーバーに共有が
-	// 無い）・267 ERROR_DIRECTORY（途中の段がファイル）。
+	// 存在しない）・267 ERROR_DIRECTORY（途中の段がファイル）。
 	return osError == ERROR_FILE_NOT_FOUND || osError == ERROR_PATH_NOT_FOUND ||
 	       osError == ERROR_BAD_NET_NAME || osError == ERROR_DIRECTORY;
 }
 
 Probe probeTo(const std::string &path) {
 	// GetFileAttributesW はリパースポイントをたどらない
-	// （壊れたリンク・ジャンクションもあるとする）。
+	// （壊れたリンク・ジャンクションも存在するものとする）。
 	DWORD attributes = ::GetFileAttributesW(windows_path::extended(path).c_str());
 	if (attributes == INVALID_FILE_ATTRIBUTES) {
 		return failure(::GetLastError());
@@ -43,9 +43,9 @@ Probe probeTo(const std::string &path) {
 }
 
 Probe probeParent(const std::string &path) {
-	// リパースポイントをたどって開く（先の無いリンク・ジャンクションの親は「無い」）。望むアクセスを
-	// 0 にし、共有を全て許すので、他のプロセスが共有を絞って開いているフォルダでも 32・5 に
-	// ならない。
+	// リパースポイントをたどって開く（参照先の無いリンク・ジャンクションの親は「無い」）。要求する
+	// アクセスを 0 とし、共有を全て許可するため、他のプロセスが共有を制限して開いているフォルダでも
+	// 32・5 とならない。
 	HANDLE handle = ::CreateFileW(windows_path::extended(path).c_str(), 0,
 	                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
 	                              OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);

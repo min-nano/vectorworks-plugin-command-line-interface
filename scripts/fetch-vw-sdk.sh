@@ -1,11 +1,12 @@
 #!/bin/sh
-# プラグインのビルドに要る Vectorworks SDK を VW_SDK_DIR に用意する（docs/plugin/build-and-release.md
-# 「CI」）。公開の URL から取るので Secrets は要らない。形は SDK リファレンスの scripts/fetch-vw-sdk.sh
-# （plugin の用途）と同じで、ヘッダ・ライブラリ・BuildVWR だけを残す。
+# プラグインのビルドに必要な Vectorworks SDK を VW_SDK_DIR に準備する
+# （docs/plugin/build-and-release.md「CI」）。公開の URL から取得するため Secrets は不要である。
+# 構成は SDK リファレンスの scripts/fetch-vw-sdk.sh（plugin の用途）と同一で、ヘッダ・ライブラリ・
+# BuildVWR のみを保持する。
 #
 #   VW_SDK_DIR=… VW_SDK_URL=… scripts/fetch-vw-sdk.sh
 #
-# 要るものがすでに揃っていれば（キャッシュを復元した）何もしない。揃っていなければ取り直す。
+# 必要なものが既に揃っていれば（キャッシュを復元した場合）何もしない。揃っていなければ取得し直す。
 set -eu
 
 dir="${VW_SDK_DIR:?VW_SDK_DIR is not set}"
@@ -41,13 +42,13 @@ rm -rf "$dir"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 curl -fL --retry 4 --retry-delay 5 -o "$work/sdk.zip" "$url"
-# Windows のランナーの bash には unzip が無いことがあるので、7z も使えるようにする。
+# Windows のランナーの bash には unzip が無いことがあるため、7z も使用できるようにする。
 if command -v unzip >/dev/null 2>&1; then
 	unzip -q "$work/sdk.zip" -d "$work/sdk"
 else
 	7z x -bso0 -bsp0 -o"$work/sdk" "$work/sdk.zip"
 fi
-# zip は全体を 1 階層のフォルダで包んでいることがある。mac の zip が混ぜる __MACOSX は避ける。
+# zip は全体を 1 階層のフォルダで包んでいることがある。mac の zip が混入させる __MACOSX は除外する。
 sdklib="$(find "$work/sdk" -type d -name SDKLib -not -path '*/__MACOSX/*' | head -n 1)"
 if [ -z "$sdklib" ]; then
 	echo "fetch-vw-sdk.sh: SDKLib is not in $url" >&2

@@ -1,10 +1,12 @@
-﻿# cli のフック（scripts/hooks/*.ps1）のテスト（docs/plugin/install-and-update.md「テスト」）。Pester 5 で、
-# Windows PowerShell 5.1（フックが走るのと同じもの）で走らせる。版は scripts/powershell.ps1 が固定する。
+﻿# cli のフック（scripts/hooks/*.ps1）のテスト（docs/plugin/install-and-update.md「テスト」）。
+# Pester 5 で、Windows PowerShell 5.1（フックが実行されるのと同じもの）で実行する。版は
+# scripts/powershell.ps1 が固定する。
 #
 #   powershell -NoProfile -File scripts/powershell.ps1 -Mode Test tests/hooks/Hooks.Tests.ps1
 #
-# 利用者の Path には触れない。lib.ps1 の関数は偽の置き場所（FakePathStore.ps1）で確かめ、install.ps1・
-# uninstall.ps1 の全体は、偽の置き場所を -Store に渡す子のプロセスで走らせて、標準出力のバイト列を見る。
+# 利用者の Path には触れない。lib.ps1 の関数は擬似の配置場所（FakePathStore.ps1）で検証し、
+# install.ps1・uninstall.ps1 の全体は、擬似の配置場所を -Store に渡す子プロセスで実行し、標準出力の
+# バイト列を確認する。
 
 BeforeAll {
 	$script:hooks = Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'scripts') 'hooks'
@@ -18,11 +20,11 @@ BeforeAll {
 		return "'" + $Text.Replace("'", "''") + "'"
 	}
 
-	# Invoke-Hook はフック（install・uninstall）を子のプロセスで走らせる。偽の置き場所は子の中で
-	# $StoreArguments（Get-FakePathStore の引数）から作り、走らせた後の State を返す。
-	# 版 $Year の CLI と同じく VW<版>_HOOK_* を渡し、他の版の名前は渡さない。$InstallDir が空なら
-	# VW<版>_HOOK_INSTALL_DIR を渡さない。$BothEditions を付けると、他の版の VW<版>_HOOK_INSTALL_DIR にも
-	# $InstallDir を渡す（フックが断ることを確かめる）。
+	# Invoke-Hook はフック（install・uninstall）を子プロセスで実行する。擬似の配置場所は子の中で
+	# $StoreArguments（Get-FakePathStore の引数）から生成し、実行した後の State を返す。
+	# 版 $Year の CLI と同様に VW<版>_HOOK_* を渡し、他の版の名前は渡さない。$InstallDir が空ならば
+	# VW<版>_HOOK_INSTALL_DIR を渡さない。$BothEditions を付けると、他の版の
+	# VW<版>_HOOK_INSTALL_DIR にも $InstallDir を渡す（フックが拒否することを検証する）。
 	function Invoke-Hook {
 		param([string] $Year, [string] $Hook, [string] $InstallDir, [string] $PluginDir, [string] $StoreArguments,
 			[switch] $BothEditions)
@@ -70,7 +72,7 @@ BeforeAll {
 		}
 	}
 
-	# Initialize-PluginDir は版 $Year の CLI（<Plug-Ins>\cli\bin\vw2026.exe・vw2025.exe）を作り、
+	# Initialize-PluginDir は版 $Year の CLI（<Plug-Ins>\cli\bin\vw2026.exe・vw2025.exe）を作成し、
 	# <Plug-Ins>\cli を返す（日本語を含むパス）。
 	function Initialize-PluginDir {
 		param([string] $Year)
@@ -80,8 +82,8 @@ BeforeAll {
 		return $dir
 	}
 
-	# Get-Ascii は標準出力のバイト列を文字列にする。ASCII の外のバイトがあれば失敗にする（出力は
-	# ConvertTo-HookJson で ASCII だけにしている。UTF-8 としても読める）。
+	# Get-Ascii は標準出力のバイト列を文字列にする。ASCII の外のバイトがあれば失敗させる（出力は
+	# ConvertTo-HookJson で ASCII のみにしている。UTF-8 としても読み取れる）。
 	function Get-Ascii {
 		param([byte[]] $Bytes)
 		@($Bytes | Where-Object { $_ -ge 0x80 }).Count | Should -Be 0

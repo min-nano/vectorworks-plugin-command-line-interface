@@ -1,17 +1,18 @@
 #!/bin/sh
-# cli の uninstall のフック（mac）。~/.local/bin/vw2026 が <Plug-Ins>/cli/bin/vw2026 を指すリンク（2025 の CLI が
-# 走らせたときは vw2025。lib.sh の hook_year。同じ
-# ディレクトリを別の書き方で指すものも含む。lib.sh の link_points_to）のときだけ消し、標準出力に
-# {"path":…,"left":[…]} を 1 つだけ書く
-# （docs/plugin/install-and-update.md「`uninstall` のフック」）。
+# cli の uninstall のフック（mac）。~/.local/bin/vw2026 が <Plug-Ins>/cli/bin/vw2026 を指すリンク
+# （2025 の CLI が実行した場合は vw2025。lib.sh の hook_year。同じディレクトリを別の表記で指すものも
+# 含む。lib.sh の link_points_to）の場合のみ削除し、標準出力に {"path":…,"left":[…]} を 1 つのみ
+# 書き込む（docs/plugin/install-and-update.md「`uninstall` のフック」）。
 #
-#   removed  リンクを消した
-#   none     このプラグインの CLI を指すリンクが無かった（利用者のファイル・別の場所を指すリンクには触れない）
-#   failed   リンクを消せなかった（left に載せる）
+#   removed  リンクを削除した
+#   none     このプラグインの CLI を指すリンクが無かった（利用者のファイル・別の場所を指す
+#            リンクには触れない）
+#   failed   リンクを削除できなかった（left に記載する）
 #
-# フォルダは <Work>/old/cli/ へ移した後で走る（VW2026_HOOK_PLUGIN_DIR は移した先）ので、消すものは
-# VW2026_HOOK_INSTALL_DIR から決める。消し始めた後は失敗にしない（失敗にすると CLI がフォルダを
-# 戻し、プラグインは残るのにリンクだけが消えた状態になる）。~/.local/bin は消さない。
+# フォルダは <Work>/old/cli/ へ移動した後で実行される（VW2026_HOOK_PLUGIN_DIR は移動先）ため、
+# 削除するものは VW2026_HOOK_INSTALL_DIR から決定する。削除を開始した後は失敗させない（失敗させると
+# CLI がフォルダを元に戻し、プラグインは残存するのにリンクのみが削除された状態になる）。
+# ~/.local/bin は削除しない。
 set -u
 
 # shellcheck source=SCRIPTDIR/lib.sh

@@ -1,7 +1,8 @@
 ﻿# PowerShell の整形と検査（docs/format.md・docs/lint.md）。scripts/powershell.ps1 が両方に渡す。
-# 整形は PSScriptAnalyzer の CodeFormatting と同じ規則を、インデントだけタブ（.editorconfig）に
-# 替えて使う。検査は既定の規則のまま（IncludeRules を書かない）で、整形の規則も指摘する。但し
-# PSUseCorrectCasing は検査では外す（整形が当てる。scripts/powershell.ps1 の -Mode LintFile）。
+# 整形は PSScriptAnalyzer の CodeFormatting と同じ規則を、インデントのみタブ（.editorconfig）に
+# 差し替えて使用する。検査は既定の規則のまま（IncludeRules を記述しない）で、整形の規則も指摘する。
+# 但し PSUseCorrectCasing は検査では除外する（整形が適用する。scripts/powershell.ps1 の
+# -Mode LintFile）。
 @{
 	Rules = @{
 		PSPlaceOpenBrace           = @{

@@ -9,10 +9,10 @@ namespace VwCli::core::save_target {
 
 namespace {
 
-// mac の上限（ファイルシステムの名前の長さと PATH_MAX。どちらも UTF-8 のバイト）。
+// mac の上限（ファイルシステムの名前の長さと PATH_MAX。いずれも UTF-8 のバイト）。
 constexpr std::size_t kMacSegmentBytes = 255;
 constexpr std::size_t kMacPathBytes = 1024;
-// Windows の上限（名前の長さと MAX_PATH。どちらも UTF-16 の単位）。
+// Windows の上限（名前の長さと MAX_PATH。いずれも UTF-16 の単位）。
 constexpr std::size_t kWindowsSegmentUnits = 255;
 constexpr std::size_t kWindowsPathUnits = 260;
 
@@ -22,7 +22,7 @@ bool hasControl(std::string_view text) {
 	return std::ranges::any_of(text, [](char c) { return static_cast<unsigned char>(c) < 0x20; });
 }
 
-// endsWithVwx は名前が .vwx で終わるか（大文字と小文字を区別しない。ASCII だけを畳む）。
+// endsWithVwx は名前が .vwx で終わるか（大文字と小文字を区別しない。ASCII のみを畳む）。
 bool endsWithVwx(std::string_view name) {
 	if (name.size() < kExtension.size()) {
 		return false;
@@ -34,8 +34,8 @@ bool endsWithVwx(std::string_view name) {
 	                          asciiLower);
 }
 
-// utf16Units は UTF-8 の文字列を UTF-16 にしたときの単位の数（サロゲートペアは 2 つ）。文字列は
-// 要求の解析で正しい UTF-8 になっている。
+// utf16Units は UTF-8 の文字列を UTF-16 に変換した場合の単位の数（サロゲートペアは 2 つ）。文字列は
+// 要求の解析により正しい UTF-8 となっている。
 std::size_t utf16Units(std::string_view text) {
 	std::size_t units = 0;
 	for (char c : text) {
@@ -67,7 +67,7 @@ std::optional<std::string> refuse(std::string &problem, std::string message) {
 	return std::nullopt;
 }
 
-// commonSegment は mac と Windows に共通の段の確かめ（空の段・. と ..）。
+// commonSegment は mac と Windows に共通の段の検証（空の段・. と ..）。
 std::optional<std::string> commonSegment(std::string_view segment) {
 	if (segment.empty()) {
 		return "空の段があります（区切りが続いているか、区切りで終わっています）";
@@ -123,7 +123,7 @@ std::optional<std::string> checkWindowsTo(std::string_view to, std::string &prob
 		return refuse(problem,
 		              "to が絶対パス（X:\\ か \\\\<サーバー>\\<共有>\\ で始まる）ではありません");
 	}
-	// ルートの後のどの段も確かめる（UNC はサーバーと共有の段も）。
+	// ルートの後の全ての段を検証する（UNC はサーバーと共有の段も）。
 	std::vector<std::string_view> segments = split(to.substr(drive ? 3 : 2), '\\');
 	for (std::size_t i = 0; i < segments.size(); ++i) {
 		std::string_view segment = segments[i];
@@ -148,7 +148,7 @@ std::optional<std::string> checkWindowsTo(std::string_view to, std::string &prob
 		return refuse(problem, "to の拡張子が .vwx ではありません");
 	}
 	std::size_t last = to.rfind('\\');
-	// ルートの直下は、区切りを含めたルートの形（C:\ と \\server\share\）。
+	// ルートの直下は、区切りを含めたルートの形式（C:\ と \\server\share\）。
 	bool underRoot = segments.size() == (drive ? 1 : 3);
 	return std::string(to.substr(0, underRoot ? last + 1 : last));
 }

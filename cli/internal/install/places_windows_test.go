@@ -6,14 +6,14 @@ import (
 	"testing"
 )
 
-// 知らない場所の ID なら、SHGetKnownFolderPath が断る。
+// 未知の場所の ID ならば、SHGetKnownFolderPath が拒否する。
 func TestKnownFolderUnknownID(t *testing.T) {
 	if _, err := knownFolder(&syscall.GUID{Data1: 1}); err == nil || !strings.Contains(err.Error(), "HRESULT") {
 		t.Fatal(err)
 	}
 }
 
-// powershell は FOLDERID_System（System32）の下のものを走らせ、環境変数 SystemRoot は読まない。
+// powershell は FOLDERID_System（System32）の下のものを実行し、環境変数 SystemRoot は読み取らない。
 func TestPowerShellIgnoresSystemRoot(t *testing.T) {
 	elsewhere := t.TempDir()
 	t.Setenv("SystemRoot", elsewhere)

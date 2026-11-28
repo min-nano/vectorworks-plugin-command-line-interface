@@ -13,12 +13,14 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// oldCLIPrefixes は、よけた CLI の名前の頭（<Work>/old/ の直下の vw2026.old-* / vw2026.exe.old-*。2025 は
-// vw2025）。名前に . を含むので、<Work>/old/<name>/（名前は . を含まない）と重ならない。
+// oldCLIPrefixes は、退避した CLI の名前の先頭（<Work>/old/ の直下の vw2026.old-* /
+// vw2026.exe.old-*。2025 は vw2025）。名前に . を含むため、<Work>/old/<name>/（名前は . を
+// 含まない）と重複しない。
 var oldCLIPrefixes = []string{edition.Command + ".old-", edition.Command + ".exe.old-"}
 
-// oldCLIName は、この OS でよけた CLI に付ける名前の頭（oldCLIPrefixes の 1 つ。Windows だけ実行ファイルの
-// 名前に .exe が付く）。後始末が探す頭と同じ一覧から選ぶので、食い違わない。
+// oldCLIName は、この OS で退避した CLI に付ける名前の先頭（oldCLIPrefixes の 1 つ。
+// Windows のみ実行ファイルの名前に .exe が付く）。後処理が探索する先頭と同じ一覧から選択するため、
+// 食い違わない。
 var oldCLIName = func() string {
 	if runtime.GOOS == "windows" {
 		return oldCLIPrefixes[1]
@@ -26,23 +28,24 @@ var oldCLIName = func() string {
 	return oldCLIPrefixes[0]
 }()
 
-// movedCLI は、よけた CLI の元の場所（よけたフォルダ dir と、そこからの相対パス rel）と移した先 to。nil なら
-// よけていない。元の場所は dir と rel から求め（from）、別に持たない（restore と restoreInto の戻す先がずれない
-// ように）。
+// movedCLI は、退避した CLI の元の場所（退避したフォルダ dir と、そこからの相対パス rel）と移動先
+// to。nil ならば退避していない。元の場所は dir と rel から導出し（from）、別途保持しない
+// （restore と restoreInto の戻し先が乖離しないように）。
 type movedCLI struct {
 	dir string
 	rel string
 	to  string
 }
 
-// from は、よけた CLI の元の場所。
+// from は、退避した CLI の元の場所。
 func (m *movedCLI) from() string {
 	return filepath.Join(m.dir, m.rel)
 }
 
-// restore はよけた CLI を元の場所へ戻す（動いていても名前の変更はできる）。戻せなければ（Windows でウイルス
-// 対策がよけた実行ファイルを開いているなど）、呼ぶ側の文言に足す、手で戻す手順を返す（戻せたら空）。黙って
-// 残すと、よけた CLI の名前のまま、次の install・uninstall の後始末が唯一の vw2026 を消すため。
+// restore は退避した CLI を元の場所へ戻す（実行中でも名前の変更はできる）。戻せなければ（Windows で
+// ウイルス対策が退避した実行ファイルを開いているなど）、呼び出し元の文言に追加する、
+// 手作業で戻す手順を返す（戻せたら空）。通知せずに残置すると、退避した CLI の名前のまま、
+// 次の install・uninstall の後処理が唯一の vw2026 を削除するため。
 func (m *movedCLI) restore() string {
 	if m == nil {
 		return ""
@@ -54,8 +57,9 @@ func (m *movedCLI) restore() string {
 	return ""
 }
 
-// restoreInto は、よけた CLI を、よけたフォルダの中の元の場所に当たる into の中の場所へ戻す（新しい版を残した
-// ときに、前の版のフォルダへ戻す）。戻せなければ、その場所を示す文言を返す（戻せたら空）。
+// restoreInto は、退避した CLI を、退避したフォルダの中の元の場所に相当する into の中の場所へ戻す
+// （新しい版を残置した場合に、前の版のフォルダへ戻す）。戻せなければ、その場所を示す文言を返す
+// （戻せたら空）。
 func (m *movedCLI) restoreInto(into string) string {
 	if m == nil {
 		return ""
@@ -68,8 +72,9 @@ func (m *movedCLI) restoreInto(into string) string {
 	return ""
 }
 
-// where は、フォルダを手で戻すよう示す文言に足す、よけた CLI の場所（よけていなければ空）。フォルダを戻すと
-// CLI の元の場所ができるので、続けて CLI を戻せる（よけた CLI は戻した版のフォルダには無い）。
+// where は、フォルダを手作業で戻すよう示す文言に追加する、退避した CLI の場所（退避していなければ
+// 空）。フォルダを戻すと CLI の元の場所が生じるため、続けて CLI を戻せる（退避した CLI は戻した版の
+// フォルダには無い）。
 func (m *movedCLI) where() string {
 	if m == nil {
 		return ""
@@ -77,17 +82,17 @@ func (m *movedCLI) where() string {
 	return fmt.Sprintf(", then move the running "+edition.Command+" back from %s to %s", m.to, m.from())
 }
 
-// sidestep は、走らせている CLI の実行ファイルが dir の中にあれば、old へ名前の変更で移す
-// （docs/plugin/install-and-update.md「実行中の CLI の退避」）。Windows では開いている
-// ファイル（動いている実行ファイル）を含むフォルダの名前を変えられないが、実行ファイルそのものは
-// 同じボリュームの別のディレクトリへ移せる。mac でも同じ手順を踏む（OS で分けない）。
+// sidestep は、実行している CLI の実行ファイルが dir の中にあれば、old へ名前の変更で移動する
+// （docs/plugin/install-and-update.md「実行中の CLI の退避」）。Windows では開いているファイル
+// （実行中の実行ファイル）を含むフォルダの名前を変更できないが、実行ファイルそのものは同じ
+// ボリュームの別のディレクトリへ移動できる。mac でも同じ手順を踏む（OS で区別しない）。
 func (o *Options) sidestep(dir, old string) (*movedCLI, error) {
 	executable, rel, ok := o.runsFrom(dir)
 	if !ok {
 		return nil, nil
 	}
-	// old は呼ぶ側（replace）が先に作っている。
-	// 名前は実行ファイルの名前に依らず固定にする（cleanOldCLIs が同じ頭で消せるように）。
+	// old は呼び出し元（replace）が先に作成している。
+	// 名前は実行ファイルの名前に依らず固定とする（cleanOldCLIs が同じ先頭で削除できるように）。
 	to := filepath.Join(old, oldCLIName+stamp())
 	if err := rename(executable, to); err != nil {
 		return nil, err
@@ -95,27 +100,28 @@ func (o *Options) sidestep(dir, old string) (*movedCLI, error) {
 	return &movedCLI{dir: dir, rel: rel, to: to}, nil
 }
 
-// stamp は、<Work>/old/ の中で重ならない名前に付ける時刻。
+// stamp は、<Work>/old/ の中で重複しない名前に付ける時刻。
 func stamp() string {
 	return time.Now().UTC().Format("20060102T150405.000000000")
 }
 
-// runsFrom は、走らせている CLI の実行ファイル（リンクを解いたもの）が dir の中にあるかと、その場所と
-// dir からの相対パスを返す。Executable が空なら中にない。
+// runsFrom は、実行している CLI の実行ファイル（リンクを解決したもの）が dir の中にあるかと、
+// その場所と dir からの相対パスを返す。Executable が空ならば中に無い。
 func (o *Options) runsFrom(dir string) (executable, rel string, ok bool) {
 	if o.Executable == "" {
 		return "", "", false
 	}
-	// mac の ~/.local/bin/vw2026 はリンクなので、解いた先で決める。
+	// mac の ~/.local/bin/vw2026 はリンクであるため、解決した先で決定する。
 	executable = spool.ResolveLinks(o.Executable)
 	rel, ok = within(executable, dir)
 	return executable, rel, ok
 }
 
-// within は、path が dir の中にあれば dir からの相対パスを返す。パスの文字列ではなく
-// ディレクトリの同一性で決める（path のあるディレクトリから親へ 1 つずつ上り、os.SameFile で比べる）。
-// dir は入った場所・初回のスクリプトの --plugins-dir・既定の場所のどれからでも来て、実行ファイルのパスと書き方
-// （大文字と小文字・8.3 形式・ジャンクション・末尾の区切り）が揃うとは限らないため。
+// within は、path が dir の中にあれば dir からの相対パスを返す。パスの文字列ではなくディレクトリの
+// 同一性で決定する（path のあるディレクトリから親へ 1 つずつ遡り、os.SameFile で比較する）。
+// dir はインストール先・初回スクリプトの --plugins-dir・既定の場所のいずれからでも渡され、
+// 実行ファイルのパスと表記（大文字と小文字・8.3 形式・ジャンクション・末尾の区切り）が一致するとは
+// 限らないため。
 func within(path, dir string) (string, bool) {
 	target, err := os.Stat(dir)
 	if err != nil {
@@ -134,12 +140,14 @@ func within(path, dir string) (string, bool) {
 	}
 }
 
-// cleanOldCLIs は <Work>/old/ の直下のよけた CLI（ファイルだけ）を消してみて、消せなかったものを
-// 返す（Windows では動いている実行ファイルを消せない）。他のものは消さない。
+// cleanOldCLIs は <Work>/old/ の直下の退避した CLI（ファイルのみ）の削除を試み、
+// 削除できなかったものを返す（Windows では実行中の実行ファイルを削除できない）。
+// 他のものは削除しない。
 func cleanOldCLIs(old string) []string {
-	// 読めなければ（無ければ）消すものも無い。
+	// 読み取れなければ（無ければ）削除するものも無い。
 	entries, _ := os.ReadDir(old)
-	// 出力の left は、無くても null ではなく [] にする。os.ReadDir の順（名前の昇順）のまま並べる。
+	// 出力の left は、無くても null ではなく [] とする。os.ReadDir の順序（名前の昇順）のまま
+	// 並べる。
 	left := []string{}
 	for _, entry := range entries {
 		if !entry.Type().IsRegular() || !hasOldCLIPrefix(entry.Name()) {
@@ -157,8 +165,8 @@ func hasOldCLIPrefix(name string) bool {
 	return slices.ContainsFunc(oldCLIPrefixes, func(prefix string) bool { return strings.HasPrefix(name, prefix) })
 }
 
-// ファイルの操作の内、OS の失敗（権限・ディスクの誤り）でしか失敗しないものは、テストが差し替えて
-// 失敗させる（失敗したときに <Plug-Ins> を元に戻すことを確かめるため）。
+// ファイルの操作の内、OS の失敗（権限・ディスクの誤り）でしか失敗しないものは、
+// テストが差し替えて失敗させる（失敗した場合に <Plug-Ins> を元に戻すことを検証するため）。
 var (
 	rename     = os.Rename
 	removeFile = os.Remove

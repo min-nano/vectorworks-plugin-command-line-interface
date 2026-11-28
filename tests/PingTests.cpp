@@ -7,7 +7,7 @@
 #include <string>
 #include <string_view>
 
-// 道具 ping の内 SDK に依らない部分（docs/plugin/tools.md「ping」）。
+// ツール ping の内 SDK に依存しない部分（docs/plugin/tools.md「ping」）。
 
 using VwCli::core::ErrorCode;
 using VwCli::core::Json;
@@ -16,14 +16,15 @@ using VwCli::core::ToolContext;
 using VwCli::core::ToolStatus;
 using VwCli::test::must;
 
-// ping は図面も Vectorworks も変えないので、占有なしで呼べる種類 read で載せる（道具の表の種類）。
+// ping は図面も Vectorworks も変更しないため、占有なしで呼び出せる種類 read で登録する（ツールの
+// 一覧の種類）。
 static_assert(VwCli::core::kPingSpec.kind == VwCli::core::ToolKind::Read);
 static_assert(VwCli::core::kPingSpec.name == VwCli::core::protocol::kToolPing);
 
 namespace {
 
-// pingText は ping の結果のテキスト。protocol は通信規則の版から組み立てる（版を上げても
-// ping を変えていなければ落ちないように）。rest は pid の後ろ（session 以降）。
+// pingText は ping の結果のテキスト。protocol は通信規則の版から構築する（版を上げても
+// ping を変更していなければ失敗しないように）。rest は pid の後ろ（session 以降）。
 std::string pingText(std::string_view rest) {
 	return R"({"version":"abc1234","branch":"main","protocol":)" +
 	       std::to_string(VwCli::core::protocol::kVersion) + R"(,"pid":4242,)" + std::string(rest);
@@ -61,7 +62,7 @@ TEST(PingKeepsAnEmptyLayerName) {
 	CHECK_EQ(*result.find("current_layer"), Json::string(""));
 }
 
-// 版の表示は書いた順に並ぶ（docs/plugin/tools.md「ping」の例と同じ順）。
+// 版の表示は記述した順に並ぶ（docs/plugin/tools.md「ping」の例と同じ順）。
 TEST(PingWritesTheFieldsInTheDocumentedOrder) {
 	ToolStatus status;
 	Json result = VwCli::core::ping(Json::object(), ToolContext{false, {}}, facts("1F"), status);
@@ -74,7 +75,7 @@ TEST(PingRejectsUnknownArguments) {
 	Json result =
 	    VwCli::core::ping(must(R"({"verbose":true})"), ToolContext{false, {}}, facts("1F"), status);
 	CHECK(status.code == ErrorCode::InvalidArgs);
-	// 文言は他の道具と同じ args::Reader の形（docs/plugin/tools.md「共通の規則」）。
+	// 文言は他のツールと同じ args::Reader の形式（docs/plugin/tools.md「共通の規則」）。
 	CHECK_EQ(status.message, std::string("ping の引数が誤っています: 知らない引数 verbose"));
 	CHECK(result.isNull());
 }

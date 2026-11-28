@@ -27,7 +27,7 @@ func TestUninstall(t *testing.T) {
 		exists(filepath.Join(h.work, "old", "demo.uninstalling")) {
 		t.Fatal("left something")
 	}
-	// 記録のフックを、移した先で走らせる。
+	// 記録のフックを、移動先で実行する。
 	runs := h.hookRuns("demo")
 	last := runs[len(runs)-1]
 	old := filepath.Join(h.work, "old", "demo")
@@ -41,8 +41,8 @@ func TestUninstall(t *testing.T) {
 	}
 }
 
-// uninstall cli の後、<Work> に空の staging / old しか無ければ <Work> も消す。remaining は
-// どの名前でも出す。
+// uninstall cli の後、<Work> に空の staging / old しか無ければ <Work> も削除する。
+// remaining はいずれの名前でも出力する。
 func TestUninstallCLIRemovesTheWorkFolder(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -67,7 +67,7 @@ func TestUninstallWhileRunning(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// 安全弁: 記録が無い・名前が違う・モジュールが無いフォルダは消さない。
+// 安全弁: 記録が無い・名前が異なる・モジュールが無いフォルダは削除しない。
 func TestUninstallRefusesForeignFolders(t *testing.T) {
 	for name, prepare := range map[string]func(t *testing.T, dir string){
 		"no record": func(t *testing.T, dir string) { os.Remove(filepath.Join(dir, RecordFile)) },
@@ -78,14 +78,15 @@ func TestUninstallRefusesForeignFolders(t *testing.T) {
 		"module path": func(t *testing.T, dir string) {
 			rewriteRecord(t, filepath.Join(dir, RecordFile), func(r *Record) { r.Module = "../cli/cli.vwlibrary" })
 		},
-		// . と記録そのものは、いつも在るので module とみなさない。
+		// . と記録そのものは、常に存在するため module とみなさない。
 		"module dot": func(t *testing.T, dir string) {
 			rewriteRecord(t, filepath.Join(dir, RecordFile), func(r *Record) { r.Module = "." })
 		},
 		"module record": func(t *testing.T, dir string) {
 			rewriteRecord(t, filepath.Join(dir, RecordFile), func(r *Record) { r.Module = RecordFile })
 		},
-		// 記録のあるフォルダ（作業用のコピーなど）を指すシンボリックリンクも、install と同じく断る。
+		// 記録のあるフォルダ（作業用の複製など）を指すシンボリックリンクも、install と同様に
+		// 拒否する。
 		"symbolic link": func(t *testing.T, dir string) {
 			real := filepath.Join(t.TempDir(), "demo")
 			if err := os.CopyFS(real, os.DirFS(dir)); err != nil {
@@ -115,7 +116,7 @@ func TestUninstallRefusesForeignFolders(t *testing.T) {
 	}
 }
 
-// フォルダを移せなければ、フックを走らせず、何も変えない。
+// フォルダを移動できなければ、フックを実行せず、何も変更しない。
 func TestUninstallRenameFailure(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -130,7 +131,7 @@ func TestUninstallRenameFailure(t *testing.T) {
 	}
 }
 
-// フックが失敗したら、フォルダを戻し、印を消す。
+// フックが失敗したら、フォルダを復元し、標識を削除する。
 func TestUninstallHookFailureRestores(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1", uninstall: &hookPlan{Exit: 1}})
@@ -144,7 +145,7 @@ func TestUninstallHookFailureRestores(t *testing.T) {
 	}
 }
 
-// 手順 3 の後で止まった uninstall: 印があれば手順 4 から続け、印が無ければ断る。
+// 手順 3 の後で停止した uninstall: 標識があれば手順 4 から続行し、標識が無ければ拒否する。
 func TestUninstallResumes(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -170,7 +171,8 @@ func TestUninstallResumes(t *testing.T) {
 	}
 }
 
-// 続きから走った回でフックが失敗しても、<Plug-Ins> へ戻さない（一部だけ残ったフォルダかもしれない）。
+// 続きから実行された回でフックが失敗しても、<Plug-Ins> へ復元しない（一部のみ残存したフォルダである
+// 可能性がある）。
 func TestUninstallResumedHookFailureDoesNotRestore(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -187,8 +189,8 @@ func TestUninstallResumedHookFailureDoesNotRestore(t *testing.T) {
 	}
 }
 
-// 前の回の残りの old/<name>/ があれば、uninstall は消さずに断る（守ること 9。install のフックが失敗して
-// Vectorworks が起動したときの前の版かもしれない）。
+// 以前の回の残存物の old/<name>/ があれば、uninstall は削除せずに拒否する（遵守事項 9。install の
+// フックが失敗して Vectorworks が起動した場合の以前の版である可能性がある）。
 func TestUninstallRefusesLeftoverOld(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -205,7 +207,7 @@ func TestUninstallRefusesLeftoverOld(t *testing.T) {
 	}
 }
 
-// 名前のフォルダが無く、印だけが残っていれば、入っていない（印は消す）。
+// 名前のフォルダが無く、標識のみが残存していれば、インストールされていない（標識は削除する）。
 func TestUninstallStaleMarker(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -218,7 +220,8 @@ func TestUninstallStaleMarker(t *testing.T) {
 	}
 }
 
-// 入っていなくても、前の回が残したよけた CLI・組み立ての場所・空の <Work> を、外したときと同じく片付ける。
+// インストールされていなくても、以前の回が残置した退避した CLI・構築の場所・空の <Work> を、
+// アンインストールした場合と同様に整理する。
 func TestUninstallNotInstalledCleansUp(t *testing.T) {
 	h := newHarness(t)
 	moved := filepath.Join(h.work, "old", oldCLIName+"20260101T000000.000000000")
@@ -231,8 +234,9 @@ func TestUninstallNotInstalledCleansUp(t *testing.T) {
 	}
 }
 
-// 走らせている CLI が外すフォルダの中にあれば（入れた cli の vw2026 で uninstall cli）、何も変えずに
-// RunsInsideError で断る（フォルダの外の CLI、初回のスクリプトで外す）。リンクを通して走らせても同じ。
+// 実行中の CLI がアンインストールするフォルダの中にあれば（インストールした cli の vw2026 で
+// uninstall cli）、何も変更せずに RunsInsideError で拒否する（フォルダの外の CLI、初回スクリプトで
+// アンインストールする）。リンクを経由して実行しても同様。
 func TestUninstallFromInsideTheFolder(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -248,7 +252,7 @@ func TestUninstallFromInsideTheFolder(t *testing.T) {
 	if len(h.hookRuns("cli")) != 1 || exists(filepath.Join(h.work, "old", "cli.uninstalling")) {
 		t.Fatal("ran the hook or left the marker")
 	}
-	// フォルダの外の CLI なら外せる。
+	// フォルダの外の CLI ならばアンインストールできる。
 	o.Executable = filepath.Join(h.tmp, "elsewhere", edition.Command)
 	if result, err := Uninstall(o, "cli"); err != nil || result.Outcome != outcomeUninstalled {
 		t.Fatalf("%+v %v", result, err)

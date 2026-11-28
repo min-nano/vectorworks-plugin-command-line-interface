@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- mac のバンドルの Info.plist（docs/plugin/build-and-release.md「CMake」）。版の鍵は持たない
-     （版の情報は build.json とコンパイル時の定義だけに置く）。 -->
+<!-- mac のバンドルの Info.plist（docs/plugin/build-and-release.md「CMake」）。版のキーは有しない
+     （版の情報は build.json とコンパイル時の定義のみに配置する）。 -->
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>

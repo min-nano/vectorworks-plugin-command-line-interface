@@ -25,17 +25,19 @@ std::int64_t processId() {
 #endif
 }
 
-// currentLayer は現在のレイヤの名前。図面が 1 枚も開いていなければ GetCurrentLayer() は落ちずに
-// nullptr を返す（起動の直後も、全部閉じた後も。Findings「Timers and Notifications」の 4 の 8）。
-// ハンドルは刻みをまたいで持たない（閉じた文書と別の文書のレイヤが同じアドレスで返る。同じ節）。
+// currentLayer は現在のレイヤの名前。図面が 1 枚も開いていなければ GetCurrentLayer() は
+// 異常終了せずに nullptr を返す（起動の直後も、全て閉じた後も。Findings
+// 「Timers and Notifications」の 4 の 8）。
+// ハンドルは周期処理をまたいで保持しない（閉じた文書と別の文書のレイヤが同じアドレスで返る。
+// 同じ節）。
 std::optional<std::string> currentLayer() {
 	MCObjectHandle layer = gSDK->GetCurrentLayer();
 	if (layer == nullptr) {
 		return std::nullopt;
 	}
 	TXString name;
-	// レイヤのハンドルに GetObjectName を使うと、レイヤの名前（「レイヤ-1」）が mac・Windows とも
-	// 読める（Findings「Timers and Notifications」の 4 の 8 の表）。
+	// レイヤのハンドルに GetObjectName を使用すると、レイヤの名前（「レイヤ-1」）が mac・
+	// Windows とも読み取れる（Findings「Timers and Notifications」の 4 の 8 の表）。
 	gSDK->GetObjectName(layer, name);
 	return utf8(name);
 }

@@ -7,19 +7,20 @@ on:
 permissions:
   contents: read
 
-# PR が閉じたら、その PR のプレリリース（dev-<slug>-<PR 番号>-<短い sha>）をリリースとタグごと全て
-# 消す（docs/plugin/build-and-release.md「CI」）。タグは push ごとに新しく付くので、末尾の
-# -<PR 番号>-<短い sha> で見分ける（ブランチの名前が変わって slug が違うものも含む）。push で止められた
-# release の下書きはまだタグが無いので、リリースの一覧からタグ名で見分けて消す。
+# PR が閉じた場合、その PR のプレリリース（dev-<slug>-<PR 番号>-<短い sha>）をリリースとタグごと
+# 全て削除する（docs/plugin/build-and-release.md「CI」）。タグは push ごとに新しく付与されるため、
+# 末尾の -<PR 番号>-<短い sha> で識別する（ブランチの名前が変更されて slug が異なるものも含む）。
+# push で停止された release の下書きはまだタグが無いため、リリースの一覧からタグ名で識別して
+# 削除する。
 jobs:
   cleanup:
-    # プレリリースを作るのは同じリポジトリの PR だけ。
+    # プレリリースを作成するのは同じリポジトリの PR のみ。
     if: github.event.pull_request.head.repo.full_name == github.repository
-    # build.yml と同じグループで走り、その PR の走っているビルドを止めてから消す（消した後に
-    # 公開されない）。グループの式は build.yml と同じものにする（片方だけ変えると同じグループに
-    # 入らない）。PR では PR 番号になる。github.ref で組むと、マージで閉じた PR では main になり、
-    # main の push のビルドを止めて main のリリースが作られない。ジョブの段に置き、片付けが走るとき
-    # （同じリポジトリの PR）だけグループを取る。
+    # build.yml と同じグループで実行され、その PR の実行中のビルドを停止してから削除する（削除した
+    # 後に公開されない）。グループの式は build.yml と同じものにする（片方のみを変更すると
+    # 同じグループに入らない）。PR では PR 番号になる。github.ref で構成すると、マージで閉じた
+    # PR では main になり、main の push のビルドを停止して main のリリースが作成されない。ジョブの
+    # 段に配置し、後処理が実行される場合（同じリポジトリの PR）のみグループを取得する。
     concurrency:
       group: build-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
@@ -31,15 +32,15 @@ jobs:
       GH_REPO: ${{ github.repository }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
-      # 形は scripts/dev-tag.sh が作るもの（slug が空なら dev-<PR 番号>-<短い sha>）。build.yml が下書きを
-      # 見分けるのと同じ形で当てる。
+      # 形式は scripts/dev-tag.sh が生成するもの（slug が空ならば dev-<PR 番号>-<短い sha>）。
+      # build.yml が下書きを識別するのと同じ形式で照合する。
       - run: |
           set -eu
           api="repos/$GH_REPO"
-          # 頁ごとに絞るので、頁を合わせない（gh の --jq。値は環境変数で渡す）。$ENV は jq の式で、
-          # シェルに展開させない。
+          # 頁ごとに絞り込むため、頁を結合しない（gh の --jq。値は環境変数で渡す）。$ENV は jq の
+          # 式であり、シェルに展開させない。
           export PATTERN="^dev-(.*-)?$PR_NUMBER-[0-9a-f]{7}\$"
-          # 下書きを含むリリース。消してもタグは残るので、タグは次で消す。
+          # 下書きを含むリリース。削除してもタグは残存するため、タグは次で削除する。
           # shellcheck disable=SC2016
           gh api --paginate "$api/releases?per_page=100" \
             --jq '.[] | select(.tag_name | test($ENV.PATTERN)) | "\(.id) \(.tag_name)"' |

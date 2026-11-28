@@ -22,9 +22,10 @@ import (
 // errInjected は、テストが差し替えたファイルの操作が返す失敗。
 var errInjected = errors.New("injected failure")
 
-// swap は、テストの間だけ差し替え口 *at（ファイルの操作・上限）を value に替える。返す関数で途中でも元に戻せる
-// （テストの終わりにも戻す）。戻すのは、この swap の前の値なので、途中で戻して良いのは、その差し替え口を最後に
-// 差し替えたものだけ（後から同じ差し替え口を差し替えていると、それも外れる）。
+// swap は、テストの間のみ差し替え口 *at（ファイルの操作・上限）を value に置換する。返す関数で
+// 途中でも元に戻せる（テストの終了時にも戻す）。戻すのは、この swap の前の値であるため、途中で
+// 戻してよいのは、その差し替え口を最後に差し替えたもののみ（後から同じ差し替え口を
+// 差し替えていると、それも解除される）。
 func swap[T any](t *testing.T, at *T, value T) (restore func()) {
 	t.Helper()
 	original := *at
@@ -34,9 +35,10 @@ func swap[T any](t *testing.T, at *T, value T) (restore func()) {
 	return restore
 }
 
-// renameWhen・pathOpWhen・writeFileWhen・mkdirAllWhen は、テストの間だけその操作の前に when を呼び、when が誤りを返せば
-// それで失敗させる（nil なら元の操作をする。見るだけのときも nil を返す）。返す関数で途中でも元に戻せる。
-// pathOpWhen は、パス 1 つを受ける操作（removeAll・removeFile）の差し替え口 at に使う。
+// renameWhen・pathOpWhen・writeFileWhen・mkdirAllWhen は、テストの間のみその操作の前に when を
+// 呼び出し、when が誤りを返せばそれで失敗させる（nil なら元の操作を行う。参照するのみの場合も
+// nil を返す）。返す関数で途中でも元に戻せる。pathOpWhen は、パス 1 つを受け取る操作
+// （removeAll・removeFile）の差し替え口 at に使用する。
 func renameWhen(t *testing.T, when func(from, to string) error) (restore func()) {
 	t.Helper()
 	original := rename
@@ -81,7 +83,7 @@ func mkdirAllWhen(t *testing.T, when func(path string) error) (restore func()) {
 	})
 }
 
-// failMkdirAll は、その場所のディレクトリの作成を失敗させる（OS の失敗を真似る）。
+// failMkdirAll は、その場所のディレクトリの作成を失敗させる（OS の失敗を模倣する）。
 func failMkdirAll(t *testing.T, at string) {
 	t.Helper()
 	mkdirAllWhen(t, func(path string) error {
@@ -92,7 +94,7 @@ func failMkdirAll(t *testing.T, at string) {
 	})
 }
 
-// failRemoveAll は、その場所の削除を失敗させる（OS の失敗を真似る）。
+// failRemoveAll は、その場所の削除を失敗させる（OS の失敗を模倣する）。
 func failRemoveAll(t *testing.T, at string) {
 	t.Helper()
 	pathOpWhen(t, &removeAll, func(path string) error {
@@ -103,8 +105,8 @@ func failRemoveAll(t *testing.T, at string) {
 	})
 }
 
-// failRename は、from から to への名前の変更を失敗させる（from が空なら移すものを、to が空なら行き先を問わない。
-// 合わない変更は通す）。返す関数で途中でも元に戻せる。
+// failRename は、from から to への名前の変更を失敗させる（from が空なら移動するものを、to が空なら
+// 移動先を問わない。合致しない変更は通す）。返す関数で途中でも元に戻せる。
 func failRename(t *testing.T, from, to string) (restore func()) {
 	t.Helper()
 	return renameWhen(t, func(oldpath, newpath string) error {
@@ -115,7 +117,7 @@ func failRename(t *testing.T, from, to string) (restore func()) {
 	})
 }
 
-// resolved は、リンクを解いたパス（sidestep が移す実行ファイルのパス）。
+// resolved は、リンクを解決したパス（sidestep が移動する実行ファイルのパス）。
 func resolved(t *testing.T, path string) string {
 	t.Helper()
 	got, err := filepath.EvalSymlinks(path)
@@ -125,7 +127,7 @@ func resolved(t *testing.T, path string) string {
 	return got
 }
 
-// 展開先を作れなければ、展開を失敗にする。
+// 展開先を作成できなければ、展開を失敗とする。
 func TestExtractCannotMakeTheFolder(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "x.zip")
@@ -137,7 +139,7 @@ func TestExtractCannotMakeTheFolder(t *testing.T) {
 	}
 }
 
-// zip が記録の名前のフォルダを持てば、記録を書けずに失敗し、何も変えない。
+// zip が記録の名前のフォルダを含む場合は、記録を書き込めずに失敗し、何も変更しない。
 func TestInstallCannotWriteTheRecord(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -149,7 +151,7 @@ func TestInstallCannotWriteTheRecord(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// 取ったものを書く場所がフォルダなら、取るのを失敗にする。
+// 取得したものを書き込む場所がフォルダならば、取得を失敗とする。
 func TestDownloadCannotWrite(t *testing.T) {
 	h := newHarness(t)
 	h.serve("/a.zip", []byte("x"))
@@ -159,7 +161,8 @@ func TestDownloadCannotWrite(t *testing.T) {
 	}
 }
 
-// 本文の途中で切れたら、取るのを失敗にする（マニフェストも zip も）。転送が 10 回を超えたら止める。
+// 本文の途中で切断された場合は、取得を失敗とする（マニフェストも zip も）。転送が 10 回を超えたら
+// 停止する。
 func TestTruncatedAndLoopingResponses(t *testing.T) {
 	h := newHarness(t)
 	inner := h.server.Config.Handler
@@ -187,8 +190,8 @@ func TestTruncatedAndLoopingResponses(t *testing.T) {
 	}
 }
 
-// 走らせられないフック（他の OS のもの）は、付け替える前に断る。記録に写したフックが走らない
-// （他の OS から写したフォルダ）ときは、フックの失敗として戻す。
+// 実行できないフック（他の OS のもの）は、差し替える前に拒否する。記録に複製したフックが
+// 実行できない（他の OS から複製したフォルダ）場合は、フックの失敗として巻き戻す。
 func TestHookOfAnotherOS(t *testing.T) {
 	h := newHarness(t)
 	interpreter, script := "powershell", "hooks/install.ps1"
@@ -211,7 +214,7 @@ func TestHookOfAnotherOS(t *testing.T) {
 	h.mustInstall(release{name: "cli", tag: "c2"})
 	dest := filepath.Join(h.plugins, "cli")
 	record, _ := readRecord(dest)
-	// powershell のスクリプトは .ps1 に限る（registry.Script）。
+	// powershell のスクリプトは .ps1 に限定する（registry.Script）。
 	uninstallScript := strings.Replace(script, "install", "uninstall", 1)
 	os.WriteFile(filepath.Join(dest, filepath.FromSlash(uninstallScript)), nil, 0o644)
 	record.Hooks.Uninstall = []string{interpreter, uninstallScript}
@@ -222,8 +225,8 @@ func TestHookOfAnotherOS(t *testing.T) {
 	}
 }
 
-// フックの 1 つ目が zip の中の実行ファイルなら、それを走らせ、残りの引数を渡す。標準エラーの
-// 行き先が無ければ捨てる。
+// フックの 1 つ目が zip の中の実行ファイルならば、それを実行し、残りの引数を渡す。標準エラーの
+// 出力先が無ければ破棄する。
 func TestHookExecutableInTheZip(t *testing.T) {
 	h := newHarness(t)
 	script := entry{name: "hooks/run", body: "#!/bin/sh\nprintf '{\"arg\":\"%s\"}' \"$1\"\necho noise >&2\n", mode: 0o755}
@@ -240,7 +243,7 @@ func TestHookExecutableInTheZip(t *testing.T) {
 	}
 }
 
-// 使い方の誤りは、何がいけないかを示す。
+// 使用方法の誤りは、何が不正であるかを示す。
 func TestUsageErrorMessage(t *testing.T) {
 	_, err := Install(Options{}, "Bad", "latest", false)
 	if !IsUsage(err) || !strings.Contains(err.Error(), `"Bad"`) {
@@ -251,8 +254,9 @@ func TestUsageErrorMessage(t *testing.T) {
 	}
 }
 
-// スプールのロックを、無い以外の理由で調べられなければ（ここではスプールの場所がファイル）、動いているかが分からない
-// ので、install も uninstall も何も変えずに断る（「動いていない」とみなして付け替えない）。
+// スプールのロックを、存在しない以外の理由で調査できなければ（ここではスプールの場所がファイル）、
+// 実行中か否かが判明しないため、install も uninstall も何も変更せずに拒否する（「実行中でない」
+// とみなして差し替えない）。
 func TestLockCannotBeRead(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows reports a path below a file as not found")
@@ -273,7 +277,7 @@ func TestLockCannotBeRead(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// --registry の書き方の誤りは、cli の無い <Plug-Ins> でも使い方の誤りにする（cli の確かめより先）。
+// --registry の記法の誤りは、cli の無い <Plug-Ins> でも使用方法の誤りとする（cli の検証より先）。
 func TestRegistryUsageBeforeTheCLICheck(t *testing.T) {
 	h := newHarness(t)
 	o := h.options()
@@ -283,24 +287,27 @@ func TestRegistryUsageBeforeTheCLICheck(t *testing.T) {
 	}
 }
 
-// cli の無い <Plug-Ins> では、レジストリを取りに行く前に断る（届かないレジストリで、本当の理由が隠れない）。
+// cli の無い <Plug-Ins> では、レジストリを取得する前に拒否する（到達できないレジストリによって、
+// 本来の理由が隠れない）。
 func TestInstallChecksCLIBeforeTheRegistry(t *testing.T) {
 	h := newHarness(t)
 	o := h.options()
 	o.Registries = []string{"https://127.0.0.1:1/unreachable.json"}
-	// 既定のレジストリに無い名前なので、確かめが後なら届かないレジストリを取りに行く。
+	// 既定のレジストリに無い名前であるため、検証が後ならば到達できないレジストリを取得しに行く。
 	if _, err := Install(o, "elsewhere", "1", false); err == nil || !strings.Contains(err.Error(), "has no cli") {
 		t.Fatal(err)
 	}
 }
 
-// 名前がどのレジストリにも無い・規則が合わない・マニフェストが読めないときは、何も変えずに失敗にする。
+// 名前がいずれのレジストリにも無い・規則が合致しない・マニフェストが読み取れない場合は、何も
+// 変更せずに失敗とする。
 func TestInstallManifestErrors(t *testing.T) {
 	h := newHarness(t)
-	// cli でない名前は cli のある <Plug-Ins> でだけ引く（無ければ、レジストリを取る前に断る）。
+	// cli でない名前は cli のある <Plug-Ins> でのみ検索する（無ければ、レジストリを取得する前に
+	// 拒否する）。
 	h.installCLI()
 	before := snapshot(t, h.plugins)
-	// 引いたレジストリを示す。
+	// 検索したレジストリを示す。
 	if _, err := h.install("nowhere", "1"); err == nil || !strings.Contains(err.Error(), "no registry (looked in: default") {
 		t.Error(err)
 	}
@@ -319,7 +326,7 @@ func TestInstallManifestErrors(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// <Plug-Ins> がファイルなら、何も変えずに失敗にする。
+// <Plug-Ins> がファイルならば、何も変更せずに失敗とする。
 func TestInstallPluginsDirIsAFile(t *testing.T) {
 	h := newHarness(t)
 	h.publish(release{name: "cli", tag: "c1"})
@@ -335,7 +342,7 @@ func TestInstallPluginsDirIsAFile(t *testing.T) {
 	}
 }
 
-// <Work> がファイルなら（作業の場所を作れない）、何も変えずに失敗にする。
+// <Work> がファイルならば（作業領域を作成できない）、何も変更せずに失敗とする。
 func TestWorkDirIsAFile(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -352,7 +359,7 @@ func TestWorkDirIsAFile(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// <Work>/old を作れなければ（OS の失敗）、install も uninstall も何も変えずに失敗にする。
+// <Work>/old を作成できなければ（OS の失敗）、install も uninstall も何も変更せずに失敗とする。
 func TestCannotMakeTheOldFolder(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -368,7 +375,8 @@ func TestCannotMakeTheOldFolder(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// 前回の残りの組み立てを消せなければ（zip の場所が中身のあるフォルダ・フォルダを消せない）、何も変えない。
+// 前回の構築の残存物を削除できなければ（zip の場所が内容のあるフォルダ・フォルダを削除できない）、
+// 何も変更しない。
 func TestInstallCannotRemoveTheStaging(t *testing.T) {
 	for name, prepare := range map[string]func(h *harness){
 		"zip": func(h *harness) {
@@ -392,7 +400,7 @@ func TestInstallCannotRemoveTheStaging(t *testing.T) {
 	}
 }
 
-// 走らせている CLI をよけられなければ、付け替えずに失敗にする。
+// 実行中の CLI を退避できなければ、差し替えずに失敗とする。
 func TestCannotSidestepTheCLI(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -410,7 +418,7 @@ func TestCannotSidestepTheCLI(t *testing.T) {
 	}
 }
 
-// <Plug-Ins> を作れなければ、退避した前の版を戻す。
+// <Plug-Ins> を作成できなければ、退避した以前の版を復元する。
 func TestInstallCannotMakeThePluginsDir(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -423,7 +431,7 @@ func TestInstallCannotMakeThePluginsDir(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// 付け替えの 2 つ目が失敗し、前の版も戻せなければ、手で戻す場所を示す。
+// 差し替えの 2 つ目が失敗し、以前の版も復元できなければ、手動で復元する場所を示す。
 func TestInstallCannotPutTheOldVersionBack(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -431,7 +439,7 @@ func TestInstallCannotPutTheOldVersionBack(t *testing.T) {
 	old := filepath.Join(h.work, "old", "cli")
 	failRename(t, filepath.Join(h.work, "staging", "cli"), "")
 	failRename(t, old, "")
-	// 走らせている CLI をよけていれば、その場所も示す（戻した版のフォルダには CLI が無いため）。
+	// 実行中の CLI を退避していれば、その場所も示す（復元した版のフォルダには CLI が無いため）。
 	o := h.options()
 	o.Executable = h.fakeExecutable()
 	if _, err := Install(o, "cli", "c2", false); err == nil || !strings.Contains(err.Error(), "by hand") ||
@@ -440,7 +448,8 @@ func TestInstallCannotPutTheOldVersionBack(t *testing.T) {
 	}
 }
 
-// フックが失敗して戻すとき、新しい版をよけられなければ残し、前の版を戻せなければ手で戻す場所を示す。
+// フックが失敗して巻き戻す場合、新しい版を退避できなければ残置し、以前の版を復元できなければ手動で
+// 復元する場所を示す。
 func TestInstallHookFailureCannotUndo(t *testing.T) {
 	for name, c := range map[string]struct {
 		move func(h *harness) [2]string
@@ -465,7 +474,7 @@ func TestInstallHookFailureCannotUndo(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), c.want) {
 				t.Fatal(err)
 			}
-			// 前の版を戻せないときは、よけた CLI の場所も示す。
+			// 以前の版を復元できない場合は、退避した CLI の場所も示す。
 			if name == "old version" && !strings.Contains(err.Error(), "move the running "+edition.Command+" back") {
 				t.Fatal(err)
 			}
@@ -473,8 +482,8 @@ func TestInstallHookFailureCannotUndo(t *testing.T) {
 	}
 }
 
-// よけた CLI を戻せなければ、どの戻しも、戻したとは言わずに、手で戻す場所を示す（黙って残すと、次の後始末が
-// よけた名前のまま唯一の vw2026 を消すため）。
+// 退避した CLI を復元できなければ、いずれの巻き戻しも、復元したとは述べずに、手動で復元する場所を
+// 示す（黙って残置すると、次の後処理が退避した名前のまま唯一の vw2026 を削除するため）。
 func TestCannotRestoreTheSidesteppedCLI(t *testing.T) {
 	for name, c := range map[string]struct {
 		fail func(h *harness)
@@ -509,7 +518,7 @@ func TestCannotRestoreTheSidesteppedCLI(t *testing.T) {
 	}
 }
 
-// uninstall の印を書けなければ（印の場所がフォルダ）、何も変えない。
+// uninstall の標識を書き込めなければ（標識の場所がフォルダ）、何も変更しない。
 func TestUninstallCannotWriteTheMarker(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -521,7 +530,7 @@ func TestUninstallCannotWriteTheMarker(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// フックが失敗し、フォルダを戻せなければ、手で戻す場所を示す。
+// フックが失敗し、フォルダを復元できなければ、手動で復元する場所を示す。
 func TestUninstallCannotPutTheFolderBack(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1", uninstall: &hookPlan{Exit: 1}})
@@ -532,8 +541,8 @@ func TestUninstallCannotPutTheFolderBack(t *testing.T) {
 	}
 }
 
-// フックの後で移したフォルダを組み立ての場所へ移せなければ（Windows で中のファイルが開かれている）、
-// 何も消さずに印を残して失敗にし、もう一度走らせると続きから消す。
+// フックの後で移動したフォルダを構築の場所へ移動できなければ（Windows で内部のファイルが
+// 開かれている）、何も削除せずに標識を残置して失敗とし、再度実行すると続きから削除する。
 func TestUninstallCannotDeleteTheFolder(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -553,13 +562,14 @@ func TestUninstallCannotDeleteTheFolder(t *testing.T) {
 	}
 }
 
-// 組み立ての場所へ移した後で消すのが途中で止まっても、外したことは変わらず（old にも印にも残らない）、
-// 残りは次の uninstall が消す。
+// 構築の場所へ移動した後の削除が途中で停止しても、アンインストールしたことは変わらず（old にも
+// 標識にも残らない）、残存物は次の uninstall が削除する。
 func TestUninstallLeavesWhatCannotBeDeletedInStaging(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
 	stage := filepath.Join(h.work, "staging", "cli")
-	// 移した後（中身があるとき）だけ失敗させる（移す前の、前回の残りを消す呼び出しは通す）。
+	// 移動した後（内容がある場合）のみ失敗させる（移動する前の、前回の残存物を削除する呼び出しは
+	// 通す）。
 	restore := pathOpWhen(t, &removeAll, func(path string) error {
 		if path == stage && exists(stage) {
 			return errInjected
@@ -580,9 +590,9 @@ func TestUninstallLeavesWhatCannotBeDeletedInStaging(t *testing.T) {
 	}
 }
 
-// 付け替えで退避したフォルダの記録の module が無ければ（利用者のファイルが入っているかもしれない）、
-// 消さずに <Work>/old/<name>.kept-<時刻>/ へ移して知らせる（守ること 9）。old/<name>/ には残さないので、
-// 次の install・uninstall も通る。
+// 差し替えで退避したフォルダの記録の module が存在しなければ（利用者のファイルが格納されている
+// 可能性がある）、削除せずに <Work>/old/<name>.kept-<時刻>/ へ移動して通知する（遵守事項 9）。
+// old/<name>/ には残置しないため、次の install・uninstall も通る。
 func TestInstallKeepsAFolderWithoutModule(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -609,7 +619,8 @@ func TestInstallKeepsAFolderWithoutModule(t *testing.T) {
 	}
 }
 
-// 退避したフォルダを脇へ移せなければ、入れたことは変えずに知らせ、old/<name>/ に残す。
+// 退避したフォルダを別の場所へ移動できなければ、インストールしたことは変更せずに通知し、
+// old/<name>/ に残置する。
 func TestInstallCannotMoveAsideAFolderWithoutModule(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -625,7 +636,8 @@ func TestInstallCannotMoveAsideAFolderWithoutModule(t *testing.T) {
 	}
 }
 
-// 初めて入れるときにフックが失敗し、その間に Vectorworks が起動したら、新しい版を残し、前の版の場所は示さない。
+// 初回のインストールでフックが失敗し、その間に Vectorworks が起動した場合は、新しい版を残置し、
+// 以前の版の場所は示さない。
 func TestFirstInstallHookFailureWhileRunning(t *testing.T) {
 	h := newHarness(t)
 	h.publish(release{name: "cli", tag: "c1", install: h.lockingHook(hookPlan{Exit: 1})})
@@ -638,13 +650,15 @@ func TestFirstInstallHookFailureWhileRunning(t *testing.T) {
 	if h.installedVersion("cli") != "c1" {
 		t.Fatal("the new version should stay")
 	}
-	// 取った zip は残さない（同じタグで走らせ直す install は zip を取らず、消す道を通らない）。
+	// 取得した zip は残置しない（同じタグで再実行する install は zip を取得せず、削除する経路を
+	// 通らない）。
 	if exists(filepath.Join(h.work, "staging", "cli.zip")) {
 		t.Fatal("should remove the downloaded zip")
 	}
 }
 
-// 新しい版を残した install の後、同じタグの install は、フックが通ったら組み立ての場所の残りも消す。
+// 新しい版を残置した install の後、同じタグの install は、フックが成功したら構築の場所の残存物も
+// 削除する。
 func TestInstallSameTagCleansTheStaging(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -663,8 +677,9 @@ func TestInstallSameTagCleansTheStaging(t *testing.T) {
 	}
 }
 
-// uninstall が空の <Work>/staging を消した後も、old へ移したフォルダを組み立ての場所を通して消せる
-// （discard が <Work>/staging を作る）。uninstall cli と、同じタグの install の片付けの両方。
+// uninstall が空の <Work>/staging を削除した後も、old へ移動したフォルダを構築の場所を経由して
+// 削除できる（discard が <Work>/staging を作成する）。uninstall cli と、同じタグの install の
+// 後処理の両方。
 func TestDiscardWithoutStaging(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -690,9 +705,10 @@ func TestDiscardWithoutStaging(t *testing.T) {
 	}
 }
 
-// uninstall の discard が失敗したら（<Work>/staging を作れない・old から組み立ての場所へ移せない）、old へ移した
-// フォルダと印を残して失敗にする（走らせ直すと続きから走る）。走らせ直す案内（run uninstall demo again）は 1 つだけで、
-// 誤りの連鎖は discard の中まで続かない（cmd が ErrRunning などを discard の中から拾わないように）。
+// uninstall の discard が失敗したら（<Work>/staging を作成できない・old から構築の場所へ
+// 移動できない）、old へ移動したフォルダと標識を残置して失敗とする（再実行すると続きから
+// 実行される）。再実行の案内（run uninstall demo again）は 1 つのみで、誤りの連鎖は discard の
+// 内部まで続かない（cmd が ErrRunning などを discard の内部から拾わないように）。
 func TestUninstallDiscardFailure(t *testing.T) {
 	for name, fail := range map[string]func(t *testing.T, h *harness){
 		"staging": func(t *testing.T, h *harness) {
@@ -723,12 +739,14 @@ func TestUninstallDiscardFailure(t *testing.T) {
 	}
 }
 
-// install の付け替えの前の片付け（settleOld の discard）が失敗したら、何も変えずに失敗にし、走らせ直す
-// install <name>@<tag> を 1 つだけ案内する（settleOld が受け取った again が discard・renameError まで届く）。
+// install の差し替えの前の後処理（settleOld の discard）が失敗したら、何も変更せずに失敗とし、
+// 再実行する install <name>@<tag> を 1 つのみ案内する（settleOld が受け取った again が
+// discard・renameError まで届く）。
 func TestInstallDiscardFailure(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
-	// 前回の残り（記録の正しい前の版）が old にあると、付け替えの前に組み立ての場所へ移してから消す。
+	// 前回の残存物（記録の正しい以前の版）が old にあると、差し替えの前に構築の場所へ移動してから
+	// 削除する。
 	old := filepath.Join(h.work, "old", "cli")
 	if err := os.CopyFS(old, os.DirFS(filepath.Join(h.plugins, "cli"))); err != nil {
 		t.Fatal(err)
@@ -745,7 +763,8 @@ func TestInstallDiscardFailure(t *testing.T) {
 	}
 }
 
-// 空の <Work> を消せなくても、外したことは変わらない（残った <Work> は次の install・uninstall が使う）。
+// 空の <Work> を削除できなくても、アンインストールしたことは変わらない（残存した <Work> は次の
+// install・uninstall が使用する）。
 func TestUninstallCannotRemoveTheEmptyWork(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -764,7 +783,7 @@ func TestUninstallCannotRemoveTheEmptyWork(t *testing.T) {
 	}
 }
 
-// インタプリタを通さないフックが Windows の走らせない拡張子なら、付け替えの前に断る。
+// インタプリタを経由しないフックが Windows で実行しない拡張子ならば、差し替えの前に拒否する。
 func TestHookNotRunnableOnWindows(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("only Windows decides by the extension whether a file runs")
@@ -780,7 +799,7 @@ func TestHookNotRunnableOnWindows(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// インタプリタを通さないフックに実行の権限が無ければ（mac）、付け替えの前に断る。
+// インタプリタを経由しないフックに実行の権限が無ければ（mac）、差し替えの前に拒否する。
 func TestHookWithoutExecutePermission(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows does not decide by the permission whether a file runs")
@@ -796,9 +815,10 @@ func TestHookWithoutExecutePermission(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// uninstall のフックが失敗し、その間に Vectorworks が起動したら、フォルダを戻さずに印を残す。uninstall cli では、
-// ロックのある <Plug-Ins>/cli/spool/ ごと old へ移すので、戻す前には移した先のスプールのロックを見る（mac では、
-// 移す直前に読み込んだプラグインのロックがフォルダと一緒に移る）。
+// uninstall のフックが失敗し、その間に Vectorworks が起動した場合は、フォルダを復元せずに標識を
+// 残置する。uninstall cli では、ロックのある <Plug-Ins>/cli/spool/ ごと old へ移動するため、
+// 復元する前に移動先のスプールのロックを確認する（mac では、移動する直前に読み込んだプラグインの
+// ロックがフォルダと共に移動する）。
 func TestUninstallHookFailureWhileRunning(t *testing.T) {
 	for _, name := range []string{"demo", "cli"} {
 		t.Run(name, func(t *testing.T) {
@@ -826,21 +846,22 @@ func TestUninstallHookFailureWhileRunning(t *testing.T) {
 	}
 }
 
-// 資産が上限より大きければ、取るのを失敗にして、取ったものを残さない。
+// 資産が上限より大きければ、取得を失敗とし、取得したものを残置しない。
 func TestDownloadTooLarge(t *testing.T) {
 	swap(t, &maxAsset, 4)
 	h := newHarness(t)
 	h.serve("/big.zip", []byte("0123456789"))
 	path := filepath.Join(t.TempDir(), "big.zip")
 	o, stderr := h.capturing()
-	// 大きさ（Content-Length）が分かれば、書く前に断る（取り始めない）。
+	// 大きさ（Content-Length）が判明すれば、書き込む前に拒否する（取得を開始しない）。
 	if err := o.download(h.url("/big.zip"), path, sha256Hex([]byte("0123456789"))); err == nil ||
 		!strings.Contains(err.Error(), "larger") || exists(path) || strings.Contains(stderr.String(), "downloading") {
 		t.Fatal(err, stderr.String())
 	}
 }
 
-// よけた CLI の名前は、実行ファイルの名前（大文字の名前・別の名前の写し）に依らず決まり、後始末が消す。
+// 退避した CLI の名前は、実行ファイルの名前（大文字の名前・別の名前の複製）に依らず決定され、
+// 後処理が削除する。
 func TestSidestepNameIgnoresTheExecutableName(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1", extra: []entry{{name: "bin/VW2026-dev", body: "copy", mode: 0o755}}})
@@ -862,7 +883,8 @@ func TestSidestepNameIgnoresTheExecutableName(t *testing.T) {
 	}
 }
 
-// 展開した大きさの合計が上限を超える zip は、何も展開せずに断る（小さな zip が大きく展開されないように）。
+// 展開した大きさの合計が上限を超える zip は、何も展開せずに拒否する（小さな zip が大きく
+// 展開されないように）。
 func TestExtractTooLarge(t *testing.T) {
 	swap(t, &maxExtracted, 5)
 	dir := t.TempDir()
@@ -881,7 +903,8 @@ func TestExtractTooLarge(t *testing.T) {
 	}
 }
 
-// 項目の数が上限を超える zip は、何も展開せずに断る（空の項目の多い小さな zip が、ファイルを作り続けないように）。
+// 項目の数が上限を超える zip は、何も展開せずに拒否する（空の項目の多い小さな zip が、ファイルを
+// 作成し続けないように）。
 func TestExtractTooManyEntries(t *testing.T) {
 	swap(t, &maxEntries, 1)
 	dir := t.TempDir()
@@ -897,8 +920,8 @@ func TestExtractTooManyEntries(t *testing.T) {
 	}
 }
 
-// フックの後で組み立ての場所を空けられなければ（zip の場所が中身のあるフォルダ）、移したフォルダを
-// 消さずに印を残して失敗にする。
+// フックの後で構築の場所を空にできなければ（zip の場所が内容のあるフォルダ）、移動したフォルダを
+// 削除せずに標識を残置して失敗とする。
 func TestUninstallCannotEmptyTheStaging(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -913,8 +936,9 @@ func TestUninstallCannotEmptyTheStaging(t *testing.T) {
 	}
 }
 
-// 付け替えの前に前回の残りの old を片付けるとき、組み立ての場所へ移したものを消しきれなければ（Windows で
-// ウイルス対策が開いているファイルなど）、組み立てずに失敗にする（前の版のファイルを新しい版に混ぜない）。
+// 差し替えの前に前回の残存物の old を整理する際、構築の場所へ移動したものを削除しきれなければ
+// （Windows でウイルス対策が開いているファイルなど）、構築せずに失敗とする（以前の版のファイルを
+// 新しい版に混入させない）。
 func TestInstallDoesNotMixTheLeftoverIntoTheNewVersion(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -924,7 +948,7 @@ func TestInstallDoesNotMixTheLeftoverIntoTheNewVersion(t *testing.T) {
 	copyDir(t, dest, old)
 	os.WriteFile(filepath.Join(old, "stale.txt"), []byte("old"), 0o644)
 	stage := filepath.Join(h.work, "staging", "cli")
-	// stale.txt だけが消せない（他は消える）。
+	// stale.txt のみが削除できない（他は削除される）。
 	restore := pathOpWhen(t, &removeAll, func(path string) error {
 		if path == stage && exists(filepath.Join(stage, "stale.txt")) {
 			entries, _ := os.ReadDir(stage)
@@ -942,7 +966,7 @@ func TestInstallDoesNotMixTheLeftoverIntoTheNewVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	sameSnapshot(t, before, snapshot(t, h.plugins))
-	// 消せるようになれば、次の install が残りを消して入れる。
+	// 削除できるようになれば、次の install が残存物を削除してインストールする。
 	restore()
 	h.mustInstall(release{name: "cli", tag: "c2"})
 	if exists(filepath.Join(dest, "stale.txt")) || exists(stage) {
@@ -950,9 +974,9 @@ func TestInstallDoesNotMixTheLeftoverIntoTheNewVersion(t *testing.T) {
 	}
 }
 
-// <Plug-Ins>/<name>/ があるなら、中断した uninstall の印は前の回の残りなので、同じタグの道でも、付け替えの
-// 前に失敗した回でも消す（残すと、後の install が付け替えの途中で止まったときに、次の uninstall が唯一
-// 残った版を消しうる）。
+// <Plug-Ins>/<name>/ が存在するなら、中断した uninstall の標識は以前の回の残存物であるため、同じ
+// タグの経路でも、差し替えの前に失敗した回でも削除する（残置すると、後の install が差し替えの途中で
+// 停止した場合に、次の uninstall が唯一残存した版を削除しうる）。
 func TestInstallRemovesAStaleMarkerOnEveryPath(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -968,7 +992,8 @@ func TestInstallRemovesAStaleMarkerOnEveryPath(t *testing.T) {
 	}
 }
 
-// 大きさの分からない応答（Content-Length が無い）が上限を超えたら、取り終えたとは書かずに、止まったと書く。
+// 大きさの判明しない応答（Content-Length が無い）が上限を超えたら、取得を完了したとは書き込まずに、
+// 停止したと書き込む。
 func TestDownloadTooLargeSaysStopped(t *testing.T) {
 	swap(t, &maxAsset, 4)
 	h := newHarness(t)
@@ -985,7 +1010,8 @@ func TestDownloadTooLargeSaysStopped(t *testing.T) {
 	}
 }
 
-// モジュールは、拡張子だけでなく、mac はフォルダ（バンドル）、Windows はファイルであることも確かめる。
+// モジュールは、拡張子のみでなく、mac はフォルダ（バンドル）、Windows はファイルであることも
+// 検証する。
 func TestFindModuleChecksTheKind(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "file.vwlibrary"), nil, 0o644)
@@ -1008,7 +1034,8 @@ func TestFindModuleChecksTheKind(t *testing.T) {
 	}
 }
 
-// フックの標準出力は上限（maxDocument）までだけを溜め、超えたら失敗にする（フックは最後まで走らせる）。
+// フックの標準出力は上限（maxDocument）までのみを蓄積し、超えたら失敗とする（フックは最後まで
+// 実行する）。
 func TestHookPrintsTooMuch(t *testing.T) {
 	h := newHarness(t)
 	h.publish(release{name: "cli", tag: "c1", install: &hookPlan{Stdout: `{"x":"` + strings.Repeat("a", maxDocument) + `"}`}})
@@ -1020,7 +1047,8 @@ func TestHookPrintsTooMuch(t *testing.T) {
 	}
 }
 
-// フックのインタプリタがこの OS で走らなければ、付け替える前に断る（<Plug-Ins> を変えない）。
+// フックのインタプリタがこの OS で実行できなければ、差し替える前に拒否する（<Plug-Ins> を
+// 変更しない）。
 func TestHookInterpreterOfAnotherOSBeforeTheSwap(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -1031,7 +1059,7 @@ func TestHookInterpreterOfAnotherOSBeforeTheSwap(t *testing.T) {
 	hooks := registry.Hooks{Install: []string{other, "hooks/install.hook"}}
 	h.publish(release{name: "cli", tag: "c2", hooks: &hooks})
 	before := snapshot(t, h.plugins)
-	// 付け替え（<Plug-Ins>/cli の名前の変更）まで進まないことを確かめる。
+	// 差し替え（<Plug-Ins>/cli の名前の変更）まで進まないことを確認する。
 	dest := filepath.Join(h.plugins, "cli")
 	swapped := false
 	renameWhen(t, func(oldpath, newpath string) error {
@@ -1048,8 +1076,8 @@ func TestHookInterpreterOfAnotherOSBeforeTheSwap(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// 続きから走る uninstall cli は、移した先のスプールのロックが掴まれていれば何もせずに ErrRunning で終わる
-// （<Plug-Ins>/cli/spool/ はもう無いので、始めの確かめでは見えない）。
+// 続きから実行される uninstall cli は、移動先のスプールのロックが取得されていれば何もせずに
+// ErrRunning で終了する（<Plug-Ins>/cli/spool/ は既に存在しないため、最初の検証では見えない）。
 func TestUninstallCLIResumeWhileLockedInOld(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -1069,8 +1097,9 @@ func TestUninstallCLIResumeWhileLockedInOld(t *testing.T) {
 	}
 }
 
-// フックが通っても、その間に移した先のスプールのロックが掴まれたら（cli）、消さずに印を残して失敗する（フォルダを移して
-// フックも走らせたので、「何もしなかった」の ErrRunning にはしない）。
+// フックが成功しても、その間に移動先のスプールのロックが取得されたら（cli）、削除せずに標識を
+// 残置して失敗する（フォルダを移動してフックも実行したため、「何もしなかった」の
+// ErrRunning にはしない）。
 func TestUninstallCLIHookSuccessWhileLockedInOld(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1", uninstall: h.lockingHook(hookPlan{Stdout: "{}"})})
@@ -1086,12 +1115,14 @@ func TestUninstallCLIHookSuccessWhileLockedInOld(t *testing.T) {
 	}
 }
 
-// sha256 が合わず、取った zip を消せなくても失敗で終わり、次の install が組み立ての場所の残りとして消す。
+// sha256 が合致せず、取得した zip を削除できなくても失敗で終了し、次の install が構築の場所の
+// 残存物として削除する。
 func TestDownloadMismatchCannotRemove(t *testing.T) {
 	h := newHarness(t)
 	h.publish(release{name: "cli", tag: "c1", sha: strings.Repeat("0", 64)})
 	zip := filepath.Join(h.work, "staging", "cli.zip")
-	// 組み立ての前の片付け（まだ無い zip を消す）は通し、取った後の zip だけを消せなくする。
+	// 構築の前の後処理（まだ存在しない zip を削除する）は通し、取得した後の zip のみを
+	// 削除できなくする。
 	restore := pathOpWhen(t, &removeFile, func(path string) error {
 		if path == zip && exists(path) {
 			return errInjected
@@ -1099,7 +1130,8 @@ func TestDownloadMismatchCannotRemove(t *testing.T) {
 		return nil
 	})
 	o, stderr := h.capturing()
-	// 取り終えた行は、sha256 を照らしてから書く（合わなければ取り終えたとは書かない）。
+	// 取得完了の行は、sha256 を照合してから書き込む（合致しなければ取得を完了したとは
+	// 書き込まない）。
 	if _, err := Install(o, "cli", "c1", false); err == nil || !strings.Contains(err.Error(), "sha256") || !exists(zip) ||
 		strings.Contains(stderr.String(), "downloaded") || !strings.Contains(stderr.String(), "stopped after") {
 		t.Fatal(err, stderr.String())
@@ -1111,8 +1143,9 @@ func TestDownloadMismatchCannotRemove(t *testing.T) {
 	}
 }
 
-// cli の install のフックの間に、前の版を読み込んだ Vectorworks のロックが old/cli/spool/ にあれば（付け替えの
-// 直前に起動した）、フックが失敗しても戻さずに新しい版を残す。
+// cli の install のフックの間に、以前の版を読み込んだ Vectorworks のロックが
+// old/cli/spool/ にあれば（差し替えの直前に起動した）、フックが失敗しても巻き戻さずに新しい版を
+// 残置する。
 func TestInstallCLIHookFailureWhileLockedInOld(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -1129,9 +1162,9 @@ func TestInstallCLIHookFailureWhileLockedInOld(t *testing.T) {
 	}
 }
 
-// フックが通っても、old/cli/spool/ のロックが掴まれていれば、退避した版を消さずに知らせる。その後は、同じタグの
-// install も、他のプラグインの install・uninstall も、Vectorworks が動いているとみなして何もしない（終了してから
-// 走らせ直すと片付ける）。
+// フックが成功しても、old/cli/spool/ のロックが取得されていれば、退避した版を削除せずに通知する。
+// その後は、同じタグの install も、他のプラグインの install・uninstall も、Vectorworks が
+// 実行中であるとみなして何もしない（終了してから再実行すると整理する）。
 func TestInstallCLIKeepsOldWhileLockedInOld(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -1163,8 +1196,8 @@ func TestInstallCLIKeepsOldWhileLockedInOld(t *testing.T) {
 	}
 }
 
-// <Plug-Ins>/<name> を、無い以外の理由で調べられなければ（ここでは <Plug-Ins> がファイル）、uninstall は入って
-// いないとみなさずに失敗にし、何も消さない（印も残す）。
+// <Plug-Ins>/<name> を、存在しない以外の理由で調査できなければ（ここでは <Plug-Ins> がファイル）、
+// uninstall はインストールされていないとみなさずに失敗とし、何も削除しない（標識も残置する）。
 func TestUninstallCannotLookAtTheFolder(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows reports a path below a file as not found")
@@ -1182,8 +1215,8 @@ func TestUninstallCannotLookAtTheFolder(t *testing.T) {
 	}
 }
 
-// フォルダを調べられなければ（無い以外の誤り）、入っていないとみなさずに誤りを返す（ロックの確かめが先に断るので、
-// 直に確かめる）。
+// フォルダを調査できなければ（存在しない以外の誤り）、インストールされていないとみなさずに誤りを
+// 返す（ロックの検証が先に拒否するため、直接検証する）。
 func TestPluginFolderCannotTell(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows reports a path below a file as not found")
@@ -1195,7 +1228,7 @@ func TestPluginFolderCannotTell(t *testing.T) {
 	}
 }
 
-// 同じタグでフックだけを走らせた回も、前の install がよけた CLI を消してみる。
+// 同じタグでフックのみを実行した回も、以前の install が退避した CLI の削除を試みる。
 func TestInstallSameTagCleansMovedCLIs(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -1206,12 +1239,14 @@ func TestInstallSameTagCleansMovedCLIs(t *testing.T) {
 	}
 }
 
-// フックが後ろに子を残して終わっても（標準出力を持ち続ける）、待たずに入れ終え、そう知らせる。
+// フックが背後に子を残して終了しても（標準出力を保持し続ける）、待機せずにインストールを完了し、
+// その旨を通知する。
 func TestHookLeavesAProcess(t *testing.T) {
 	swap(t, &hookWaitDelay, 100*time.Millisecond)
 	h := newHarness(t)
-	// 子は releaseFile ができるまで残る。テストの片付け（一時ディレクトリを消す）の前に終わらせる（Windows では
-	// 動いているテストの実行ファイルと、その作業ディレクトリを消せない）。
+	// 子は releaseFile が作成されるまで残存する。テストの後処理（一時ディレクトリを削除する）の前に
+	// 終了させる（Windows では実行中のテストの実行ファイルと、その作業ディレクトリを
+	// 削除できない）。
 	releaseFile := filepath.Join(h.tmp, "release")
 	t.Cleanup(func() {
 		os.WriteFile(releaseFile, nil, 0o600)
@@ -1232,7 +1267,8 @@ func TestHookLeavesAProcess(t *testing.T) {
 	}
 }
 
-// Vectorworks が動いていれば、レジストリを取る前に vectorworks_running と答える（届かないレジストリの誤りより先）。
+// Vectorworks が実行中であれば、レジストリを取得する前に vectorworks_running と応答する
+// （到達できないレジストリの誤りより先）。
 func TestRunningBeforeTheRegistry(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -1244,7 +1280,8 @@ func TestRunningBeforeTheRegistry(t *testing.T) {
 	}
 }
 
-// <Plug-Ins> と <Work> の片方がもう片方の中にあれば、何もせずに断る（片付けが入れたばかりのプラグインを消さない）。
+// <Plug-Ins> と <Work> の一方が他方の内部にあれば、何もせずに拒否する（後処理が
+// インストールしたばかりのプラグインを削除しない）。
 func TestOverlappingPlaces(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -1265,16 +1302,17 @@ func TestOverlappingPlaces(t *testing.T) {
 		}
 		sameSnapshot(t, before, snapshot(t, h.plugins))
 	}
-	// 大文字と小文字を区別しない OS では、その違いだけの書き方も重なる。区別する OS では別のフォルダ（uninstall で
-	// 確かめる。入っていなければ何も作らない）。
+	// 大文字と小文字を区別しない OS では、その違いのみの表記も重複する。区別する OS では別の
+	// フォルダ（uninstall で確認する。インストールされていなければ何も作成しない）。
 	o := h.options()
 	o.PluginsDir = strings.ToUpper(filepath.Join(h.work, "old"))
 	_, err := Uninstall(o, "cli")
 	if folds := runtime.GOOS == "darwin" || runtime.GOOS == "windows"; folds != (err != nil && strings.Contains(err.Error(), "overlap")) {
 		t.Errorf("case: %v", err)
 	}
-	// リンクで別の書き方をしても、同じディレクトリ・その中なら断る（<Work> の下を指すリンクを --plugins-dir に
-	// 渡したときも。まだ無い場所の下も、あるところまでのリンクを解いて見つける）。
+	// リンクで別の表記をしても、同じディレクトリ・その内部ならば拒否する（<Work> の下を指すリンクを
+	// --plugins-dir に渡した場合も。まだ存在しない場所の下も、存在する箇所までのリンクを解決して
+	// 検出する）。
 	link := filepath.Join(h.tmp, "plugins-link")
 	staging := filepath.Join(h.tmp, "staging-link")
 	os.MkdirAll(filepath.Join(h.work, "staging"), 0o700)
@@ -1295,8 +1333,8 @@ func TestOverlappingPlaces(t *testing.T) {
 	}
 }
 
-// 同じタグでも、マニフェストを取る間に起動した Vectorworks の下ではフックを走らせない（始めの確かめの後で、
-// もう一度見る）。
+// 同じタグでも、マニフェストを取得する間に起動した Vectorworks の下ではフックを実行しない（最初の
+// 検証の後で、再度確認する）。
 func TestInstallSameTagLockTakenWhileFetching(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1", latest: true})
@@ -1312,7 +1350,8 @@ func TestInstallSameTagLockTakenWhileFetching(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// 同じタグで、マニフェストを取る間にロックを調べられなくなれば、フックを走らせずに失敗にする（終了コード 1）。
+// 同じタグで、マニフェストを取得する間にロックを調査できなくなれば、フックを実行せずに失敗とする
+// （終了コード 1）。
 func TestInstallSameTagLockUnreadableWhileFetching(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows reports a path below a file as not found")
@@ -1334,8 +1373,8 @@ func TestInstallSameTagLockUnreadableWhileFetching(t *testing.T) {
 	}
 }
 
-// Windows のジャンクション（Go は ModeDir と ModeIrregular を返す）も、vw2026 が入れたフォルダとみなさない（リンクの
-// 先の作業用のコピーに触れない）。
+// Windows のジャンクション（Go は ModeDir と ModeIrregular を返す）も、vw2026 がインストールした
+// フォルダとみなさない（リンクの先の作業用の複製に触れない）。
 func TestPluginFolderRefusesAJunction(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("junctions are a Windows feature")
@@ -1353,8 +1392,9 @@ func TestPluginFolderRefusesAJunction(t *testing.T) {
 	}
 }
 
-// 記録を置き換えられなければ（書く途中で止まった・名前を変えられない）、この回が隣に書いたファイルを残さず、元の
-// 記録も、前からある隣の名前のファイル（この回が書いたものではない）もそのまま。
+// 記録を置換できなければ（書き込みの途中で停止した・名前を変更できない）、この回が隣に書き込んだ
+// ファイルを残置せず、元の記録も、以前から存在する隣の名前のファイル（この回が
+// 書き込んだものではない）もそのまま。
 func TestReplaceFileLeavesNoTemporary(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, RecordFile)
@@ -1365,7 +1405,7 @@ func TestReplaceFileLeavesNoTemporary(t *testing.T) {
 		matches, _ := filepath.Glob(path + ".new-*")
 		return matches
 	}
-	// 書きかけて止まる。
+	// 書き込みの途中で停止する。
 	original := writeFile
 	restore := swap(t, &writeFile, func(name string, data []byte, perm fs.FileMode) error {
 		original(name, data[:1], perm)
@@ -1374,7 +1414,7 @@ func TestReplaceFileLeavesNoTemporary(t *testing.T) {
 	if err := replaceFile(path, []byte("new")); !errors.Is(err, errInjected) || len(written()) != 0 {
 		t.Fatal("write:", err, written())
 	}
-	// 書けたが、置き換えられない。
+	// 書き込めたが、置換できない。
 	restore()
 	swap(t, &rename, func(string, string) error { return errInjected })
 	if err := replaceFile(path, []byte("new")); !errors.Is(err, errInjected) || len(written()) != 0 {

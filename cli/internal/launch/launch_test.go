@@ -13,7 +13,7 @@ import (
 )
 
 // helperEnv が設定されていれば、テストの実行ファイルは Start に起動される側として振る舞い、
-// 指定されたファイルを書いてすぐ終わる（TestMain）。
+// 指定されたファイルを書き込んで直ちに終了する（TestMain）。
 const helperEnv = edition.EnvPrefix + "LAUNCH_TEST_MARKER"
 
 func TestMain(m *testing.M) {
@@ -52,20 +52,20 @@ func TestCommandExplicitMustBeAFile(t *testing.T) {
 	}
 }
 
-// Vectorworks の動かない OS では、既定のものを起動しない。
+// Vectorworks の動作しない OS では、既定のものを起動しない。
 func TestCommandUnsupportedOS(t *testing.T) {
 	if argv, err := command("plan9", ""); err == nil {
 		t.Fatalf("want an error, got %v", argv)
 	}
 }
 
-// macOS の道は計算機に依らないので、どの OS でも確かめる。
+// macOS の経路は計算機に依存しないので、いずれの OS でも検証する。
 func TestCommandMac(t *testing.T) {
 	argv, err := command("darwin", "")
 	if err != nil || !reflect.DeepEqual(argv, []string{"/usr/bin/open", "-a", DefaultMacApp}) {
 		t.Fatalf("got %v, %v", argv, err)
 	}
-	// .app は存在を確かめずに open -a へ渡す（open が探す）。
+	// .app は存在を確認せずに open -a へ渡す（open が探索する）。
 	app := "/Applications/" + edition.Product + "/" + edition.Product + ".app/"
 	argv, err = command("darwin", app)
 	if err != nil || !reflect.DeepEqual(argv, []string{"/usr/bin/open", "-a", app}) {
@@ -73,8 +73,8 @@ func TestCommandMac(t *testing.T) {
 	}
 }
 
-// Windows の道は %ProgramFiles% と区切りに依るので、Windows でだけ確かめる。走っている OS の
-// 既定の道を Command で確かめる（macOS は TestCommandMac が command で確かめる）。
+// Windows の経路は %ProgramFiles% と区切り文字に依存するので、Windows でのみ検証する。実行中の
+// OS の既定の経路を Command で検証する（macOS は TestCommandMac が command で検証する）。
 func TestCommandDefault(t *testing.T) {
 	switch runtime.GOOS {
 	case "darwin":
@@ -101,10 +101,10 @@ func TestCommandDefault(t *testing.T) {
 }
 
 // Start は切り離して起動する。切り離しの指定（Setsid・DETACHED_PROCESS）を誤ると
-// 起動そのものが失敗するので、各 OS で実際に起動して確かめる。
+// 起動そのものが失敗するので、各 OS で実際に起動して検証する。
 func TestStartDetaches(t *testing.T) {
-	// テストの実行ファイルを別名で写して起動する。Windows では同じ名前のプロセス
-	// （このテスト自身）が動いていると、起動済みとみなして起動しないため。
+	// テストの実行ファイルを別名で複製して起動する。Windows では同じ名前のプロセス
+	// （このテスト自身）が動作していると、起動済みとみなして起動しないため。
 	exe := copyTestBinary(t, filepath.Join(t.TempDir(), "helper"+exeSuffix()))
 	marker := filepath.Join(t.TempDir(), "started")
 	t.Setenv(helperEnv, marker)
@@ -123,7 +123,7 @@ func TestStartDetaches(t *testing.T) {
 	}
 }
 
-// 起動できなければ（実行ファイルが無い）、起動のエラーを返す。
+// 起動できなければ（実行ファイルが存在しない）、起動のエラーを返す。
 func TestStartFailsForMissingExecutable(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing"+exeSuffix())
 	if err := Start([]string{missing}); err == nil {
@@ -131,8 +131,9 @@ func TestStartFailsForMissingExecutable(t *testing.T) {
 	}
 }
 
-// Windows では、同じ実行ファイルが動いていれば起動せずに成功とする。このテスト自身が動いている
-// 実行ファイルで確かめる（誤って起動すると、起動された側は印を書いてすぐ終わる）。
+// Windows では、同一の実行ファイルが動作していれば起動せずに成功とする。このテスト自身が
+// 動作している実行ファイルで検証する（誤って起動すると、起動された側は標識を書き込んで直ちに
+// 終了する）。
 func TestStartSkipsWhenRunningOnWindows(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("windows only")

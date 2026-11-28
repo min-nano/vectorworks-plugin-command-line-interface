@@ -35,8 +35,8 @@ void put(const TempDir &dir, const std::string &name, const std::string &text = 
 	CHECK(files::write(dir.sub(name), text));
 }
 
-// inCi は CI の環境変数があるか（MSVC は std::getenv を非推奨とし、警告をエラーにするので
-// _dupenv_s を使う）。
+// inCi は CI の環境変数が存在するか（MSVC は std::getenv を非推奨とし、警告をエラーにするため
+// _dupenv_s を使用する）。
 bool inCi() {
 #ifdef _WIN32
 	char *value = nullptr;
@@ -54,8 +54,8 @@ bool exists(const TempDir &dir, const std::string &name) {
 }
 
 #ifdef _WIN32
-// setForeignReparsePoint は path（既にあるファイル）に、名前の代わりにならない独自の reparse
-// point を付ける（OneDrive などのクラウドのファイルにあたるものを、テストで作るため）。付けられ
+// setForeignReparsePoint は path（既存のファイル）に、名前の代替にならない独自の reparse point
+// を付ける（OneDrive などのクラウドのファイルに相当するものを、テストで作成するため）。付けられ
 // なければ、その理由（0 なら付けた）。
 DWORD setForeignReparsePoint(const std::filesystem::path &path) {
 	HANDLE file = ::CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
@@ -66,7 +66,7 @@ DWORD setForeignReparsePoint(const std::filesystem::path &path) {
 	constexpr DWORD kData = 4;
 	std::vector<BYTE> buffer(REPARSE_GUID_DATA_BUFFER_HEADER_SIZE + kData);
 	auto *reparse = reinterpret_cast<REPARSE_GUID_DATA_BUFFER *>(buffer.data());
-	// Microsoft のものでも名前の代わりでもない tag（上位のビットを立てない）。
+	// Microsoft のものでも名前の代替でもない tag（上位のビットを立てない）。
 	reparse->ReparseTag = 0x00001234;
 	reparse->ReparseDataLength = kData;
 	reparse->ReparseGuid =
@@ -84,8 +84,8 @@ DWORD setForeignReparsePoint(const std::filesystem::path &path) {
 
 }
 
-// join は区切りを 1 つだけ足す（dir が区切りで終わっていれば足さず、空なら name だけ）。
-// Windows は \ と / のどちらも区切りとみなし、足すのは \。
+// join は区切りを 1 つのみ追加する（dir が区切りで終わっていれば追加せず、空なら name のみ）。
+// Windows は \ と / のいずれも区切りとみなし、追加するのは \。
 TEST(FilesJoinAddsOneSeparator) {
 	CHECK(files::isSeparator('/'));
 	CHECK(!files::isSeparator('a'));
@@ -153,8 +153,8 @@ TEST(BridgeLockFailsWhenTheSpoolIsMissing) {
 	CHECK(!error.empty());
 }
 
-// 動いている間にスプールが消されても（利用者が消したなど）、掃除と見回りは何もせずに終わる
-// （スプールを作り直さない。作るのは prepare だけ）。
+// 実行中にスプールが削除されても（利用者が削除したなど）、整理と巡回は何もせずに終了する
+// （スプールを再作成しない。作成するのは prepare のみ）。
 TEST(BridgeSweepAndPollTolerateAMissingSpool) {
 	TempDir dir;
 	Bridge bridge(dir.sub("missing"));
@@ -164,7 +164,7 @@ TEST(BridgeSweepAndPollTolerateAMissingSpool) {
 }
 
 TEST(BridgePollReturnsValidIdsInFileNameOrder) {
-	// 大文字と小文字だけが違う名前は、macOS と Windows では同じファイルになるので使わない。
+	// 大文字と小文字のみが異なる名前は、macOS と Windows では同一のファイルになるため使用しない。
 	TempDir dir;
 	for (const char *name :
 	     {"b.req.json", "a.req.json", "a-b.req.json", "C.req.json", "0.req.json", "a.b.req.json",
@@ -182,7 +182,7 @@ TEST(BridgeTakeReadsThenRemoves) {
 	std::optional<std::string> text = bridge.take("r");
 	CHECK(text && *text == R"({"tool":"ping"})");
 	CHECK(!exists(dir, "r.req.json"));
-	// 無くなっていた要求は飛ばす。
+	// 消失していた要求は飛ばす。
 	CHECK(!bridge.take("r"));
 }
 
@@ -219,18 +219,18 @@ TEST(BridgeReplyPublishesWithoutLeavingTemp) {
 	CHECK(bridge.reply("r", R"({"ok":true})"));
 	CHECK_EQ(VwCli::test::readFile(dir.path() / "r.res.json"), std::string(R"({"ok":true})"));
 	CHECK(!exists(dir, "r.res.json.tmp"));
-	// 同じ id の応答があれば置き換える。
+	// 同じ id の応答があれば置換する。
 	CHECK(bridge.reply("r", R"({"ok":false})"));
 	CHECK_EQ(VwCli::test::readFile(dir.path() / "r.res.json"), std::string(R"({"ok":false})"));
 }
 
-// 応答の名前にディレクトリがあると付け替えられない。失敗を返し、書きかけを残さない。
+// 応答の名前にディレクトリがあると差し替えられない。失敗を返し、書き込み途中のものを残さない。
 TEST(BridgeReplyFailsWithoutLeavingTempWhenItCannotRename) {
 	TempDir dir;
 	Bridge bridge(dir.utf8Path());
 	std::filesystem::create_directory(dir.path() / "r.res.json");
 	put(dir, "r.res.json/inside");
-	// 書きかけの名前には書ける（失敗するのは書き込みではなく付け替え）。
+	// 書き込み途中の名前には書き込める（失敗するのは書き込みではなく差し替え）。
 	put(dir, "r.res.json.tmp", "old");
 	CHECK(!bridge.reply("r", R"({"ok":true})"));
 	CHECK(!exists(dir, "r.res.json.tmp"));
@@ -238,26 +238,27 @@ TEST(BridgeReplyFailsWithoutLeavingTempWhenItCannotRename) {
 }
 
 #ifndef _WIN32
-// FIFO などの通常のファイルでないものを置かれても、開いて待たない（待つとメインスレッドが止まる）。
-// 待てばこのテストが終わらない。
+// FIFO などの通常のファイルでないものを配置されても、開いて待機しない（待機するとメインスレッドが
+// 停止する）。待機すればこのテストが終了しない。
 TEST(BridgeDoesNotWaitOnFifos) {
 	TempDir dir;
 	for (const char *name : {"f.req.json", "f.wait", "g.res.json.tmp"}) {
 		REQUIRE(::mkfifo(dir.sub(name).c_str(), 0600) == 0);
 	}
 	Bridge bridge(dir.utf8Path());
-	// 読めない要求として飛ばし、消さない。
+	// 読み取れない要求として飛ばし、削除しない。
 	CHECK(!bridge.take("f"));
 	CHECK(exists(dir, "f.req.json"));
-	// 通常のファイルでない待つ印は無いものとする（実行しない）。
+	// 通常のファイルでない待機標識は存在しないものとする（実行しない）。
 	CHECK(bridge.waitState("f") == files::WaitState::Missing);
-	// 書きかけの FIFO は消して作り直すので、応答を書ける。
+	// 書き込み途中の FIFO は削除して再作成するため、応答を書き込める。
 	CHECK(bridge.reply("g", R"({"ok":true})"));
 	CHECK_EQ(VwCli::test::readFile(dir.path() / "g.res.json"), std::string(R"({"ok":true})"));
 }
 
-// bridge.lock が通常のファイルでなければ、開いて待たずに、消して作り直してから掴む。作り直すのは
-// 1 つの Lock につき 1 度だけで、2 度目は断った理由を返す（受け付けの度に繰り返さない）。
+// bridge.lock が通常のファイルでなければ、開いて待機せずに、削除して再作成してから取得する。
+// 再作成するのは 1 つの Lock につき 1 度のみで、2 度目は拒否した理由を返す（受付処理の度に
+// 繰り返さない）。
 TEST(BridgeLockRecreatesAFifoOnce) {
 	TempDir dir;
 	std::string lockPath = dir.sub("bridge.lock");
@@ -274,7 +275,7 @@ TEST(BridgeLockRecreatesAFifoOnce) {
 	CHECK(!lock.held());
 }
 
-// 書きかけのシンボリックリンクはたどらない（たどると、リンクの先を切り詰めてしまう）。
+// 書き込み途中のシンボリックリンクはたどらない（たどると、リンクの先を切り詰めてしまう）。
 TEST(BridgeReplyDoesNotFollowSymlinks) {
 	TempDir dir;
 	put(dir, "target", "keep");
@@ -286,15 +287,15 @@ TEST(BridgeReplyDoesNotFollowSymlinks) {
 }
 #endif
 
-// スプールのファイルがシンボリックリンクなら、たどらずに断る（リンクの先がデバイスや名前付き
-// パイプだと、開くだけで副作用が起きる・止まるため）。
+// スプールのファイルがシンボリックリンクであれば、たどらずに拒否する（リンクの先がデバイスや
+// 名前付きパイプの場合、開くのみで副作用が生じる・停止するため）。
 TEST(BridgeDoesNotFollowSymlinks) {
 	TempDir dir;
 	put(dir, "target", R"({"tool":"ping"})");
 	std::error_code linked;
 	std::filesystem::create_symlink(dir.path() / "target", dir.path() / "s.req.json", linked);
-	// Windows でシンボリックリンクを作る権限が無ければ確かめようがない。黙って通らないよう、
-	// 飛ばしたことを出力に残し、CI（runner は作れる）では失敗にする。
+	// Windows でシンボリックリンクを作成する権限が無ければ確認できない。暗黙に通過しないよう、
+	// 飛ばしたことを出力に残し、CI（runner は作成できる）では失敗とする。
 	if (linked) {
 		REQUIRE(!inCi());
 		std::fprintf(stderr, "skip BridgeDoesNotFollowSymlinks: %s\n", linked.message().c_str());
@@ -307,7 +308,7 @@ TEST(BridgeDoesNotFollowSymlinks) {
 	Bridge bridge(dir.utf8Path());
 	CHECK(!bridge.take("s"));
 	CHECK(bridge.waitState("s") == files::WaitState::Missing);
-	// bridge.lock のリンクは、たどらずに名前を消して作り直す（リンクの先は残る）。
+	// bridge.lock のリンクは、たどらずに名前を削除して再作成する（リンクの先は残る）。
 	std::string error;
 	CHECK(bridge.lock(error) == files::Lock::Result::Taken);
 	CHECK(std::filesystem::is_regular_file(
@@ -315,7 +316,7 @@ TEST(BridgeDoesNotFollowSymlinks) {
 	CHECK_EQ(VwCli::test::readFile(dir.path() / "target"), std::string(R"({"tool":"ping"})"));
 }
 
-// 書きかけが hard link でも、リンクの先（スプールの外のファイル）は変えない。
+// 書き込み途中のものが hard link でも、リンクの先（スプールの外のファイル）は変更しない。
 TEST(BridgeReplyDoesNotWriteThroughHardLinks) {
 	TempDir dir;
 	put(dir, "target", "keep");
@@ -338,7 +339,7 @@ TEST(BridgeTreatsReservedNamesAsFiles) {
 	std::optional<std::string> text = bridge.take("NUL");
 	CHECK(text && *text == R"({"tool":"ping"})");
 	CHECK(bridge.poll().empty());
-	// 無い待つ印は、開けてしまう NUL デバイスではなく、無いと分かる。
+	// 存在しない待機標識は、開けてしまう NUL デバイスではなく、存在しないと判別される。
 	CHECK(bridge.waitState("NUL") == files::WaitState::Missing);
 	put(dir, "CON.wait");
 	CHECK(bridge.waitState("CON") == files::WaitState::Released);
@@ -346,26 +347,28 @@ TEST(BridgeTreatsReservedNamesAsFiles) {
 	CHECK(bridge.reply("AUX", R"({"ok":true})"));
 	std::optional<std::string> response = files::read(dir.sub("AUX.res.json"), 1024);
 	CHECK(response && *response == R"({"ok":true})");
-	// 拡張子の無い名前は、Windows 11 でもデバイスを指す（\\?\ を付けなければ、NUL へ書いても
-	// 捨てられ、読んでも空になる）。
+	// 拡張子の無い名前は、Windows 11 でもデバイスを指す（\\?\ を付けなければ、NUL へ書き込んでも
+	// 破棄され、読み取っても空になる）。
 	CHECK(files::write(dir.sub("NUL"), "file"));
 	std::optional<std::string> bare = files::read(dir.sub("NUL"), 1024);
 	CHECK(bare && *bare == "file");
 	CHECK(files::probe(dir.sub("NUL")) == files::WaitState::Released);
-	// 一時ディレクトリを消す std::filesystem が予約された名前を消せるとは限らないので、ここで消す。
+	// 一時ディレクトリを削除する std::filesystem が予約された名前を削除できるとは限らないため、
+	// ここで削除する。
 	CHECK(files::remove(dir.sub("AUX.res.json")));
 	CHECK(files::remove(dir.sub("NUL")));
 	std::optional<std::vector<std::string>> names = files::list(dir.utf8Path());
 	CHECK(names && names->empty());
 }
 
-// リンクでない reparse point（OneDrive などのクラウドのファイルにあたる）も、開き直さずに断る。
-// bridge.lock だけは、1 度だけ消して作り直す。
+// リンクでない reparse point（OneDrive などのクラウドのファイルに相当する）も、開き直さずに
+// 拒否する。bridge.lock のみは、1 度のみ削除して再作成する。
 TEST(BridgeRejectsReparsePointsThatAreNotLinks) {
 	TempDir dir;
 	std::vector<std::string> made;
-	// 作ったものは、テストの終わりに消す（一時ディレクトリを消す std::filesystem が未知の tag の
-	// reparse point を消せるとは限らない。DeleteFileW は reparse point そのものを消す）。
+	// 作成したものは、テストの終了時に削除する（一時ディレクトリを削除する std::filesystem が
+	// 未知の tag の reparse point を削除できるとは限らない。DeleteFileW は reparse point
+	// そのものを削除する）。
 	auto cleanUp = [&] {
 		for (const std::string &name : made) {
 			CHECK(files::remove(dir.sub(name)));
@@ -375,7 +378,7 @@ TEST(BridgeRejectsReparsePointsThatAreNotLinks) {
 		put(dir, name, R"({"tool":"ping"})");
 		if (DWORD failure = setForeignReparsePoint(dir.path() / name); failure != 0) {
 			cleanUp();
-			// 作れなければ確かめようがない。黙って通らないよう、CI では失敗にする。
+			// 作成できなければ確認できない。暗黙に通過しないよう、CI では失敗とする。
 			REQUIRE(!inCi());
 			std::fprintf(stderr, "skip BridgeRejectsReparsePointsThatAreNotLinks: error %lu\n",
 			             failure);
@@ -386,13 +389,13 @@ TEST(BridgeRejectsReparsePointsThatAreNotLinks) {
 	Bridge bridge(dir.utf8Path());
 	CHECK(!bridge.take("r"));
 	CHECK(bridge.waitState("r") == files::WaitState::Missing);
-	// 要求と待つ印は、開き直さずに断るので、reparse point のまま残る（取り出していない）。
+	// 要求と待機標識は、開き直さずに拒否するため、reparse point のまま残る（取り出していない）。
 	for (const char *name : {"r.req.json", "r.wait"}) {
 		DWORD attributes = ::GetFileAttributesW((dir.path() / name).c_str());
 		CHECK(attributes != INVALID_FILE_ATTRIBUTES &&
 		      (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0);
 	}
-	// bridge.lock は消して作り直してから掴む。
+	// bridge.lock は削除して再作成してから取得する。
 	std::string lockPath = dir.sub("bridge.lock");
 	files::Lock lock;
 	std::string error;
@@ -400,8 +403,8 @@ TEST(BridgeRejectsReparsePointsThatAreNotLinks) {
 	DWORD attributes = ::GetFileAttributesW((dir.path() / "bridge.lock").c_str());
 	CHECK(attributes != INVALID_FILE_ATTRIBUTES &&
 	      (attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0);
-	// 2 度目は作り直さず、reparse point を「通常のファイルでない」として断ったことを返す
-	// （開き直して開けなかったのなら、CreateFile の error の番号になる）。
+	// 2 度目は再作成せず、reparse point を「通常のファイルでない」として拒否したことを返す
+	// （開き直して開けなかったのであれば、CreateFile の error の番号になる）。
 	lock.release();
 	REQUIRE(setForeignReparsePoint(dir.path() / "bridge.lock") == 0);
 	CHECK(lock.take(lockPath, error) == files::Lock::Result::Failed);
@@ -410,10 +413,10 @@ TEST(BridgeRejectsReparsePointsThatAreNotLinks) {
 }
 
 // UNC のパス（\\server\share\…）は \\?\UNC\ を付けて開き、
-// share の後ろから区切りごとに作る。管理用の共有 \\localhost\C$ など
-// （一時ディレクトリのドライブ）を通して、一時ディレクトリの下に作る。
-// 共有を使えなければ飛ばしたことを出力に残し、CI（runner は使える）では
-// 失敗にする。
+// share の後ろから区切りごとに作成する。管理用の共有 \\localhost\C$ など
+// （一時ディレクトリのドライブ）を経由して、一時ディレクトリの下に作成する。
+// 共有を使用できなければ飛ばしたことを出力に残し、CI（runner は使用できる）では
+// 失敗とする。
 TEST(FilesMakeDirectoriesOnUncPathOnWindows) {
 	TempDir dir;
 	std::wstring local = dir.path().wstring();
@@ -444,8 +447,8 @@ TEST(FilesRejectRelativePathsOnWindows) {
 }
 #endif
 
-// mac のプラグインはバンドルの中の実行ファイルなので、バンドルのあるフォルダ（<Plug-Ins>/cli）の
-// 下に置く。
+// mac のプラグインはバンドルの中の実行ファイルであるため、バンドルのあるフォルダ（<Plug-Ins>/cli）
+// の下に配置する。
 TEST(BridgeSpoolDirOfBundleIsNextToTheBundle) {
 	using VwCli::core::spoolDirOf;
 	std::string plugIns = "/Users/a/Library/Application Support/Vectorworks/2026/Plug-Ins";
@@ -454,8 +457,9 @@ TEST(BridgeSpoolDirOfBundleIsNextToTheBundle) {
 	CHECK_EQ(spoolDirOf("/x.vwlibrary/cli/cli.vwlibrary/Contents/MacOS/cli").value_or(""),
 	         files::join("/x.vwlibrary/cli", "spool"));
 	CHECK_EQ(spoolDirOf("/cli.vwlibrary/Contents/MacOS/cli").value_or(""), std::string("/spool"));
-	// <X>.vwlibrary/Contents/MacOS/<実行ファイル> の形のときだけ上る。パスの途中に .vwlibrary で
-	// 終わるフォルダがあっても上らない（呼ぶ側は bin の親を取るので、上ると食い違う）。
+	// <X>.vwlibrary/Contents/MacOS/<実行ファイル> の形の場合のみ上位へ移る。パスの途中に .vwlibrary
+	// で終わるフォルダがあっても上位へ移らない（呼び出し元は bin の親を取得するため、上位へ移ると
+	// 不一致が生じる）。
 	CHECK_EQ(spoolDirOf("/x.vwlibrary/Plug-ins/cli/cli.vlb").value_or(""),
 	         files::join("/x.vwlibrary/Plug-ins/cli", "spool"));
 	CHECK_EQ(spoolDirOf("/a/cli.vwlibrary/MacOS/cli").value_or(""),
@@ -464,11 +468,11 @@ TEST(BridgeSpoolDirOfBundleIsNextToTheBundle) {
 	         files::join("/a/cli.vwlibrary/Contents", "spool"));
 	CHECK_EQ(spoolDirOf("/a/cli/Contents/MacOS/cli").value_or(""),
 	         files::join("/a/cli/Contents/MacOS", "spool"));
-	// モジュールそのものの名前は見ない。
+	// モジュールそのものの名前は参照しない。
 	CHECK_EQ(spoolDirOf("/a/cli/cli.vwlibrary").value_or(""), files::join("/a/cli", "spool"));
 }
 
-// Windows のプラグイン（cli.vlb）とテストの実行ファイルは、モジュールのあるフォルダの下に置く。
+// Windows のプラグイン（cli.vlb）とテストの実行ファイルは、モジュールのあるフォルダの下に配置する。
 TEST(BridgeSpoolDirOfModuleIsNextToTheModule) {
 	using VwCli::core::spoolDirOf;
 	CHECK_EQ(spoolDirOf("/a/b/VwCliTests").value_or(""), files::join("/a/b", "spool"));
@@ -487,14 +491,14 @@ TEST(BridgeSpoolDirOfModuleIsNextToTheModule) {
 #endif
 }
 
-// どのモジュールの中にも無い番地（スタック）には、モジュールのパスが無い。
+// いずれのモジュールの中にも無い番地（スタック）には、モジュールのパスが存在しない。
 TEST(FilesModulePathOfAddressOutsideModules) {
 	int local = 0;
 	CHECK(!files::modulePathOf(&local));
 }
 
 #ifndef _WIN32
-// 相対パスは今の作業ディレクトリの下にする（Linux の実行ファイルでは dladdr が argv[0] を返す）。
+// 相対パスは現在の作業ディレクトリの下とする（Linux の実行ファイルでは dladdr が argv[0] を返す）。
 TEST(FilesAbsoluteResolvesAgainstTheWorkingDirectory) {
 	CHECK_EQ(files::absolute("/a/b").value_or(""), std::string("/a/b"));
 	CHECK(!files::absolute(""));
@@ -504,7 +508,7 @@ TEST(FilesAbsoluteResolvesAgainstTheWorkingDirectory) {
 }
 #endif
 
-// テストでは、このコードを含むモジュールはテストの実行ファイルなので、そのフォルダの下になる。
+// テストでは、このコードを含むモジュールはテストの実行ファイルであるため、そのフォルダの下になる。
 TEST(BridgeDefaultSpoolDirIsNextToTheModule) {
 	static const char anchor = 0;
 	std::optional<std::string> module = files::modulePathOf(&anchor);
