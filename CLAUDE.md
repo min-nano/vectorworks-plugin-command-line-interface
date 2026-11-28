@@ -1,180 +1,183 @@
 # CLAUDE.md
 
-このリポジトリで作業するときの共通の規約です。**この指示は既定の挙動より優先されます。**
+本リポジトリで作業する際の共通の規約です。**この指示は既定の挙動より優先されます。**
 
 ## 本リポジトリの概要
 
 Vectorworks 2026 を外部から操作するための**プラグイン（C++・VW SDK）と CLI（Go）**です。
-目的・決めたこと・構成は `docs/design.md`、通信規則は `docs/protocol.md`、`vw2026 install` が読む
-レジストリとマニフェストの書き方は `docs/registry.md` が真実です。
+目的・決定事項・構成は `docs/design.md`、通信規則は `docs/protocol.md`、`vw2026 install` が読み込む
+レジストリとマニフェストの記法は `docs/registry.md` が真実です。
 
 ## 遵守事項
 
-1. **通信規則の真実は `docs/protocol.md` だけ。** プラグイン側と `cli/internal/spool` はその対。
-   どちらかを変えたら文書と両方を直す。両側のテストが読む通信規則の見本（`protocol/fixtures`。
-   `docs/fixtures.md`）も合わせて直す。`protocol` の版を上げるかは `docs/protocol.md「互換性」`
-   に従う。
-2. **CLI はプリミティブに保つ。** 再試行・占有を待つこと・道具ごとの解釈を入れない（呼ぶ側の
-   責任）。排他はプラグインの占有（通信規則の「占有」。CLI は印を受け取って載せるだけ）だけで持ち、
-   CLI に足さない（`docs/design.md「CLI のプリミティブ性の維持」`）。
+1. **通信規則の真実は `docs/protocol.md` のみ。** プラグイン側と `cli/internal/spool` はその対。
+   いずれかを変更した場合は、文書と両方を修正する。両側のテストが読み込む通信規則のフィクスチャ
+   （`protocol/fixtures`。`docs/fixtures.md`）も併せて修正する。`protocol` の版を上げるか否かは
+   `docs/protocol.md「互換性」`に従う。
+2. **CLI はプリミティブに保つ。** 再試行・占有の待機・ツールごとの解釈を組み込まない（呼び出し元の
+   責任）。排他はプラグインの占有（通信規則の「占有」。CLI はセッション ID を受け取って付与するのみ）でのみ
+   実現し、CLI に追加しない（`docs/design.md「CLI のプリミティブ性の維持」`）。
 3. **プラグインは単純に保つ。** 配置と更新は CLI（`vw2026 install`）が Vectorworks の終了後に行う。
-   プラグインのフォルダは `vw2026` の作業の場所（利用者ごとの一時フォルダの下）と同じドライブにある前提で、その外の場合の扱いを足さない
-   （`docs/design.md「決定事項」`）。プラグインのフォルダの外に置くもの（PATH）は `cli` のフック
-   （`scripts/hooks/`）だけが置き、`install` の Go のコード（`cli/internal/install`）は `cli` を特別に扱わない
-   （`cli` の名前を使うのは、ロックの場所と、他のプラグインを `cli` のある `<Plug-Ins>` にだけ入れる確かめと、入った CLI が自分の入った `<Plug-Ins>` を求めることだけ）。
-4. **SDK 呼び出しはメインスレッドからだけ。** 受け付け用のスレッドや、受け付けの中で非同期の
-   処理の完了を待つループを書かない（`docs/protocol.md「予約ツール」`）。
-5. **本番で常駐する前提（`docs/design.md「本番環境で常駐させる前提」`）を崩さない。** 勝手に
-   動く処理を足さない。図面に書く道具は undo の手順に従う。利用者が開いた図面とダイアログも、
-   呼ぶ側が指定すれば操作の対象にする（保存せずに閉じる・ダイアログのどのボタンを押すことも含む）。
-   プラグインと CLI が勝手には行わない。図面のファイルは消さない（消すコードは 9 に従う）。
-6. **プラグインは 1 から書く。** 他のプラグインのコードや決めごとを引き継がない。
-   根拠にするのは [SDK リファレンス](https://github.com/min-nano/vectorworks-developer-sdk-reference)
-   の確かめられた仕様と挙動（`Findings/`・実機確認プラグイン `plugin/`・`scripts/`）だけで、
-   参考にしたときは文書にその節を示す（`docs/plugin/README.md「根拠」`）。
-7. **SDK の調査はリファレンス側で行う。** 「この API はあるか・どう振る舞うか」が分からない
-   まま実装に入らない。[SDK リファレンス](https://github.com/min-nano/vectorworks-developer-sdk-reference)で
-   issue を立て、`Findings/` に反映されてから実装する。待っているものは、このリポジトリの issue で追う。
-   利用者の判断で調べないと決めたもの（ネットワークの場所でサーバーが届かないときに止まること、保存の途中でつながりが切れたときに
-   ダイアログが出るか）は例外とし、
-   `docs/sdk-research.md` に書く。
-   6 と 7 が対象にするのは SDK（Vectorworks）の振る舞いで、OS の呼び出しの振る舞い（返すエラーの番号・名前の長さの
-   上限など）は対象外とする。OS の振る舞いに頼るところは、mac と Windows の `VwCliTests` が本物の呼び出しで確かめ、CI の環境で作れない場面
-   （ネットワークの共有・名前の解決など）は、その変更の実機の確認（`docs/plugin/verification.md`）で見る。
-8. **新しく分かったことは書き残す。** SDK の挙動は SDK リファレンスの `Findings/`、この
+   プラグインのフォルダは `vw2026` の作業領域（利用者ごとの一時フォルダの下）と同一のドライブにある前提とし、それ以外の場合の処理を追加しない
+   （`docs/design.md「決定事項」`）。プラグインのフォルダの外に配置するもの（PATH）は `cli` のフック
+   （`scripts/hooks/`）のみが配置し、`install` の Go のコード（`cli/internal/install`）は `cli` を特別に扱わない
+   （`cli` の名前を使用するのは、ロックの配置場所と、他のプラグインを `cli` のある `<Plug-Ins>` にのみインストールする検証と、インストールされた CLI が自身のインストール先の `<Plug-Ins>` を導出することのみ）。
+4. **SDK 呼び出しはメインスレッドからのみ。** 受付処理用のスレッドや、受付処理の中で非同期の
+   処理の完了を待機するループを記述しない（`docs/protocol.md「予約ツール」`）。
+5. **本番環境で常駐する前提（`docs/design.md「本番環境で常駐させる前提」`）を崩さない。** 自律的に
+   動作する処理を追加しない。書き込みツールは undo の手順に従う。利用者が開いた図面とダイアログも、
+   呼び出し元が指定すれば操作の対象とする（保存せずに閉じること・ダイアログのいずれのボタンを押すことも含む）。
+   プラグインと CLI が独自の判断では行わない。図面のファイルは削除しない（削除するコードは 9 に従う）。
+6. **プラグインは 1 から記述する。** 他のプラグインのコードや取り決めを引き継がない。
+   根拠とするのは [SDK リファレンス](https://github.com/min-nano/vectorworks-developer-sdk-reference)
+   の検証された仕様と挙動（`Findings/`・実機確認プラグイン `plugin/`・`scripts/`）のみであり、
+   参考にした場合は文書にその節を示す（`docs/plugin/README.md「根拠」`）。
+7. **SDK の調査はリファレンス側で行う。** 「この API は存在するか・どのように振る舞うか」が不明な
+   まま実装に着手しない。[SDK リファレンス](https://github.com/min-nano/vectorworks-developer-sdk-reference)で
+   issue を作成し、`Findings/` に反映されてから実装する。反映を待機しているものは、本リポジトリの issue で追跡する。
+   利用者の判断で調査しないと決定した事項（ネットワーク上の場所でサーバーに到達できない場合に停止すること、保存の途中で接続が切断された場合に
+   ダイアログが表示されるか）は例外とし、
+   `docs/sdk-research.md` に記述する。
+   6 と 7 が対象とするのは SDK（Vectorworks）の振る舞いであり、OS の呼び出しの振る舞い（返すエラーの番号・名前の長さの
+   上限など）は対象外とする。OS の振る舞いに依存する箇所は、mac と Windows の `VwCliTests` が実際の呼び出しで検証し、CI の環境で再現できない場面
+   （ネットワークの共有・名前の解決など）は、その変更の実機での確認（`docs/plugin/verification.md`）で確認する。
+8. **新たに判明したことは記録する。** SDK の挙動は SDK リファレンスの `Findings/`、本
    プラグイン固有のことは `docs/` へ。
-9. **利用者のものを消すコードは、次の場所だけにし、歯止めを緩めない**（`docs/plugin/install-and-update.md「削除処理の制約」`）。
+9. **利用者のものを削除するコードは、次の箇所のみとし、制約を緩めない**（`docs/plugin/install-and-update.md「削除処理の制約」`）。
 
-   | 消すコード | 消して良いもの |
+   | 削除するコード | 削除してよいもの |
    | --- | --- |
-   | `install`（組み立て・後始末・フックの失敗の戻し） | `<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ。前方一致では消さない）・`<Work>/old/<name>/`（退避した版と前回の残りは、記録の `name` が一致し、記録の `module` があり、`<Plug-Ins>/<name>/` もあるときだけ。`<Work>/staging/<name>/` へ移してから消す。条件に合わないものは消さずに `<Work>/old/<name>.kept-<時刻>/` へ移す）・フックが失敗したときの新しい `<Plug-Ins>/<name>/`（自分が置いたもの）・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ。よけた CLI と前回までの残り）・中断した `uninstall` の印 `<Work>/old/<name>.uninstalling`（付け替えに成功した後と、`<Plug-Ins>/<name>/` があるとき。どちらも前の回の残り） |
-   | `uninstall` | 記録の `name` が一致し、記録の `module` がある `<Plug-Ins>/<name>/`（`<Work>/old/<name>/` へ移し、フックの後で `<Work>/staging/<name>/` へ移してから消す）・`<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（どちらも名前をそのまま組み立てたパスだけ）・自分が書いた印 `<Work>/old/<name>.uninstalling`・`<Plug-Ins>/<name>/` も `<Work>/old/<name>/` も無いときの前の回の印 `<Work>/old/<name>.uninstalling`・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルだけ）・空の `<Work>/staging`・`<Work>/old`・`<Work>`（中身のあるものは消さない） |
+   | `install`（構築・後処理・フックの失敗時の巻き戻し） | `<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（いずれも名前をそのまま用いて構築したパスのみ。前方一致では削除しない）・`<Work>/old/<name>/`（退避した版と前回の残存物は、記録の `name` が一致し、記録の `module` が存在し、`<Plug-Ins>/<name>/` も存在する場合のみ。`<Work>/staging/<name>/` へ移動してから削除する。条件に合致しないものは削除せずに `<Work>/old/<name>.kept-<時刻>/` へ移動する）・フックが失敗した場合の新しい `<Plug-Ins>/<name>/`（自身が配置したもの）・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルのみ。退避した CLI と前回までの残存物）・中断した `uninstall` の標識 `<Work>/old/<name>.uninstalling`（差し替えに成功した後と、`<Plug-Ins>/<name>/` が存在する場合。いずれも以前の回の残存物） |
+   | `uninstall` | 記録の `name` が一致し、記録の `module` が存在する `<Plug-Ins>/<name>/`（`<Work>/old/<name>/` へ移動し、フックの後で `<Work>/staging/<name>/` へ移動してから削除する）・`<Work>/staging/<name>/`・`<Work>/staging/<name>.zip`（いずれも名前をそのまま用いて構築したパスのみ）・自身が書き込んだ標識 `<Work>/old/<name>.uninstalling`・`<Plug-Ins>/<name>/` も `<Work>/old/<name>/` も存在しない場合の以前の回の標識 `<Work>/old/<name>.uninstalling`・`<Work>/old/` の直下の `vw2026.old-*` / `vw2026.exe.old-*`（ファイルのみ）・空の `<Work>/staging`・`<Work>/old`・`<Work>`（内容のあるものは削除しない） |
    | `cli` の `install` のフック | なし |
-   | `cli` の `uninstall` のフック | `<Plug-Ins>/cli/bin/vw2026` を指す `~/.local/bin/vw2026`・`Path` の `<Plug-Ins>\cli\bin` と一致する項目（どちらも `VW2026_HOOK_INSTALL_DIR` から決め、同じ場所かはディレクトリの同一性で決める） |
+   | `cli` の `uninstall` のフック | `<Plug-Ins>/cli/bin/vw2026` を指す `~/.local/bin/vw2026`・`Path` の `<Plug-Ins>\cli\bin` と一致する項目（いずれも `VW2026_HOOK_INSTALL_DIR` から決定し、同一の場所か否かはディレクトリの同一性で判定する） |
 
-   2025 の `cli`（`vw2025`）では、表の名前を `docs/plugin/editions.md` の表で読み替える（`vw2025.old-*`・
-   `~/.local/bin/vw2025`・`VW2025_HOOK_INSTALL_DIR` など）。消して良いものの範囲は同じ。
+   2025 の `cli`（`vw2025`）では、表の名前を `docs/plugin/editions.md` の表に従って読み替える（`vw2025.old-*`・
+   `~/.local/bin/vw2025`・`VW2025_HOOK_INSTALL_DIR` など）。削除してよいものの範囲は同一。
 
 ## 整形と検査
 
-- **整形（`scripts/format.sh`）と検査（`scripts/lint.sh`）を分ける。** 整形は直すだけ、検査は
-  指摘するだけ。`format.sh` は既定で確かめるだけで、`--fix` で書き換える。CI は `format.sh` と
-  `lint.sh` を走らせる。push の前に両方を通す。
-- 言語をまたぐ決まり（UTF-8・LF・タブ・100 桁の目安）は `.editorconfig` に
-  だけ書く。各言語の設定には、その言語にしかない項目だけを書く（`docs/format.md`）。
-- ツールは言語ごとに標準のもの 1 つを、ほぼ既定のまま使い、版を固定する。Go で書かれたツールは
+- **整形（`scripts/format.sh`）と検査（`scripts/lint.sh`）を分離する。** 整形は修正のみ、検査は
+  指摘のみを行う。`format.sh` は既定では確認のみを行い、`--fix` で書き換える。CI は `format.sh` と
+  `lint.sh` を実行する。push の前に両方を通過させる。
+- 言語共通の規則（UTF-8・LF・タブ・100 桁の目安）は `.editorconfig` に
+  のみ記述する。各言語の設定には、その言語固有の項目のみを記述する（`docs/format.md`）。
+- ツールは言語ごとに標準のもの 1 つを、ほぼ既定の設定のまま使用し、版を固定する。Go で記述されたツールは
   `tools/go.mod`、pip のツール（clang-format・clang-tidy・shellcheck）は `tools/requirements.txt`、
-  PSScriptAnalyzer と Pester（`cli` のフックのテスト。`hooks.yml`）は `scripts/powershell.ps1` に版を置く。ツールと対象は `docs/format.md`・`docs/lint.md`。
-- **コメントは対象のコードの直前の行に置き、コードと同じ行の末尾には書かない**（どの言語でも。
-  1 行で足りるものも同じ。複数行と 1 行で置き場所が混ざると読みにくいため）。
+  PSScriptAnalyzer と Pester（`cli` のフックのテスト。`hooks.yml`）は `scripts/powershell.ps1` に版を記述する。ツールと対象は `docs/format.md`・`docs/lint.md`。
+- **コメントは対象のコードの直前の行に配置し、コードと同じ行の末尾には記述しない**（全ての言語で同様。
+  1 行で足りるものも同様。複数行と 1 行で配置場所が混在すると読みにくいため）。
 
 ## Go（`cli/`）
 
-- 実行ファイルは 1 つにする（cgo を使わない）。
-- **外部の依存は、信頼できるかを確かめてから足す。** 標準ライブラリで足りるならそちらを使う。
-  足す前に次を確かめ、結果をコミットメッセージに書く。
-  - 保守されているか（最近のリリース・issue への応答）と、広く使われているか
+- 実行ファイルは 1 つとする（cgo を使用しない）。
+- **外部の依存は、信頼性を確認してから追加する。** 標準ライブラリで足りる場合はそちらを使用する。
+  追加する前に次を確認し、結果をコミットメッセージに記述する。
+  - 保守されているか（最近のリリース・issue への応答）と、広く使用されているか
   - ライセンスが配布と両立するか（MIT・BSD・Apache-2.0 など）
-  - 推移的な依存が少ないか（`go mod graph` で、実行ファイルに入るものを見る）
-  - 既知の脆弱性が無いか（`govulncheck ./...`）
+  - 推移的な依存が少ないか（`go mod graph` で、実行ファイルに含まれるものを確認する）
+  - 既知の脆弱性が存在しないか（`govulncheck ./...`）
   - 版を固定し、`go.sum` をコミットする
-- `tools/go.mod` のツール（整形と検査）も同じように確かめる。但し実行ファイルに入らないので、
+- `tools/go.mod` のツール（整形と検査）も同様に確認する。但し実行ファイルに含まれないため、
   推移的な依存の数は問わない。
-- 今入っている依存は [kong](https://github.com/alecthomas/kong)（コマンドラインの解析。MIT。
-  実行ファイルに入る推移的な依存なし）だけ。
-- 受け渡しは偽のプラグインに対する単体テストで確かめる（`cli/internal/fakeplugin`）。スプールの
-  場所は、本番では実行ファイルの場所から求め（`spool.Dir`）、テストでは `env.spool` を差し替えて渡す。
-  `install` / `uninstall` の場所も同じで、本番では `main()` だけが `env.workDir`（`install.WorkDir`）・
-  `env.pluginsDir`（`install.DefaultPluginsDir`）・`env.executable`（`os.Executable`）を入れ、テストの
-  `invoke` はどれも既定で一時ディレクトリを返す（開発者の計算機の本物の `<Plug-Ins>`・`<Work>` に触れない）。
-  配置の手順は `cli/internal/install` で、場所と既定のレジストリを `install.Options` で受け取り、偽の
-  HTTPS サーバー（`httptest`）と、テストの実行ファイルを偽のフックとして走らせる `Options.Interpreters` で確かめる。
-  場所を変える指定（引数・環境変数）は足さない（プラグインは自分のモジュールの場所から求めた
-  `<Plug-Ins>/cli/spool` しか見ないので、本番で効かない。`docs/protocol.md「スプールの場所」`）。
+- 現在導入されている依存は [kong](https://github.com/alecthomas/kong)（コマンドラインの解析。MIT。
+  実行ファイルに含まれる推移的な依存なし）のみ。
+- 受け渡しは擬似プラグインに対する単体テストで検証する（`cli/internal/fakeplugin`）。スプールの
+  場所は、本番環境では実行ファイルの場所から導出し（`spool.Dir`）、テストでは `env.spool` を差し替えて渡す。
+  `install` / `uninstall` の場所も同様で、本番環境では `main()` のみが `env.workDir`（`install.WorkDir`）・
+  `env.pluginsDir`（`install.DefaultPluginsDir`）・`env.executable`（`os.Executable`）を設定し、テストの
+  `invoke` はいずれも既定で一時ディレクトリを返す（開発者の計算機の実際の `<Plug-Ins>`・`<Work>` に触れない）。
+  配置の手順は `cli/internal/install` にあり、場所と既定のレジストリを `install.Options` で受け取り、擬似
+  HTTPS サーバー（`httptest`）と、テストの実行ファイルを擬似フックとして実行する `Options.Interpreters` で検証する。
+  場所を変更する指定（引数・環境変数）は追加しない（プラグインは自身のモジュールの場所から導出した
+  `<Plug-Ins>/cli/spool` のみを参照するため、本番環境では効果がない。`docs/protocol.md「スプールの場所」`）。
 - 手書きの字句処理（`spool.NestingDepth`）は Go の標準のファジングで、`encoding/json` と同じ深さを
-  返すことを確かめる（`cli/internal/spool/fuzz_test.go`。任意のバイト列の `FuzzNestingDepth` と、
-  `json.Marshal` した要求の `FuzzNestingDepthOfRequest`）。プラグインとの一致は通信規則の見本で確かめる。
-  `go test` は種だけを走らせ、CI の `go.yml` が 30 秒ずつ回す。手元では `cli/` で
+  返すことを検証する（`cli/internal/spool/fuzz_test.go`。任意のバイト列の `FuzzNestingDepth` と、
+  `json.Marshal` した要求の `FuzzNestingDepthOfRequest`）。プラグインとの一致は通信規則のフィクスチャで検証する。
+  `go test` はシードのみを実行し、CI の `go.yml` が 30 秒ずつ実行する。ローカル環境では `cli/` で
   `go test -run '^$' -fuzz '^FuzzNestingDepth$' -fuzztime 30s ./internal/spool`（対象は 1 回に 1 つ）。
-  落ちた入力は `internal/spool/testdata/fuzz/` に書かれ、`go test -run` で再現できる。JSON の解析
-  そのものは `encoding/json` に任せていて、ファジングしない。
-- **CLI の使い方（コマンド・指定・出力・終了コード）は、コマンドの定義に英語で書く。**
+  失敗を引き起こした入力は `internal/spool/testdata/fuzz/` に書き込まれ、`go test -run` で再現できる。JSON の解析
+  そのものは `encoding/json` に委ねており、ファジングの対象としない。
+- **CLI の使用方法（コマンド・指定・出力・終了コード）は、コマンドの定義に英語で記述する。**
   1 コマンド 1 ファイル（`cli/cmd/vw2026/call.go` など）の構造体で、kong のタグ（`help`）と
-  `Help()`（詳しい説明）を `run` の隣に書く。全体の説明と終了コードは `main.go` の `cli.Help()`。
-  真実は `vw2026 --help`（`vw2026 help <command>`）で、Markdown や godoc に別に書かない。
-- **指定（フラグ）は、環境変数でも与えられるようにする**（kong の `env` タグ）。名前は、使う
-  コマンドではなく**値の通じる範囲**で決める。両方あれば引数が勝つ。オン・オフの指定は
-  `negatable:""` を付け、`--no-<指定>` で打ち消せるようにする。位置の引数（道具名・引数の JSON）は
-  対象外。付け忘れは `TestEveryFlagHasEnv` が落とす。但し、初回のスクリプトだけが一時フォルダの CLI に渡す
-  隠した指定（`install` / `uninstall` の `--plugins-dir`。kong の `hidden`）は環境変数を持たない（持つと、入った
-  CLI にも効いてしまう。入った CLI は自分の入った `<Plug-Ins>` を使い、この指定を断る）。
-  - どのコマンドからも同じものを指す値（占有の印・Vectorworks の場所・レジストリ）は `VW2026_<指定>`
-    （`VW2026_SESSION`・`VW2026_APP`・`VW2026_REGISTRY`）。今 1 つのコマンドだけが読むものも含む。この名前は
-    `VW2026_<コマンド>_` で始めない（コマンドごとの名前と重ならないように。`TestEnvNamesDoNotCollide`）。
-  - それ以外（待つ上限・出力の形のオン・オフなど、コマンドごとに違う値を与えうるもの）は
+  `Help()`（詳細な説明）を `run` の隣に記述する。全体の説明と終了コードは `main.go` の `cli.Help()`。
+  真実は `vw2026 --help`（`vw2026 help <command>`）であり、Markdown や godoc に別途記述しない。
+- **指定（フラグ）は、環境変数でも与えられるようにする**（kong の `env` タグ）。名前は、使用する
+  コマンドではなく**値の通用する範囲**で決定する。両方ある場合は引数が優先される。オン・オフの指定には
+  `negatable:""` を付け、`--no-<指定>` で打ち消せるようにする。位置引数（ツール名・引数の JSON）は
+  対象外。付け忘れは `TestEveryFlagHasEnv` が検出して失敗させる。但し、初回スクリプトのみが一時フォルダの CLI に渡す
+  隠し指定（`install` / `uninstall` の `--plugins-dir`。kong の `hidden`）は環境変数を持たない（持つと、インストール
+  された CLI にも作用する。インストールされた CLI は自身のインストール先の `<Plug-Ins>` を使用し、この指定を拒否する）。
+  - いずれのコマンドからも同じものを指す値（セッション ID・Vectorworks の場所・レジストリ）は `VW2026_<指定>`
+    （`VW2026_SESSION`・`VW2026_APP`・`VW2026_REGISTRY`）。現在 1 つのコマンドのみが読み取るものも含む。この名前は
+    `VW2026_<コマンド>_` で始めない（コマンドごとの名前と重複しないように。`TestEnvNamesDoNotCollide`）。
+  - それ以外（待機の上限・出力形式のオン・オフなど、コマンドごとに異なる値を与えうるもの）は
     `VW2026_<コマンド>_<指定>`（`VW2026_CALL_TIMEOUT`・`VW2026_CALL_RAW`）。`<コマンド>` は値を共有する
-    コマンドの範囲で決める。幾つかのコマンドが同じ値を共有するなら、それらをまとめる名前を使い
-    （`session start` と `session end` の `VW2026_SESSION_TIMEOUT`）、1 つのコマンドだけのものなら
-    そのコマンドの名前を使う（`session end` だけなら `VW2026_SESSION_END_<指定>`）。共通の親を
+    コマンドの範囲で決定する。複数のコマンドが同じ値を共有する場合は、それらを包括する名前を使用し
+    （`session start` と `session end` の `VW2026_SESSION_TIMEOUT`）、1 つのコマンドのみのものは
+    そのコマンドの名前を使用する（`session end` のみならば `VW2026_SESSION_END_<指定>`）。共通の親を
     持たないコマンド（`call` と `session start` など）は値を共有せず、コマンドごとに名前を付ける。
-  - どちらか迷うものはコマンドごとにする。全体の名前は、どのコマンドでも同じ意味だと言えるときだけ
-    付ける。
-- コメントは日本語でも英語でもよく、**なぜ**を書く。CLI の出力・エラーの文言は英語（機械が
-  読む・端末の文字コードに依らない）。
+  - いずれとするか判断に迷うものはコマンドごとにする。全体の名前は、全てのコマンドで同じ意味であると
+    言える場合のみ付ける。
+- コメントは日本語でも英語でもよく、**理由**を記述する。CLI の出力・エラーの文言は英語（機械が
+  読み取る・端末の文字コードに依存しない）。
 
 ## C++（`src/`）
 
-- **SDK に依らない部分は `src/core` に置き、無 SDK の単体テスト（`tests/`）で確かめる。** 受け付けの
-  手順・JSON・スプールの OS の呼び出しはここ。SDK を呼ぶのは `src/core` の外だけ。
-- **通信規則に関わる振る舞いは通信規則の見本（`protocol/fixtures`。`docs/fixtures.md`）に置く。** C++ と Go の
-  両方のテストが同じ見本を読むので、片側だけを直すと落ちる。見本で表しにくいことだけを、各言語の
-  テストに書く。
-  道具の結果の決まり（実数の綴り）は通信規則ではないので `tests/fixtures/` に置き、C++
-  （`tests/NumberTests.cpp`）と Go（`cli/internal/toolfixtures`）の両方のテストが読む。
-- 手元（mac）でプラグインをビルドするときは、プリセット `vw2026` を使う
-  （`docs/plugin/build-and-release.md`「手元のビルド」）。
-- 手元のテスト（CI の `cpp.yml` と同じ指定）:
+- **SDK に依存しない部分は `src/core` に配置し、無 SDK の単体テスト（`tests/`）で検証する。** 受付処理の
+  手順・JSON・スプールの OS の呼び出しはここに含める。SDK を呼び出すのは `src/core` の外のみ。
+- **通信規則に関わる振る舞いは通信規則のフィクスチャ（`protocol/fixtures`。`docs/fixtures.md`）に記述する。** C++ と Go の
+  両方のテストが同一のフィクスチャを読み込むため、片側のみを修正すると失敗する。フィクスチャで表現しにくい事項のみを、
+  各言語のテストに記述する。
+  ツールの結果の規則（実数の表記）は通信規則ではないため `tests/fixtures/` に配置し、C++
+  （`tests/NumberTests.cpp`）と Go（`cli/internal/toolfixtures`）の両方のテストが読み込む。
+- ローカル環境（mac）でプラグインをビルドする場合は、プリセット `vw2026` を使用する
+  （`docs/plugin/build-and-release.md`「ローカル環境でのビルド」）。
+- ローカル環境でのテスト（CI の `cpp.yml` と同じ指定）:
   `cmake -S . -B build -DVW_BUILD_PLUGIN=OFF -DVW_BUILD_TESTS=ON -DVW_ENABLE_SANITIZERS=ON -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=Debug && cmake --build build && ctest --test-dir build --output-on-failure`。
-  ファジングは clang（Apple の clang は不可）で `-DVW_BUILD_FUZZERS=ON` を足し、
+  ファジングは clang（Apple の clang は不可）で `-DVW_BUILD_FUZZERS=ON` を追加し、
   `mkdir -p corpus crashes && build/JsonFuzzer -max_total_time=120 -artifact_prefix=crashes/ corpus protocol/fixtures/requests`
-  で回す（libFuzzer は見つけた入力を最初に渡したディレクトリへ書くので、空のコーパスを先に渡し、
-  見本のディレクトリを汚さない）。
-  カバレッジは clang（Apple の clang も可）で `-DVW_ENABLE_COVERAGE=ON` を足してテストを走らせ、
+  で実行する（libFuzzer は発見した入力を最初に渡したディレクトリへ書き込むため、空のコーパスを先に渡し、
+  フィクスチャのディレクトリを汚染しない）。
+  カバレッジは clang（Apple の clang も可）で `-DVW_ENABLE_COVERAGE=ON` を追加してテストを実行し、
   `llvm-profdata merge -sparse build/coverage/*.profraw -o build/coverage.profdata && llvm-cov report build/VwCliTests -instr-profile=build/coverage.profdata src/core`
-  で見る（mac は `xcrun` を前に付ける。CI は同じものを lcov にして Codecov へ送る）。
-  `llvm-profdata`・`llvm-cov` はビルドに使った clang と同じ版を使う（版が違うと結果を読めない
-  ことがある。Linux では `llvm-profdata-18` のように版の付いた名前で入っていることが多い）。
+  で確認する（mac は `xcrun` を前に付ける。CI は同じものを lcov 形式に変換して Codecov へ送信する）。
+  `llvm-profdata`・`llvm-cov` はビルドに使用した clang と同じ版を使用する（版が異なると結果を読み取れない
+  ことがある。Linux では `llvm-profdata-18` のように版の付いた名前でインストールされていることが多い）。
   Windows（MSVC）は `-DVW_ENABLE_COVERAGE=ON`（`/PROFILE` を付けてリンクする。
   `VW_ENABLE_SANITIZERS` とは併用できない）でビルドし、Developer PowerShell で
   `Remove-Item build/Debug/VwCliTests.exe -ErrorAction Ignore; cmake --build build --config Debug; Microsoft.CodeCoverage.Console instrument --settings tests/MsvcCoverage.xml build/Debug/VwCliTests.exe; Microsoft.CodeCoverage.Console collect --settings tests/MsvcCoverage.xml -f cobertura -o build/coverage.cobertura.xml ctest --test-dir build --build-config Debug --output-on-failure`
-  で集める（Visual Studio に付属。2022 は Enterprise だけ）。計装は実行ファイルをその場で
-  書き換え、ソースが変わらなければ `cmake --build` は再リンクしないので、毎回 exe を消して
+  で収集する（Visual Studio に付属。2022 は Enterprise のみ）。計装は実行ファイルをその場で
+  書き換え、ソースが変更されなければ `cmake --build` は再リンクしないため、毎回 exe を削除して
   リンクし直してから計装する（計装済みのものを重ねて計装しない）。
-- 外部のライブラリ（テストの枠組みを含む）は足さない。標準ライブラリと OS の呼び出しで書く。
+- 外部のライブラリ（テストフレームワークを含む）は追加しない。標準ライブラリと OS の呼び出しで記述する。
 
 ## 文書
 
-- 日本語。1 ページ 1 トピック。技術文書の語で書き、くだけた言い回し・比喩を使わない。
-- 漢字で書ける語は漢字で書く（他・全て・今・後・通り・間など。意味を読み取りやすくするため）。一般的でない当て字は
-  使わない。形式名詞（こと・とき・もの・ところ）と補助的な語（ている・など・まま）は仮名で書く。コードの注釈も同じ。
-- 決めたことの根拠が SDK の挙動なら、SDK リファレンスの `Findings/` の節へリンクする。
-  経緯や実測の数値はここへ写さない。
-- `README.md` は、コードブロックを見るだけで概ねの使い方を想像できるように書く。実行する
-  コマンドと、その結果・次に実行するコマンドを同じブロックに置き、結果はコメントで示す。
-  結果のコメントはコマンドの次の行に置く（「整形と検査」のコメントの置き場所の決まりの例外）。
+- 日本語。1 ページ 1 トピック。技術文書の語で記述し、くだけた言い回し・比喩を使用しない。
+- 漢字で書ける語は漢字で表記する（他・全て・今・後・通り・間など。意味を読み取りやすくするため）。一般的でない
+  当て字は使用しない。形式名詞（こと・とき・もの・ところ）と補助的な語（ている・など・まま）は仮名で表記する。
+  コードの注釈も同様。
+- 和語より漢語を主体とし、フォーマルな技術文書の表現で記述する。用語は既存の文書の訳語（ツール・フィクスチャ・
+  呼び出し元・セッション ID・標識など）に統一する。
+- 決定事項の根拠が SDK の挙動であれば、SDK リファレンスの `Findings/` の節へリンクする。
+  経緯や実測の数値はここへ転記しない。
+- `README.md` は、コードブロックを参照するだけで概ねの使用方法を想像できるように記述する。実行する
+  コマンドと、その結果・次に実行するコマンドを同じブロックに配置し、結果はコメントで示す。
+  結果のコメントはコマンドの次の行に配置する（「整形と検査」のコメントの配置場所の規則の例外）。
 
 ## 作業の進行
 
-- `main` へは直接 push せず、ブランチを切って PR で進める。
-- コミットメッセージには Claude セッションの URL を入れる。
-- **プラグインは、まとまり（道具・機能）ごとに 1 PR で進める。** これから作るものは issue で追う。
-  PR には、確かめ方と、確かめた結果（実機で見られなかった項目を含む）を書く。
-- **PR は下書き（draft）で作る。下書きの PR をレビューの準備ができた状態に変える前に、
-  必ずレビューのスキル（`/code-review`）を使い、マージの妨げになる指摘が無いことを確かめる。**
-  妨げになるのは `important` の指摘と、`severity` の無い指摘で、`pre_existing` と `nit` は
-  妨げにしない。妨げになる指摘があれば直してからもう一度レビューし、それが無くなるまで下書きのままにする。
-  レビューの準備ができた状態の PR に push するときも、push の前に同じようにレビューし、妨げになる
-  指摘が無いことを確かめてから push する。
-- **実機でしか確かめられない変更（プラグイン・スクリプト）は、利用者が実機で「確認できた」と言うまで
-  マージしない。** CI が通ることも、道具が応えることも、実機の確認の代わりにはならない。実機の
-  確かめ方は `docs/plugin/verification.md`（PR のプレリリースを入れ、`vw2026` で呼ぶ）。
+- `main` へは直接 push せず、ブランチを作成して PR で進める。
+- コミットメッセージには Claude セッションの URL を記載する。
+- **プラグインは、まとまり（ツール・機能）単位で 1 PR として進める。** 今後作成するものは issue で追跡する。
+  PR には、検証方法と、検証の結果（実機で確認できなかった項目を含む）を記述する。
+- **PR は下書き（draft）で作成する。下書きの PR をレビュー準備完了の状態に変更する前に、
+  必ずレビューのスキル（`/code-review`）を使用し、マージの妨げとなる指摘が無いことを確認する。**
+  妨げとなるのは `important` の指摘と、`severity` の無い指摘であり、`pre_existing` と `nit` は
+  妨げとしない。妨げとなる指摘があれば修正してから再度レビューし、それが無くなるまで下書きのままにする。
+  レビュー準備完了の状態の PR に push する場合も、push の前に同様にレビューし、妨げとなる
+  指摘が無いことを確認してから push する。
+- **実機でのみ検証できる変更（プラグイン・スクリプト）は、利用者が実機で「確認できた」と述べるまで
+  マージしない。** CI を通過することも、ツールが応答することも、実機での確認の代替にはならない。実機での
+  検証方法は `docs/plugin/verification.md`（PR のプレリリースをインストールし、`vw2026` で呼び出す）。
