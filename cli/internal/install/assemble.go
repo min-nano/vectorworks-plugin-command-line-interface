@@ -16,7 +16,7 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
 
-// RecordFile は入れたときの記録（docs/registry.md「入れたときの記録」。2025 は vw2025-install.json）。
+// RecordFile は入れたときの記録（docs/registry.md「インストールの記録」。2025 は vw2025-install.json）。
 const RecordFile = edition.Command + "-install.json"
 
 // recordVersion は読み書きする record_version。
@@ -193,7 +193,7 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 	return record, nil
 }
 
-// extract は zip を dir へ展開する（docs/registry.md「zip の形」）。展開先の外へ出る項目・
+// extract は zip を dir へ展開する（docs/registry.md「zip の構成」）。展開先の外へ出る項目・
 // シンボリックリンク・\ を区切りに使った項目・展開すると maxExtracted を超える zip・項目が maxEntries を超える zip
 // は断る。
 // 権限（実行ビット）は保ち、ファイルの時刻は展開した時刻のままにする（古い時刻を付けると、

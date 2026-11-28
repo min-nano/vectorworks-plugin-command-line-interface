@@ -45,7 +45,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # 同じリポジトリの PR はブランチの head（docs/plugin/build-and-release.md「リリースの形」）。
+          # 同じリポジトリの PR はブランチの head（docs/plugin/build-and-release.md「リリースの構成」）。
           # fork の head は信頼できないので、マージのためのコミットをビルドするだけにする。
           ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
       - id: meta
@@ -346,7 +346,7 @@ jobs:
           done
           ls -l dist
       # 同じタグの公開済みのリリースがあれば、タグが今回の完全な sha を指すなら何もせず（同じ sha の
-      # 実行し直し）、違えば失敗にする（短い sha が重なった。docs/plugin/build-and-release.md「リリースの形」）。
+      # 実行し直し）、違えば失敗にする（短い sha が重なった。docs/plugin/build-and-release.md「リリースの構成」）。
       # 下書きのまま残ったもの（前の実行が途中で止まった）は消して作り直す。PR では、同じ PR の別のタグの
       # 下書き（push で止められた前の実行のもの）も消す。タグは公開したときに target の sha に作られる
       # （下書きの間はタグが無い）。
@@ -462,7 +462,7 @@ jobs:
       - name: manifest
         run: |
           set -eu
-          # 既定のレジストリの cli の規則の内、最初に合ったものの path（docs/registry.md「規則の選び方」）。
+          # 既定のレジストリの cli の規則の内、最初に合ったものの path（docs/registry.md「規則の選択」）。
           manifest_url() {
             jq -r --arg tag "$1" '.plugins.cli.manifests
               | map(select(.match as $m | $tag | test("^" + ($m | gsub("\\."; "\\.") | gsub("\\*"; ".*")) + "$")))
@@ -606,7 +606,7 @@ jobs:
       YEAR: ${{ matrix.year }}
     steps:
       # 各手順が読み込む関数。場所は vw2026（2025 は vw2025）と同じく OS の決まった場所から求める
-      # （docs/plugin/identifiers.md「置き場所」）。
+      # （docs/plugin/identifiers.md「配置場所」）。
       - name: helpers
         run: |
           @'

@@ -9,7 +9,7 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
-// 進み具合を書く間隔（docs/plugin/install-and-update.md「流れ」）。端末では同じ行を書き
+// 進み具合を書く間隔（docs/plugin/install-and-update.md「処理の流れ」）。端末では同じ行を書き
 // 直すので短く、端末でなければ（ログに残る）1 行ずつ足すので長くする。テストが縮める。
 var (
 	progressEvery         = 10 * time.Second

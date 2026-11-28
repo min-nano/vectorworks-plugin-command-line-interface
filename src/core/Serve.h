@@ -1,6 +1,6 @@
 #pragma once
 
-// 受け付け 1 回の手順と、占有の印（docs/plugin/bridge.md「受け付け 1 回」）。SDK に依らない。
+// 受け付け 1 回の手順と、占有の印（docs/plugin/bridge.md「1 回の受付処理」）。SDK に依らない。
 // 道具の表と時刻を引数で受けるので、偽の道具の表でテストできる。
 
 #include "core/Bridge.h"
@@ -160,7 +160,7 @@ private:
 	Outcome answer(const std::string &text, std::span<const Tool> tools, std::int64_t nowNanos,
 	               Activity activity, Startup startup);
 
-	// held は要求を取り出し、呼ぶ側が待っていれば中身を返す（通信規則「待つ印」）。待つ者が
+	// held は要求を取り出し、呼ぶ側が待っていれば中身を返す（通信規則「待機標識」）。待つ者が
 	// 居なければ待つ印を消し、待つ印が無ければ no_wait で応えて、どちらも空を返す。
 	std::optional<std::string> held(const std::string &id);
 

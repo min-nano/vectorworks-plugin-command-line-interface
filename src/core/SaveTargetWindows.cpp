@@ -11,7 +11,7 @@
 #include <windows.h>
 
 // save の保存先をファイルシステムに聞く関数の Windows の実装（docs/plugin/save-target.md「状態の
-// 確かめ」）。どちらも \\?\ を付けて聞くので、CON.vwx などを装置ではなくファイルの名前として聞き、
+// 検証」）。どちらも \\?\ を付けて聞くので、CON.vwx などを装置ではなくファイルの名前として聞き、
 // MAX_PATH で失敗することもない。
 
 namespace VwCli::core::save_target {

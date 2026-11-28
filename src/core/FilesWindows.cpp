@@ -176,7 +176,7 @@ std::optional<std::vector<std::string>> list(const std::string &dir) {
 
 std::optional<std::string> read(const std::string &path, std::size_t limit) {
 	// 読む間は消させない（呼ぶ側の取り下げは、消せないことでプラグインが受け取ったと分かる。通信規則
-	// 「待つのをやめる」）。
+	// 「待機の中止」）。
 	HANDLE file = openFile(path, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING).handle;
 	if (file == INVALID_HANDLE_VALUE) {
 		return std::nullopt;

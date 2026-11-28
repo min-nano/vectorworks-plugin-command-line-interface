@@ -31,7 +31,7 @@ inline constexpr int kMaxNestingDepth = 64;
 // id の長さの上限（綴りは [0-9A-Za-z_-]{1,64}。通信規則「id」）。
 inline constexpr std::size_t kMaxIdLength = 64;
 
-// 予約された道具（通信規則「予約された道具」）。通信規則そのものが受け持つ 3 つは、道具の名前の綴り
+// 予約された道具（通信規則「予約ツール」）。通信規則そのものが受け持つ 3 つは、道具の名前の綴り
 // （[a-z0-9_]+(\.[a-z0-9_]+)*）では書けない @ で始め、道具の名前と重ならないようにする。ping は
 // このプラグインの道具（種類 read）として道具の表に載る。
 inline constexpr std::string_view kToolTools = "@tools";

@@ -49,7 +49,7 @@ run again.
 }
 
 // run does not wait: waiting is the caller's choice
-// (docs/design.md「CLI はプリミティブに保つ」).
+// (docs/design.md「CLI のプリミティブ性の維持」).
 func (c *launchCmd) run(e *env) int {
 	bridge := open(e)
 	if bridge == nil {
