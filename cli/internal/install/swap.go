@@ -63,6 +63,10 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 	if err := rename(p.stageDir, p.dest); err != nil {
 		return nil, undoSwap(p, hadOld, moved, err)
 	}
+	// 付け替えたことを、フックが外のもの（PATH など）を変える前に残す（durable.go）。できなくても付け替えは済んで
+	// いて、戻す理由にならないので、誤りは見ない（電源が落ちて付け替えの前に戻っても、次の install が old から続ける）。
+	_ = syncDir(p.plugins)
+	_ = syncDir(p.old)
 
 	hook, err := o.runHook("install", record.Hooks.Install, hookEnv{
 		name: name, tag: tag, previous: previous, target: o.Target, pluginDir: p.dest, installDir: p.dest,

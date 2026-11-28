@@ -164,6 +164,6 @@ var (
 	removeFile = os.Remove
 	removeAll  = os.RemoveAll
 	mkdirAll   = os.MkdirAll
-	writeFile  = os.WriteFile
+	writeFile  = writeSynced
 	openFile   = os.OpenFile
 )
