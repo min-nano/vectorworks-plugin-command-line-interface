@@ -41,7 +41,7 @@ func TestUninstall(t *testing.T) {
 	}
 }
 
-// uninstall cli のあと、<Work> に空の staging / old しか無ければ <Work> も消す。remaining は
+// uninstall cli の後、<Work> に空の staging / old しか無ければ <Work> も消す。remaining は
 // どの名前でも出す。
 func TestUninstallCLIRemovesTheWorkFolder(t *testing.T) {
 	h := newHarness(t)
@@ -144,7 +144,7 @@ func TestUninstallHookFailureRestores(t *testing.T) {
 	}
 }
 
-// 手順 3 のあとで止まった uninstall: 印があれば手順 4 から続け、印が無ければ断る。
+// 手順 3 の後で止まった uninstall: 印があれば手順 4 から続け、印が無ければ断る。
 func TestUninstallResumes(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()

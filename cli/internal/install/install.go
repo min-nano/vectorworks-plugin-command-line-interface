@@ -1,7 +1,7 @@
 // Package install はプラグインの配置（vw2026 install / uninstall）を行う
 // （docs/plugin/install-and-update.md・docs/registry.md）。どのプラグインにも同じ手順だけを持ち、
 // cli を特別に扱わない。cli の名前を使うのは、Vectorworks が動いているかを見るロックの場所
-// （<Plug-Ins>/cli/spool）と、ほかのプラグインを cli と同じ <Plug-Ins> にだけ入れるための確かめと、入った CLI が
+// （<Plug-Ins>/cli/spool）と、他のプラグインを cli と同じ <Plug-Ins> にだけ入れるための確かめと、入った CLI が
 // 自分の入った <Plug-Ins> を求めること（PluginsDirOf）だけ。
 //
 // 場所（<Plug-Ins>・<Work>）と既定のレジストリは Options で受け取る（テストが一時ディレクトリと
@@ -20,7 +20,7 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
 
-// cliName は cli のプラグインの名前（フォルダ名）。ロックの場所・ほかのプラグインを cli のある <Plug-Ins> に
+// cliName は cli のプラグインの名前（フォルダ名）。ロックの場所・他のプラグインを cli のある <Plug-Ins> に
 // だけ入れる確かめ・入った CLI が自分の入った <Plug-Ins> を求める（PluginsDirOf）ためだけに使う。
 const cliName = "cli"
 
@@ -104,7 +104,7 @@ func CheckRequest(name, tag string) error {
 // ErrRunning を返す（結果の outcome も vectorworks_running）。
 func Install(o Options, name, requested string, check bool) (*InstallResult, error) {
 	result, err := install(o, name, requested, check)
-	// どこで分かっても、Vectorworks が動いていたら同じ形にする（outcome を道ごとに書かない）。ほかの誤りでは結果を
+	// どこで分かっても、Vectorworks が動いていたら同じ形にする（outcome を道ごとに書かない）。他の誤りでは結果を
 	// 返さない（呼ぶ側は failed を出す）。
 	switch {
 	case errors.Is(err, ErrRunning) && result != nil:
@@ -141,7 +141,7 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 		PluginsDir: p.plugins,
 	}
 	// cli の記録と、Vectorworks が動いているかを、レジストリ・マニフェストを取る前に答える（ネットワークの誤りや
-	// 記録の誤りより先に。同じタグでも動いていればフックを走らせない）。--check は動いていてもよい。付け替えの直前にも
+	// 記録の誤りより先に。同じタグでも動いていればフックを走らせない）。--check は動いていても良い。付け替えの直前にも
 	// もう一度見る（replace）。
 	if err := precheck(p, name, !check); errors.Is(err, ErrRunning) {
 		return result, err
@@ -198,20 +198,20 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 				name, installed.Tag, p.oldDir, name, installed.Tag, p.dest)
 		}
 		// 同じタグでも入れ直しになる（module が欠けた・ターゲットが違う）ときは、入れ終える道が無いので、利用者が
-		// 前の版を戻すか消すかを決める（どちらも済めば、ふつうに入れ直せる）。
+		// 前の版を戻すか消すかを決める（どちらも済めば、普通に入れ直せる）。
 		return nil, fmt.Errorf("%s@%s has not finished installing and has to be installed again (its module is missing "+
 			"or it is for another target), but the previous version, the last that finished, is in %s; to keep it, "+
 			"delete %s and move it back there, otherwise delete it; then run install again",
 			name, installed.Tag, p.oldDir, p.dest)
 	}
 	// <Plug-Ins>/<name>/ があるなら、中断した uninstall の印は前の回の残り（uninstall は移してから止まる
-	// ので、そのときは <Plug-Ins>/<name>/ が無い）。どの道でも先に消す（残すと、このあとの install が付け替えの
+	// ので、そのときは <Plug-Ins>/<name>/ が無い）。どの道でも先に消す（残すと、この後の install が付け替えの
 	// 途中で止まったときに、次の uninstall がそれを中断した uninstall とみなし、唯一残った old/<name>/ を消す）。
 	if installed != nil {
 		_ = removeFile(p.marker)
 	}
 	if upToDate {
-		// 同じタグなら、zip を取らず付け替えもせずに、記録に写したフックだけを走らせる。始めの確かめのあと、レジストリと
+		// 同じタグなら、zip を取らず付け替えもせずに、記録に写したフックだけを走らせる。始めの確かめの後、レジストリと
 		// マニフェストを取る間（時間の上限が無い）に起動した Vectorworks の下でフックを走らせないよう、もう一度見る。
 		if err := stopped(p); err != nil {
 			return result, err
@@ -223,7 +223,7 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 		if err != nil {
 			return nil, err
 		}
-		// 新しい版を残した install の続きなら、フックが通ったので、付け替えのあとと同じく印を外して片付ける。
+		// 新しい版を残した install の続きなら、フックが通ったので、付け替えの後と同じく印を外して片付ける。
 		o.finishInstall(p, name, installed.Tag, nil, false)
 		result.Outcome = outcomeUpToDate
 		result.Hook = hook
@@ -285,7 +285,7 @@ func inspect(dest, name, source string) (*Record, error) {
 }
 
 // previousTag は、フックに渡す前のタグ（VW2026_HOOK_PREVIOUS_TAG）。入っていなければ空、入っていればそのタグ。
-// ただし入っている版のフックがまだ通っていなければ（記録の hook_pending。新しい版を残した install のあと）、
+// 但し入っている版のフックがまだ通っていなければ（記録の hook_pending。新しい版を残した install の後）、
 // その版は入れ終えていないので、<Work>/old/<name>/ に残った前の版のタグにし、無ければ（最初に入れたとき）空に
 // する（フックが前の版から移す処理を飛ばさないように。同じタグで終える回も、別のタグへ更新する回も同じ）。
 func previousTag(p places, name string, installed *Record) string {

@@ -19,9 +19,9 @@ BeforeAll {
 	}
 
 	# Invoke-Hook はフック（install・uninstall）を子のプロセスで走らせる。偽の置き場所は子の中で
-	# $StoreArguments（Get-FakePathStore の引数）から作り、走らせたあとの State を返す。
-	# 版 $Year の CLI と同じく VW<版>_HOOK_* を渡し、ほかの版の名前は渡さない。$InstallDir が空なら
-	# VW<版>_HOOK_INSTALL_DIR を渡さない。$BothEditions を付けると、ほかの版の VW<版>_HOOK_INSTALL_DIR にも
+	# $StoreArguments（Get-FakePathStore の引数）から作り、走らせた後の State を返す。
+	# 版 $Year の CLI と同じく VW<版>_HOOK_* を渡し、他の版の名前は渡さない。$InstallDir が空なら
+	# VW<版>_HOOK_INSTALL_DIR を渡さない。$BothEditions を付けると、他の版の VW<版>_HOOK_INSTALL_DIR にも
 	# $InstallDir を渡す（フックが断ることを確かめる）。
 	function Invoke-Hook {
 		param([string] $Year, [string] $Hook, [string] $InstallDir, [string] $PluginDir, [string] $StoreArguments,

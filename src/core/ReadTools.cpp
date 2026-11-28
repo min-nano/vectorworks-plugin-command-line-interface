@@ -41,7 +41,7 @@ std::optional<std::size_t> findLayer(const std::vector<std::string> &names, cons
 	    status);
 }
 
-// allLayers は前面の図面のすべてのレイヤを、直下の列まで読む。
+// allLayers は前面の図面の全てのレイヤを、直下の列まで読む。
 std::vector<LayerFacts> allLayers(Drawing &drawing) {
 	std::size_t count = drawing.layerNames().size();
 	std::vector<LayerFacts> layers;
@@ -175,7 +175,7 @@ Json layerObjects(const Json &args, Drawing &drawing, ToolStatus &status) {
 	}
 	std::size_t at = *found;
 	LayerFacts layer = drawing.layer(at);
-	// 絞ったあとの並び（列の中の位置）。
+	// 絞った後の並び（列の中の位置）。
 	const std::vector<std::int16_t> &types = layer.memberTypes;
 	std::vector<std::size_t> members;
 	for (std::size_t i = 0; i < types.size(); ++i) {
@@ -185,7 +185,7 @@ Json layerObjects(const Json &args, Drawing &drawing, ToolStatus &status) {
 	}
 	auto first = static_cast<std::size_t>(offset);
 	Json objects = Json::array();
-	// 名前・クラス・外形は、絞ったあとの頁に入る図形についてだけ SDK から読む（レイヤの全部の図形に
+	// 名前・クラス・外形は、絞った後の頁に入る図形についてだけ SDK から読む（レイヤの全部の図形に
 	// ついては読まない。大きなレイヤでも 1 回の受け付けを長引かせないため）。
 	for (std::size_t i = first; i < members.size() && i - first < static_cast<std::size_t>(limit);
 	     ++i) {

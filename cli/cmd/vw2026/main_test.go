@@ -27,9 +27,9 @@ type result struct {
 	stderr string
 }
 
-// envVars は、コマンドが読む環境変数のすべて。コマンドの定義（kong のタグ）から集める（手で並べると、
+// envVars は、コマンドが読む環境変数の全て。コマンドの定義（kong のタグ）から集める（手で並べると、
 // 指定を足したときに書き足し忘れる）。
-// テストを走らせる前のパッケージの初期化では作らない（kong のタグを壊したとき、初期化の panic ですべての
+// テストを走らせる前のパッケージの初期化では作らない（kong のタグを壊したとき、初期化の panic で全ての
 // テストが走らなくなる代わりに、使うテストが名前付きで落ちるように）。
 var envVars = sync.OnceValue(func() []string {
 	seen := map[string]bool{}
@@ -63,7 +63,7 @@ type opts struct {
 	dir string
 	// スプールの場所を求める関数（env.spool）。dir より優先する。求められないときを確かめるため。
 	locate func() (string, error)
-	// 環境変数。envVars に挙げたもののうち、ここに無いものは消す。
+	// 環境変数。envVars に挙げたものの内、ここに無いものは消す。
 	vars map[string]string
 	// 標準入力。nil なら空。
 	stdin io.Reader
@@ -209,7 +209,7 @@ func TestCallArgsFromStdin(t *testing.T) {
 }
 
 // 標準入力を読めなければ、要求を置かずに 1 で終わる。応える偽のプラグインは使わず、ロックだけを
-// 掴んでおき、終わったあとに要求も待つ印も残っていないことを見る。
+// 掴んでおき、終わった後に要求も待つ印も残っていないことを見る。
 func TestCallArgsFromUnreadableStdin(t *testing.T) {
 	dir, _ := fakeplugin.NewHeldDir(t)
 	broken := iotest.ErrReader(errors.New("broken pipe"))
@@ -272,7 +272,7 @@ func TestCallCannotWriteOutput(t *testing.T) {
 	for _, c := range []struct {
 		args []string
 		code int
-		// stderr は、書けなかったことのほかに標準エラーに含まれるもの。
+		// stderr は、書けなかったことの他に標準エラーに含まれるもの。
 		stderr string
 	}{
 		{[]string{"call", "ping"}, exitFailure, ""},
@@ -416,7 +416,7 @@ func TestHelp(t *testing.T) {
 	}
 }
 
-// TestEveryCommandRuns は、kong に並べたコマンドがすべて command を満たすことを確かめる
+// TestEveryCommandRuns は、kong に並べたコマンドが全て command を満たすことを確かめる
 // （満たさなければ run の型アサーションが実行時に落ちる）。
 func TestEveryCommandRuns(t *testing.T) {
 	for _, node := range kong.Must(&cli{}, grammarOptions()...).Model.Leaves(true) {
@@ -446,7 +446,7 @@ func TestCodeFor(t *testing.T) {
 }
 
 // session start が印を出し、占有の中でだけ呼べる道具（quit）はその印の call だけが実行される。
-// 読む道具（layers・ping）は誰の call でも実行される。end のあとは quit が占有の外として断られる。
+// 読む道具（layers・ping）は誰の call でも実行される。end の後は quit が占有の外として断られる。
 func TestSessionStartCallEnd(t *testing.T) {
 	dir := echoBridge(t)
 	r := invoke(t, opts{dir: dir}, "session", "start")
@@ -635,7 +635,7 @@ func TestSpoolNotLocated(t *testing.T) {
 	}
 }
 
-// TestEveryFlagHasEnv は、ヘルプと隠した指定を除くすべての指定に環境変数があり、オン・オフの指定が
+// TestEveryFlagHasEnv は、ヘルプと隠した指定を除く全ての指定に環境変数があり、オン・オフの指定が
 // --no-<flag> を持つことを確かめる（指定を足して環境変数を付け忘れないように。invoke が置き直す環境変数は、
 // envVars がコマンドの定義から集める）。
 func TestEveryFlagHasEnv(t *testing.T) {
@@ -662,7 +662,7 @@ func TestEveryFlagHasEnv(t *testing.T) {
 }
 
 // TestEnvNamesDoNotCollide は、VW2026_<コマンド>_ で始まる環境変数を、そのコマンド（とその下の
-// コマンド）の指定だけが使うことを確かめる。<コマンド> はどの深さのコマンドでもよい（session も
+// コマンド）の指定だけが使うことを確かめる。<コマンド> はどの深さのコマンドでも良い（session も
 // session end も）。全体で使う値に VW2026_SESSION_X のような名前を付けると、session コマンドの指定 X と
 // 区別できなくなるため（CLAUDE.md「Go」）。
 func TestEnvNamesDoNotCollide(t *testing.T) {

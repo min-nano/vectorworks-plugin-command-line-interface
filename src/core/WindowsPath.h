@@ -21,7 +21,7 @@ std::wstring widen(std::string_view text);
 // narrow は UTF-16 を UTF-8 にする。
 std::string narrow(std::wstring_view wide);
 
-// extended はパスを \\?\ を付けた UTF-16 にする（スプールのファイルと保存先の確かめは、すべて
+// extended はパスを \\?\ を付けた UTF-16 にする（スプールのファイルと保存先の確かめは、全て
 // これで開く・聞く）。
 //
 // 付けないと、CON・NUL・AUX・COM1 などの名前は（Windows 10 までは拡張子があっても）ファイルでは

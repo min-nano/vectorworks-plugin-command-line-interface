@@ -112,7 +112,7 @@ func PluginsDirOf(executable string) (dir string, ok bool) {
 	}
 	bin := filepath.Dir(spool.ResolveLinks(executable))
 	cli := filepath.Dir(bin)
-	// 名前は、Windows では大文字と小文字を区別せず、ほかでは区別して比べる（install が作る名前は bin と cli。区別する
+	// 名前は、Windows では大文字と小文字を区別せず、他では区別して比べる（install が作る名前は bin と cli。区別する
 	// ボリュームの CLI/bin を cli/bin と取り違えて、別のフォルダのロックと記録を見ない）。
 	same := func(a, b string) bool { return a == b }
 	if runtime.GOOS == "windows" {
@@ -179,7 +179,7 @@ func (o *Options) places(name string) (places, error) {
 // overlap は、a と b の片方がもう片方と同じか、その中か。書いたままのパスと、リンクを解いたパス（resolvedPath。それぞれ
 // 1 回だけ解く）の書き方と、ディレクトリの同一性（SameDirectory・within）で決める。書き方は、まだ無い場所も見つける
 // （リンクを通して <Work> の下を指す --plugins-dir も、解いた書き方で見つける）。同一性は、Windows で EvalSymlinks が
-// 解かないジャンクション・subst のドライブ・割り当てたドライブ・短い名前も見つける。親を順に調べる within は、ほかで
+// 解かないジャンクション・subst のドライブ・割り当てたドライブ・短い名前も見つける。親を順に調べる within は、他で
 // 決まらないときだけ走らせる。
 func overlap(a, b string) bool {
 	ra, rb := resolvedPath(a), resolvedPath(b)

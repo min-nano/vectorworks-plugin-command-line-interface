@@ -135,7 +135,7 @@ func within(path, dir string) (string, bool) {
 }
 
 // cleanOldCLIs は <Work>/old/ の直下のよけた CLI（ファイルだけ）を消してみて、消せなかったものを
-// 返す（Windows では動いている実行ファイルを消せない）。ほかのものは消さない。
+// 返す（Windows では動いている実行ファイルを消せない）。他のものは消さない。
 func cleanOldCLIs(old string) []string {
 	// 読めなければ（無ければ）消すものも無い。
 	entries, _ := os.ReadDir(old)
@@ -157,7 +157,7 @@ func hasOldCLIPrefix(name string) bool {
 	return slices.ContainsFunc(oldCLIPrefixes, func(prefix string) bool { return strings.HasPrefix(name, prefix) })
 }
 
-// ファイルの操作のうち、OS の失敗（権限・ディスクの誤り）でしか失敗しないものは、テストが差し替えて
+// ファイルの操作の内、OS の失敗（権限・ディスクの誤り）でしか失敗しないものは、テストが差し替えて
 // 失敗させる（失敗したときに <Plug-Ins> を元に戻すことを確かめるため）。
 var (
 	rename     = os.Rename

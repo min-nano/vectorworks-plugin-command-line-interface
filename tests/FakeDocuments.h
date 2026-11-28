@@ -29,7 +29,7 @@ public:
 	bool closeKeeps = false;
 	// 閉じると、この ref の図面も一覧から消える（前面へ戻せない場合を真似る）。
 	std::int32_t closeAlsoDrops = -1;
-	// 保存のあと、前面の図面の項目を一覧から消す（読み直せない場合を真似る）。
+	// 保存の後、前面の図面の項目を一覧から消す（読み直せない場合を真似る）。
 	bool saveLosesFront = false;
 	// 閉じた図面が中に残った枚数（一覧には出ず、GetActiveDocument だけが真を返す）。
 	int remnants = 0;
@@ -112,7 +112,7 @@ public:
 		std::erase_if(open, [this](const core::OpenDocument &document) {
 			return document.ref == closeAlsoDrops;
 		});
-		// 閉じたあとに前面になるのは最後に開いた図面（ここでは一覧の末尾）。
+		// 閉じた後に前面になるのは最後に開いた図面（ここでは一覧の末尾）。
 		if (!open.empty()) {
 			open.back().active = true;
 		}

@@ -156,7 +156,7 @@ if(VW_BUILD_PLUGIN)
 
 	# 刻印（docs/plugin/build-and-release.md「リリースの形」）。ping の結果にだけ載る。
 	# -DVW_BUILD_VERSION / -DVW_BUILD_BRANCH で渡したときだけその値を使い、渡さなければ local。
-	# キャッシュに残さない（残ると、あとで渡さずに構成し直しても古い sha のまま ping に載る）。
+	# キャッシュに残さない（残ると、後で渡さずに構成し直しても古い sha のまま ping に載る）。
 	# C の文字列に書くので \ と " を逃がす（git はブランチ名に " を許す）。生成したヘッダに書き、
 	# コンパイルの指定の引用符の扱いに頼らない。
 	foreach(stamp IN ITEMS VERSION BRANCH)
@@ -285,8 +285,8 @@ if(VW_ENABLE_COVERAGE AND VW_BUILD_TESTS AND NOT MSVC)
 	set(coverageDir ${CMAKE_BINARY_DIR}/coverage)
 	add_test(NAME CoverageClean COMMAND ${CMAKE_COMMAND} -E rm -rf ${coverageDir})
 	set_tests_properties(CoverageClean PROPERTIES FIXTURES_SETUP coverage)
-	# 計測付きのテストはすべて結果を同じ場所に書く（%p はプロセスごとに分ける）。ENVIRONMENT は
-	# 置き換えではなく足して、ほかの指定を消さない。
+	# 計測付きのテストは全て結果を同じ場所に書く（%p はプロセスごとに分ける）。ENVIRONMENT は
+	# 置き換えではなく足して、他の指定を消さない。
 	foreach(test IN ITEMS VwCliTests JsonFuzzerSeeds)
 		if(TEST ${test})
 			set_property(TEST ${test} APPEND

@@ -313,7 +313,7 @@ func (r *caseRunner) step(step fixtureStep) {
 		}
 	}
 
-	// この回より前に置いたファイルを除き、スプールにある応答はすべて期待に載っていなければならない。
+	// この回より前に置いたファイルを除き、スプールにある応答は全て期待に載っていなければならない。
 	for _, name := range r.listing() {
 		if _, put := step.Files[name]; put || !strings.HasSuffix(name, spool.ResponseSuffix) {
 			continue

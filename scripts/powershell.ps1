@@ -63,7 +63,7 @@ if ($Mode -eq 'Lint') {
 		for ($attempt = 1; ; $attempt++) {
 			& $pwsh -NoProfile -File $PSCommandPath -Mode LintFile $file
 			$code = $LASTEXITCODE
-			# 0 と 1 のほかは落ちたとみなす（Windows で .NET の例外のまま終わった pwsh は負の終了コードを返す）。
+			# 0 と 1 の他は落ちたとみなす（Windows で .NET の例外のまま終わった pwsh は負の終了コードを返す）。
 			if ($code -eq 0 -or $code -eq 1 -or $attempt -ge 3) {
 				break
 			}
@@ -81,7 +81,7 @@ $settings = Join-Path (Split-Path $PSScriptRoot) 'PSScriptAnalyzerSettings.psd1'
 # 書き戻すときは BOM を付ける（.editorconfig）。
 $utf8 = [System.Text.UTF8Encoding]::new($true)
 
-# 子のプロセス（LintFile）では、解析器の中の失敗（止まる誤り）を 3 で終わらせ、指摘（1）と分ける。ほかの
+# 子のプロセス（LintFile）では、解析器の中の失敗（止まる誤り）を 3 で終わらせ、指摘（1）と分ける。他の
 # モードでは、これまでどおり止まる（break は誤りをそのまま投げる）。exit ではなく [Environment]::Exit で
 # プロセスをすぐ終わらせる（exit は後片付けで、落ちた解析器のまだ動いているスレッドを待ち、15 分ほど
 # 戻らないことがあった）。

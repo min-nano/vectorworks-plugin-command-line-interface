@@ -42,7 +42,7 @@ func count(t *testing.T, dir, suffix string) int {
 	return len(matches)
 }
 
-// 回の始めに並べた要求はすべて処理し（件数の上限は無い）、その後に置かれた要求は次の回に回す。
+// 回の始めに並べた要求は全て処理し（件数の上限は無い）、その後に置かれた要求は次の回に回す。
 func TestServeTakesOnlyRequestsListedAtStart(t *testing.T) {
 	dir := NewDir(t)
 	const listed = 20

@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-// 読む道具のうち SDK に依らない部分（docs/plugin/tools.md「読む道具」）。
+// 読む道具の内 SDK に依らない部分（docs/plugin/tools.md「読む道具」）。
 
 using VwCli::core::Drawing;
 using VwCli::core::ErrorCode;
@@ -204,7 +204,7 @@ TEST(ClassesListsNamesInIdOrder) {
 	CHECK(refused.code == ErrorCode::InvalidArgs);
 }
 
-// 終端と置き石を除き、index は絞ったあとの並びの位置。PIO だけが pio_name を持つ。
+// 終端と置き石を除き、index は絞った後の並びの位置。PIO だけが pio_name を持つ。
 TEST(LayerObjectsListsTheObjectsUnderTheLayer) {
 	FakeDrawing drawing = sample();
 	ToolStatus status;
@@ -315,7 +315,7 @@ TEST(LayerObjectsRejectsBadArguments) {
 }
 
 // 名前は完全に一致するものだけ（参照で入ったレイヤは接頭辞ごと渡す）。
-// 範囲と型の誤りの文言（「以下」のあとに空白を入れない）。
+// 範囲と型の誤りの文言（「以下」の後に空白を入れない）。
 TEST(LayerObjectsDescribesTheRange) {
 	FakeDrawing drawing = sample();
 	ToolStatus range;
@@ -380,7 +380,7 @@ TEST(ObjectCountsCountsTheWholeDrawingByType) {
 	                        R"({"type":122,"type_name":"viewport","count":1}],"total":9})");
 }
 
-// 図面全体は layers のすべてのレイヤの objects の和。
+// 図面全体は layers の全てのレイヤの objects の和。
 TEST(ObjectCountsTotalIsTheSumOfLayerObjects) {
 	FakeDrawing drawing = sample();
 	ToolStatus status;

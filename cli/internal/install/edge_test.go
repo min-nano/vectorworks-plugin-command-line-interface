@@ -50,7 +50,7 @@ func TestInterpreterOfAnotherOS(t *testing.T) {
 	}
 }
 
-// 転送は追うが、行き先も https:// に限る。200 のほかは失敗。
+// 転送は追うが、行き先も https:// に限る。200 の他は失敗。
 func TestOpenRefusesRedirectsAndErrors(t *testing.T) {
 	h := newHarness(t)
 	h.serve("/ok.json", []byte("{}"))
@@ -95,7 +95,7 @@ func TestOpenRefusesRedirectsAndErrors(t *testing.T) {
 	}
 }
 
-// --registry は https:// か file:// の URL だけ。パス・ほかの scheme・空・正しくない file:// は使い方の誤り。
+// --registry は https:// か file:// の URL だけ。パス・他の scheme・空・正しくない file:// は使い方の誤り。
 func TestCheckRegistry(t *testing.T) {
 	for _, ref := range []string{"https://Example.com/R.json", fileURL(filepath.Join(t.TempDir(), "a b", "r.json"))} {
 		if err := checkRegistry(ref); err != nil {
@@ -257,7 +257,7 @@ func TestUninstallResumeNeedsAValidRecord(t *testing.T) {
 	}
 }
 
-// <Work> にほかのものがあれば、uninstall は <Work> を消さない。<Plug-Ins> の直下のファイルや、
+// <Work> に他のものがあれば、uninstall は <Work> を消さない。<Plug-Ins> の直下のファイルや、
 // 名前の違う記録のフォルダは remaining に載せない。
 func TestUninstallKeepsOtherThings(t *testing.T) {
 	h := newHarness(t)

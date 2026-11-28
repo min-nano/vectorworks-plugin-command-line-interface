@@ -23,8 +23,8 @@ import (
 var errInjected = errors.New("injected failure")
 
 // swap は、テストの間だけ差し替え口 *at（ファイルの操作・上限）を value に替える。返す関数で途中でも元に戻せる
-// （テストの終わりにも戻す）。戻すのは、この swap の前の値なので、途中で戻してよいのは、その差し替え口を最後に
-// 差し替えたものだけ（あとから同じ差し替え口を差し替えていると、それも外れる）。
+// （テストの終わりにも戻す）。戻すのは、この swap の前の値なので、途中で戻して良いのは、その差し替え口を最後に
+// 差し替えたものだけ（後から同じ差し替え口を差し替えていると、それも外れる）。
 func swap[T any](t *testing.T, at *T, value T) (restore func()) {
 	t.Helper()
 	original := *at
@@ -187,8 +187,8 @@ func TestTruncatedAndLoopingResponses(t *testing.T) {
 	}
 }
 
-// 走らせられないフック（ほかの OS のもの）は、付け替える前に断る。記録に写したフックが走らない
-// （ほかの OS から写したフォルダ）ときは、フックの失敗として戻す。
+// 走らせられないフック（他の OS のもの）は、付け替える前に断る。記録に写したフックが走らない
+// （他の OS から写したフォルダ）ときは、フックの失敗として戻す。
 func TestHookOfAnotherOS(t *testing.T) {
 	h := newHarness(t)
 	interpreter, script := "powershell", "hooks/install.ps1"
@@ -532,7 +532,7 @@ func TestUninstallCannotPutTheFolderBack(t *testing.T) {
 	}
 }
 
-// フックのあとで移したフォルダを組み立ての場所へ移せなければ（Windows で中のファイルが開かれている）、
+// フックの後で移したフォルダを組み立ての場所へ移せなければ（Windows で中のファイルが開かれている）、
 // 何も消さずに印を残して失敗にし、もう一度走らせると続きから消す。
 func TestUninstallCannotDeleteTheFolder(t *testing.T) {
 	h := newHarness(t)
@@ -553,13 +553,13 @@ func TestUninstallCannotDeleteTheFolder(t *testing.T) {
 	}
 }
 
-// 組み立ての場所へ移したあとで消すのが途中で止まっても、外したことは変わらず（old にも印にも残らない）、
+// 組み立ての場所へ移した後で消すのが途中で止まっても、外したことは変わらず（old にも印にも残らない）、
 // 残りは次の uninstall が消す。
 func TestUninstallLeavesWhatCannotBeDeletedInStaging(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
 	stage := filepath.Join(h.work, "staging", "cli")
-	// 移したあと（中身があるとき）だけ失敗させる（移す前の、前回の残りを消す呼び出しは通す）。
+	// 移した後（中身があるとき）だけ失敗させる（移す前の、前回の残りを消す呼び出しは通す）。
 	restore := pathOpWhen(t, &removeAll, func(path string) error {
 		if path == stage && exists(stage) {
 			return errInjected
@@ -644,7 +644,7 @@ func TestFirstInstallHookFailureWhileRunning(t *testing.T) {
 	}
 }
 
-// 新しい版を残した install のあと、同じタグの install は、フックが通ったら組み立ての場所の残りも消す。
+// 新しい版を残した install の後、同じタグの install は、フックが通ったら組み立ての場所の残りも消す。
 func TestInstallSameTagCleansTheStaging(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -663,7 +663,7 @@ func TestInstallSameTagCleansTheStaging(t *testing.T) {
 	}
 }
 
-// uninstall が空の <Work>/staging を消したあとも、old へ移したフォルダを組み立ての場所を通して消せる
+// uninstall が空の <Work>/staging を消した後も、old へ移したフォルダを組み立ての場所を通して消せる
 // （discard が <Work>/staging を作る）。uninstall cli と、同じタグの install の片付けの両方。
 func TestDiscardWithoutStaging(t *testing.T) {
 	h := newHarness(t)
@@ -897,7 +897,7 @@ func TestExtractTooManyEntries(t *testing.T) {
 	}
 }
 
-// フックのあとで組み立ての場所を空けられなければ（zip の場所が中身のあるフォルダ）、移したフォルダを
+// フックの後で組み立ての場所を空けられなければ（zip の場所が中身のあるフォルダ）、移したフォルダを
 // 消さずに印を残して失敗にする。
 func TestUninstallCannotEmptyTheStaging(t *testing.T) {
 	h := newHarness(t)
@@ -924,7 +924,7 @@ func TestInstallDoesNotMixTheLeftoverIntoTheNewVersion(t *testing.T) {
 	copyDir(t, dest, old)
 	os.WriteFile(filepath.Join(old, "stale.txt"), []byte("old"), 0o644)
 	stage := filepath.Join(h.work, "staging", "cli")
-	// stale.txt だけが消せない（ほかは消える）。
+	// stale.txt だけが消せない（他は消える）。
 	restore := pathOpWhen(t, &removeAll, func(path string) error {
 		if path == stage && exists(filepath.Join(stage, "stale.txt")) {
 			entries, _ := os.ReadDir(stage)
@@ -951,7 +951,7 @@ func TestInstallDoesNotMixTheLeftoverIntoTheNewVersion(t *testing.T) {
 }
 
 // <Plug-Ins>/<name>/ があるなら、中断した uninstall の印は前の回の残りなので、同じタグの道でも、付け替えの
-// 前に失敗した回でも消す（残すと、あとの install が付け替えの途中で止まったときに、次の uninstall が唯一
+// 前に失敗した回でも消す（残すと、後の install が付け替えの途中で止まったときに、次の uninstall が唯一
 // 残った版を消しうる）。
 func TestInstallRemovesAStaleMarkerOnEveryPath(t *testing.T) {
 	h := newHarness(t)
@@ -1091,7 +1091,7 @@ func TestDownloadMismatchCannotRemove(t *testing.T) {
 	h := newHarness(t)
 	h.publish(release{name: "cli", tag: "c1", sha: strings.Repeat("0", 64)})
 	zip := filepath.Join(h.work, "staging", "cli.zip")
-	// 組み立ての前の片付け（まだ無い zip を消す）は通し、取ったあとの zip だけを消せなくする。
+	// 組み立ての前の片付け（まだ無い zip を消す）は通し、取った後の zip だけを消せなくする。
 	restore := pathOpWhen(t, &removeFile, func(path string) error {
 		if path == zip && exists(path) {
 			return errInjected
@@ -1129,8 +1129,8 @@ func TestInstallCLIHookFailureWhileLockedInOld(t *testing.T) {
 	}
 }
 
-// フックが通っても、old/cli/spool/ のロックが掴まれていれば、退避した版を消さずに知らせる。そのあとは、同じタグの
-// install も、ほかのプラグインの install・uninstall も、Vectorworks が動いているとみなして何もしない（終了してから
+// フックが通っても、old/cli/spool/ のロックが掴まれていれば、退避した版を消さずに知らせる。その後は、同じタグの
+// install も、他のプラグインの install・uninstall も、Vectorworks が動いているとみなして何もしない（終了してから
 // 走らせ直すと片付ける）。
 func TestInstallCLIKeepsOldWhileLockedInOld(t *testing.T) {
 	h := newHarness(t)
@@ -1295,7 +1295,7 @@ func TestOverlappingPlaces(t *testing.T) {
 	}
 }
 
-// 同じタグでも、マニフェストを取る間に起動した Vectorworks の下ではフックを走らせない（始めの確かめのあとで、
+// 同じタグでも、マニフェストを取る間に起動した Vectorworks の下ではフックを走らせない（始めの確かめの後で、
 // もう一度見る）。
 func TestInstallSameTagLockTakenWhileFetching(t *testing.T) {
 	h := newHarness(t)

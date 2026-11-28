@@ -18,7 +18,7 @@
 #include <utility>
 #include <vector>
 
-// 図面を扱う道具（documents・save・close）のうち SDK に依らない部分（docs/plugin/tools.md「図面を
+// 図面を扱う道具（documents・save・close）の内 SDK に依らない部分（docs/plugin/tools.md「図面を
 // 扱う道具」）。SDK の代わりに偽の Documents を渡し、呼んだ順を確かめる。
 
 namespace save_target = VwCli::core::save_target;
@@ -592,7 +592,7 @@ Json serveOnce(Server &server, Caller &caller, std::span<const Tool> tools, cons
 
 }
 
-// 道具の表と同じ種類で載せた save・close は、印なしなら no_session、ほかの印なら occupied で、
+// 道具の表と同じ種類で載せた save・close は、印なしなら no_session、他の印なら occupied で、
 // 実行されずに断られる。
 TEST(ServeRefusesSaveAndCloseOutsideTheSession) {
 	const Tool tools[] = {VwCli::core::toolOf(VwCli::core::kSaveSpec, &counts),

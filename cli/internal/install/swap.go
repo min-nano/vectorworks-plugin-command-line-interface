@@ -74,7 +74,7 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 	return hook, nil
 }
 
-// finishInstall は install のフックが通ったあとの後始末（付け替えのあとも、同じタグでフックだけを走らせたあとも
+// finishInstall は install のフックが通った後の後始末（付け替えの後も、同じタグでフックだけを走らせた後も
 // これだけを使う）。退避した版を settleOld の規則で片付け（守ること 9 の歯止め。片付けられなくても入れたことは
 // 変わらないので、知らせるだけにする。次の install が片付ける）、組み立ての場所の残りと中断した uninstall の印を
 // 消し（印を残すと、次の install が付け替えの途中で止まったときに、次の uninstall が唯一残った old/<name>/ を
@@ -154,7 +154,7 @@ func undoHook(p places, hadOld bool, moved *movedCLI, again string, cause error)
 	if running(p) {
 		return keep(startedMeanwhile)
 	}
-	// 新しい版は名前の変更でよける（消すのはあと。削除が途中で止まると、半分消えたプラグインが
+	// 新しい版は名前の変更でよける（消すのは後。削除が途中で止まると、半分消えたプラグインが
 	// Plug-Ins に残るため）。
 	if err := rename(p.dest, p.stageDir); err != nil {
 		return keep(fmt.Sprintf("it cannot be moved away (%v; Vectorworks may have loaded it)", err))
@@ -184,8 +184,8 @@ func removeStaging(p places) error {
 	return nil
 }
 
-// settleOld は <Work>/old/<name>/ を片付ける。install のどの道（付け替えの前・付け替えのあと・同じタグで
-// フックだけを走らせたあと）もこれだけを使う（docs/plugin/install-and-update.md「<Work>/old/<name>/ の
+// settleOld は <Work>/old/<name>/ を片付ける。install のどの道（付け替えの前・付け替えの後・同じタグで
+// フックだけを走らせた後）もこれだけを使う（docs/plugin/install-and-update.md「<Work>/old/<name>/ の
 // 片付け」）。
 //
 //   - <Plug-Ins>/<name>/ が無ければ、old が唯一の版かもしれないので、何も変えずに失敗にする（印があれば、
@@ -199,7 +199,7 @@ func removeStaging(p places) error {
 //
 // again は、走らせ直すコマンド（install <name>@<tag>。片付けられないときの案内に使う）。advice は、Vectorworks が
 // 使っているかもしれないので残すときに添える、次にすること（呼ぶ側が決める。付け替えの前は何も変えていない、
-// 付け替えのあとは新しい版が入っている）。
+// 付け替えの後は新しい版が入っている）。
 func (o *Options) settleOld(p places, name, again, advice string) (string, error) {
 	switch {
 	case !exists(p.oldDir):

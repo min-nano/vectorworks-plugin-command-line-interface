@@ -288,7 +288,7 @@ func ParseManifest(data []byte, remote bool) (*Manifest, error) {
 }
 
 // Check はフックの書き方を確かめる（docs/registry.md「書き方」）。zip の中に実在するかは、
-// 展開したあとで install が確かめる。
+// 展開した後で install が確かめる。
 func (h Hooks) Check() error {
 	for _, hook := range []struct {
 		name string
@@ -315,7 +315,7 @@ func ViaInterpreter(argv []string) bool {
 
 // Script はフックの argv から、zip の中のファイルの相対パス（/ 区切り）を返す。1 つ目が sh・powershell
 // なら 2 つ目、それ以外なら 1 つ目。絶対パス・..・- で始まるもの（sh -c のような指定）・\ は断る。powershell の
-// スクリプトは .ps1 に限る（Windows PowerShell 5.1 の -File はほかの拡張子を断るので、付け替えの前に断る）。
+// スクリプトは .ps1 に限る（Windows PowerShell 5.1 の -File は他の拡張子を断るので、付け替えの前に断る）。
 func Script(argv []string) (string, error) {
 	if len(argv) == 0 {
 		return "", errors.New("empty")

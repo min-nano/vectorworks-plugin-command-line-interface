@@ -46,7 +46,7 @@ std::optional<std::string> spoolDirOf(const std::string &modulePath) {
 }
 
 std::optional<std::string> defaultSpoolDir() {
-	// モジュールの中の番地なら何でもよいので、関数ではなく静的なデータの番地を渡す（関数の
+	// モジュールの中の番地なら何でも良いので、関数ではなく静的なデータの番地を渡す（関数の
 	// ポインタを void * にするのは処理系に依る）。
 	// 求められなければ空のパスを渡し、spoolDirOf が空を返す（区切りが無い）。
 	static const char anchor = 0;

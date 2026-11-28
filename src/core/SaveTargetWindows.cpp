@@ -44,7 +44,7 @@ Probe probeTo(const std::string &path) {
 
 Probe probeParent(const std::string &path) {
 	// リパースポイントをたどって開く（先の無いリンク・ジャンクションの親は「無い」）。望むアクセスを
-	// 0 にし、共有をすべて許すので、ほかのプロセスが共有を絞って開いているフォルダでも 32・5 に
+	// 0 にし、共有を全て許すので、他のプロセスが共有を絞って開いているフォルダでも 32・5 に
 	// ならない。
 	HANDLE handle = ::CreateFileW(windows_path::extended(path).c_str(), 0,
 	                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,

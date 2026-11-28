@@ -47,7 +47,7 @@ std::string join(const std::string &dir, std::string_view name);
 std::optional<std::string> modulePathOf(const void *address);
 
 #ifndef _WIN32
-// absolute は path を絶対パスにする。/ で始まればそのまま、そうでなければいまの作業ディレクトリの
+// absolute は path を絶対パスにする。/ で始まればそのまま、そうでなければ今の作業ディレクトリの
 // 下（Linux の実行ファイルでは dladdr が argv[0] を返し、相対パスのことがある。呼ぶ前に作業
 // ディレクトリを変えると誤る）。path が空なら空。作業ディレクトリを求められなければ
 // std::filesystem::filesystem_error を投げる（std::filesystem::absolute）。
@@ -94,7 +94,7 @@ public:
 	enum class Result {
 		// 掴んだ
 		Taken,
-		// ほかが掴んでいる
+		// 他が掴んでいる
 		Busy,
 		// 開けない
 		Failed,
@@ -108,8 +108,8 @@ public:
 	// take は path を作って（あれば開いて）排他で掴む。Failed なら error に理由を書く。
 	//
 	// path が通常のファイルでない・中身がローカルにない（Windows）として断ったら、名前を消して
-	// 作り直す。ただし 1 つの Lock につき 1 度だけ（受け付けのたびに消して作るのを繰り返さない。
-	// 同期のサービスなどが、そのたびに動かないように）。
+	// 作り直す。但し 1 つの Lock につき 1 度だけ（受け付けの度に消して作るのを繰り返さない。
+	// 同期のサービスなどが、その度に動かないように）。
 	Result take(const std::string &path, std::string &error);
 	bool held() const { return handle_ != kNone; }
 	void release();

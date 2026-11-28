@@ -162,7 +162,7 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 		return nil, fmt.Errorf("%s: %w", asset.URL, err)
 	}
 	// フックのスクリプトがあることと、インタプリタがこの OS で走ることを、付け替えの前に確かめる（走らない
-	// フックに付け替えたあとで気付くと、その間に起動した Vectorworks の下に入れ終えられない版が残る）。
+	// フックに付け替えた後で気付くと、その間に起動した Vectorworks の下に入れ終えられない版が残る）。
 	for _, hook := range [][]string{asset.Hooks.Install, asset.Hooks.Uninstall} {
 		if hook == nil {
 			continue
@@ -176,7 +176,7 @@ func (o *Options) assemble(p places, name, source, tag string, asset registry.As
 			}
 		}
 	}
-	// フックが通るまでは hook_pending（付け替えのあとフックが失敗して残した・フックの途中で止まった版を見分ける）。
+	// フックが通るまでは hook_pending（付け替えの後フックが失敗して残した・フックの途中で止まった版を見分ける）。
 	record := &Record{
 		RecordVersion: recordVersion,
 		Name:          name,
@@ -238,7 +238,7 @@ func extract(zipPath, dir string) ([]string, error) {
 }
 
 // extractFile は項目を 1 つ dir へ展開し、その一番上の名前を返す（findModule が dir の中で使うので、
-// 名前を確かめたあとの値から作る）。
+// 名前を確かめた後の値から作る）。
 func extractFile(file *zip.File, dir string) (string, error) {
 	name := strings.TrimSuffix(file.Name, "/")
 	if err := registry.CheckInside(name); err != nil {
@@ -266,7 +266,7 @@ func writeEntry(file *zip.File, path string) error {
 	if err := mkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	// 持ち主が読み書きできるようにして、ほかの権限（実行ビット）は zip のまま保つ。
+	// 持ち主が読み書きできるようにして、他の権限（実行ビット）は zip のまま保つ。
 	perm := mode.Perm() | 0o600
 	in, err := file.Open()
 	if err != nil {
@@ -285,8 +285,8 @@ func writeEntry(file *zip.File, path string) error {
 	return err
 }
 
-// findModule は、dir に展開した直下の項目の名前 top のうちモジュール（mac は *.vwlibrary のフォルダ、
-// Windows は *.vlb のファイル）がちょうど 1 つあることを確かめ、その名前を返す。拡張子だけでなく、
+// findModule は、dir に展開した直下の項目の名前 top の内モジュール（mac は *.vwlibrary のフォルダ、
+// Windows は *.vlb のファイル）が丁度 1 つあることを確かめ、その名前を返す。拡張子だけでなく、
 // フォルダかファイルかも見る（Vectorworks が読み込めない形の zip を入れない）。
 func findModule(dir string, top []string, target string) (string, error) {
 	ext, folder, kind := ".vlb", false, "file"
