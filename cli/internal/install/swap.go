@@ -206,22 +206,28 @@ func removeStaging(p places) error {
 // 使っているかもしれないので残すときに添える、次にすること（呼ぶ側が決める。付け替えの前は何も変えていない、
 // 付け替えの後は新しい版が入っている）。
 func (o *Options) settleOld(p places, name, again, advice string) (string, error) {
-	// 調べられないものがあれば、何も変えずに失敗にする（無いとみなすと、唯一の版かもしれない old を消しうる）。
-	there := map[string]bool{}
-	for _, path := range []string{p.oldDir, p.dest, p.marker} {
-		found, err := present(path)
-		if err != nil {
-			return "", checkError(path, err, again)
-		}
-		there[path] = found
+	// 判定に使うものを調べられなければ、何も変えずに失敗にする（無いとみなすと、唯一の版かもしれない old を
+	// 消しうる）。調べるのは、その判定に要るものだけ（old が無ければ、何も片付けないので他は見ない）。
+	oldThere, err := present(p.oldDir)
+	if err != nil {
+		return "", checkError(p.oldDir, err, again)
 	}
-	switch {
-	case !there[p.oldDir]:
+	if !oldThere {
 		return "", nil
-	case !there[p.dest] && there[p.marker]:
-		return "", fmt.Errorf("%s was left by an uninstall that stopped halfway; run uninstall %s again to finish it",
-			p.oldDir, name)
-	case !there[p.dest]:
+	}
+	destThere, err := present(p.dest)
+	if err != nil {
+		return "", checkError(p.dest, err, again)
+	}
+	if !destThere {
+		markerThere, err := present(p.marker)
+		if err != nil {
+			return "", checkError(p.marker, err, again)
+		}
+		if markerThere {
+			return "", fmt.Errorf("%s was left by an uninstall that stopped halfway; run uninstall %s again to finish it",
+				p.oldDir, name)
+		}
 		return "", fmt.Errorf("%s was left by an install or uninstall that stopped halfway; "+
 			"it may be the only copy of %s. Move it back to %s or delete it, then run %s again",
 			p.oldDir, name, p.dest, again)

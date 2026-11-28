@@ -98,15 +98,10 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("%w; nothing is removed", err)
 	}
-	// old と印も、調べられなければ何も変えずに失敗にする（無いとみなすと、old に残った唯一の版を見落とすか、
-	// 中断した uninstall の続きを取り違える）。
+	// old も、調べられなければ何も変えずに失敗にする（無いとみなすと、old に残った唯一の版を見落とす）。
 	oldThere, err := present(p.oldDir)
 	if err != nil {
 		return nil, false, fmt.Errorf("%w; nothing is removed", checkError(p.oldDir, err, uninstallCommand(name)))
-	}
-	markerThere, err := present(p.marker)
-	if err != nil {
-		return nil, false, fmt.Errorf("%w; nothing is removed", checkError(p.marker, err, uninstallCommand(name)))
 	}
 	switch {
 	case found:
@@ -148,6 +143,11 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 	case oldThere:
 		// 前の uninstall が、フォルダを移した後で止まった。印が無ければ、install が付け替えの
 		// 途中で止まったのと見分けられない（old が唯一の版かもしれない）。
+		// 印も、調べられなければ何も変えずに失敗にする（無いとみなしても進まないが、理由を取り違えない）。
+		markerThere, err := present(p.marker)
+		if err != nil {
+			return nil, false, fmt.Errorf("%w; nothing is removed", checkError(p.marker, err, uninstallCommand(name)))
+		}
 		record, ok := checkedRecord(p.oldDir, name)
 		if !markerThere || !ok {
 			return nil, false, fmt.Errorf("%s was left by an install or uninstall that stopped halfway, and %s is not there; "+

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -48,30 +49,119 @@ func TestInstallCannotDeleteAStaleMarker(t *testing.T) {
 	sameSnapshot(t, beforeWork, snapshot(t, h.work))
 }
 
-// 消す・移すかを決めるもの（old/<name>/・印）を調べられなければ、無いとみなさずに、install も uninstall も何も
-// 変えずに失敗にする（唯一の版かもしれない old/<name>/ を見落とさない）。
-func TestUncheckablePlacesChangeNothing(t *testing.T) {
-	for _, at := range []string{"old/cli", "old/cli.uninstalling"} {
-		t.Run(at, func(t *testing.T) {
-			h := newHarness(t)
-			h.mustInstall(release{name: "cli", tag: "c1"})
-			h.publish(release{name: "cli", tag: "c2"})
-			failLstat(t, filepath.Join(h.work, filepath.FromSlash(at)))
-			before := snapshot(t, h.plugins)
-			if _, err := h.install("cli", "c2"); !errors.Is(err, errInjected) ||
-				!strings.Contains(err.Error(), "cannot check") {
-				t.Errorf("install: %v", err)
-			}
-			if _, err := Uninstall(h.options(), "cli"); !errors.Is(err, errInjected) ||
-				!strings.Contains(err.Error(), "nothing is removed") {
-				t.Errorf("uninstall: %v", err)
-			}
-			sameSnapshot(t, before, snapshot(t, h.plugins))
-			if h.installedVersion("cli") != "c1" {
-				t.Error("the installed version changed")
-			}
-		})
+// failLstatWhen は、テストの間だけ、when が真のときの at の lstat を失敗させる。
+func failLstatWhen(t *testing.T, at string, when func() bool) {
+	t.Helper()
+	original := lstat
+	swap(t, &lstat, func(path string) (fs.FileInfo, error) {
+		if path == at && when() {
+			return nil, &fs.PathError{Op: "lstat", Path: path, Err: errInjected}
+		}
+		return original(path)
+	})
+}
+
+// old/<name>/ を調べられなければ、無いとみなさずに、install も uninstall も何も変えずに失敗にする（唯一の版かも
+// しれない old/<name>/ を見落とさない）。
+func TestUncheckableOldChangesNothing(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.publish(release{name: "cli", tag: "c2"})
+	failLstat(t, filepath.Join(h.work, "old", "cli"))
+	before := snapshot(t, h.plugins)
+	if _, err := h.install("cli", "c2"); !errors.Is(err, errInjected) || !strings.Contains(err.Error(), "cannot check") {
+		t.Errorf("install: %v", err)
 	}
+	if _, err := Uninstall(h.options(), "cli"); !errors.Is(err, errInjected) ||
+		!strings.Contains(err.Error(), "nothing is removed") {
+		t.Errorf("uninstall: %v", err)
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
+	if h.installedVersion("cli") != "c1" {
+		t.Error("the installed version changed")
+	}
+}
+
+// old/<name>/ だけが残り（<Plug-Ins>/<name>/ が無い）、印を調べられなければ、中断した uninstall の続きかを決めずに、
+// install も uninstall も何も変えずに失敗にする。
+func TestUncheckableMarkerChangesNothing(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.publish(release{name: "cli", tag: "c2"})
+	old := filepath.Join(h.work, "old", "cli")
+	os.MkdirAll(filepath.Dir(old), 0o700)
+	if err := os.Rename(filepath.Join(h.plugins, "cli"), old); err != nil {
+		t.Fatal(err)
+	}
+	failLstat(t, filepath.Join(h.work, "old", "cli.uninstalling"))
+	before, beforeWork := snapshot(t, h.plugins), snapshot(t, h.work)
+	if _, err := h.install("cli", "c2"); !errors.Is(err, errInjected) || !strings.Contains(err.Error(), "cannot check") {
+		t.Errorf("install: %v", err)
+	}
+	if _, err := Uninstall(h.options(), "cli"); !errors.Is(err, errInjected) ||
+		!strings.Contains(err.Error(), "nothing is removed") {
+		t.Errorf("uninstall: %v", err)
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
+	sameSnapshot(t, beforeWork, snapshot(t, h.work))
+}
+
+// old/<name>/ が無ければ、印を調べられなくても判定に要らないので、install も uninstall も進む。
+func TestUncheckableMarkerWithoutOld(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.publish(release{name: "cli", tag: "c2"})
+	o, stderr := h.capturing()
+	failLstat(t, filepath.Join(h.work, "old", "cli.uninstalling"))
+	if result, err := Install(o, "cli", "c2", false); err != nil || result.Outcome != outcomeInstalled {
+		t.Fatalf("install: %+v %v", result, err)
+	}
+	if strings.Contains(stderr.String(), "cannot check") {
+		t.Errorf("install warned: %q", stderr.String())
+	}
+	if result, err := Uninstall(h.options(), "cli"); err != nil || result.Outcome != outcomeUninstalled {
+		t.Fatalf("uninstall: %+v %v", result, err)
+	}
+}
+
+// 付け替えの直前に <Plug-Ins>/<name>/ を調べられなければ、よけた CLI と組み立てたものを戻して、何も変えずに失敗にする。
+func TestUncheckableDestBeforeTheSwap(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	zip := h.publish(release{name: "cli", tag: "c2"})
+	// 偽のサーバーが zip を配るゴルーチンで書くので、atomic にする。
+	var fetched atomic.Bool
+	h.onGet(zip, func() { fetched.Store(true) })
+	failLstatWhen(t, filepath.Join(h.plugins, "cli"), fetched.Load)
+	before := snapshot(t, h.plugins)
+	if _, err := h.install("cli", "c2"); !errors.Is(err, errInjected) || !strings.Contains(err.Error(), "cannot check") {
+		t.Fatal(err)
+	}
+	if !fetched.Load() {
+		t.Fatal("failed before the swap was reached")
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
+	if exists(filepath.Join(h.work, "staging", "cli")) || exists(filepath.Join(h.work, "staging", "cli.zip")) {
+		t.Error("left the staging")
+	}
+}
+
+// <Work> の下を調べられなければ（権限・届かない共有）、install も uninstall も何も変えずに失敗にする。
+func TestUncheckableWorkFolder(t *testing.T) {
+	h := newHarness(t)
+	h.mustInstall(release{name: "cli", tag: "c1"})
+	h.publish(release{name: "cli", tag: "c2"})
+	failLstat(t, filepath.Join(h.work, "staging"))
+	before := snapshot(t, h.plugins)
+	if _, err := h.install("cli", "c2"); !errors.Is(err, errInjected) ||
+		!strings.Contains(err.Error(), "cannot check the work folder") {
+		t.Errorf("install: %v", err)
+	}
+	if _, err := Uninstall(h.options(), "cli"); !errors.Is(err, errInjected) ||
+		!strings.Contains(err.Error(), "cannot check the work folder") {
+		t.Errorf("uninstall: %v", err)
+	}
+	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
 // <Work>・<Work>/staging・<Work>/old がリンク（Windows ではジャンクションも）なら、install も uninstall も、リンクの
