@@ -107,6 +107,11 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("%w; nothing is removed", err)
 	}
+	// old も、調べられなければ何も変えずに失敗にする（無いとみなすと、old に残った唯一の版を見落とす）。
+	oldThere, err := present(p.oldDir)
+	if err != nil {
+		return nil, false, fmt.Errorf("%w; nothing is removed", checkError(p.oldDir, err, uninstallCommand(name)))
+	}
 	switch {
 	case found:
 		// 安全弁: 記録の名前がフォルダ名と一致し、記録の module が実在する場合のみ進行する。
@@ -132,7 +137,7 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 		// Vectorworks が起動した場合の前の版などで、通知せずに削除すると戻せなくなるため。
 		// 同じタグ・同じレジストリ・同じ <Plug-Ins> の install が、その install を完了して
 		// 整理する。
-		if exists(p.oldDir) {
+		if oldThere {
 			return nil, false, fmt.Errorf("%s is left by an install that stopped or kept the new version; nothing is removed. "+
 				"Run install %s@%s again (from the registry %s, into %s) to finish that install (it cleans this up), "+
 				"or delete it, then run uninstall again", p.oldDir, name, record.Tag, record.Registry, p.plugins)
@@ -147,11 +152,16 @@ func (o *Options) takeOut(p places, name string) (*Record, bool, error) {
 			return nil, false, renameError(p.dest, err, uninstallCommand(name))
 		}
 		return record, false, nil
-	case exists(p.oldDir):
+	case oldThere:
 		// 前の uninstall が、フォルダを移動した後で停止した。標識が無ければ、install が差し替えの
 		// 途中で停止したのと区別できない（old が唯一の版かもしれない）。
+		// 標識も、確認できなければ何も変更せずに失敗とする（存在しないとみなしても進まないが、理由を取り違えない）。
+		markerThere, err := present(p.marker)
+		if err != nil {
+			return nil, false, fmt.Errorf("%w; nothing is removed", checkError(p.marker, err, uninstallCommand(name)))
+		}
 		record, ok := checkedRecord(p.oldDir, name)
-		if !exists(p.marker) || !ok {
+		if !markerThere || !ok {
 			return nil, false, fmt.Errorf("%s was left by an install or uninstall that stopped halfway, and %s is not there; "+
 				"it may be the only copy of %s. Move it back to %s or delete it", p.oldDir, p.dest, name, p.dest)
 		}

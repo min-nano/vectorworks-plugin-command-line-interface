@@ -50,7 +50,12 @@ func (o *Options) replace(p places, name, source, tag, previous string, asset re
 		_ = removeStaging(p)
 		return nil, err
 	}
-	hadOld := exists(p.dest)
+	hadOld, err := present(p.dest)
+	if err != nil {
+		note := moved.restore()
+		_ = removeStaging(p)
+		return nil, fmt.Errorf("%w%s", checkError(p.dest, err, again), note)
+	}
 	if hadOld {
 		if err := rename(p.dest, p.oldDir); err != nil {
 			note := moved.restore()
@@ -209,13 +214,28 @@ func removeStaging(p places) error {
 // 次に行うこと（呼び出し元が決定する。差し替えの前は何も変更していない、差し替えの後は新しい版が
 // インストールされている）。
 func (o *Options) settleOld(p places, name, again, advice string) (string, error) {
-	switch {
-	case !exists(p.oldDir):
+	// 判定に使うものを調べられなければ、何も変えずに失敗にする（無いとみなすと、唯一の版かもしれない old を
+	// 消しうる）。調べるのは、その判定に要るものだけ（old が無ければ、何も片付けないので他は見ない）。
+	oldThere, err := present(p.oldDir)
+	if err != nil {
+		return "", checkError(p.oldDir, err, again)
+	}
+	if !oldThere {
 		return "", nil
-	case !exists(p.dest) && exists(p.marker):
-		return "", fmt.Errorf("%s was left by an uninstall that stopped halfway; run uninstall %s again to finish it",
-			p.oldDir, name)
-	case !exists(p.dest):
+	}
+	destThere, err := present(p.dest)
+	if err != nil {
+		return "", checkError(p.dest, err, again)
+	}
+	if !destThere {
+		markerThere, err := present(p.marker)
+		if err != nil {
+			return "", checkError(p.marker, err, again)
+		}
+		if markerThere {
+			return "", fmt.Errorf("%s was left by an uninstall that stopped halfway; run uninstall %s again to finish it",
+				p.oldDir, name)
+		}
 		return "", fmt.Errorf("%s was left by an install or uninstall that stopped halfway; "+
 			"it may be the only copy of %s. Move it back to %s or delete it, then run %s again",
 			p.oldDir, name, p.dest, again)
@@ -273,7 +293,26 @@ func renameError(dir string, err error, command string) error {
 		dir, err, command)
 }
 
+// exists は path が在るか（調べられなければ偽）。知らせるだけの判定に使う。消す・移すかを決める判定は present を使う。
 func exists(path string) bool {
-	_, err := os.Lstat(path)
+	_, err := lstat(path)
 	return err == nil
+}
+
+// present は path が在るか。無い以外の理由で調べられなければ（権限・届かない共有）、その誤りを返す（無いとみなして
+// 進むと、唯一の版かもしれない <Work>/old/<name>/ を見落として、消す・移す判定を誤るため。遵守事項 9 の制約）。
+func present(path string) (bool, error) {
+	_, err := lstat(path)
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, os.ErrNotExist):
+		return false, nil
+	}
+	return false, err
+}
+
+// checkError は、present が調べられなかったときの文言。command（走らせ直すコマンド）を案内する。
+func checkError(path string, err error, command string) error {
+	return fmt.Errorf("cannot check whether %s is there (%w); run %s again once it can be checked", path, err, command)
 }

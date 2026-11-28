@@ -219,8 +219,13 @@ func install(o Options, name, requested string, check bool) (*InstallResult, err
 	// （uninstall は移動してから停止するため、その場合は <Plug-Ins>/<name>/ が存在しない）。
 	// いずれの経路でも先に削除する（残置すると、この後の install が差し替えの途中で停止した場合に、
 	// 次の uninstall がそれを中断した uninstall とみなし、唯一残存した old/<name>/ を削除する）。
+	// 削除できなければ（ウイルス対策ソフトが開いている場合など）、何も変更せずに失敗とする
+	// （標識を残置したまま差し替えへ進まない）。
 	if installed != nil {
-		_ = removeFile(p.marker)
+		if err := removeFile(p.marker); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("cannot delete %s, left by an earlier uninstall (%v); nothing is changed. Close what has "+
+				"it open (antivirus software), then run %s again", p.marker, err, installCommand(name, result.Tag))
+		}
 	}
 	if upToDate {
 		// 同じタグならば、zip を取得せず差し替えもせずに、記録に複製したフックのみを実行する。
@@ -325,7 +330,7 @@ func previousTag(p places, name string, installed *Record) string {
 // その誤りを返す（存在しないとみなして進行しない）。install と uninstall はいずれもこれのみで
 // 決定する（遵守事項 9 の制約）。
 func pluginFolder(dest string) (bool, error) {
-	info, err := os.Lstat(dest)
+	info, err := lstat(dest)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		return false, nil
