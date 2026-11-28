@@ -2,9 +2,9 @@
 # scripts/format.sh と scripts/lint.sh が共に読み込む（. で読み込む）。対象と版の確認を 1 か所に
 # 配置し、整形と検査で食い違わないようにする。読み込む前にリポジトリのルートへ cd しておく。
 
-# shfmt_scripts は、引数に scripts/ と tests/hooks/ を追加して shfmt を実行する（shfmt が整形し、
-# shellcheck が検査するシェルスクリプトの配置場所）。shfmt は go.mod の無いリポジトリのルートでは
-# 動作しないため、tools/ で実行し、絶対パスを渡す。
+# shfmt_scripts は、引数に scripts/ と tests/hooks/ を追加して shfmt を実行する
+# （shfmt が整形し、shellcheck が検査するシェルスクリプトの配置場所）。shfmt は go.mod の無い
+# リポジトリのルートでは動作しないため、tools/ で実行し、絶対パスを渡す。
 shfmt_scripts() {
 	go -C tools tool shfmt "$@" "$PWD/scripts" "$PWD/tests/hooks"
 }
