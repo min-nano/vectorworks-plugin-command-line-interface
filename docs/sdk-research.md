@@ -6,7 +6,7 @@ issue を立てて `Findings/` に反映されてから、それを根拠に実�
 作業（通信規則・CLI・SDK に依らない共通部）を進めます。
 
 このページに置くのは、調べ終えたものの索引（結果が SDK リファレンスのどこにあり、このリポジトリのどこで使って
-いるか）と、**調べないと決めたもの**です。調べた結果そのもの（挙動・実測）は `Findings/` が真実で、ここへは
+いるか）と、**調べないと決めたもの**（[5](#5-同じプラグインが-2-つあるときの挙動調べない実装を待たせない)と[末尾](#調べないと決めたもの)）です。調べた結果そのもの（挙動・実測）は `Findings/` が真実で、ここへは
 写しません。待っているもの・調べ残し（測れていない・確かめていない挙動）は、このリポジトリの issue で扱います。
 節の番号は他のページから参照しています（欠けた番号は issue へ移した節）。
 
@@ -68,7 +68,7 @@ issue を立てて `Findings/` に反映されてから、それを根拠に実�
 | `quit` | OS タイマーの刻みから `CloseAllFilesAndQuitVectorworks(true, false)` を呼ぶこと・保存の確認の最中の刻み・戻った後の 2 度目 | [#230](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/230)・[#235](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/235)・[#313](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/313)。[Timers and Notifications](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md) の 4 の 9 | [構成「Vectorworks が処理中」](plugin/architecture.md#vectorworks-が処理中) |
 | `quit` | 起動の途中に終了を頼むとどうなるか・起動を終えた目印 | [#312](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/312)・[#317](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/317)。同 4 の 9「起動の途中の刻みから」「起動を終えた目印」 | [道具「quit」](plugin/tools.md#quit)・[構成「入口」](plugin/architecture.md#入口) |
 
-## 5. 同じプラグインが 2 つあるときの挙動（調べていない。実装を待たせない）
+## 5. 同じプラグインが 2 つあるときの挙動（調べない。実装を待たせない）
 
 同じプラグイン（同じユニバーサル名・拡張機能の UUID・リソースの識別子を登録するモジュール）が
 `Plug-Ins` の 2 か所にあるとき、Vectorworks が何をもって衝突とみなし、どう振る舞うかは
@@ -105,5 +105,5 @@ SDK リファレンスの `Findings/` に記載がありません。`vw2026 inst
 - **ネットワークの場所（他の計算機の共有・ネットワークのドライブ）でサーバーが届かないときに `save` が止まること。**
   OS の呼び出しがネットワークを待つことは SDK の挙動ではなく、OS が失敗を返すまで止まるものとして扱います
   （[保存先の確かめ「ネットワークの場所」](plugin/save-target.md#ネットワークの場所)）。
-- **保存の途中でつながりが切れたときに、Vectorworks がダイアログを出すか。** 出ればダイアログを読む・押すコマンドで
+- **保存の途中でつながりが切れたときに、Vectorworks がダイアログを出すか。** 出ればダイアログを読む・押すコマンド（[#133](https://github.com/min-nano/vectorworks-plugin-command-line-interface/issues/133)）で
   扱うので、出るかどうかで実装は変わりません。

@@ -1,5 +1,5 @@
 {
-	"description": "終了の依頼の最中は、表の道具をすべて busy で断る（種類 read と ping も）。tools・session_start・session_end は応え、表に無い道具は unknown_tool。種類 write と app は占有に照らすのが先",
+	"description": "終了の依頼の最中は、表の道具を全て busy で断る（種類 read と ping も）。tools・session_start・session_end は応え、表に無い道具は unknown_tool。種類 write と app は占有に照らすのが先",
 	"steps": [
 		{
 			"description": "ロックを取る（空のスプールなので何も消さない）",
@@ -73,7 +73,7 @@
 			}
 		},
 		{
-			"description": "終了の依頼の最中でなくなれば（保存の確認を取り消したあと）実行する",
+			"description": "終了の依頼の最中でなくなれば（保存の確認を取り消した後）実行する",
 			"requests": {"a-edit": "edit-in-session.json", "b-ping": "ping.json"},
 			"expect": {
 				"calls": [{"tool": "edit", "args": {}}, {"tool": "ping"}],

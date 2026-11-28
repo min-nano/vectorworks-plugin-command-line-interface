@@ -99,7 +99,7 @@ Vectorworks 2026 を外部から操作するための**プラグイン（C++・V
   落ちた入力は `internal/spool/testdata/fuzz/` に書かれ、`go test -run` で再現できる。JSON の解析
   そのものは `encoding/json` に任せていて、ファジングしない。
 - **CLI の使い方（コマンド・指定・出力・終了コード）は、コマンドの定義に英語で書く。**
-  1 コマンド 1 ファイル（`cli/cmd/vw2026/call.go` 等）の構造体で、kong のタグ（`help`）と
+  1 コマンド 1 ファイル（`cli/cmd/vw2026/call.go` など）の構造体で、kong のタグ（`help`）と
   `Help()`（詳しい説明）を `run` の隣に書く。全体の説明と終了コードは `main.go` の `cli.Help()`。
   真実は `vw2026 --help`（`vw2026 help <command>`）で、Markdown や godoc に別に書かない。
 - **指定（フラグ）は、環境変数でも与えられるようにする**（kong の `env` タグ）。名前は、使う
