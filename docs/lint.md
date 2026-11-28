@@ -33,7 +33,7 @@ PSScriptAnalyzer は、同一のファイルでも時折解析器の内部で異
 
 ## 検査の対象外
 
-CMake・Markdown・JSON のフィクスチャは検査しません。フィクスチャは C++ と Go のテストが読み込むことで検証します。
+CMake・Markdown・JSON のフィクスチャ・JavaScript（自動レビューの `scripts/review/review.mjs` のみ。[自動レビュー](review.md)）は検査しません。フィクスチャは C++ と Go のテストが読み込むことで検証します。
 
 ## ローカル環境での実行
 

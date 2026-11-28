@@ -99,6 +99,7 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
 | `lint.yml` | push / PR・マージキュー | `scripts/lint.sh`（[検査](../lint.md)） |
 | `build.yml` | push（main）/ PR・マージキュー / 手動 | mac と Windows のビルド・梱包・リリースと、公開した資産の検証（下記） |
 | `hooks.yml` | push / PR・マージキュー | `cli` のフック（`scripts/hooks/`）のテスト。mac で `tests/hooks/hooks_test.sh`（`sh`）、Windows で `tests/hooks/Hooks.Tests.ps1`（Pester。Windows PowerShell 5.1）を実行する（[インストール「テスト」](install-and-update.md#テスト)） |
+| `review.yml` | PR（作成・push・再オープン・レビュー準備完了への変更） | Claude による自動レビューと判定。レビュー準備完了の PR のみ、他のワークフローが全て成功してからレビューする。`plugin` ジョブは、固定した code-review プラグインを取り出せるかを毎回確認する（[自動レビュー](../review.md)）。必須のチェックとしないため、`merge_group` を付与しない |
 | `cleanup-dev-release.yml` | PR が閉じられたとき | 当該 PR のプレリリース（`dev-<slug>-<PR 番号>-<短い sha>`）と下書きのリリースを、リリースとタグごと全て削除する。`build.yml` と同じ `concurrency` のグループで実行され、当該 PR の実行中のビルドを停止してから削除する（削除した後に公開されないため）。グループの構成と再オープン（`reopened`）の扱いは、両方のワークフローの注釈 |
 
 `build.yml` のジョブ:
@@ -135,7 +136,7 @@ cmake --preset vw2026 && cmake --build --preset vw2026 --target VwCli
 - **SDK のキャッシュのキーは、配布されている SDK の版から決定します**（`scripts/vw-sdk-cache-key.sh`。
   URL が `latest` で SDK が差し替わっても変化しないため。版を読み取れない場合の扱いは同じスクリプトの注釈）。
 - リリースは `GITHUB_TOKEN`（`contents: write`）で行います。
-- 自動レビューは設けません（設ける場合は Secrets に `CLAUDE_CODE_OAUTH_TOKEN` が必要です）。
+- 自動レビューは `review.yml` が行います（[自動レビュー](../review.md)。WIF を使用するため Secrets は不要です）。
 - 署名はアドホック（`codesign --force --deep --sign -`）です。Developer ID と公証は行いません。
 
 ## 梱包

@@ -48,7 +48,8 @@ PSScriptAnalyzer でも選択できるためです。これにより YAML と Ma
 | PowerShell | `Invoke-Formatter`（PSScriptAnalyzer） | `PSScriptAnalyzerSettings.psd1`（`CodeFormatting` と同じ規則で、インデントのみタブ） | `scripts/powershell.ps1` の `$version`（`-Mode Install` でインストールされる） |
 
 対象は、Go は `cli/`、sh は `scripts/` と `tests/hooks/`、C++ と PowerShell は git が追跡し、無視しないファイル
-（ビルドの出力や SDK の複製を含めない）です。PowerShell の整形と検査は `scripts/powershell.ps1` を介して
+（ビルドの出力や SDK の複製を含めない）です。JavaScript（自動レビューの `scripts/review/review.mjs` のみ。
+[自動レビュー](review.md)）は対象としません。PowerShell の整形と検査は `scripts/powershell.ps1` を介して
 行います（`format.sh` と `lint.sh` が呼び出す。フックのテストに使用する Pester の版もここで定める）。
 
 Go で書かれたツールは `tools/go.mod` に `tool` で記述し、`go -C tools tool <名前>` で呼び出します。Go は

@@ -28,3 +28,11 @@ updates:
     groups:
       llvm:
         patterns: ["clang-*"]
+  # 自動レビューの code-review プラグイン（docs/review.md）。取得元（anthropics/claude-plugins-official）
+  # には tag も release も無いため、submodule（.github/claude-plugins-official）で commit を固定し、main の
+  # 最新の commit へ更新させる。上流は 1 日に複数回更新され、code-review に関係しない変更でも更新される
+  # ため、週 1 回とする。更新した commit にプラグインが存在するかは review.yml の plugin ジョブが確認する。
+  - package-ecosystem: gitsubmodule
+    directory: /
+    schedule:
+      interval: weekly
