@@ -23,9 +23,11 @@ the drawing). A tool of kind write or app runs only in a session (see
 "${cmd} help session").
 
 Tools runs for every call, in a session or not, and even while Vectorworks is
-quitting. On Windows, while a tool shows a dialog, the plug-in refuses it with
-busy like every other call, and tools exits with 23. It prints and exits as call
-does, with the same exit codes ("${cmd} help call").
+quitting. While another tool runs (saving a large drawing, for example), tools
+waits behind it like every other call and exits with 3 when --timeout runs out.
+On Windows, while a tool shows a dialog, the plug-in refuses it with busy like
+every other call, and tools exits with 23. It prints and exits as call does,
+with the same exit codes ("${cmd} help call").
 `)
 }
 
