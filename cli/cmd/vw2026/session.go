@@ -22,7 +22,8 @@ occupies the bridge, and such a tool does not run at all (23). A tool that only
 reads (kind read, such as ping) and "${cmd} tools" run for every call, in a
 session or not (but while Vectorworks is quitting, every tool exits with 23
 except "${cmd} tools", "session start" and "session end", and a tool the plug-in
-does not have exits with 22; see "${cmd} help call").
+does not have exits with 22; on Windows, while a tool shows a dialog, every call
+exits with 23, "${cmd} tools" included; see "${cmd} help call").
 
 	${cmd} session start                     # {"session":"<ID>"}
 	${cmd} call <TOOL> --session <ID>        # a tool of kind write or app
