@@ -1,8 +1,8 @@
 # ツール
 
 プラグインが提供するツールの仕様です。版と状態を返す `ping`、図面を**読み取るのみ**のツール（`layers`・`classes`・
-`layer_objects`・`object_counts`）、図面を保存して閉じるツール（`documents`・`save`・`close`）、Vectorworks を終了させる
-`quit` があります。更新はツールではなく CLI の `vw2026 install` で行います
+`layer_objects`・`object_counts`）、図面を保存して閉じるツール（`documents`・`save`・`close`）、シートレイヤを PDF に書き出す `export_pdf`、
+Vectorworks を終了させる `quit` があります。更新はツールではなく CLI の `vw2026 install` で行います
 （[インストール](install-and-update.md#インストールと更新vw2026-install)）。
 
 **SDK 呼び出しは、SDK リファレンスで挙動が確認されているもののみを使用します**（無いものはリファレンスで
@@ -21,6 +21,7 @@
 | `documents` | read | なし | [図面を操作するツール](#図面を操作するツールdocumentssaveclose) |
 | `save` | app | `document`（必須）・`to`（必須） | 同上 |
 | `close` | app | `document`（必須） | 同上 |
+| `export_pdf` | app（mac のみ） | `document`（必須）・`sheets`（必須。シートレイヤの名前の配列）・`to`（必須） | `{"document","path","pages"}`（[export_pdf](#export_pdf)） |
 | `quit` | app | なし | `{"quitting":true}`。図面が開いていれば `internal` で失敗し、`detail` に一覧（下記） |
 
 ## 共通の規則
@@ -58,30 +59,30 @@
   ないので、通信規則のフィクスチャ（`protocol/fixtures`。[通信規則のフィクスチャ](../fixtures.md)）とは区別して配置します。
 
 **引数の検証は次の順に行い、最初に該当したもので返します**（どの `reason` を返すかを定めておくため）。
-1. 引数の形式（未知の引数・型・値の範囲・必須の欠落・`save` の `to` の形式。[保存先の検証](save-target.md#to-の形式)）→ `invalid_args`。
+1. 引数の形式（未知の引数・型・値の範囲・必須の欠落・`save`・`export_pdf` の `to` の形式。[保存先の検証](save-target.md#to-の形式)）→ `invalid_args`。
 2. 図面が無い → `internal`（`no_document`）。**「図面が無い」は、ツールが使用するものの有無で判定します。** 前面の図面を読み取る
    ツール（`layers`・`classes`・`layer_objects`・`object_counts`）は `GetCurrentLayer()` が `nullptr` か否か（`ping` の
-   `document_open` と同じ基準）、図面を指定するツール（`save`・`close`）は `GetOpenFilesList` の件数が 0 か否か（指定する図面を
+   `document_open` と同じ基準）、図面を指定するツール（`save`・`close`・`export_pdf`）は `GetOpenFilesList` の件数が 0 か否か（指定する図面を
    検索する一覧と同じもの）で判定します。2 つが一致することを確認したのは、起動の直後と全て閉じた後のみです（mac / Windows）（[Findings「Timers and Notifications」の 4 の 8](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/Timers%20and%20Notifications.md)）。件数が 1 以上でも前面の
-   図面が無い状態があれば、読み取りツールは `no_document` で拒否し、`save`・`close` は指定した図面に作用します（いずれもツールが
+   図面が無い状態があれば、読み取りツールは `no_document` で拒否し、`save`・`close`・`export_pdf` は指定した図面に作用します（いずれもツールが
    使用するものに適合している）。`documents` は失敗にせず空の一覧を返し、`ping` は失敗せずに `document_open` を偽にします。
-3. 引数が指定するもの（`document`・`layer`）が実在しない → `invalid_args`。指定するものが 1 つに定まらない
+3. 引数が指定するもの（`document`・`layer`・`export_pdf` の `sheets`）が実在しない → `invalid_args`。指定するものが 1 つに定まらない
    （`document` に一致する図面が 2 枚以上 → `internal`（`document_ambiguous`）、`layer` に一致するレイヤが 2 枚以上 →
    `internal`（`layer_ambiguous`））。
-4. ツールごとの状態（`save` は[保存先の検証「状態の検証」](save-target.md#状態の検証)の順）→ `internal`。
+4. ツールごとの状態（`save`・`export_pdf` は[保存先の検証「状態の検証」](save-target.md#状態の検証)の順）→ `internal`。
 
 **ツールが返す失敗の `invalid_args` と `internal` は、次のように区別します**（[通信規則「応答」](../protocol.md#応答idresjson)）。
 
 - **`invalid_args`** は、引数そのものが誤っている場合: 未知の引数・型や値の誤り・必須の欠落、引数が指定するもの
-  （`document` の図面・`layer` のレイヤ）が実在しない、
-  `save` の `to` の形式（拡張子・使用できない文字など）。
+  （`document` の図面・`layer` のレイヤ・`sheets` のシートレイヤ）が実在しない、
+  `save`・`export_pdf` の `to` の形式（拡張子・使用できない文字など）。
 - **`internal`** は、引数は正しく、指定するものも実在するが、それ以外の状態のために実行できない場合: 図面が無い
   （`no_document`）・指定するものが 1 つに定まらない（`save`・`close` の `document_ambiguous`、`layer_objects`・
   `object_counts` の `layer_ambiguous`）・
   図面が開いている（`quit` の `documents_open`）・保存先が既に使用されている（`save` の `to_is_open`・
   `file_exists`。`to` は新規に作成するファイルを指定するので、既に存在することは状態に該当する）・保存先の親のフォルダが無い
   （`parent_missing`）・保存先を検証できない（`to_check_failed`）・図面が閉じなかった（`close` の
-  `not_closed`）・SDK の失敗（`save` の `save_failed`）・ツール内部の例外。
+  `not_closed`）・SDK の失敗（`save` の `save_failed`・`export_pdf` の `export_failed`）・ツール内部の例外。
 
 呼び出し元が理由で分岐する場合は、`code` ではなく `detail` の `reason` を参照します（`reason` を返す失敗のみ）。
 
@@ -517,3 +518,77 @@ Vectorworks 2026 / mac。Windows も挙動は同じで、異なるのはパス�
 - **Windows も同様に後処理を行います**（Vectorworks 2025 の Windows でも図面が残存し、この後処理で確認が表示されなくなる。同じ節。
   Vectorworks 2026 の Windows は計測していない。[#323](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/323)）。
 
+## `export_pdf`
+
+シートレイヤを PDF に書き出すツールです。利用者が GUI のパブリッシュで作る PDF を CLI からも作り、仕上がりを
+確かめられるようにします。使用する SDK 呼び出しは SDK リファレンスで確認済みです
+（[Findings「PDF Export」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/PDF%20Export.md)。Vectorworks 2026 / mac。
+[SDK リファレンス #332](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/332)）。
+**mac にのみ登録します。** Windows の振る舞いを確かめるまで（[SDK リファレンス #334](https://github.com/min-nano/vectorworks-developer-sdk-reference/issues/334)）、
+Windows のプラグインの `@tools` には載らず、呼び出すと `unknown_tool` になります（CLAUDE.md の 7）。
+SDK リファレンスで確かめたのは Vectorworks 2026 で、2025 のプラグインにも同じソースで入ります（[版](editions.md)。2025 の
+振る舞いは、実機の確認で見る）。
+
+| ツール | 種類 | 引数 | 結果 |
+| --- | --- | --- | --- |
+| `export_pdf` | app | `document`（必須）・`sheets`（必須）・`to`（必須） | `{"document","path","pages"}` |
+
+```json
+{"document":"/Users/me/plan.vwx","path":"/Users/me/tmp/plan.pdf","pages":2}
+```
+
+- **同じ計算機・同じ設定なら、GUI のパブリッシュ・「PDF の取り出し」と画素単位で同じ PDF になります**
+  （[Findings「PDF Export」の結論](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/PDF%20Export.md#結論)）。
+  パブリッシュのセットは SDK から作れないので使わず、書き出すシートは呼び出し元が `sheets` で決めます。
+- 種類は `app` です（`save` と同じく、図面の内容を変えずにファイルに書き込む。[ブリッジ「ツールの一覧」](bridge.md#ツールの一覧)）。
+- **`document`** は `save`・`close` と同じです（`documents` の `path` と完全に一致する図面。無ければ `invalid_args`、
+  2 枚以上なら `document_ambiguous`。[図面を操作するツール](#図面を操作するツールdocumentssaveclose)）。
+- **`sheets`** はシートレイヤの名前の配列で、**この順に 1 枚 1 頁で並びます**。`layers` の `kind` が `sheet` の `name` を渡します。
+  1 つ以上が必要です（空の配列は `invalid_args`）。同じ名前を 2 度渡すと 2 頁になります（重複は拒否しない）。
+  - **書き出す前に全ての名前を確かめ、指定した図面のシートレイヤの名前と完全に一致しないもの（デザインレイヤの名前・
+    空の名前・大文字と小文字のみが違う名前を含む）が 1 つでもあれば、何も書き出さずに `invalid_args` で拒否します。**
+    無い名前を渡すと `ExportPDFPages` が失敗し、頁の欠けた PDF が残るためです（空の名前は現在のレイヤを書き出す。
+    [Findings「失敗の見え方」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/PDF%20Export.md#失敗の見え方)）。
+- **`to`** は書き出す先の新しいパスで、`save` と同じ規則で形式と状態を確かめます（[保存先の検証](save-target.md)）。
+  違いは次の 2 つです。
+  - 拡張子は `.pdf` です（大文字と小文字は区別しない）。
+  - 状態は `file_exists` → `parent_missing` の順で（確かめられなければ `to_check_failed`）、`to_is_open` は返しません
+    （開いている図面は `.vwx` なので、`.pdf` の `to` と一致しない）。
+  - **既にあるファイルは拒否します**（`file_exists`）。Vectorworks は同じパスの PDF を確認なしに上書きするので、
+    プラグインが利用者のファイルを置き換えないためです（CLAUDE.md の 9）。書き直す場合は、呼び出し元が先にファイルを消すか、
+    新しい `to` を渡します。
+  - **出力先のフォルダが無ければ `parent_missing` で拒否します。** Vectorworks はこの場合、どの呼び出しも成功を返したまま
+    ファイルを作らないためです。
+- **結果の `path`** は `to` をそのまま返します（PDF は図面ではないので、一覧から読み直さない）。**`pages`** は書き出した頁の数で、
+  `sheets` の要素の数です（範囲を「全体を 1 頁」にするので、シート 1 枚が 1 頁になる。PDF を読み直して数えてはいない）。
+- **書き出す間だけ、利用者の PDF の書き出しの設定を 2 つ変え、書き終えたら（失敗しても）元に戻します**
+  （[Findings「設定」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/PDF%20Export.md#設定sexportpdfoptions)）。
+  - 「PDF を開く」（`fOpenInViewer`）を切ります。保存される設定で、既定の値が起動によって変わるためです（入っていると、書き出す度に
+    PDF の閲覧ソフトが前面に出る）。
+  - 範囲を「全体を 1 頁」（`eWholeAreaAsOnePage`。既定の値）にします。シートを用紙の大きさの頁にするためです（「現在のビュー」では
+    画面の大きさの頁になる）。
+  - 他の設定（解像度・PDF/A・書体の埋め込み・ビューポートの更新など）は利用者の設定のままです。設定を変える引数は設けません。
+- **ダイアログは表示しません。undo の記録も開きません**（書き出しは記録を残さず、現在のレイヤも変わらない）。但し、設定の
+  「ビューポートを更新」（既定で有効）で、書き出しの中で古いビューポートが更新されえます。図面の内容が変わるかは SDK リファレンスでも
+  測っていません（未保存の変更を読めないため）。
+- **指定した図面を前面にしてから、シートの名前と `to` の状態を確かめて書き出し、成否に依らず（例外でも）前面を元に戻します**
+  （前面でない図面のシートは書き出せない。シートレイヤの名前も前面の図面からしか読めない）。手順は `save` と同じで、前面に
+  できなければ何もせずに `internal`（`reason` なし）で失敗します。`save` と違い、`to` の状態は前面を切り替えた後に確かめます
+  （[共通の規則](#共通の規則)の検証の順の 3（`sheets`）を 4（`to` の状態）より先にするため）。どちらで拒否しても前面は戻ります。
+- **書き出しの失敗は `internal` で、`detail` に `{"reason":"export_failed","step":<段>}` を付与します。**
+  `vcom_error` は SDK の戻り値（`VCOMError`）で、値ごとの意味は SDK に書かれていないので、そのまま記載します。
+  - `open`: `OpenPDFDocument` が 0 以外を返した（書き込めないフォルダなど）。`vcom_error` を付ける。ファイルはできません。
+  - `page`: `ExportPDFPages` が 0 以外を返した。`sheet`（失敗したシートの名前）と `vcom_error` を付ける。残りのシートは
+    書き出さずに PDF を閉じます。**`to` に書きかけの PDF が残ることがあり、プラグインは消しません**（CLAUDE.md の 9）。
+    名前は事前に確かめているので、通常は起こりません。
+  - `close`: `ClosePDFDocument` が 0 以外を返した。`vcom_error` を付ける。
+  - `file`: 全ての呼び出しが成功を返したのに、`to` にファイルが無い（ファイルでないものがある場合も）。戻り値だけでは
+    成否が分からないため、書き終えた後に確かめます。問い合わせが「無い」以外の理由で失敗したら `os_error` を付けます。
+- **ツールが戻った時点で、PDF は書き終わっています**（`ClosePDFDocument` から戻った時点で書き終わる）。
+- **時間が掛かります。** 起動後の最初の書き出しは小さなシートでも 6〜10 秒、A3 のシートは 1 枚 0.4〜1.1 秒、12 枚を 1 つにすると
+  12〜17 秒でした（[Findings「出力」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/PDF%20Export.md#出力)）。
+  多くのシートを書き出す場合は、`vw2026 call` に長い `--timeout` を付けます（既定は 30 秒）。上限を超えても、プラグインは
+  書き出しを続けます（`save` と同じ）。
+- **埋め込む書体は、Vectorworks が動く計算機に入っている書体で決まります。** 書体によっては、描かれる文字は正しいのに、PDF の
+  検索・コピーで文字が化けます（PDF の文字の対応表が欠けている。GUI の「PDF の取り出し」・パブリッシュも同じ。
+  [Findings「出力」](https://github.com/min-nano/vectorworks-developer-sdk-reference/blob/main/Findings/PDF%20Export.md#出力)）。プラグインからは変えられません。

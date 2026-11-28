@@ -96,4 +96,30 @@ std::string Reader::requiredString(std::string_view key) {
 	return string(key).value_or(std::string());
 }
 
+std::vector<std::string> Reader::requiredStrings(std::string_view key) {
+	const Json *value = find(key);
+	if (!ok()) {
+		return {};
+	}
+	if (!value) {
+		invalid(std::string(key) + " は必須です");
+		return {};
+	}
+	if (!value->isArray() ||
+	    !std::ranges::all_of(value->items(), [](const Json &item) { return item.isString(); })) {
+		invalid(std::string(key) + " は文字列の配列です");
+		return {};
+	}
+	if (value->items().empty()) {
+		invalid(std::string(key) + " は 1 つ以上の要素の配列です");
+		return {};
+	}
+	std::vector<std::string> out;
+	out.reserve(value->items().size());
+	for (const Json &item : value->items()) {
+		out.push_back(item.asString());
+	}
+	return out;
+}
+
 }

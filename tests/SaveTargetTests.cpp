@@ -44,14 +44,16 @@ namespace {
 
 std::optional<std::string> mac(std::string_view to) {
 	std::string problem;
-	std::optional<std::string> parent = save_target::checkMacTo(to, problem);
+	std::optional<std::string> parent =
+	    save_target::checkMacTo(to, save_target::kVwxExtension, problem);
 	CHECK(parent.has_value() == problem.empty());
 	return parent;
 }
 
 std::optional<std::string> windows(std::string_view to) {
 	std::string problem;
-	std::optional<std::string> parent = save_target::checkWindowsTo(to, problem);
+	std::optional<std::string> parent =
+	    save_target::checkWindowsTo(to, save_target::kVwxExtension, problem);
 	CHECK(parent.has_value() == problem.empty());
 	return parent;
 }
@@ -219,6 +221,30 @@ TEST(WindowsToRejectsMaxPath) {
 	    base + repeat("\xF0\x9F\x98\x80", (259 - base.size() - 4) / 2) + ".vwx";
 	CHECK(windows(surrogates));
 	CHECK(!windows(surrogates.substr(0, surrogates.size() - 4) + "a.vwx"));
+}
+
+// 拡張子は呼び出し元が渡す（save は .vwx、export_pdf は .pdf）。他の規則は拡張子に依らない。
+TEST(ToExtensionIsGivenByTheTool) {
+	auto check = [](save_target::FormCheck form, std::string_view to, std::string_view extension) {
+		std::string problem;
+		std::optional<std::string> parent = form(to, extension, problem);
+		CHECK(parent.has_value() == problem.empty());
+		return parent;
+	};
+	CHECK_EQ(check(&save_target::checkMacTo, "/x/a.pdf", save_target::kPdfExtension).value_or(""),
+	         std::string("/x"));
+	CHECK(check(&save_target::checkMacTo, "/x/A.PDF", save_target::kPdfExtension));
+	CHECK(!check(&save_target::checkMacTo, "/x/a.vwx", save_target::kPdfExtension));
+	CHECK(!check(&save_target::checkMacTo, "/x/a.pdf", save_target::kVwxExtension));
+	CHECK(!check(&save_target::checkMacTo, "/x/./a.pdf", save_target::kPdfExtension));
+	CHECK_EQ(check(&save_target::checkWindowsTo, "C:\\x\\a.Pdf", save_target::kPdfExtension)
+	             .value_or(""),
+	         std::string("C:\\x"));
+	CHECK(!check(&save_target::checkWindowsTo, "C:\\x\\a.vwx", save_target::kPdfExtension));
+	CHECK(!check(&save_target::checkWindowsTo, "C:/x/a.pdf", save_target::kPdfExtension));
+	std::string problem;
+	CHECK(!save_target::checkMacTo("/x/a.vwx", save_target::kPdfExtension, problem));
+	CHECK_EQ(problem, std::string("to の拡張子が .pdf ではありません"));
 }
 
 // プラグインが使用する規則は OS のビルドで決定される。

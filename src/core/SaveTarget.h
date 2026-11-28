@@ -28,17 +28,25 @@ inline constexpr std::string_view kFileExists = "file_exists";
 inline constexpr std::string_view kParentMissing = "parent_missing";
 inline constexpr std::string_view kToCheckFailed = "to_check_failed";
 
-// FormCheck は to の形式の規則。正しければ親のフォルダのパス（ルートの直下ならルートの形式。
-// 区切りを含む）を返し、誤りであれば空を返して problem に理由（日本語）を書き込む。
-using FormCheck = std::optional<std::string> (*)(std::string_view to, std::string &problem);
+// 拡張子（save は .vwx、export_pdf は .pdf。大文字と小文字を区別せずに比較する）。
+inline constexpr std::string_view kVwxExtension = ".vwx";
+inline constexpr std::string_view kPdfExtension = ".pdf";
+
+// FormCheck は to の形式の規則。extension は最後の段の拡張子（. を含む小文字）。正しければ親の
+// フォルダのパス（ルートの直下ならルートの形式。区切りを含む）を返し、誤りであれば空を返して
+// problem に理由（日本語）を書き込む。
+using FormCheck = std::optional<std::string> (*)(std::string_view to, std::string_view extension,
+                                                 std::string &problem);
 
 // checkMacTo は mac の規則（/ から始まる絶対パス。255 バイトを超える段・1024 バイト以上を
 // 拒否する）。
-std::optional<std::string> checkMacTo(std::string_view to, std::string &problem);
+std::optional<std::string> checkMacTo(std::string_view to, std::string_view extension,
+                                      std::string &problem);
 
 // checkWindowsTo は Windows の規則（X:\ で始まる絶対パスと UNC。/ を含むもの・255 文字を超える段・
 // 260 文字以上（いずれも UTF-16 の単位）を拒否する）。
-std::optional<std::string> checkWindowsTo(std::string_view to, std::string &problem);
+std::optional<std::string> checkWindowsTo(std::string_view to, std::string_view extension,
+                                          std::string &problem);
 
 // kNativeForm はプラグインが使用する規則（出荷するプラグインは OS ごとのビルドであるため、
 // ビルドで決定される）。
