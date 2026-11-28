@@ -27,8 +27,8 @@ looks at another spool; see "${cmd} --help").
 
 The reason is "not found" when there is no spool, "not running" when nobody
 holds the lock, and starts with "cannot check the lock:" when the lock cannot
-be checked (it cannot be opened, or it is not a regular file); status reports
-the bridge as not running then too.
+be checked (it cannot be opened, or, on macOS and Linux, it is not a regular
+file); status reports the bridge as not running then too.
 
 ${cmd} does not wait for the bridge to start or stop; run status in a loop
 and decide on its exit status, not on its output. Stop on 1 too (the spool

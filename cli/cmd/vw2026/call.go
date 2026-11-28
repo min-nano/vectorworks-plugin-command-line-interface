@@ -11,6 +11,10 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
+// maxStdinBytes は、call が標準入力から読む引数の上限。要求の上限（空白を詰めた後の大きさ）より大きく取る
+// （整形した JSON の字下げと改行の分）。終わらない入力でメモリを使い切らないための歯止め。
+const maxStdinBytes = 16 * spool.MaxRequestBytes
+
 type callCmd struct {
 	Tool    string  `arg:"" help:"Tool to call (\"${cmd} tools\" lists them)."`
 	Args    string  `arg:"" optional:"" name:"args" help:"Arguments as a JSON object, or - to read them from the standard input."`
@@ -28,9 +32,9 @@ the plug-in as it is and reserves no names of its own.
 The arguments are a JSON object. "-" reads them from the standard input.
 Without them, the tool is called with no arguments. Call does not check the
 arguments against the tool; the plug-in does. Call only refuses a request
-that the plug-in would not read (over 1 MiB, or nested deeper than 64): it
-exits with 2 for it, before it looks at the bridge, and reads at most that much
-of the standard input.
+that the plug-in would not read (over 1 MiB once its spaces and line breaks
+are removed, or nested deeper than 64): it exits with 2 for it, before it looks
+at the bridge. It reads at most 16 MiB of the standard input.
 
 	${cmd} call layers '{"include_sheets":false}'
 	echo '{"layer":"1F"}' | ${cmd} call layer_objects -
@@ -102,16 +106,16 @@ func (c *callCmd) run(e *env) int {
 	if c.Args != "" {
 		text := c.Args
 		if text == "-" {
-			// 要求の上限より 1 バイトだけ多く読む（終わらない入力を渡されても読み続けない。超えれば下の確かめが
-			// 大きすぎる要求として断る）。
-			data, err := io.ReadAll(io.LimitReader(e.stdin, spool.MaxRequestBytes+1))
+			// 読むのは maxStdinBytes まで（終わらない入力を渡されても読み続けない）。大きすぎるかは、空白を
+			// 詰めた要求で下の確かめが決める（整形した JSON は、詰めれば上限に収まることがあるため）。
+			data, err := io.ReadAll(io.LimitReader(e.stdin, maxStdinBytes+1))
 			if err != nil {
 				fmt.Fprintf(e.stderr, edition.Command+": read stdin: %v\n", err)
 				return exitFailure
 			}
-			if len(data) > spool.MaxRequestBytes {
+			if len(data) > maxStdinBytes {
 				fmt.Fprintf(e.stderr, edition.Command+": %v (the standard input is over %d bytes)\n",
-					spool.ErrRequestTooLarge, spool.MaxRequestBytes)
+					spool.ErrRequestTooLarge, maxStdinBytes)
 				return exitUsage
 			}
 			text = string(data)

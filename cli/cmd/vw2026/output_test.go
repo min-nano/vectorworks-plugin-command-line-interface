@@ -118,6 +118,14 @@ func TestCallRefusesUnreadableRequests(t *testing.T) {
 			t.Errorf("%s without the bridge: code %d, stderr %q", c.name, r.code, r.stderr)
 		}
 	}
+	// 大きすぎるかは空白を詰めた要求で決める（整形した JSON は、生の大きさが上限を超えても詰めれば収まる）。
+	// ブリッジが無いので 5 で終わる（2 ではない）。
+	pretty := "{\n" + strings.Repeat(" ", spool.MaxRequestBytes) + "\"a\": 1\n}"
+	for _, args := range [][]string{{"call", "x", pretty}, {"call", "x", "-"}} {
+		if r := invoke(t, opts{stdin: strings.NewReader(pretty)}, args...); r.code != exitDown {
+			t.Errorf("pretty %v: code %d, stderr %q", args[2] == "-", r.code, r.stderr)
+		}
+	}
 	dir, _ := fakeplugin.NewHeldDir(t)
 	if r := invoke(t, opts{dir: dir}, "call", "x", deep); r.code != exitUsage {
 		t.Errorf("deep with the bridge: code %d, stderr %q", r.code, r.stderr)
