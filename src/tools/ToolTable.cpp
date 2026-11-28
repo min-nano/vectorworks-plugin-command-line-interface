@@ -11,9 +11,9 @@ namespace VwCli::tools {
 
 namespace {
 
-// 名前・説明・inputSchema・種類は src/core の各道具の定数（ToolSpec。constexpr なので表も定数で
-// 初期化され、静的な初期化の順序に依らない）を使い、種類を無 SDK のテストで確かめる（save・
-// close・quit は App。Read で載せると占有なしで保存・閉じる・終了を頼める）。
+// 名前・説明・inputSchema・種類は src/core の各ツールの定数（ToolSpec。constexpr であるため一覧も
+// 定数で初期化され、静的な初期化の順序に依存しない）を使用し、種類を無 SDK のテストで検証する
+// （save・close・quit は App。Read として登録すると占有なしで保存・閉じる・終了を依頼できる）。
 constexpr core::Tool kTools[] = {
     core::toolOf(core::kPingSpec, &ping),
     core::toolOf(core::kLayersSpec, &layers),

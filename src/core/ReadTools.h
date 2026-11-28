@@ -1,9 +1,9 @@
 #pragma once
 
-// 読む道具（layers・classes・layer_objects・object_counts）の内 SDK に依らない部分
+// 読み取りツール（layers・classes・layer_objects・object_counts）の内 SDK に依存しない部分
 // （docs/plugin/tools.md「読み取りツール」）。引数の検査・no_document の判定・数え方・
-// type_name の表・絞り込みと頁送り・結果の形をここに置き、SDK から読む値は
-// Drawing（src/tools/ReadTools.cpp が SDK で作る）から受け取るので、無 SDK でテストできる。
+// type_name の表・絞り込みと頁送り・結果の形式をここに配置し、SDK から読み取る値は
+// Drawing（src/tools/ReadTools.cpp が SDK で作成する）から受け取るため、無 SDK でテストできる。
 
 #include "core/Json.h"
 #include "core/Serve.h"
@@ -17,7 +17,8 @@
 
 namespace VwCli::core {
 
-// 道具の表の行（種類を含む。src/tools/ToolTable.cpp はこれを使う）。どれも図面を変えない Read。
+// ツールの一覧の行（種類を含む。src/tools/ToolTable.cpp はこれを使用する）。いずれも図面を
+// 変更しない Read。
 inline constexpr ToolSpec kLayersSpec{
     "layers",
     "前面の図面のレイヤ（デザインとシート）を、列の順（背面→前面）に返す。"
@@ -52,44 +53,44 @@ inline constexpr ToolSpec kObjectCountsSpec{
     R"("additionalProperties":false})",
     ToolKind::Read};
 
-// GetObjectTypeN の番号の内、数えるときに除くもの（Objs.TDType.h）。
+// GetObjectTypeN の番号の内、計数する際に除外するもの（Objs.TDType.h）。
 inline constexpr std::int16_t kTermNode = 0;
 inline constexpr std::int16_t kUndoPlaceholderNode = 90;
-// GetObjectTypeN のプラグインオブジェクトの番号（Objs.TDType.h）。数え、pio_name を読む。
+// GetObjectTypeN のプラグインオブジェクトの番号（Objs.TDType.h）。計数し、pio_name を読み取る。
 inline constexpr std::int16_t kParametricNode = 86;
 
 // 失敗の detail の reason（docs/plugin/tools.md）。layer に一致するレイヤが 2 枚以上。
 inline constexpr std::string_view kLayerAmbiguous = "layer_ambiguous";
 
 // ovLayerType の値（MiniCadCallBacks.h の ELayerType。Findings「Layers and Stories」）。3 は
-// リソースの参照で入ったデザインレイヤだけで、レイヤの参照で入ったものは 1（参照由来かは
-// referenced で見る）。
+// リソースの参照で取り込まれたデザインレイヤのみで、レイヤの参照で取り込まれたものは 1（参照由来か
+// 否かは referenced で判定する）。
 inline constexpr std::int16_t kLayerDesign = 1;
 inline constexpr std::int16_t kLayerSheet = 2;
 inline constexpr std::int16_t kGuestLayerDesign = 3;
 
-// LayerFacts は SDK から読むレイヤ 1 枚（GetDrawingHeader の列の内型が kLayerNode のもの）。
+// LayerFacts は SDK から読み取るレイヤ 1 枚（GetDrawingHeader の列の内型が kLayerNode のもの）。
 struct LayerFacts {
-	// GetObjectName。リソースの参照で入ったレイヤは
-	// NNA#<n>_<元の名前>、レイヤの参照で入ったレイヤは 元の名前のまま。
+	// GetObjectName。リソースの参照で取り込まれたレイヤは
+	// NNA#<n>_<元の名前>、レイヤの参照で取り込まれたレイヤは 元の名前のまま。
 	std::string name;
 	// ovLayerType。GetObjectVariable が偽なら空。
 	std::optional<std::int16_t> layerType;
-	// IsObjectFromReferencedFile(layer)。参照で入ったレイヤなら、参照の方法によらず真（Findings
-	// 「Layers and Stories」の「参照で入ってきたレイヤ」。SDK リファレンス #310）。
+	// IsObjectFromReferencedFile(layer)。参照で取り込まれたレイヤであれば、参照の方法によらず真
+	// （Findings「Layers and Stories」の「参照で入ってきたレイヤ」。SDK リファレンス #310）。
 	bool referenced = false;
 	// GetLayerScaleN（分母）。
 	double scale = 1;
 	// GetCurrentLayer() とハンドルが一致するか。
 	bool current = false;
 	// FirstMemberObj → NextObject の列の型（GetObjectTypeN）。終端（0）と undo の置き石（90）も
-	// そのまま入れる（除くのは core）。
+	// そのまま格納する（除外するのは core）。
 	std::vector<std::int16_t> memberTypes;
 };
 
-// ObjectFacts は SDK から読む図形 1 つ。
+// ObjectFacts は SDK から読み取る図形 1 つ。
 struct ObjectFacts {
-	// VWParametricObj::GetParametricName。PIO（型 86）のときだけ読む。
+	// VWParametricObj::GetParametricName。PIO（型 86）の場合のみ読み取る。
 	std::optional<std::string> pioName;
 	// GetObjectName。
 	std::string name;
@@ -103,33 +104,35 @@ struct ObjectFacts {
 	double bottom = 0;
 };
 
-// Drawing は前面の図面から読む口。道具 1 回の中でだけ使う（ハンドルは刻みをまたいで持たない）。
+// Drawing は前面の図面から読み取るインターフェース。1 回のツールの実行の中でのみ使用する
+// （ハンドルは周期処理をまたいで保持しない）。
 class Drawing {
 public:
 	virtual ~Drawing() = default;
-	// open は前面の図面があるか（GetCurrentLayer() が nullptr でないか）。
+	// open は前面の図面が存在するか（GetCurrentLayer() が nullptr でないか）。
 	virtual bool open() = 0;
-	// layerNames は前面の図面のレイヤの名前を列の順（背面→前面）に返す。直下の列は辿らない（1 枚の
-	// レイヤを名前で探すときに、図面全体を辿らないため）。
+	// layerNames は前面の図面のレイヤの名前を列の順（背面→前面）に返す。直下の列は走査しない
+	// （1 枚のレイヤを名前で検索する際に、図面全体を走査しないため）。
 	virtual std::vector<std::string> layerNames() = 0;
-	// layer は、直前の layerNames() の index 番目のレイヤを、直下の列まで読む。
+	// layer は、直前の layerNames() の index 番目のレイヤを、直下の列まで読み取る。
 	virtual LayerFacts layer(std::size_t index) = 0;
 	// classes は前面の図面のクラスの名前（ForEachClass(false, …)。ID の順）。
 	virtual std::vector<std::string> classes() = 0;
-	// object は、layer(index) で読んだレイヤの、列の member 番目の図形を読む。
+	// object は、layer(index) で読み取ったレイヤの、列の member 番目の図形を読み取る。
 	virtual ObjectFacts object(std::size_t index, std::size_t member) = 0;
 };
 
 // typeName は type_name の表（docs/plugin/tools.md「type_name の表」が真実）。表に無い番号は空。
 std::optional<std::string_view> typeName(std::int16_t type);
 
-// counted は数える図形か（終端と undo の置き石でない）。
+// counted は計数する図形か（終端と undo の置き石でない）。
 constexpr bool counted(std::int16_t type) {
 	return type != kTermNode && type != kUndoPlaceholderNode;
 }
 
-// boundsJson は bounds の値。ok が偽か、4 つのどれかが有限でなければ null。有限かは最小と最大を
-// とる前に確かめる（std::min は NaN を落とすため）。left ≤ right・bottom ≤ top にして入れる。
+// boundsJson は bounds の値。ok が偽か、4 つのいずれかが有限でなければ null。有限か否かは最小と
+// 最大を算出する前に確認する（std::min は NaN を除外するため）。left ≤ right・bottom ≤ top にして
+// 格納する。
 Json boundsJson(bool ok, double left, double top, double right, double bottom);
 
 Json layers(const Json &args, Drawing &drawing, ToolStatus &status);

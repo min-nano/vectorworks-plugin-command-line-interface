@@ -14,7 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # Go・clang-format・PSScriptAnalyzer（lint.yml と同じ準備。shellcheck も入るが、format.sh は使わない）。
+      # Go・clang-format・PSScriptAnalyzer（lint.yml と同じ準備。shellcheck もインストールされるが、
+      # format.sh は使用しない）。
       - uses: ./.github/actions/setup-checks
       - run: scripts/format.sh
         env:

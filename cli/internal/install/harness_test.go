@@ -24,38 +24,39 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/spool"
 )
 
-// testTarget はテストが使うターゲット。配置のコードはターゲットからモジュールの拡張子を決めるだけで、
-// 走っている OS に依らない（フックの sh は TestHookHelper に差し替える）。
+// testTarget はテストが使用するターゲット。配置のコードはターゲットからモジュールの拡張子を
+// 決定するのみであり、実行中の OS に依存しない（フックの sh は TestHookHelper に差し替える）。
 const testTarget = "macos-arm64"
 
-// hookPlan は偽のフック（TestHookHelper）がすること。zip の中のフックのファイルに JSON で書く。
+// hookPlan は擬似フック（TestHookHelper）が行うこと。zip の中のフックのファイルに JSON で記述する。
 type hookPlan struct {
-	// 標準出力に書くもの
+	// 標準出力に書き込むもの
 	Stdout string `json:"stdout"`
-	// 標準出力に書くバイト列（正しくない UTF-8 を書くため。JSON の文字列では書けない）
+	// 標準出力に書き込むバイト列（不正な UTF-8 を書き込むため。JSON の文字列では記述できない）
 	Raw []byte `json:"raw,omitempty"`
 	// 終了コード
 	Exit int `json:"exit"`
-	// 引数・作業ディレクトリ・フックの変数（どの版の VW<4 桁>_HOOK_* も）を JSON で書き足す（1 行 1 回）ファイル
+	// 引数・作業ディレクトリ・フックの変数（いずれの版の VW<4 桁>_HOOK_* も）を JSON で追記する
+	// （1 回につき 1 行）ファイル
 	Record string `json:"record,omitempty"`
-	// 走り始めたら作るファイル
+	// 実行を開始したら作成するファイル
 	Signal string `json:"signal,omitempty"`
-	// 作られるまで待つファイル（テストがロックを掴むのを待つ）
+	// 作成されるまで待機するファイル（テストがロックを取得するのを待機する）
 	Await string `json:"await,omitempty"`
-	// 標準出力と標準エラーを受け継いだ子を後ろに残す。子はこのファイルができるまで待ち、終わる前に
-	// <このファイル>.done を作る（TestHookLinger）
+	// 標準出力と標準エラーを継承した子を背後に残す。子はこのファイルが作成されるまで待機し、
+	// 終了する前に <このファイル>.done を作成する（TestHookLinger）
 	Linger string `json:"linger,omitempty"`
 }
 
-// hookRun は偽のフックが 1 回走ったときの記録。
+// hookRun は擬似フックが 1 回実行されたときの記録。
 type hookRun struct {
 	Args []string          `json:"args"`
 	Dir  string            `json:"dir"`
 	Env  map[string]string `json:"env"`
 }
 
-// TestMain は、偽のフック（このテストの実行ファイル）を -race でビルドしたときに、終わる前の待ち
-// （既定で 1 秒）をなくす。フックは何度も走るので、待ちがテストの時間の大半になるため。
+// TestMain は、擬似フック（このテストの実行ファイル）を -race でビルドした場合に、終了する前の待機
+// （既定で 1 秒）を無くす。フックは何度も実行されるので、待機がテストの時間の大半を占めるため。
 func TestMain(m *testing.M) {
 	if _, ok := os.LookupEnv("GORACE"); !ok {
 		os.Setenv("GORACE", "atexit_sleep_ms=0")
@@ -63,9 +64,9 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// TestHookHelper は偽のフックとして走る（Options.Interpreters の sh をこのテストの実行ファイルに
-// 差し替える）。テストとして走ったとき（-- の後ろが無い）は何もしない。sh の無い Windows でも同じ
-// フックを走らせるため。
+// TestHookHelper は擬似フックとして実行される（Options.Interpreters の sh をこのテストの
+// 実行ファイルに差し替える）。テストとして実行された場合（-- の後が無い）は何もしない。sh の無い
+// Windows でも同じフックを実行するため。
 func TestHookHelper(t *testing.T) {
 	args := os.Args
 	at := -1
@@ -114,7 +115,8 @@ func TestHookHelper(t *testing.T) {
 	if plan.Linger != "" {
 		child := exec.Command(os.Args[0], "-test.run=^TestHookLinger$")
 		child.Env = append(os.Environ(), edition.EnvPrefix+"TEST_LINGER="+plan.Linger)
-		// 作業ディレクトリをプラグインのフォルダの外にする（Windows で、テストの片付けが消せなくならないように）。
+		// 作業ディレクトリをプラグインのフォルダの外にする（Windows で、テストの後処理が
+		// 削除できなくならないように）。
 		child.Dir = os.TempDir()
 		child.Stdout = os.Stdout
 		child.Stderr = os.Stderr
@@ -125,8 +127,9 @@ func TestHookHelper(t *testing.T) {
 	os.Exit(plan.Exit)
 }
 
-// TestHookLinger は、フックが後ろに残す子として走る（VW2026_TEST_LINGER のファイルができるまで待ち、
-// 終わる前に <そのファイル>.done を作る）。テストとして走ったとき（環境変数が無い）は何もしない。
+// TestHookLinger は、フックが背後に残す子として実行される（VW2026_TEST_LINGER のファイルが
+// 作成されるまで待機し、終了する前に <そのファイル>.done を作成する）。テストとして実行された場合
+// （環境変数が無い）は何もしない。
 func TestHookLinger(t *testing.T) {
 	release := os.Getenv(edition.EnvPrefix + "TEST_LINGER")
 	if release == "" {
@@ -138,7 +141,7 @@ func TestHookLinger(t *testing.T) {
 	os.WriteFile(release+".done", nil, 0o600)
 }
 
-// harness は一時ディレクトリの <Plug-Ins>・<Work> と、リリースを配る偽の HTTPS サーバー。
+// harness は一時ディレクトリの <Plug-Ins>・<Work> と、リリースを配信する擬似 HTTPS サーバー。
 type harness struct {
 	t       *testing.T
 	tmp     string
@@ -150,7 +153,7 @@ type harness struct {
 	mu    sync.Mutex
 	files map[string][]byte
 	hits  map[string]int
-	// パスを配る直前に呼ぶ（ロックを掴むなど）
+	// パスを配信する直前に呼び出す（ロックを取得するなど）
 	before map[string]func()
 }
 
@@ -185,7 +188,7 @@ func newHarness(t *testing.T) *harness {
 		w.Write(data)
 	}))
 	t.Cleanup(h.server.Close)
-	// 既定のレジストリの代わり。cli と demo を、latest は決まった場所、それ以外はタグで指す。
+	// 既定のレジストリの代替。cli と demo を、latest は定められた場所、それ以外はタグで指す。
 	def, err := registry.Parse([]byte(`{"registry_version":1,"plugins":{`+
 		`"cli":{"manifests":[{"match":"latest","path":"`+h.url("/cli/latest/"+edition.Command+".json")+`"},`+
 		`{"match":"*","path":"`+h.url("/cli/{tag}/"+edition.Command+".json")+`"}]},`+
@@ -232,7 +235,7 @@ func (h *harness) options() Options {
 	}
 }
 
-// capturing は、標準エラーを溜める Options と、溜めた中身を返す（文言を確かめるテストのため）。
+// capturing は、標準エラーを蓄積する Options と、蓄積した内容を返す（文言を検証するテストのため）。
 func (h *harness) capturing() (Options, *bytes.Buffer) {
 	var stderr bytes.Buffer
 	o := h.options()
@@ -285,18 +288,18 @@ func makeZip(t *testing.T, entries []entry) []byte {
 type release struct {
 	name string
 	tag  string
-	// 既定の項目（モジュール・版のファイル・フック）の代わりに使う項目
+	// 既定の項目（モジュール・版のファイル・フック）の代わりに使用する項目
 	entries []entry
-	// 既定の項目に足す項目
+	// 既定の項目に追加する項目
 	extra []entry
-	// フックの計画。nil なら {"stdout":"{\"ran\":\"<kind>\"}"} で記録を runs に書く
+	// フックの計画。nil なら {"stdout":"{\"ran\":\"<kind>\"}"} で記録を runs に書き込む
 	install   *hookPlan
 	uninstall *hookPlan
 	// マニフェストのフック。nil なら hooks/install.hook と hooks/uninstall.hook を sh で
 	hooks *registry.Hooks
 	// マニフェストの sha256 を書き換える
 	sha string
-	// latest としても配る
+	// latest としても配信する
 	latest bool
 }
 
@@ -305,7 +308,7 @@ func (h *harness) runs(name string) string {
 	return filepath.Join(h.tmp, name+"-hooks.jsonl")
 }
 
-// hookRuns はフックが走った記録を返す。
+// hookRuns はフックが実行された記録を返す。
 func (h *harness) hookRuns(name string) []hookRun {
 	h.t.Helper()
 	data, err := os.ReadFile(h.runs(name))
@@ -334,7 +337,7 @@ func planJSON(t *testing.T, plan hookPlan) string {
 	return string(data)
 }
 
-// publish はリリースの zip とマニフェストを配り、zip のパスを返す。
+// publish はリリースの zip とマニフェストを配信し、zip のパスを返す。
 func (h *harness) publish(r release) string {
 	h.t.Helper()
 	install := hookPlan{Stdout: `{"ran":"install","tag":"` + r.tag + `"}`, Record: h.runs(r.name)}
@@ -384,13 +387,13 @@ func (h *harness) publish(r release) string {
 	return zipPath
 }
 
-// install は Install を走らせる。
+// install は Install を実行する。
 func (h *harness) install(name, tag string) (*InstallResult, error) {
 	h.t.Helper()
 	return Install(h.options(), name, tag, false)
 }
 
-// mustInstall はリリースを配って入れる。
+// mustInstall はリリースを配信してインストールする。
 func (h *harness) mustInstall(r release) *InstallResult {
 	h.t.Helper()
 	h.publish(r)
@@ -401,7 +404,7 @@ func (h *harness) mustInstall(r release) *InstallResult {
 	return result
 }
 
-// installedVersion は <Plug-Ins>/<name>/version.txt（入っている版）。無ければ空。
+// installedVersion は <Plug-Ins>/<name>/version.txt（インストールされている版）。無ければ空。
 func (h *harness) installedVersion(name string) string {
 	data, err := os.ReadFile(filepath.Join(h.plugins, name, "version.txt"))
 	if err != nil {
@@ -410,12 +413,12 @@ func (h *harness) installedVersion(name string) string {
 	return string(data)
 }
 
-// cliSpool は <Plug-Ins>/cli/spool/（入った cli のプラグインがロックを掴む場所）。
+// cliSpool は <Plug-Ins>/cli/spool/（インストールされた cli のプラグインがロックを取得する場所）。
 func (h *harness) cliSpool() string {
 	return filepath.Join(h.plugins, cliName, spool.SpoolDirName)
 }
 
-// holdLock は <Plug-Ins>/cli/spool/ のロックを掴む（Vectorworks が動いている）。
+// holdLock は <Plug-Ins>/cli/spool/ のロックを取得する（Vectorworks が実行中である）。
 func (h *harness) holdLock() func() {
 	dir := h.cliSpool()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -424,25 +427,28 @@ func (h *harness) holdLock() func() {
 	return fakeplugin.HoldLock(h.t, dir)
 }
 
-// lockingHook は、plan に、走り始めたら合図を出し、テストがロックを掴むまで待つこと（Signal・Await）を足す。
-// フックの間に Vectorworks が起動したことにするテストが、lockWhenHookStarts と組にして使う。
+// lockingHook は、plan に、実行を開始したら合図を出し、テストがロックを取得するまで待機すること
+// （Signal・Await）を追加する。フックの間に Vectorworks が起動したことにするテストが、
+// lockWhenHookStarts と組にして使用する。
 func (h *harness) lockingHook(plan hookPlan) *hookPlan {
 	plan.Signal, plan.Await = h.hookSignals()
 	return &plan
 }
 
-// hookSignals は、フックが走り始めたら作るファイルと、テストがロックを掴んだら作るファイル（lockingHook と
-// lockWhenHookStarts が同じものを使う）。
+// hookSignals は、フックが実行を開始したら作成するファイルと、テストがロックを取得したら作成する
+// ファイル（lockingHook と lockWhenHookStarts が同じものを使用する）。
 func (h *harness) hookSignals() (signal, await string) {
 	return filepath.Join(h.tmp, "hook-started"), filepath.Join(h.tmp, "locked")
 }
 
-// lockWhenHookStarts は、lockingHook のフックの合図を待ってスプール dir のロックを掴み、フックに知らせる。done は
-// 終えたら閉じる。unlock はロックを放す（Vectorworks の終了。done の後で呼ぶ。呼ばなければテストの終わりに放す）。
+// lockWhenHookStarts は、lockingHook のフックの合図を待機してスプール dir のロックを取得し、
+// フックに通知する。done は終了したら閉じる。unlock はロックを解放する（Vectorworks の終了。done の
+// 後で呼び出す。呼び出さなければテストの終了時に解放する）。
 //
-// 前の回の合図のファイルは先に消す（残っていると、フックを待たずに掴んでしまう）。10 秒待っても合図が無ければ
-// （フックが走らなかった）、掴まずにテストを失敗にする。ロックを掴めなければ、テストを失敗にする（ゴルーチンの
-// 中なので t.Fatal ではなく t.Error）。どの道でも、フックが待つファイルを書いてから終える（フックを止めない）。
+// 以前の回の合図のファイルは先に削除する（残存していると、フックを待機せずに取得してしまう）。
+// 10 秒待機しても合図が無ければ（フックが実行されなかった）、取得せずにテストを失敗とする。ロックを
+// 取得できなければ、テストを失敗とする（ゴルーチンの内部であるため t.Fatal ではなく t.Error）。
+// いずれの経路でも、フックが待機するファイルを書き込んでから終了する（フックを停止させない）。
 func (h *harness) lockWhenHookStarts(dir string) (done <-chan struct{}, unlock func()) {
 	signal, await := h.hookSignals()
 	os.Remove(signal)
@@ -478,7 +484,7 @@ func (h *harness) lockWhenHookStarts(dir string) (done <-chan struct{}, unlock f
 	return finished, unlock
 }
 
-// snapshot はディレクトリの中身（相対パス → 中身。ディレクトリは "/"）。スプールの中は除く。
+// snapshot はディレクトリの内容（相対パス → 内容。ディレクトリは "/"）。スプールの内部は除外する。
 func snapshot(t *testing.T, dir string) map[string]string {
 	t.Helper()
 	files := map[string]string{}
@@ -498,7 +504,8 @@ func snapshot(t *testing.T, dir string) map[string]string {
 			files[rel] = "/"
 			return nil
 		}
-		// シンボリックリンクは、たどらずに行き先を残す（リンクを消した・付け替えたことも比べられる）。
+		// シンボリックリンクは、たどらずにリンク先を保持する（リンクを削除した・差し替えたことも
+		// 比較できる）。
 		if d.Type()&fs.ModeSymlink != 0 {
 			target, err := os.Readlink(path)
 			files[rel] = "-> " + target
@@ -531,7 +538,8 @@ func sameSnapshot(t *testing.T, before, after map[string]string) {
 	}
 }
 
-// fileURL は、絶対パス path を指す file:// の URL（Windows は file:///C:/…。空白などは %XX にする）。
+// fileURL は、絶対パス path を指す file:// の URL（Windows は file:///C:/…。空白などは
+// %XX にする）。
 func fileURL(path string) string {
 	slashed := filepath.ToSlash(path)
 	if !strings.HasPrefix(slashed, "/") {
@@ -545,7 +553,8 @@ func sha256Hex(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// installCLI は <Plug-Ins>/cli/ に入れた cli を作る（cli 以外を入れるテストの前提）。
+// installCLI は <Plug-Ins>/cli/ にインストールした cli を作成する（cli 以外をインストールする
+// テストの前提）。
 func (h *harness) installCLI() {
 	h.t.Helper()
 	h.mustInstall(release{name: "cli", tag: "c1"})

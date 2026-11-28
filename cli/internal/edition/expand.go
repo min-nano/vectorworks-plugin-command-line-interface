@@ -2,8 +2,8 @@ package edition
 
 import "strings"
 
-// Expand は s の ${cmd} などを Vars の値に置き換える。kong が差し込まない文字列（コマンドの Help() の
-// 詳しい説明・誤りの文言）に使う。知らない ${…} はそのまま残す。
+// Expand は s の ${cmd} などを Vars の値に置換する。kong が挿入しない文字列（コマンドの Help() の
+// 詳細な説明・エラーの文言）に使用する。未知の ${…} はそのまま残す。
 func Expand(s string) string {
 	if !strings.Contains(s, "${") {
 		return s

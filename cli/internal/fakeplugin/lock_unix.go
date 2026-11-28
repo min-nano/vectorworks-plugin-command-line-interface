@@ -8,7 +8,7 @@ import (
 	"syscall"
 )
 
-// lock はプラグインと同じく flock(LOCK_EX) を掴む。
+// lock はプラグインと同様に flock(LOCK_EX) を取得する。
 func lock(path string) (func(), error) {
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
@@ -21,9 +21,10 @@ func lock(path string) (func(), error) {
 	return func() { file.Close() }, nil
 }
 
-// waitStateOf は <id>.wait の状態（docs/protocol.md「待機標識」）。掴めれば呼ぶ側が放した・死んだ。プラグインと
-// 同じく、開いて待たず（O_NONBLOCK）、リンクをたどらない（O_NOFOLLOW）。通常のファイルでない・無い（名前が長すぎて
-// 置けないものも）なら無い、それ以外の理由で開けない・試せないなら確かめられない。
+// waitStateOf は <id>.wait の状態（docs/protocol.md「待機標識」）。取得できれば呼び出し元が
+// 解放した・異常終了した。プラグインと同じく、開いて待機せず（O_NONBLOCK）、リンクをたどらない
+// （O_NOFOLLOW）。通常のファイルでない・存在しない（名前が長すぎて配置できないものも）ならば存在しない、
+// それ以外の理由で開けない・取得を試行できないならば確認できない。
 func waitStateOf(path string) waitState {
 	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0)
 	if err != nil {

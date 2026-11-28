@@ -10,8 +10,8 @@
 #include <string_view>
 #include <system_error>
 
-// 整数の引数を値で読む口（Json::integerValue）と、道具の結果の実数を書き出す口（Json::real）。
-// 決まりは docs/plugin/tools.md「共通の規則」。
+// 整数の引数を値として読み取る関数（Json::integerValue）と、ツールの結果の実数を書き出す関数
+// （Json::real）。規則は docs/plugin/tools.md「共通の規則」。
 
 using VwCli::core::IntegerCheck;
 using VwCli::core::IntegerValue;
@@ -55,7 +55,7 @@ TEST(IntegerValueReadsZeroWrittenAnyWay) {
 	CHECK(integer("0.000e1000000000000000000000", 0));
 }
 
-// 範囲と小数部は、仮数の最初の 0 でない数字の位置に指数を足した実際の桁の位置で決める。
+// 範囲と小数部は、仮数の最初の 0 でない数字の位置に指数を加えた実際の桁の位置で決定する。
 TEST(IntegerValueUsesThePlaceOfTheDigits) {
 	CHECK(integer("0.0000000001e10", 1));
 	CHECK(integer("1" + std::string(10000, '0') + "e-10000", 1));
@@ -64,7 +64,7 @@ TEST(IntegerValueUsesThePlaceOfTheDigits) {
 	CHECK(integer("1000000000e-9", 1));
 }
 
-// 浮動小数点数に直すと 2 に丸まる値も、小数部があるとして断る。
+// 浮動小数点数に変換すると 2 に丸められる値も、小数部があるものとして拒否する。
 TEST(IntegerValueRejectsFractions) {
 	CHECK(fraction("2.5"));
 	CHECK(fraction("2.0000000000000001"));
@@ -74,7 +74,7 @@ TEST(IntegerValueRejectsFractions) {
 	CHECK(fraction("12345e-3"));
 }
 
-// 浮動小数点数に直すと無限大になる値も、範囲の外として断る。
+// 浮動小数点数に変換すると無限大になる値も、範囲外として拒否する。
 TEST(IntegerValueRejectsValuesOutOfRange) {
 	CHECK(outOfRange("2147483648"));
 	CHECK(outOfRange("1e30"));
@@ -87,8 +87,8 @@ TEST(IntegerValueRejectsValuesOutOfRange) {
 	CHECK(outOfRange("1" + std::string(100000, '0')));
 }
 
-// 実数と綴りの組の見本（tests/fixtures/reals.json）。Go のテストは同じ組を json.Marshal と照らす
-// （cli/internal/toolfixtures）。
+// 実数と綴りの組のフィクスチャ（tests/fixtures/reals.json）。Go のテストは同じ組を json.Marshal と
+// 照合する（cli/internal/toolfixtures）。
 TEST(RealMatchesTheFixture) {
 	std::filesystem::path path = std::filesystem::path(VWCLI_TOOL_FIXTURES_DIR) / "reals.json";
 	Json fixture = must(VwCli::test::readFile(path));
@@ -115,7 +115,7 @@ TEST(RealIsNullUnlessFinite) {
 	CHECK(Json::real(1.5).isNumber());
 }
 
-// 書き出した綴りは JSON の数として読み直せ、同じ値に戻る。
+// 書き出した綴りは JSON の数として読み直すことができ、同じ値に戻る。
 TEST(RealRoundTrips) {
 	for (double value : {0.1, 2366.025, 1e21, 1e-7, 5e-324, 1.7976931348623157e308, -43.065}) {
 		std::string text = Json::real(value).dump();

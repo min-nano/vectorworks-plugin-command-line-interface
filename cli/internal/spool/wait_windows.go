@@ -4,11 +4,11 @@ package spool
 
 import "syscall"
 
-// holdWait は <id>.wait を作って掴む（docs/protocol.md「待機標識」）。返す関数で放す。
+// holdWait は <id>.wait を作成して取得する（docs/protocol.md「待機標識」）。返す関数で解放する。
 //
-// 掴み方は bridge.lock と同じく共有なし（share mode 0）で開いたハンドルを持ち続ける。
-// ハンドルはプロセスが終われば（異常終了でも）OS が閉じる。lpSecurityAttributes に nil を
-// 渡し、子プロセスに受け継がせない。
+// 取得の方法は bridge.lock と同じく共有なし（share mode 0）で開いたハンドルを保持し続ける。
+// ハンドルはプロセスが終了すれば（異常終了でも）OS が閉じる。lpSecurityAttributes に nil を
+// 渡し、子プロセスに継承させない。
 func holdWait(path string) (func(), error) {
 	name, err := syscall.UTF16PtrFromString(path)
 	if err != nil {

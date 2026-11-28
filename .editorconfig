@@ -1,4 +1,4 @@
-# 言語をまたぐ整形の決まり（docs/format.md）。各言語の設定には、その言語にしかない項目だけを書く。
+# 言語共通の整形の規則（docs/format.md）。各言語の設定には、その言語固有の項目のみを記述する。
 root = true
 
 [*]
@@ -10,7 +10,7 @@ indent_style = tab
 indent_size = 4
 max_line_length = 100
 
-# YAML はタブを使えない。Markdown はリストの入れ子をスペースで書く。
+# YAML はタブを使用できない。Markdown はリストの入れ子をスペースで記述する。
 [*.{yml,yaml,md}]
 indent_style = space
 indent_size = 2
@@ -20,18 +20,18 @@ indent_size = 2
 max_line_length = off
 
 # PowerShell は BOM 付き。Windows PowerShell 5.1 は BOM の無いファイルを ANSI のコードページで
-# 読み、日本語のコメントや文字列を読み崩すため。
+# 読み取り、日本語のコメントや文字列を誤って解釈するため。
 [*.{ps1,psm1,psd1}]
 charset = utf-8-bom
 
-# Vectorworks のリソースの文字列。UTF-16LE（BOM 付き）・CRLF のまま保つ。
+# Vectorworks のリソースの文字列。UTF-16LE（BOM 付き）・CRLF のまま保持する。
 [*.vwstrings]
 charset = utf-16le
 end_of_line = crlf
 insert_final_newline = unset
 trim_trailing_whitespace = unset
 
-# 通信規則の見本。壊れた要求をわざと含むので、エディタに中身を変えさせない。
+# 通信規則のフィクスチャ。不正な要求を意図的に含むため、エディタに内容を変更させない。
 [protocol/fixtures/**]
 charset = unset
 end_of_line = unset

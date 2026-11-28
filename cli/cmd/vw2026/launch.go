@@ -62,7 +62,8 @@ func (c *launchCmd) run(e *env) int {
 	}
 	argv, err := launch.Command(c.App)
 	if err != nil {
-		// 起動するものの指定（フラグと環境変数）は、それを定義するここで案内する。Windows では実行ファイルを指す。
+		// 起動対象の指定（フラグと環境変数）は、それを定義するこの箇所で案内する。Windows では
+		// 実行ファイルを指す。
 		what := "the application"
 		if runtime.GOOS == "windows" {
 			what = "Vectorworks" + edition.Year + ".exe"

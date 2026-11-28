@@ -15,8 +15,8 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/registry"
 )
 
-// 本物の sh（mac）と powershell（Windows）でフックを走らせる（Interpreters を差し替えない）。
-// 走らせるものは OS の決まった場所のもので、PATH から探さない。
+// 実際の sh（mac）と powershell（Windows）でフックを実行する（Interpreters を差し替えない）。
+// 実行するものは OS の定められた場所のものであり、PATH から探索しない。
 func TestRealInterpreter(t *testing.T) {
 	h := newHarness(t)
 	hooks := registry.Hooks{Install: []string{"sh", "hooks/install.sh", "x y"}}
@@ -38,7 +38,7 @@ func TestRealInterpreter(t *testing.T) {
 	}
 }
 
-// sh のフックは Windows で、powershell のフックは mac で走らない（失敗にして戻す）。
+// sh のフックは Windows で、powershell のフックは mac で実行されない（失敗として巻き戻す）。
 func TestInterpreterOfAnotherOS(t *testing.T) {
 	o := Options{}
 	other := "powershell"
@@ -50,7 +50,7 @@ func TestInterpreterOfAnotherOS(t *testing.T) {
 	}
 }
 
-// 転送は追うが、行き先も https:// に限る。200 の他は失敗。
+// 転送には追従するが、転送先も https:// に限定する。200 以外は失敗とする。
 func TestOpenRefusesRedirectsAndErrors(t *testing.T) {
 	h := newHarness(t)
 	h.serve("/ok.json", []byte("{}"))
@@ -95,7 +95,8 @@ func TestOpenRefusesRedirectsAndErrors(t *testing.T) {
 	}
 }
 
-// --registry は https:// か file:// の URL だけ。パス・他の scheme・空・正しくない file:// は使い方の誤り。
+// --registry は https:// か file:// の URL のみ。パス・他の scheme・空・不正な file:// は使用方法の
+// 誤り。
 func TestCheckRegistry(t *testing.T) {
 	for _, ref := range []string{"https://Example.com/R.json", fileURL(filepath.Join(t.TempDir(), "a b", "r.json"))} {
 		if err := checkRegistry(ref); err != nil {
@@ -110,8 +111,8 @@ func TestCheckRegistry(t *testing.T) {
 	}
 }
 
-// 場所が分からなければ、何も変えずに失敗にする。<Plug-Ins>・<Work> は絶対パスだけ（相対の <Plug-Ins> は
-// 使い方の誤り）で、整えた形で使う。
+// 場所が判明しなければ、何も変更せずに失敗とする。<Plug-Ins>・<Work> は絶対パスのみ（相対の
+// <Plug-Ins> は使用方法の誤り）とし、正規化した形で使用する。
 func TestPlaces(t *testing.T) {
 	o := Options{Target: testTarget}
 	if _, err := Install(o, "cli", "latest", false); err == nil {
@@ -133,7 +134,7 @@ func TestPlaces(t *testing.T) {
 	}
 }
 
-// 入れる先にフォルダでないもの（利用者のファイル）があれば触れない。
+// インストール先にフォルダでないもの（利用者のファイル）が存在すれば、それに触れない。
 func TestInstallRefusesAFile(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -148,7 +149,7 @@ func TestInstallRefusesAFile(t *testing.T) {
 	}
 }
 
-// 同じタグで記録のフックのファイルが無くなっていれば、フックの失敗として何も変えない。
+// 同じタグで記録のフックのファイルが存在しなくなっていれば、フックの失敗として何も変更しない。
 func TestInstallSameTagWithoutTheHookFile(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -160,12 +161,13 @@ func TestInstallSameTagWithoutTheHookFile(t *testing.T) {
 	sameSnapshot(t, before, snapshot(t, h.plugins))
 }
 
-// 展開を失敗にするもの: zip でないもの・ファイルでない項目・展開先の中にとどまる ..（区切りの .. は名前に
-// 使えない）・ファイルの項目の下の項目（フォルダを作れない）・知らない圧縮の方法の項目（読めない）。
+// 展開を失敗とするもの: zip でないもの・ファイルでない項目・展開先の内部にとどまる ..（区切りの
+// .. は名前に使用できない）・ファイルの項目の下の項目（フォルダを作成できない）・未知の圧縮方式の
+// 項目（読み取れない）。
 func TestExtractRefuses(t *testing.T) {
 	for name, c := range map[string]struct {
 		zip func(t *testing.T) []byte
-		// want は誤りの文言に含まれるもの（どの理由で断ったか）。
+		// want は誤りの文言に含まれるもの（いずれの理由で拒否したか）。
 		want string
 	}{
 		"not a zip": {func(*testing.T) []byte { return []byte("not a zip") }, "not a zip"},
@@ -205,7 +207,7 @@ func TestExtractRefuses(t *testing.T) {
 	}
 }
 
-// 項目の中のディレクトリは作る。
+// 項目の中のディレクトリは作成する。
 func TestExtractMakesFolders(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "folders.zip")
@@ -216,7 +218,7 @@ func TestExtractMakesFolders(t *testing.T) {
 	}
 }
 
-// uninstall の安全弁: モジュールが無いときは、install で直すよう示す。
+// uninstall の安全弁: モジュールが存在しない場合は、install で修正するよう示す。
 func TestUninstallMissingModuleSaysHowToRepair(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -226,7 +228,8 @@ func TestUninstallMissingModuleSaysHowToRepair(t *testing.T) {
 	}
 }
 
-// 前の回の old/<name>/ が読めない記録のままで <Plug-Ins>/<name>/ もあるなら、uninstall も断る。
+// 以前の回の old/<name>/ が読み取れない記録のままで <Plug-Ins>/<name>/ も存在するなら、uninstall も
+// 拒否する。
 func TestUninstallRefusesUnreadableLeftover(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -240,7 +243,7 @@ func TestUninstallRefusesUnreadableLeftover(t *testing.T) {
 	}
 }
 
-// 印があっても、old/<name>/ の記録が読めなければ続けない。
+// 標識が存在しても、old/<name>/ の記録が読み取れなければ続行しない。
 func TestUninstallResumeNeedsAValidRecord(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -257,8 +260,8 @@ func TestUninstallResumeNeedsAValidRecord(t *testing.T) {
 	}
 }
 
-// <Work> に他のものがあれば、uninstall は <Work> を消さない。<Plug-Ins> の直下のファイルや、
-// 名前の違う記録のフォルダは remaining に載せない。
+// <Work> に他のものが存在すれば、uninstall は <Work> を削除しない。<Plug-Ins> の直下のファイルや、
+// 名前の異なる記録のフォルダは remaining に含めない。
 func TestUninstallKeepsOtherThings(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -279,7 +282,7 @@ func TestUninstallKeepsOtherThings(t *testing.T) {
 	}
 }
 
-// 走らせている CLI がフォルダの外にあれば、よけない。
+// 実行中の CLI がフォルダの外にあれば、退避しない。
 func TestSidestepOutside(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()
@@ -296,7 +299,7 @@ func TestSidestepOutside(t *testing.T) {
 	}
 }
 
-// 記録は、版・名前・出どころ・タグ・ターゲット・モジュールと正しいフックがそろって読める。
+// 記録は、版・名前・出所・タグ・ターゲット・モジュールと正しいフックが揃った状態で読み取れる。
 func TestReadRecordRefuses(t *testing.T) {
 	for name, body := range map[string]string{
 		"no version":    `{"name":"a","registry":"default","tag":"t","target":"macos-arm64","module":"a.vwlibrary"}`,
@@ -313,7 +316,7 @@ func TestReadRecordRefuses(t *testing.T) {
 	}
 }
 
-// 名前が見つかる前の --registry が読めない（壊れている）なら、そこで失敗にする。
+// 名前が見つかる前の --registry が読み取れない（破損している）場合は、その時点で失敗とする。
 func TestLookupBrokenRegistry(t *testing.T) {
 	h := newHarness(t)
 	broken := fileURL(filepath.Join(h.tmp, "broken.json"))
@@ -323,14 +326,14 @@ func TestLookupBrokenRegistry(t *testing.T) {
 	if _, _, err := o.lookup("other"); err == nil || !strings.Contains(err.Error(), broken) {
 		t.Fatal(err)
 	}
-	// 正しくない --registry は、既定のレジストリにある名前でも使い方の誤り。
+	// 不正な --registry は、既定のレジストリにある名前でも使用方法の誤りとする。
 	o.Registries = []string{""}
 	if _, err := Install(o, "cli", "c1", false); !IsUsage(err) {
 		t.Fatal(err)
 	}
 }
 
-// 記録の先頭の BOM は許す（BOM を書くエディタで保存した記録も読む）。
+// 記録の先頭の BOM は許容する（BOM を書き込むエディタで保存した記録も読み取る）。
 func TestRecordWithBOM(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -342,7 +345,7 @@ func TestRecordWithBOM(t *testing.T) {
 	}
 }
 
-// ./ で始まる項目の zip（zip -r x.zip ./ が作る）も入れられる。
+// ./ で始まる項目の zip（zip -r x.zip ./ が作成する）もインストールできる。
 func TestInstallZipWithDotSlash(t *testing.T) {
 	h := newHarness(t)
 	h.installCLI()

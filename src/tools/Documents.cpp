@@ -13,16 +13,17 @@
 #include <string>
 #include <vector>
 
-// 図面を扱う道具（documents・save・close）の SDK の側。SDK の呼び出しを core::Documents として
-// 渡すだけで、確かめの順・保存先の確かめ・前面を戻す手順・結果の形は src/core/DocumentTools.cpp
-// （docs/plugin/tools.md「図面を操作するツール」。Findings「Documents」の「指定した図面を保存する・閉じる」）。
+// 図面を操作するツール（documents・save・close）の SDK の側。SDK の呼び出しを
+// core::Documents として渡すのみで、検証の順序・保存先の検証・前面を戻す手順・結果の形式は
+// src/core/DocumentTools.cpp（docs/plugin/tools.md「図面を操作するツール」。Findings「Documents」の
+// 「指定した図面を保存する・閉じる」）。
 
 namespace VwCli::tools {
 
 namespace {
 
 // pathOf は図面のパス。SDK が返す文字列をそのまま返す（正規化しない。docs/plugin/tools.md
-// 「documents」）。読めなければ空。
+// 「documents」）。読み取れなければ空。
 std::string pathOf(const VectorWorks::Filing::IFileIdentifierPtr &file) {
 	if (!file) {
 		return {};
@@ -52,7 +53,7 @@ public:
 	bool switchTo(std::int32_t ref) override { return gSDK->SwitchToOpenFile(ref); }
 
 	std::uint32_t saveActive(const std::string &path) override {
-		// プラグインはパスを書き換えずに渡す（形は core が先に確かめてある）。
+		// プラグインはパスを書き換えずに渡す（形式は core が事前に検証している）。
 		VectorWorks::Filing::IFileIdentifierPtr file(VectorWorks::Filing::IID_FileIdentifier);
 		if (!file || file->Set(TXString(path)) != kVCOMError_NoError) {
 			throw std::runtime_error("保存先の IFileIdentifier を作れませんでした");
@@ -60,14 +61,14 @@ public:
 		return static_cast<std::uint32_t>(gSDK->SaveActiveDocumentPath(file));
 	}
 
-	// CloseDocument は保存の確認を出さずに閉じ、未保存の変更を捨てる。閉じても false を返すことが
-	// あるので、成否は core が閉じた後の一覧で決める（Findings「CloseDocument() は false を
-	// 返しながら閉じている」）。
+	// CloseDocument は保存の確認を表示せずに閉じ、未保存の変更を破棄する。閉じても false を
+	// 返すことがあるため、成否は core が閉じた後の一覧で判定する（Findings
+	// 「CloseDocument() は false を返しながら閉じている」）。
 	void closeActive() override { (void)gSDK->CloseDocument(); }
 
-	// 一覧が空でも、CloseDocument で閉じた図面が中に残っていれば真を返す（core の
-	// clearClosedDocuments が使う。Findings「Documents」の「閉じた図面が残り、終了で保存の確認が
-	// 出る」）。パスは使わない。
+	// 一覧が空でも、CloseDocument で閉じた図面が内部に残存していれば真を返す（core の
+	// clearClosedDocuments が使用する。Findings「Documents」の
+	// 「閉じた図面が残り、終了で保存の確認が出る」）。パスは使用しない。
 	bool hasActive() override {
 		VectorWorks::Filing::IFileIdentifierPtr file(VectorWorks::Filing::IID_FileIdentifier);
 		bool saved = false;
@@ -86,9 +87,9 @@ core::Json documents(const core::Json &args, const core::ToolContext & /*context
 core::Json save(const core::Json &args, const core::ToolContext & /*context*/,
                 core::ToolStatus &status) {
 	SdkDocuments docs;
-	// プラグインの OS の to の形の規則と、本物の比べ方・ファイルシステムに聞く関数を渡す（CI では
-	// 確かめられないので、実機の確認で、大文字と小文字だけが違う to が to_is_open
-	// になるのを見る）。
+	// プラグインの OS の to の形式の規則と、実際の比較方法・ファイルシステムに問い合わせる関数を
+	// 渡す（CI では検証できないため、実機の確認で、大文字と小文字のみが異なる to が
+	// to_is_open になることを確認する）。
 	core::SaveEnvironment environment{core::save_target::kNativeForm,
 	                                  {&core::path_compare::equivalent, &core::save_target::probeTo,
 	                                   &core::save_target::probeParent}};
@@ -101,8 +102,9 @@ core::Json close(const core::Json &args, const core::ToolContext & /*context*/,
 	return core::close(args, docs, status);
 }
 
-// quit は開いている図面の一覧（GetOpenFilesList）だけを読むので、図面を扱う道具と同じ口を使う。
-// 終了は頼まない（終了の依頼を返すだけで、頼むのは受け付けの外の Clock）。
+// quit は開いている図面の一覧（GetOpenFilesList）のみを読み取るため、図面を操作するツールと
+// 同じインターフェースを使用する。
+// 終了は依頼しない（終了の依頼を返すのみで、依頼するのは受付処理の外の Clock）。
 core::Json quit(const core::Json &args, const core::ToolContext &context,
                 core::ToolStatus &status) {
 	SdkDocuments docs;

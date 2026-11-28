@@ -11,28 +11,31 @@ permissions:
   contents: read
 
 # mac と Windows のプラグインのビルド・梱包・リリース（docs/plugin/build-and-release.md）。
-# タグはビルドごとに新しく付け、使い回さない。main は 0.0.0-<短い sha> に（latest）、同じリポジトリの
-# PR はブランチの head でビルドしたものを dev-<slug>-<PR 番号>-<短い sha> にプレリリースする。
-# fork の PR・マージキュー・main 以外の手動の実行はビルドするだけで、公開しない。
-# 公開したら、資産を利用者と同じ道筋（既定のレジストリの規則 → マニフェスト → zip）で取ってきて確かめ、
-# PR では Windows で入れ替え（install・uninstall）を確かめる。
+# タグはビルドごとに新しく付与し、再利用しない。main は 0.0.0-<短い sha> に（latest）、
+# 同じリポジトリの PR はブランチの head でビルドしたものを dev-<slug>-<PR 番号>-<短い sha> に
+# プレリリースする。
+# fork の PR・マージキュー・main 以外の手動の実行はビルドのみを行い、公開しない。
+# 公開した後、資産を利用者と同じ経路（既定のレジストリの規則 → マニフェスト → zip）で取得して
+# 検証し、PR では Windows で置換（install・uninstall）を検証する。
 #
-# PR では新しい push が走っているビルドを止める（古い head の公開に意味は無い）。PR が閉じたときは
-# cleanup-dev-release.yml が同じグループで走り、走っているビルドを止めてから、その PR の
-# プレリリースを消す。PR のグループは github.ref ではなく PR 番号で組む。マージで閉じた
-# PR の closed では github.ref が main になり、github.ref で組むと main の push のビルドを止めるため。
-# グループの式は cleanup-dev-release.yml と同じものにする（片方だけ変えると同じグループに入らない）。
-# 開き直し（reopened）は止めずに待つ。閉じたときの片付けが走っている最中に開き直すと、片付けを
-# 途中で止めてタグや消しかけのリリースを残すため。開き直しのビルドが片付けを待っている間に push が
-# 来ると、その synchronize のビルドは片付けを止める。片付けは数秒で終わるので、この隙間は残す。
+# PR では新しい push が実行中のビルドを停止する（古い head の公開に意味は無い）。PR が閉じた場合は
+# cleanup-dev-release.yml が同じグループで実行され、実行中のビルドを停止してから、その PR の
+# プレリリースを削除する。PR のグループは github.ref ではなく PR 番号で構成する。マージで閉じた
+# PR の closed では github.ref が main になり、github.ref で構成すると main の push のビルドを
+# 停止するため。
+# グループの式は cleanup-dev-release.yml と同じものにする（片方のみを変更すると同じグループに
+# 入らない）。
+# 再開（reopened）は停止せずに待機する。閉じた際の後処理の実行中に再開すると、後処理を途中で停止して
+# タグや削除の途中のリリースを残置するため。再開のビルドが後処理を待機している間に push が届くと、
+# その synchronize のビルドは後処理を停止する。後処理は数秒で終了するため、この隙間は許容する。
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'reopened' }}
 
 jobs:
-  # 刻印・公開先を決め、build.json を書く（mac と Windows の zip に同じものを入れる）。ビルドのジョブは
-  # 刻印（version・branch）をここから受け取る。取り出すコミットはビルドのジョブが自分で決め、ここの sha と
-  # 同じかを確かめる。
+  # 刻印・公開先を決定し、build.json を書き込む（mac と Windows の zip に同じものを格納する）。
+  # ビルドのジョブは刻印（version・branch）をここから受け取る。取り出すコミットはビルドのジョブが
+  # 自身で決定し、ここの sha と同じかを確認する。
   meta:
     runs-on: ubuntu-latest
     outputs:
@@ -45,8 +48,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # 同じリポジトリの PR はブランチの head（docs/plugin/build-and-release.md「リリースの構成」）。
-          # fork の head は信頼できないので、マージのためのコミットをビルドするだけにする。
+          # 同じリポジトリの PR はブランチの head（docs/plugin/build-and-release.md
+          # 「リリースの構成」）。
+          # fork の head は信頼できないため、マージのためのコミットをビルドするのみとする。
           ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
       - id: meta
         env:
@@ -88,10 +92,12 @@ jobs:
           name: build-json
           path: build.json
 
-  # mac の zip: cli.vwlibrary/・build.json・bin/vw2026（universal）・hooks/（sh）。版ごとに作る
+  # mac の zip: cli.vwlibrary/・build.json・bin/vw2026（universal）・hooks/（sh）。版ごとに作成する
   # （docs/plugin/editions.md）。2026 はジョブ名を build-mac のまま（必須のチェック）にし、2025 は
-  # build-mac-vw2025 で、Vectorworks 2025 の SDK でプラグインを、ビルドタグ vw2025 で vw2025 をビルドする。
-  # 2025 の mac の SDK のヘッダは clang 19 以降で通らないので、どちらも Xcode 16.2 でビルドする。
+  # build-mac-vw2025 で、Vectorworks 2025 の SDK でプラグインを、ビルドタグ vw2025 で vw2025 を
+  # ビルドする。
+  # 2025 の mac の SDK のヘッダは clang 19 以降でコンパイルできないため、いずれも Xcode 16.2 で
+  # ビルドする。
   build-mac:
     name: ${{ matrix.name }}
     needs: meta
@@ -116,9 +122,9 @@ jobs:
       ARCHIVE: ${{ matrix.zip }}
       GO_TAGS: ${{ matrix.go-tags }}
     steps:
-      # 取り出すものは meta の出力に頼らず、ここに条件を書く（同じリポジトリの PR だけ head。fork の
-      # PR はマージのためのコミット）。CodeQL が安全だと読めるようにし、meta を変えたときに信頼
-      # できないコードを取り出すようになるのを防ぐため。
+      # 取り出すものは meta の出力に依存せず、ここに条件を記述する（同じリポジトリの PR のみ head。
+      # fork の PR はマージのためのコミット）。CodeQL が安全であると判定できるようにし、meta を
+      # 変更した際に信頼できないコードを取り出すようになることを防止するため。
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
@@ -126,7 +132,7 @@ jobs:
         with:
           sha: ${{ needs.meta.outputs.sha }}
           sdk-cache-prefix: vw-sdk-${{ matrix.year }}-mac
-      # SDK リファレンスの plugin/ が実機で読み込まれているビルドと同じ Xcode に合わせる。
+      # SDK リファレンスの plugin/ が実機で読み込まれているビルドと同じ Xcode に統一する。
       - run: sudo xcode-select -s /Applications/Xcode_16.2.app
       - name: plug-in
         env:
@@ -136,15 +142,19 @@ jobs:
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DVW_SDK_DIR="$VW_SDK_DIR" \
             -DVW_BUILD_VERSION="$VERSION" -DVW_BUILD_BRANCH="$BRANCH"
           cmake --build build --target VwCli --parallel "$(sysctl -n hw.ncpu)"
-          # アドホック署名（Developer ID と公証はしない）。.vwr を入れた後にかけ、リソースまで封をする。
+          # アドホック署名（Developer ID と公証は行わない）。.vwr を格納した後に署名し、リソースまで
+          # 封印する。
           codesign --force --deep --sign - build/cli.vwlibrary
           codesign --verify --strict --verbose=2 build/cli.vwlibrary
           lipo -info build/cli.vwlibrary/Contents/MacOS/cli
-          # mac の BuildVWR は固めずに写す（ログは "Release (Copied)"）ので、ファイルとは限らない。
+          # mac の BuildVWR は 1 つのファイルにまとめずに複製する（ログは "Release (Copied)"）ため、
+          # ファイルとは限らない。
           test -e build/cli.vwlibrary/Contents/Resources/cli.vwr
           ditto build/cli.vwlibrary stage/cli.vwlibrary
-      # Go は arm64 のバイナリをリンクのときにアドホック署名する。lipo は各アーキテクチャの署名を保つ。
-      # 2025 はビルドタグ vw2025 を付ける（マトリクスの go-tags。コマンド名・環境変数・置き場所・既定のレジストリが 2025 になる）。
+      # Go は arm64 のバイナリをリンクの際にアドホック署名する。lipo は各アーキテクチャの署名を
+      # 保持する。
+      # 2025 はビルドタグ vw2025 を付与する（マトリクスの go-tags。コマンド名・環境変数・配置場所・
+      # 既定のレジストリが 2025 になる）。
       - name: cli
         run: |
           set -eu
@@ -157,14 +167,16 @@ jobs:
           lipo -info "stage/bin/vw$YEAR"
           "stage/bin/vw$YEAR" version
           "stage/bin/vw$YEAR" --help | head -1 | grep -q "^Usage: vw$YEAR "
-      # フックは PATH だけを置く（docs/plugin/install-and-update.md「cli のフック」）。mac は sh のものだけ。
-      # どの版の zip にも同じフックを入れる（フックは渡された VW<版>_HOOK_* で版を決める）。
+      # フックは PATH のみを配置する（docs/plugin/install-and-update.md「cli のフック」）。mac は
+      # sh のもののみ。
+      # いずれの版の zip にも同じフックを格納する（フックは渡された VW<版>_HOOK_* で版を決定する）。
       - name: hooks
         run: |
           set -eu
           mkdir -p stage/hooks
           cp scripts/hooks/install.sh scripts/hooks/uninstall.sh scripts/hooks/lib.sh stage/hooks/
-      # zip はシンボリックリンクを追って中身を入れる（-y を付けない。install はリンクを断る）。
+      # zip はシンボリックリンクを辿って内容を格納する（-y を付けない。install はリンクを
+      # 拒否する）。
       - name: package
         run: |
           set -eu
@@ -176,8 +188,8 @@ jobs:
           name: ${{ matrix.zip }}
           path: dist/${{ matrix.zip }}
 
-  # Windows の zip: cli.vlb・cli.vwr・build.json・bin\vw2026.exe・hooks\（PowerShell）。版ごとに作る
-  # （build-mac と同じ。2026 は build-windows、2025 は build-windows-vw2025）。
+  # Windows の zip: cli.vlb・cli.vwr・build.json・bin\vw2026.exe・hooks\（PowerShell）。版ごとに
+  # 作成する（build-mac と同じ。2026 は build-windows、2025 は build-windows-vw2025）。
   build-windows:
     name: ${{ matrix.name }}
     needs: meta
@@ -205,9 +217,9 @@ jobs:
       ARCHIVE: ${{ matrix.zip }}
       GO_TAGS: ${{ matrix.go-tags }}
     steps:
-      # 取り出すものは meta の出力に頼らず、ここに条件を書く（同じリポジトリの PR だけ head。fork の
-      # PR はマージのためのコミット）。CodeQL が安全だと読めるようにし、meta を変えたときに信頼
-      # できないコードを取り出すようになるのを防ぐため。
+      # 取り出すものは meta の出力に依存せず、ここに条件を記述する（同じリポジトリの PR のみ head。
+      # fork の PR はマージのためのコミット）。CodeQL が安全であると判定できるようにし、meta を
+      # 変更した際に信頼できないコードを取り出すようになることを防止するため。
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
@@ -232,15 +244,15 @@ jobs:
             -ldflags "-s -w -X main.version=$VERSION" -o "../stage/bin/vw$YEAR.exe" ./cmd/vw2026
           "stage/bin/vw$YEAR.exe" version
           "stage/bin/vw$YEAR.exe" --help | head -1 | grep -q "^Usage: vw$YEAR "
-      # フックは PATH だけを置く（docs/plugin/install-and-update.md「cli のフック」）。Windows は
-      # PowerShell のものだけ。どの版の zip にも同じフックを入れる。
+      # フックは PATH のみを配置する（docs/plugin/install-and-update.md「cli のフック」）。
+      # Windows は PowerShell のもののみ。いずれの版の zip にも同じフックを格納する。
       - name: hooks
         run: |
           set -eu
           mkdir -p stage/hooks
           cp scripts/hooks/install.ps1 scripts/hooks/uninstall.ps1 scripts/hooks/lib.ps1 stage/hooks/
-      # .NET の ZipFile は項目の名前の区切りを / にする（Windows PowerShell 5.1 の Compress-Archive は \
-      # にするので使わない。install は \ の項目を断る）。
+      # .NET の ZipFile は項目の名前の区切りを / にする（Windows PowerShell 5.1 の
+      # Compress-Archive は \ にするため使用しない。install は \ の項目を拒否する）。
       - name: package
         shell: pwsh
         run: |
@@ -256,8 +268,9 @@ jobs:
           name: ${{ matrix.zip }}
           path: dist/${{ matrix.zip }}
 
-  # マニフェストを書き、下書きのリリースに資産を上げ終えてから公開する（下書きは利用者の URL から
-  # 見えないので、資産が揃わない間を見せない。latest は公開した時点で進む）。タグは使い回さない。
+  # マニフェストを書き込み、下書きのリリースに資産をアップロードし終えてから公開する（下書きは
+  # 利用者の URL から参照できないため、資産が揃っていない間を見せない。latest は公開した時点で
+  # 進む）。タグは再利用しない。
   release:
     needs: [meta, build-mac, build-windows]
     if: needs.meta.outputs.publish == 'true'
@@ -274,7 +287,7 @@ jobs:
       TITLE: ${{ needs.meta.outputs.title }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
-      # 初回のスクリプトは、ビルドしたのと同じコミットから取る。
+      # 初回スクリプトは、ビルドしたものと同じコミットから取得する。
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
@@ -289,8 +302,8 @@ jobs:
           path: dist
           merge-multiple: true
       # マニフェスト（docs/registry.md「マニフェスト」）。版ごとに 1 つ（vw2026.json・vw2025.json。
-      # docs/plugin/editions.md）。資産は絶対の参照で、このタグのリリースを指す（同じマニフェストを latest の
-      # 場所から取っても、指す zip は変わらない）。
+      # docs/plugin/editions.md）。資産は絶対の参照で、このタグのリリースを指す（同じマニフェストを
+      # latest の場所から取得しても、指す zip は変わらない）。
       - name: manifest
         run: |
           set -eu
@@ -321,11 +334,13 @@ jobs:
             }' > "dist/vw$year.json"
             cat "dist/vw$year.json"
           done
-      # 初回のスクリプト。雛形（scripts/get-vw.sh・.ps1）の @VW_TAG@ をこのリリースのタグに、@VW_YEAR@ を版に
-      # 置き換えて、版ごとに作る（get-vw2026.*・get-vw2025.*。どのリリースから取ったスクリプトも、その
-      # リリースのその版の cli を入れる。タグは英数字と . _ - だけなので、sed の置き換えにそのまま書ける）。
-      # PowerShell のものは BOM を除いて上げる（Windows PowerShell 5.1 の Invoke-RestMethod は charset の
-      # 無い本文を ISO-8859-1 で読むので、BOM が iex に崩れて渡る）。同じ理由で ASCII だけであることを確かめる。
+      # 初回スクリプト。雛形（scripts/get-vw.sh・.ps1）の @VW_TAG@ をこのリリースのタグに、
+      # @VW_YEAR@ を版に置換して、版ごとに作成する（get-vw2026.*・get-vw2025.*。いずれのリリースから
+      # 取得したスクリプトも、そのリリースのその版の cli をインストールする。タグは
+      # 英数字と . _ - のみであるため、sed の置換にそのまま記述できる）。
+      # PowerShell のものは BOM を除去してアップロードする（Windows PowerShell 5.1 の
+      # Invoke-RestMethod は charset の無い本文を ISO-8859-1 で読み取るため、BOM が崩れて iex に
+      # 渡る）。同じ理由で ASCII のみであることを確認する。
       - name: scripts
         run: |
           set -eu
@@ -345,11 +360,12 @@ jobs:
             fi
           done
           ls -l dist
-      # 同じタグの公開済みのリリースがあれば、タグが今回の完全な sha を指すなら何もせず（同じ sha の
-      # 実行し直し）、違えば失敗にする（短い sha が重なった。docs/plugin/build-and-release.md「リリースの構成」）。
-      # 下書きのまま残ったもの（前の実行が途中で止まった）は消して作り直す。PR では、同じ PR の別のタグの
-      # 下書き（push で止められた前の実行のもの）も消す。タグは公開したときに target の sha に作られる
-      # （下書きの間はタグが無い）。
+      # 同じタグの公開済みのリリースが存在すれば、タグが今回の完全な sha を指す場合は何もせず（同じ
+      # sha の再実行）、異なる場合は失敗とする（短い sha が重複した。
+      # docs/plugin/build-and-release.md「リリースの構成」）。
+      # 下書きのまま残存したもの（前回の実行が途中で停止した）は削除して作成し直す。PR では、同じ
+      # PR の別のタグの下書き（push で停止された前回の実行のもの）も削除する。タグは公開した時点で
+      # target の sha に作成される（下書きの間はタグが無い）。
       - id: publish
         run: |
           set -eu
@@ -389,12 +405,14 @@ jobs:
             dist/vw2025.json dist/cli-vw2025-macos-arm64.zip dist/cli-vw2025-windows-x64.zip \
             dist/get-vw2025.sh dist/get-vw2025.ps1 \
             --draft --target "$SHA" --title "$TITLE" --notes "Built from $SHA." "${kind[@]}"
-          # 作ったばかりの下書きは、一覧に載るまで少し掛かることがある（載る前に引くと id が無く、公開が
-          # 404 になる）。載るまで引き直し、載らなければ失敗にする。
+          # 作成した直後の下書きは、一覧に掲載されるまで若干の時間を要することがある（掲載される前に
+          # 照会すると id が無く、公開が 404 になる）。掲載されるまで照会し直し、掲載されなければ
+          # 失敗とする。
           id=""
           for _ in $(seq 10); do
-            # 頁ごとに絞り、最初の 1 行を取る（head で切ると gh が SIGPIPE で落ちうるので、シェルで切る）。
-            # $ENV は jq の式で、シェルに展開させない。
+            # 頁ごとに絞り込み、最初の 1 行を取得する（head で切り取ると gh が SIGPIPE で
+            # 異常終了しうるため、シェルで切り取る）。
+            # $ENV は jq の式であり、シェルに展開させない。
             # shellcheck disable=SC2016
             id="$(gh api --paginate "$api/releases?per_page=100" \
               --jq '.[] | select(.draft and .tag_name == $ENV.TAG) | .id')"
@@ -406,8 +424,9 @@ jobs:
             echo "::error::the draft of $TAG does not appear in the list of releases"
             exit 1
           fi
-          # latest にするのは、ビルドしたコミットが公開する時点の main の先頭のときだけ（失敗した古い
-          # push を後から実行し直したときに、latest が古いコミットへ戻らないため）。
+          # latest にするのは、ビルドしたコミットが公開する時点の main の先頭である場合のみ
+          # （失敗した古い push を後から再実行した際に、latest が古いコミットへ
+          # 戻らないようにするため）。
           latest=false
           if [ -z "$PR_NUMBER" ] && [ "$(gh api "$api/commits/main" --jq .sha)" = "$SHA" ]; then
             latest=true
@@ -417,8 +436,8 @@ jobs:
           echo "published $TAG (latest: $latest)"
           echo "latest=$latest" >> "$GITHUB_OUTPUT"
 
-  # 公開した資産を、利用者と同じ道筋（既定のレジストリの cli の規則が指すマニフェスト → その asset）で
-  # 取ってきて確かめる。版ごと（2026 と 2025。docs/plugin/editions.md）に確かめる。
+  # 公開した資産を、利用者と同じ経路（既定のレジストリの cli の規則が指すマニフェスト → その asset）
+  # で取得して検証する。版ごと（2026 と 2025。docs/plugin/editions.md）に検証する。
   verify:
     needs: [meta, release]
     strategy:
@@ -448,7 +467,8 @@ jobs:
       TARGET: ${{ matrix.target }}
       YEAR: ${{ matrix.year }}
     steps:
-      # 規則は CLI に埋め込むのと同じ既定のレジストリ（ビルドしたコミットのもの。版ごとのファイル）から読む。
+      # 規則は CLI に埋め込むものと同じ既定のレジストリ（ビルドしたコミットのもの。版ごとの
+      # ファイル）から読み取る。
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.sha }}
@@ -457,12 +477,13 @@ jobs:
       - env:
           SHA: ${{ needs.meta.outputs.sha }}
         run: test "$(git rev-parse HEAD)" = "$SHA"
-      # マニフェストの tag が公開したタグで、zip が sha256 と合う。latest にしたときは、latest の規則でも
-      # 同じタグのマニフェストが取れる。
+      # マニフェストの tag が公開したタグであり、zip が sha256 と一致する。latest にした場合は、
+      # latest の規則でも同じタグのマニフェストを取得できる。
       - name: manifest
         run: |
           set -eu
-          # 既定のレジストリの cli の規則の内、最初に合ったものの path（docs/registry.md「規則の選択」）。
+          # 既定のレジストリの cli の規則の内、最初に一致したものの path（docs/registry.md
+          # 「規則の選択」）。
           manifest_url() {
             jq -r --arg tag "$1" '.plugins.cli.manifests
               | map(select(.match as $m | $tag | test("^" + ($m | gsub("\\."; "\\.") | gsub("\\*"; ".*")) + "$")))
@@ -475,7 +496,8 @@ jobs:
           asset="$(jq -r --arg t "$TARGET" '.targets[$t].asset' "$manifest")"
           want="$(jq -r --arg t "$TARGET" '.targets[$t].sha256' "$manifest")"
           curl -fL --retry 4 --retry-delay 5 -o "$RUNNER_TEMP/release.zip" "$asset"
-          # 標準入力から読ませる（Windows の Git Bash の sha256sum は、パスに \ があると行の頭に \ を付ける）。
+          # 標準入力から読み取らせる（Windows の Git Bash の sha256sum は、パスに \ があると行頭に
+          # \ を付ける）。
           if command -v sha256sum > /dev/null; then
             got="$(sha256sum < "$RUNNER_TEMP/release.zip" | cut -d' ' -f1)"
           else
@@ -486,8 +508,9 @@ jobs:
             curl -fsSL --retry 4 --retry-delay 5 -o "$RUNNER_TEMP/latest.json" "$(manifest_url latest)"
             test "$(jq -r .tag "$RUNNER_TEMP/latest.json")" = "$TAG"
           fi
-      # 直下は build.json と bin/・hooks/ と、プラグイン（mac は cli.vwlibrary/、Windows は cli.vlb と cli.vwr）。
-      # bin/ の中は CLI だけ、hooks/ の中はその OS のフックだけ。
+      # 直下は build.json と bin/・hooks/ と、プラグイン（mac は cli.vwlibrary/、Windows は
+      # cli.vlb と cli.vwr）。
+      # bin/ の中は CLI のみ、hooks/ の中はその OS のフックのみ。
       - if: runner.os == 'macOS'
         run: |
           set -eu
@@ -523,9 +546,9 @@ jobs:
           $dir = "$env:RUNNER_TEMP/release"
           Expand-Archive -LiteralPath $zipPath -DestinationPath $dir
           "RELEASE_DIR=$dir" >> $env:GITHUB_ENV
-      # mac の初回のスクリプト（公開した get-vw<版>.sh）で、一時の <Plug-Ins> に入れて外す（Windows の初回の
-      # スクリプトは install-windows-editions が確かめる）。リンク（~/.local/bin/vw<版>）はランナーのホームに作って
-      # 消す（ランナーは使い捨て）。
+      # mac の初回スクリプト（公開した get-vw<版>.sh）で、一時的な <Plug-Ins> にインストールして
+      # アンインストールする（Windows の初回スクリプトは install-windows-editions が検証する）。
+      # リンク（~/.local/bin/vw<版>）はランナーのホームに作成して削除する（ランナーは使い捨て）。
       - if: runner.os == 'macOS'
         name: first-time script
         run: |
@@ -543,7 +566,8 @@ jobs:
           test "$(jq -r .outcome "$RUNNER_TEMP/uninstall.json")" = uninstalled
           test ! -e "$plugins/cli"
           test ! -L "$HOME/.local/bin/vw$YEAR"
-      # build.json と CLI の版が、ビルドした sha になっている。CLI はその版のもの（vw2025 は 2025）。
+      # build.json と CLI の版が、ビルドした sha になっている。CLI はその版のもの（vw2025 は
+      # 2025）。
       - run: |
           set -eu
           cat "$RELEASE_DIR/build.json"
@@ -552,11 +576,12 @@ jobs:
           test "$(jq -r .version "$RUNNER_TEMP/version.json")" = "$VERSION"
           "$RELEASE_DIR/bin/vw$YEAR" --help | head -1 | grep "^Usage: vw$YEAR "
 
-  # verify の結果を 1 つのチェックにまとめる（必須のチェックにするため）。verify は行列のジョブで、
-  # 公開しないとき（マージキュー・fork の PR）は release とともに行列を展開する前に飛ばされ、行列の値の
-  # 入った名前のチェックを出さないので、そのままでは必須にできない。公開するときは release と verify が
-  # 成功したこと、公開しないときはどちらも飛ばされたことを確かめる。always() にするのは、前のジョブが
-  # 失敗・中止したときに、このジョブまで飛ばされて成功として扱われないようにするため。
+  # verify の結果を 1 つのチェックに集約する（必須のチェックにするため）。verify は行列のジョブで、
+  # 公開しない場合（マージキュー・fork の PR）は release とともに行列を展開する前にスキップされ、
+  # 行列の値の含まれた名前のチェックを出力しないため、そのままでは必須にできない。公開する場合は
+  # release と verify が成功したこと、公開しない場合は両方がスキップされたことを確認する。
+  # always() にするのは、前のジョブが失敗・中止した場合に、このジョブまでスキップされて成功として
+  # 扱われないようにするため。
   verify-result:
     needs: [meta, release, verify]
     if: always()
@@ -579,16 +604,19 @@ jobs:
             test "$VERIFY" = skipped
           fi
 
-  # 実物の exe の入れ替え（docs/plugin/install-and-update.md「テスト」）。PR の CLI を <Plug-Ins>\cli\ に
-  # 入れ、入った PR の CLI に install（タグの違う記録にしてから）と install cli@latest を走らせて、PR の Go の
-  # コードに動いている自分をよけさせる（PR でよけ方を壊したら落ちる）。入った CLI の uninstall cli は断り、
-  # 初回のスクリプト（その PR のタグの CLI がフォルダの外で走る）で外す。利用者の Path の型と既存の項目が保たれることも
-  # 実物のレジストリで確かめる。ランナーは使い捨てなので既定の場所を使い、元の値は戻さない。main では
-  # 版の違う相手が無いので走らせない。初回のスクリプトは、利用者と同じく Windows PowerShell 5.1 で、
-  # 公開したものを Invoke-RestMethod で取って走らせる。
-  # 版ごとに走らせる（docs/plugin/editions.md）。2025 は vw2025 と Vectorworks 2025 の <Plug-Ins> を使う。
-  # 必須のチェックは、結果をまとめる install-windows にする（行列のジョブは、飛ばされると行列の値の入った名前の
-  # チェックを出さないので、そのままでは必須にできない。verify-result と同じ）。
+  # 実物の exe の置換（docs/plugin/install-and-update.md「テスト」）。PR の CLI を
+  # <Plug-Ins>\cli\ にインストールし、インストールされた PR の CLI に install（タグの異なる
+  # 記録にしてから）と install cli@latest を実行させ、PR の Go のコードに実行中の自身を退避させる
+  # （PR で退避の処理を損なえば失敗する）。インストールされた CLI の uninstall cli は拒否し、
+  # 初回スクリプト（その PR のタグの CLI がフォルダの外で実行される）でアンインストールする。
+  # 利用者の Path の型と既存の項目が保持されることも実物のレジストリで検証する。ランナーは
+  # 使い捨てであるため既定の場所を使用し、元の値は戻さない。main では版の異なる相手が無いため
+  # 実行しない。初回スクリプトは、利用者と同じく Windows PowerShell 5.1 で、公開したものを
+  # Invoke-RestMethod で取得して実行する。
+  # 版ごとに実行する（docs/plugin/editions.md）。2025 は vw2025 と Vectorworks 2025 の <Plug-Ins> を
+  # 使用する。
+  # 必須のチェックは、結果を集約する install-windows とする（行列のジョブは、スキップされると行列の
+  # 値の含まれた名前のチェックを出力しないため、そのままでは必須にできない。verify-result と同じ）。
   install-windows-editions:
     needs: [meta, release]
     if: github.event_name == 'pull_request'
@@ -605,29 +633,32 @@ jobs:
       VERSION: ${{ needs.meta.outputs.version }}
       YEAR: ${{ matrix.year }}
     steps:
-      # 各手順が読み込む関数。場所は vw2026（2025 は vw2025）と同じく OS の決まった場所から求める
-      # （docs/plugin/identifiers.md「配置場所」）。
+      # 各手順が読み込む関数。場所は vw2026（2025 は vw2025）と同じく OS の定められた場所から
+      # 導出する（docs/plugin/identifiers.md「配置場所」）。
       - name: helpers
         run: |
           @'
           $year = $env:YEAR
           $plugins = Join-Path ([Environment]::GetFolderPath('ApplicationData')) "Nemetschek\Vectorworks\$year\Plug-Ins"
-          # <Work> は <Plug-Ins> ごと（install.WorkDirFor: 小文字にした <Plug-Ins> の sha256 の先頭 12 桁。ランナーの
-          # <Plug-Ins> の書き方にリンクは無い）。食い違えば、4 の「<Work> がある」の確かめで落ちる。
+          # <Work> は <Plug-Ins> ごと（install.WorkDirFor: 小文字にした <Plug-Ins> の sha256 の先頭
+          # 12 桁。ランナーの <Plug-Ins> の表記にリンクは無い）。食い違えば、4 の「<Work> がある」の
+          # 確認で失敗する。
           $sha = [Security.Cryptography.SHA256]::Create()
           $key = -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($plugins.ToLowerInvariant()))[0..5] | ForEach-Object { $_.ToString('x2') })
           $work = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) "Temp\vectorworks$year-cli-$key"
           $bin = Join-Path $plugins 'cli\bin'
           $exe = Join-Path $bin "vw$year.exe"
 
-          # vw2026（vw2025）の出力の JSON をログに出して読む。終了コードが 0 でなければ止める。
+          # vw2026（vw2025）の出力の JSON をログに出力して読み取る。終了コードが 0 でなければ
+          # 停止する。
           function Read-Output($Text) {
               $code = $LASTEXITCODE
               Write-Host $Text
               if ($code -ne 0) { throw "exit code $code" }
               $Text | ConvertFrom-Json
           }
-          # その PR のタグの公開した初回のスクリプトを、引数を付けて走らせる（引数が無ければ、そのタグの cli を入れる）。
+          # その PR のタグの公開した初回スクリプトを、引数を付けて実行する（引数が無ければ、その
+          # タグの cli をインストールする）。
           function Invoke-Bootstrap {
               $script = Invoke-RestMethod -UseBasicParsing "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:TAG/get-vw$year.ps1"
               $arguments = $args
@@ -663,8 +694,9 @@ jobs:
               @(Get-ChildItem -LiteralPath (Join-Path $work 'old') -Filter "vw$year.exe.old-*" -File -ErrorAction SilentlyContinue)
           }
           '@ | Set-Content -Encoding UTF8 "$env:RUNNER_TEMP\helpers.ps1"
-      # latest を入れる手順 7 を走らせるか。PR の CLI が読めるのは PR のマニフェストと同じ manifest_version
-      # なので、latest にマニフェストが無い・版が違う（manifest_version を上げる PR）ときは飛ばす。
+      # latest をインストールする手順 7 を実行するか。PR の CLI が読み取れるのは PR のマニフェストと
+      # 同じ manifest_version であるため、latest にマニフェストが無い・版が異なる
+      # （manifest_version を上げる PR）場合はスキップする。
       - id: latest
         shell: bash
         run: |
@@ -678,8 +710,8 @@ jobs:
           else
             echo "install=false" >> "$GITHUB_OUTPUT"
           fi
-      # 1. 利用者の Path の値を消し、初回のスクリプトと同じ入り方で入れる。Path は REG_EXPAND_SZ の
-      #    <Plug-Ins>\cli\bin だけになる。
+      # 1. 利用者の Path の値を削除し、初回スクリプトと同じ方法でインストールする。Path は
+      #    REG_EXPAND_SZ の <Plug-Ins>\cli\bin のみになる。
       - name: install from the first-time script
         run: |
           . "$env:RUNNER_TEMP\helpers.ps1"
@@ -689,8 +721,8 @@ jobs:
           Assert-UserPath $bin ([Microsoft.Win32.RegistryValueKind]::ExpandString)
           $version = (Get-Content -Raw (Join-Path $plugins 'cli\build.json') | ConvertFrom-Json).version
           if ($version -ne $env:VERSION) { throw "build.json: $version" }
-      # 2. 実物のレジストリで、Path の型と既存の項目が保たれる。同じタグの install はフックだけを走らせ、
-      #    付け替えないので CLI をよけない。
+      # 2. 実物のレジストリで、Path の型と既存の項目が保持される。同じタグの install はフックのみを
+      #    実行し、差し替えないため CLI を退避しない。
       - name: keep the kind and the entries of Path
         run: |
           . "$env:RUNNER_TEMP\helpers.ps1"
@@ -698,21 +730,22 @@ jobs:
           $out = Invoke-Installed install "cli@$env:TAG"
           if ($out.outcome -ne 'up_to_date') { throw 'not up_to_date' }
           Assert-UserPath "C:\vw2026-probe-sz;$bin" ([Microsoft.Win32.RegistryValueKind]::String)
-          # 項目を展開せずに残し、末尾の ; に区切りを重ねない。
+          # 項目を展開せずに保持し、末尾の ; に区切りを重ねない。
           Set-UserPath '%USERPROFILE%\vw2026-path-probe;' ([Microsoft.Win32.RegistryValueKind]::ExpandString)
           $out = Invoke-Installed install "cli@$env:TAG"
           if ($out.outcome -ne 'up_to_date') { throw 'not up_to_date' }
           Assert-UserPath "%USERPROFILE%\vw2026-path-probe;$bin" ([Microsoft.Win32.RegistryValueKind]::ExpandString)
-          # 置き直さずにもう一度走らせても同じ値のまま。
+          # 設定し直さずに再度実行しても同じ値のまま。
           $out = Invoke-Installed install "cli@$env:TAG"
           if ($out.hook.path -ne 'exists') { throw "hook: $($out.hook.path)" }
           Assert-UserPath "%USERPROFILE%\vw2026-path-probe;$bin" ([Microsoft.Win32.RegistryValueKind]::ExpandString)
-      # 3. 入った PR の CLI で uninstall cli は、何も変えずに 2 で終わり、入っているタグの初回のスクリプトを示す。
+      # 3. インストールされた PR の CLI で uninstall cli は、何も変更せずに 2 で終了し、
+      #    インストールされているタグの初回スクリプトを示す。
       - name: uninstall with the installed CLI is refused
         run: |
           . "$env:RUNNER_TEMP\helpers.ps1"
-          # Windows PowerShell 5.1 は、Stop のときに exe の標準エラーを止まる誤りにするので、この呼び出しだけ
-          # Continue にする（標準エラーには、案内の文言が出る）。
+          # Windows PowerShell 5.1 は、Stop の場合に exe の標準エラーを停止するエラーとして
+          # 扱うため、この呼び出しのみ Continue にする（標準エラーには、案内の文言が出力される）。
           $ErrorActionPreference = 'Continue'
           $text = & $exe uninstall cli 2>&1 | ForEach-Object { if ($_ -is [System.Management.Automation.ErrorRecord]) { Write-Host "stderr: $_" } else { $_ } }
           $code = $LASTEXITCODE
@@ -723,27 +756,30 @@ jobs:
               throw "exit code $code"
           }
           if (-not (Test-Path -LiteralPath (Join-Path $plugins "cli\vw$year-install.json"))) { throw 'cli is removed' }
-          # 2 で終わったのが正しいので、ステップの終了コード（$LASTEXITCODE）を戻す。
+          # 2 で終了したことが正しいため、ステップの終了コード（$LASTEXITCODE）を戻す。
           $global:LASTEXITCODE = 0
-      # 4. 入った PR の CLI で、記録のタグを違うものにしてから同じビルドを入れ直す。動いている自分を
-      #    <Work>\old\ へよけてフォルダを付け替え、よけた自分（動いている）は残る。
+      # 4. インストールされた PR の CLI で、記録のタグを異なるものにしてから同じビルドを
+      #    インストールし直す。実行中の自身を <Work>\old\ へ退避してフォルダを差し替え、退避した自身
+      #    （実行中）は残存する。
       - name: install with the installed CLI moves it aside
         run: |
           . "$env:RUNNER_TEMP\helpers.ps1"
           $recordPath = Join-Path $plugins "cli\vw$year-install.json"
           $record = Get-Content -Raw -LiteralPath $recordPath | ConvertFrom-Json
           $record.tag = 'dev-previous'
-          # BOM を付けずに書く（Set-Content -Encoding UTF8 は BOM を付け、Go の JSON が読めない）。
+          # BOM を付けずに書き込む（Set-Content -Encoding UTF8 は BOM を付け、Go の JSON が
+          # 読み取れない）。
           [IO.File]::WriteAllText($recordPath, ($record | ConvertTo-Json -Depth 5))
           $out = Invoke-Installed install "cli@$env:TAG"
           if (-not (Test-Path -LiteralPath (Join-Path $work 'old'))) { throw "no work folder $work" }
           if ($out.outcome -ne 'installed') { throw 'not installed' }
           if ((Get-MovedCli).Count -ne 1) { throw "moved: $((Get-MovedCli).Name -join ', ')" }
           if (Test-Path -LiteralPath (Join-Path $work 'old\cli')) { throw 'old\cli is left' }
-      # 5. 手順 3 が示した形で、その PR のタグの初回のスクリプトに uninstall を渡す（その PR の CLI が
-      #    フォルダの外で外す）。フォルダを消し、Path からは <Plug-Ins>\cli\bin だけが除かれ、手順 4 の残り
-      #    （そのプロセスは終わっている）も消えて、何も残らない。指定（既定と同じ場所の --plugins-dir）は
-      #    uninstall の前に書く（スクリプトが uninstall cli の後ろへ回す）。
+      # 5. 手順 3 が示した形で、その PR のタグの初回スクリプトに uninstall を渡す（その PR の CLI が
+      #    フォルダの外でアンインストールする）。フォルダを削除し、Path からは
+      #    <Plug-Ins>\cli\bin のみが除去され、手順 4 の残存物（そのプロセスは終了している）も
+      #    削除されて、何も残存しない。指定（既定と同じ場所の --plugins-dir）は uninstall の前に
+      #    記述する（スクリプトが uninstall cli の後ろへ移動する）。
       - name: uninstall with the first-time script
         run: |
           . "$env:RUNNER_TEMP\helpers.ps1"
@@ -752,14 +788,15 @@ jobs:
           if (Test-Path -LiteralPath (Join-Path $plugins 'cli')) { throw 'cli is left' }
           Assert-UserPath '%USERPROFILE%\vw2026-path-probe' ([Microsoft.Win32.RegistryValueKind]::ExpandString)
           if ((Get-MovedCli).Count -ne 0) { throw 'the moved CLI is left' }
-      # 6. 初回のスクリプトで入れ直す。
+      # 6. 初回スクリプトでインストールし直す。
       - name: install again from the first-time script
         run: |
           . "$env:RUNNER_TEMP\helpers.ps1"
           $out = Invoke-Bootstrap
           if ($out.outcome -ne 'installed') { throw 'not installed' }
-      # 7. 入った PR の CLI で install cli@latest。PR の Go のコードが動いている自分をよけて、フォルダを
-      #    latest のものに付け替える。比べるのはどちらも build.json の version（タグの形は版の付け方で変わる）。
+      # 7. インストールされた PR の CLI で install cli@latest。PR の Go のコードが実行中の自身を
+      #    退避して、フォルダを latest のものに差し替える。比較するのはいずれも build.json の
+      #    version（タグの形式は版の付け方で変わる）。
       - name: install latest with the installed CLI
         if: steps.latest.outputs.install == 'true'
         run: |
@@ -773,10 +810,10 @@ jobs:
           if ((Get-MovedCli).Count -eq 0) { throw 'the CLI was not moved' }
           if (Test-Path -LiteralPath (Join-Path $work 'old\cli')) { throw 'old\cli is left' }
 
-  # install-windows-editions の結果を 1 つのチェックにまとめる（必須のチェック）。PR のプレリリースを公開したときは
-  # release と install-windows-editions が成功したこと、それ以外（main・マージキュー・fork の PR）は
-  # install-windows-editions が飛ばされたことを確かめる。前のジョブが失敗・中止しても飛ばされないよう always() で
-  # 走らせる。
+  # install-windows-editions の結果を 1 つのチェックに集約する（必須のチェック）。PR の
+  # プレリリースを公開した場合は release と install-windows-editions が成功したこと、それ以外
+  # （main・マージキュー・fork の PR）は install-windows-editions がスキップされたことを確認する。
+  # 前のジョブが失敗・中止してもスキップされないよう always() で実行する。
   install-windows:
     needs: [meta, release, install-windows-editions]
     if: always()

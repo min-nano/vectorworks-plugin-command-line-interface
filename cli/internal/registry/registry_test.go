@@ -7,8 +7,8 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
-// 既定のレジストリは CLI に埋め込むので、読めなければ install cli が動かない。cli の規則は
-// latest を決まった場所で、それ以外をタグで指す（docs/registry.md「レジストリ」）。
+// 既定のレジストリは CLI に埋め込むため、読み取れなければ install cli が動作しない。cli の規則は
+// latest を固定の場所で、それ以外をタグで指す（docs/registry.md「レジストリ」）。
 func TestDefaultRegistry(t *testing.T) {
 	def := Default()
 	cli, ok := def.Plugins["cli"]
@@ -45,7 +45,7 @@ func TestValidName(t *testing.T) {
 	}
 }
 
-// タグの先頭を英数字に限るので、. や .. だけのタグが {tag} の置き換えで上の階層を指さない。
+// タグの先頭を英数字に限るため、. や .. のみのタグが {tag} の置換で上の階層を指さない。
 func TestValidTag(t *testing.T) {
 	for _, tag := range []string{"latest", "0.0.0-a1b2c3d", "v1.2_3", "A", strings.Repeat("a", 128)} {
 		if !ValidTag(tag) {
@@ -86,7 +86,7 @@ func TestMatch(t *testing.T) {
 	}
 }
 
-// 最初に合った規則だけを使う（後ろに合う規則があっても見ない）。
+// 最初に合致した規則のみを使用する（後ろに合致する規則があっても参照しない）。
 func TestSelectFirstMatch(t *testing.T) {
 	entry := Entry{Manifests: []Rule{
 		{Match: "stable", Path: "https://example.com/stable.json"},
@@ -102,7 +102,8 @@ func TestSelectFirstMatch(t *testing.T) {
 	}
 }
 
-// タグの綴りを満たさない文字列には、* の規則も合わない（match は ValidTag を通った文字列だけを照らす）。
+// タグの綴りを満たさない文字列には、* の規則も合致しない（match は ValidTag を通過した文字列のみを
+// 照合する）。
 func TestSelectRefusesInvalidTags(t *testing.T) {
 	entry := Entry{Manifests: []Rule{{Match: "*", Path: "https://example.com/{tag}.json"}}}
 	for _, requested := range []string{"", "feature/x", "a?b", "[x]", `a\b`, "-x"} {
@@ -199,7 +200,7 @@ func TestScript(t *testing.T) {
 			t.Errorf("%s: %q %v", argv, got, err)
 		}
 	}
-	// powershell の .ps1 は大文字でも良い。
+	// powershell の .ps1 は大文字でもよい。
 	if got, err := Script([]string{"powershell", "hooks/install.PS1"}); err != nil || got != "hooks/install.PS1" {
 		t.Errorf("upper case .PS1: %q %v", got, err)
 	}
@@ -222,13 +223,14 @@ func TestCheckRelative(t *testing.T) {
 			t.Errorf("%q should be refused", path)
 		}
 	}
-	// zip の項目の名前は - で始まっても良い。
+	// zip の項目の名前は - で始まってもよい。
 	if err := CheckInside("-a"); err != nil {
 		t.Error(err)
 	}
 }
 
-// 間の部分が見つからなければ合わない。手元のレジストリでも相対パスは断る。読めないマニフェストは断る。
+// 間の部分が見つからなければ合致しない。ローカル環境のレジストリでも相対パスは拒否する。
+// 読み取れないマニフェストは拒否する。
 func TestRegistryEdges(t *testing.T) {
 	if match("a*b*c", "a-x-c") {
 		t.Error("a*b*c should not match a-x-c")
@@ -242,8 +244,8 @@ func TestRegistryEdges(t *testing.T) {
 	}
 }
 
-// file:// の URL を、mac・Linux と Windows のパスにする。%XX を解き、Windows は C: の前の / を除き、
-// ホストのあるものは共有フォルダにする。
+// file:// の URL を、mac・Linux と Windows のパスに変換する。%XX をデコードし、Windows は C: の前の
+// / を除去し、ホストのあるものは共有フォルダとする。
 func TestFilePath(t *testing.T) {
 	for _, c := range []struct {
 		ref     string

@@ -1,6 +1,7 @@
 #pragma once
 
-// 無 SDK の単体テストの小さな枠と、テストが共に使うもの。外部のテストの枠組みに依らない。
+// 無 SDK の単体テストの小規模な枠組みと、テストが共に使用するもの。外部のテストフレームワークに
+// 依存しない。
 
 #include "core/Files.h"
 #include "core/Json.h"
@@ -32,16 +33,16 @@ namespace VwCli::test {
 
 using TestFn = void (*)();
 
-// Registrar はテストを登録する。登録に失敗する（メモリが足りない）なら走らせようがないので、
-// 例外を投げずに終わる（noexcept）。
+// Registrar はテストを登録する。登録に失敗する（メモリが不足する）場合は実行できないため、
+// 例外を投げずに終了する（noexcept）。
 struct Registrar {
 	Registrar(const char *name, TestFn run) noexcept;
 };
 
-// fail は失敗を記録する（テストは止めずに続ける）。
+// fail は失敗を記録する（テストは停止せずに続行する）。
 void fail(const char *file, int line, const std::string &what);
 
-// TempDir はテストごとの一時ディレクトリ。壊すと中身ごと消す。
+// TempDir はテストごとの一時ディレクトリ。破棄すると内容ごと削除する。
 class TempDir {
 public:
 	TempDir();
@@ -51,60 +52,59 @@ public:
 
 	const std::filesystem::path &path() const { return path_; }
 	std::string utf8Path() const;
-	// sub は中のパスを UTF-8 の文字列で返す。
+	// sub は内部のパスを UTF-8 の文字列で返す。
 	std::string sub(const std::string &name) const;
 
 private:
 	std::filesystem::path path_;
 };
 
-// readFile はファイルの中身を全て読む。読めなければ失敗を記録して空を返す。
+// readFile はファイルの内容を全て読み取る。読み取れなければ失敗を記録して空を返す。
 std::string readFile(const std::filesystem::path &path);
 
 // utf8 はパスを UTF-8 の文字列にする。
 std::string utf8(const std::filesystem::path &path);
 
-// denyRead は path（ファイル）を、このプロセスから読めないようにする（開くと権限の誤りになる）。
-// POSIX は chmod 000、Windows は Everyone の読み取りを拒む ACE を足す。できなければ偽を返す
-// （POSIX の root は権限を無視して開けるので偽）。allowRead
-// で戻す（一時ディレクトリを消せるように）。
+// denyRead は path（ファイル）を、このプロセスから読み取れないようにする（開くと権限のエラーになる）。
+// POSIX は chmod 000、Windows は Everyone の読み取りを拒否する ACE を追加する。できなければ偽を返す
+// （POSIX の root は権限を無視して開けるため偽）。allowRead で戻す（一時ディレクトリを削除できるように）。
 bool denyRead(const std::filesystem::path &path);
 void allowRead(const std::filesystem::path &path);
 
-// must は読めるはずのテキストを、要求と同じ深さの上限で読む。読めなければ呼んだ場所で失敗を記録して
-// null を返す。値で返すので、式の中で使っても寿命を気にしなくて良い。
+// must は読み取れるはずのテキストを、要求と同じ深さの上限で読み取る。読み取れなければ呼び出した
+// 箇所で失敗を記録して null を返す。値で返すため、式の中で使用しても寿命を考慮しなくてよい。
 core::Json must(std::string_view text,
                 std::source_location where = std::source_location::current());
 
-// isTrue は value が真偽値の true か（無い・null・他の型は偽）。
+// isTrue は value が真偽値の true か（存在しない・null・他の型は偽）。
 inline bool isTrue(const core::Json &value) { return value.isBool() && value.asBool(); }
 
-// kNow は受け付けに渡す、決まった今の時刻（ナノ秒）。
+// kNow は受付処理に渡す、固定の現在時刻（ナノ秒）。
 inline constexpr std::int64_t kNow = 1760000000000000000;
 
-// kMaxResponseBytes は応答のファイルを読む上限。通信規則は応答の大きさを決めないので、
-// 要求の上限より大きく取る。
+// kMaxResponseBytes は応答のファイルを読み取る上限。通信規則は応答の大きさを定めないため、
+// 要求の上限より大きく設定する。
 inline constexpr std::size_t kMaxResponseBytes = core::protocol::kMaxRequestBytes * 2;
 
-// reasonOf は失敗の詳細（detail）の reason。無ければ空。
+// reasonOf は失敗の詳細（detail）の reason。存在しなければ空。
 std::string reasonOf(const core::Json &detail);
 inline std::string reasonOf(const core::ToolStatus &status) { return reasonOf(status.detail); }
 
-// Caller は呼ぶ側を真似る。待つ印を掴んでから要求を置き、壊すと放す。
+// Caller は呼び出し元を模倣する。待機標識を保持してから要求を配置し、破棄すると解放する。
 class Caller {
 public:
 	explicit Caller(const TempDir &dir) : dir_(dir) {}
 
 	void put(const std::string &id, const std::string &request);
-	// response は応答を読む。無ければ null。
+	// response は応答を読み取る。存在しなければ null。
 	core::Json response(const std::string &id) const;
-	// member は応答のフィールドの値。無ければ null。
+	// member は応答のフィールドの値。存在しなければ null。
 	core::Json member(const std::string &id, std::string_view key) const;
 	core::Json result(const std::string &id) const { return member(id, "result"); }
-	// ok は応答が成功か。応答が無ければ偽。
+	// ok は応答が成功か。応答が存在しなければ偽。
 	bool ok(const std::string &id) const { return isTrue(member(id, "ok")); }
 	std::string code(const std::string &id) const;
-	// session は @session_start の応答の占有の印。無ければ空。
+	// session は @session_start の応答の占有のセッション ID。存在しなければ空。
 	std::string session(const std::string &id) const;
 
 private:
@@ -112,7 +112,7 @@ private:
 	std::vector<std::unique_ptr<core::files::Lock>> locks_;
 };
 
-// runAll は登録されたテストを走らせる。引数があれば、名前にその文字列を含むものだけ。
+// runAll は登録されたテストを実行する。引数があれば、名前にその文字列を含むもののみ。
 int runAll(int argc, char **argv);
 
 template <typename T> std::string show(const T &value) {
@@ -134,10 +134,10 @@ template <typename T>
 inline constexpr bool isCString =
     std::is_same_v<std::decay_t<T>, const char *> || std::is_same_v<std::decay_t<T>, char *>;
 
-// checkEq は CHECK_EQ の中身。actual == expected でなければ、両辺を示して失敗を記録する。
+// checkEq は CHECK_EQ の内容。actual == expected でなければ、両辺を示して失敗を記録する。
 template <typename A, typename B>
 void checkEq(const A &actual, const B &expected, const char *file, int line, const char *what) {
-	// C の文字列どうしは中身ではなくアドレスを比べるので断る（片方を std::string にする）。
+	// C の文字列どうしは内容ではなくアドレスを比較するため拒否する（片方を std::string にする）。
 	static_assert(!(isCString<A> && isCString<B>), "CHECK_EQ: compare C strings as std::string");
 	if (!(actual == expected)) {
 		fail(file, line,
@@ -163,7 +163,8 @@ void checkEq(const A &actual, const B &expected, const char *file, int line, con
 		}                                                                                          \
 	} while (false)
 
-// REQUIRE は満たさなければ失敗を記録して、テストの関数から戻る（続けると無い値を読むとき）。
+// REQUIRE は満たさなければ失敗を記録して、テストの関数から戻る（続行すると存在しない値を
+// 読み取る場合）。
 #define REQUIRE(condition)                                                                         \
 	do {                                                                                           \
 		if (!(condition)) {                                                                        \
@@ -172,8 +173,8 @@ void checkEq(const A &actual, const B &expected, const char *file, int line, con
 		}                                                                                          \
 	} while (false)
 
-// CHECK_EQ は両辺を checkEq の引数として渡す。引数は式の終わりまで生きるので、写さずに比べても
-// 一時の値の中を指す参照（must(...).asString() など）も寿命の内で読める。両辺を求める順は
-// 決まらない（関数の引数の評価順）ので、両辺に副作用のある式を書かない。
+// CHECK_EQ は両辺を checkEq の引数として渡す。引数は式の終わりまで存続するため、複製せずに
+// 比較しても一時の値の内部を指す参照（must(...).asString() など）も寿命の内で読み取れる。
+// 両辺を評価する順は定まらない（関数の引数の評価順）ため、両辺に副作用のある式を記述しない。
 #define CHECK_EQ(actual, expected)                                                                 \
 	::VwCli::test::checkEq((actual), (expected), __FILE__, __LINE__, #actual " == " #expected)

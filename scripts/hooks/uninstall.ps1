@@ -1,13 +1,14 @@
 ﻿# cli の uninstall のフック（Windows）。利用者の Path（HKCU\Environment）から <Plug-Ins>\cli\bin と
-# 一致する項目を全て除き、標準出力に {"path":…,"left":[…]} を 1 つだけ書く
-# （docs/plugin/install-and-update.md「`uninstall` のフック」）。path は lib.ps1 の Uninstall-PathEntry
-# （removed・none・failed）で、failed なら残った項目を left に載せる。
+# 一致する項目を全て除去し、標準出力に {"path":…,"left":[…]} を 1 つのみ書き込む
+# （docs/plugin/install-and-update.md「`uninstall` のフック」）。path は lib.ps1 の
+# Uninstall-PathEntry（removed・none・failed）で、failed ならば残存した項目を left に記載する。
 #
-# フォルダは <Work>\old\cli\ へ移した後で走る（VW2026_HOOK_PLUGIN_DIR は移した先）ので、除く項目は
-# VW2026_HOOK_INSTALL_DIR から決める。消し始めた後は失敗にしない（失敗にすると CLI がフォルダを
-# 戻し、プラグインは残るのに Path の項目だけが消えた状態になる）。
+# フォルダは <Work>\old\cli\ へ移動した後で実行される（VW2026_HOOK_PLUGIN_DIR は移動先）ため、
+# 除去する項目は VW2026_HOOK_INSTALL_DIR から決定する。削除を開始した後は失敗させない（失敗させると
+# CLI がフォルダを元に戻し、プラグインは残存するのに Path の項目のみが削除された状態になる）。
 #
-# -Store はテストが偽の置き場所を渡すためのもの。vw2026 uninstall は渡さない（利用者の Path を読み書きする）。
+# -Store はテストが擬似の配置場所を渡すためのもの。vw2026 uninstall は渡さない（利用者の Path を
+# 読み書きする）。
 param([hashtable] $Store)
 
 $ErrorActionPreference = 'Stop'
@@ -24,7 +25,7 @@ if ($null -eq $Store) {
 	$Store = Get-RegistryPathStore
 }
 
-# ここから先は失敗にしない。思わぬ例外も failed として left に載せる。
+# ここから先は失敗させない。予期しない例外も failed として left に記載する。
 $state = 'failed'
 try { $state = Uninstall-PathEntry $Store $bin } catch { Write-HookException 'cannot update Path' $_ }
 $left = ''

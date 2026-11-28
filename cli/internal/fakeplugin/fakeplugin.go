@@ -1,14 +1,15 @@
-// Package fakeplugin はプラグイン側の受け付けを真似る（docs/protocol.md「プラグイン側の義務」・
-// docs/plugin/bridge.md「1 回の受付処理」）。spool と vw2026 の単体テストだけが使う。
+// Package fakeplugin はプラグイン側の受付処理を模倣する（docs/protocol.md「プラグイン側の義務」・
+// docs/plugin/bridge.md「1 回の受付処理」）。spool と vw2026 の単体テストのみが使用する。
 //
-// 通信規則より緩く真似ると、CLI がプラグインの断る要求を送っても単体テストが気づかないので、
-// 関門（id の綴り・回の始めに並べた要求だけの処理・大きさと入れ子の深さの上限・占有・ロックを取ったときの掃除）は
-// プラグインと同じに持つ。プラグインと同じに振る舞うかは、両方のテストが読む通信規則の見本
-// （protocol/fixtures。docs/fixtures.md）で確かめる。道具の表は持たないので、道具の種類は
-// StartWithKinds で受け取り、受け取らない道具は quit なら種類 app、他を read とみなす。種類
-// write と app は占有の中でだけ呼べる。終了の依頼は種類では決めず、本物の道具の表と同じく quit
-// だけが立てるとみなし、quit が成功したらその回の残りを取り出さない。受け付けの入れ子は真似ない
-// （Go の偽の道具はイベントを回さない）。
+// 通信規則より緩く模倣すると、CLI がプラグインの拒否する要求を送信しても単体テストが
+// 検出しないので、関門（id の綴り・回の開始時に並んでいた要求のみの処理・大きさと入れ子の深さの
+// 上限・占有・ロックを取得した場合の掃除）はプラグインと同一に保持する。プラグインと同一に
+// 振る舞うかは、両方のテストが読み込む通信規則のフィクスチャ（protocol/fixtures。
+// docs/fixtures.md）で検証する。ツールの一覧は保持しないので、ツールの種類は StartWithKinds で
+// 受け取り、受け取らないツールは quit ならば種類 app、他を read とみなす。種類 write と app は
+// 占有の中でのみ呼び出せる。終了の依頼は種類では決定せず、実際のツールの一覧と同様に quit のみが
+// 要求するとみなし、quit が成功したらその回の残りを取り出さない。受付処理の入れ子は模倣しない
+// （Go の擬似ツールはイベントを処理しない）。
 package fakeplugin
 
 import (
@@ -29,20 +30,20 @@ import (
 type waitState int
 
 const (
-	// 呼ぶ側が待っている
+	// 呼び出し元が待機している
 	waitHeld waitState = iota
-	// 呼ぶ側が放した・死んだ
+	// 呼び出し元が解放した・異常終了した
 	waitReleased
-	// 無い（通信規則に反する。通常のファイルでないときも）
+	// 存在しない（通信規則に反する。通常のファイルでない場合も）
 	waitMissing
 	// 確かめられない（無い以外の理由で開けない・試せない）。実行せず、掃除では消さない
 	waitUnknown
 )
 
-// Handler は道具 1 つの呼び出しに応える。
+// Handler はツール 1 つの呼び出しに応答する。
 type Handler func(tool string, args json.RawMessage) spool.Response
 
-// NewDir は 0700 のスプールを作る。
+// NewDir は 0700 のスプールを作成する。
 func NewDir(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), spool.SpoolDirName)
@@ -52,16 +53,16 @@ func NewDir(t *testing.T) string {
 	return dir
 }
 
-// NewHeldDir は NewDir で作ったスプールのロックを掴む（Vectorworks が動いている）。返す関数で放す
-// （終了を真似る。テストの終わりにも放す）。
+// NewHeldDir は NewDir で作成したスプールのロックを取得する（Vectorworks が動作している）。返す
+// 関数で解放する（終了を模倣する。テストの終了時にも解放する）。
 func NewHeldDir(t *testing.T) (dir string, release func()) {
 	t.Helper()
 	dir = NewDir(t)
 	return dir, HoldLock(t, dir)
 }
 
-// HoldLock はロックファイルを掴む（Vectorworks が動いている）。返す関数で放す（終了を真似る）。
-// テストの終わりにも放す。
+// HoldLock はロックファイルを取得する（Vectorworks が動作している）。返す関数で解放する（終了を
+// 模倣する）。テストの終了時にも解放する。
 func HoldLock(t *testing.T, dir string) (release func()) {
 	t.Helper()
 	release, err := TryHoldLock(dir)
@@ -72,9 +73,10 @@ func HoldLock(t *testing.T, dir string) (release func()) {
 	return release
 }
 
-// TryHoldLock は HoldLock と同じくロックファイルを掴むが、掴めなければテストを止めずに誤りを返す（テストの
-// ゴルーチンの外から掴むため。t.Fatal はテストのゴルーチンからしか呼べない）。返す関数は何度呼んでもよく、
-// テストの終わりに放すのは呼ぶ側が受け持つ。
+// TryHoldLock は HoldLock と同様にロックファイルを取得するが、取得できなければテストを停止せずに
+// エラーを返す（テストのゴルーチンの外から取得するため。t.Fatal はテストのゴルーチンからのみ
+// 呼び出せる）。返す関数は何度呼び出してもよく、テストの終了時に解放するのは呼び出し元の責任で
+// ある。
 func TryHoldLock(dir string) (release func(), err error) {
 	unlock, err := lock(filepath.Join(extendedPath(dir), spool.LockFile))
 	if err != nil {
@@ -83,19 +85,20 @@ func TryHoldLock(dir string) (release func(), err error) {
 	return sync.OnceFunc(unlock), nil
 }
 
-// Start はロックを掴み、前の回の残骸を消してから、要求に handle で応え続ける。テストの終わりに
-// 止める。返す関数で途中でも止められる（Vectorworks の終了を真似る）。占有の印は Start ごとに
-// 持つ（Vectorworks を起動し直すと消えるのと同じ）。quit だけを種類 app、他を read とみなす。
+// Start はロックを取得し、前回の残骸を削除してから、要求に handle で応答し続ける。テストの終了時に
+// 停止する。返す関数で途中でも停止できる（Vectorworks の終了を模倣する）。占有のセッション ID は
+// Start ごとに保持する（Vectorworks を再起動すると消失するのと同様）。quit のみを種類 app、他を
+// read とみなす。
 func Start(t *testing.T, dir string, handle Handler) (stop func()) {
 	t.Helper()
 	return StartWithKinds(t, dir, nil, handle)
 }
 
-// StartWithKinds は Start と同じで、道具の種類（read・write・app）を道具の名前ごとに受け取る。
-// kinds に無い道具は、quit なら app、他は read とみなす。
+// StartWithKinds は Start と同様で、ツールの種類（read・write・app）をツール名ごとに受け取る。
+// kinds に存在しないツールは、quit ならば app、他は read とみなす。
 func StartWithKinds(t *testing.T, dir string, kinds map[string]string, handle Handler) (stop func()) {
 	t.Helper()
-	// プラグインと同じく、予約された名前（NUL など）の要求もファイルとして開く
+	// プラグインと同様に、予約された名前（NUL など）の要求もファイルとして開く
 	// （docs/protocol.md「id」）。
 	s := &server{dir: extendedPath(dir), handle: handle, kinds: kinds}
 	if !s.take() {
@@ -123,8 +126,9 @@ func StartWithKinds(t *testing.T, dir string, kinds map[string]string, handle Ha
 	return stop
 }
 
-// sweep はロックを取った直後の掃除（docs/protocol.md「ロック」）。待つ印を掴める・無い id の
-// 要求・応答・待つ印・書きかけを消し、待っている呼ぶ側のもの（確かめられないものも）は残す。id は最初の . より前。
+// sweep はロックを取得した直後の掃除（docs/protocol.md「ロック」）。待機標識を
+// 取得できる・存在しない id の要求・応答・待機標識・書き込み途中のファイルを削除し、待機している
+// 呼び出し元のもの（確認できないものも）は残す。id は最初の . より前。
 func sweep(dir string) {
 	entries, _ := os.ReadDir(dir)
 	for _, entry := range entries {
@@ -140,24 +144,25 @@ func sweep(dir string) {
 	}
 }
 
-// server は受け付けるブリッジ 1 つ。占有の印（session）はメモリだけに持つ（docs/protocol.md「占有」）。
+// server は受付処理を行うブリッジ 1 つ。占有のセッション ID（session）はメモリにのみ保持する
+// （docs/protocol.md「占有」）。
 type server struct {
 	dir    string
 	handle Handler
-	// 道具の名前ごとの種類。無い道具は、quit なら app、他は read
+	// ツール名ごとの種類。存在しないツールは、quit ならば app、他は read
 	kinds map[string]string
-	// 成功したら終了を頼む道具（道具が返す終了の依頼）。nil なら quit だけ
+	// 成功したら終了を依頼するツール（ツールが返す終了の依頼）。nil ならば quit のみ
 	quits map[string]bool
-	// 受け付けの外の状態（"quitting"）。空でなければ表の道具を全て busy で断る（SDK を呼ばない
-	// @tools・@session_start・@session_end と、表に無い道具は除く）
+	// 受付処理の外の状態（"quitting"）。空でなければ一覧のツールを全て busy で拒否する（SDK を
+	// 呼び出さない @tools・@session_start・@session_end と、一覧に無いツールは除く）
 	activity string
-	// 掴んでいるロックを放す。nil ならロックを掴んでいない
+	// 取得しているロックを解放する。nil ならばロックを取得していない
 	unlock func()
-	// 発行している占有の印。空なら占有されていない
+	// 発行している占有のセッション ID。空ならば占有されていない
 	session string
 }
 
-// take はロックを取ってみて、取れたら前の回の残骸を消す。
+// take はロックの取得を試み、取得できたら前回の残骸を削除する。
 func (s *server) take() bool {
 	unlock, err := lock(filepath.Join(s.dir, spool.LockFile))
 	if err != nil {
@@ -175,10 +180,11 @@ func (s *server) release() {
 	}
 }
 
-// serveOnce は受け付け 1 回。ロックを掴んでいなければ取ってみて、取れなければ何もせずに
-// serving を偽で返す。要求を名前の昇順で読み、消し、呼ぶ側が待っていれば実行する。処理するのは
-// 回の始めに並べた要求だけで（件数と時間の上限は無い）、取り出した要求には同じ回の中で応える。
-// 終了を頼む道具（quits）が成功したら、その回の残りの要求を取り出さずに quit を真で返す。
+// serveOnce は 1 回の受付処理。ロックを取得していなければ取得を試み、取得できなければ何もせずに
+// serving を偽で返す。要求を名前の昇順で読み取り、削除し、呼び出し元が待機していれば実行する。
+// 処理するのは回の開始時に並んでいた要求のみで（件数と時間の上限は無い）、取り出した要求には同じ
+// 回の中で応答する。終了を依頼するツール（quits）が成功したら、その回の残りの要求を取り出さずに
+// quit を真で返す。
 func (s *server) serveOnce() (serving, quit bool) {
 	if s.unlock == nil && !s.take() {
 		return false, false
@@ -187,7 +193,7 @@ func (s *server) serveOnce() (serving, quit bool) {
 	var names []string
 	for _, entry := range entries {
 		name := entry.Name()
-		// 綴りを満たさない id の要求は受け付けない（読まず・消さず・応えない）。
+		// 綴りを満たさない id の要求は受け付けない（読み取らず・削除せず・応答しない）。
 		if strings.HasSuffix(name, spool.RequestSuffix) && spool.ValidID(strings.TrimSuffix(name, spool.RequestSuffix)) {
 			names = append(names, name)
 		}
@@ -198,15 +204,16 @@ func (s *server) serveOnce() (serving, quit bool) {
 		path := filepath.Join(s.dir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
-			// 呼ぶ側が取り下げた。黙って飛ばす。
+			// 呼び出し元が取り下げた。黙って飛ばす。
 			continue
 		}
 		if os.Remove(path) != nil {
-			// 消せない要求は実行しない（残すと次の回に又実行してしまう。消えていたなら
-			// 呼ぶ側が取り下げた）。
+			// 削除できない要求は実行しない（残すと次の回に再び実行してしまう。消失していたならば
+			// 呼び出し元が取り下げた）。
 			continue
 		}
-		// 待つ者の居なくなった要求は実行も応答もしない。.wait の無い要求は実行せずに断る。
+		// 待機する者の存在しなくなった要求は実行も応答もしない。.wait の無い要求は実行せずに
+		// 拒否する。
 		wait := filepath.Join(s.dir, id+spool.WaitSuffix)
 		state := waitStateOf(wait)
 		if state == waitReleased {
@@ -225,14 +232,15 @@ func (s *server) serveOnce() (serving, quit bool) {
 			response, session = s.answer(tool, args, held)
 		}
 		out, _ := json.Marshal(response)
-		// 占有の印と終了は、応答を書けたときだけ反映する（docs/protocol.md「占有」）。
+		// 占有のセッション ID と終了は、応答を書き込めた場合のみ反映する
+		// （docs/protocol.md「占有」）。
 		if spool.WriteAtomically(filepath.Join(s.dir, id+spool.ResponseSuffix), out) != nil {
 			continue
 		}
 		if session != nil {
 			s.session = *session
 		}
-		// 終了したら応えられないので、残りは置いたままにする。
+		// 終了したら応答できないので、残りは配置したままにする。
 		if s.quitsOn(tool) && response.OK {
 			return true, true
 		}
@@ -240,20 +248,23 @@ func (s *server) serveOnce() (serving, quit bool) {
 	return true, false
 }
 
-// answer は要求を占有に照らしてから応える（docs/protocol.md「占有」）。
+// answer は要求を占有と照合してから応答する（docs/protocol.md「占有」）。
 //
-//   - @tools と種類 read の道具は占有に照らさない（図面を変えないので、占有している呼ぶ側の作業と
-//     混ざらない）。表に無い道具も占有に照らさず、handle が unknown_tool で応える（Vectorworks が
-//     処理中でも）。
-//   - @session_start は占有されていなければ印を発行し、されていれば occupied。
-//   - @session_end と種類 write・app は占有の中でだけ呼べる。
-//   - Vectorworks が処理中（activity）なら、表の道具を全て busy で断る（種類 read と ping も）。
-//     SDK を呼ばない @tools・@session_start・@session_end は応える。種類 write・app は占有に照らすのが先。
+//   - @tools と種類 read のツールは占有と照合しない（図面を変更しないので、占有している呼び出し元の
+//     作業と混在しない）。一覧に無いツールも占有と照合せず、handle が unknown_tool で応答する
+//     （Vectorworks が処理中でも）。
+//   - @session_start は占有されていなければセッション ID を発行し、占有されていれば occupied。
+//   - @session_end と種類 write・app は占有の中でのみ呼び出せる。
+//   - Vectorworks が処理中（activity）ならば、一覧のツールを全て busy で拒否する（種類 read と
+//     ping も）。SDK を呼び出さない @tools・@session_start・@session_end は応答する。種類
+//     write・app は占有との照合が先。
 //
-// 表に無い道具は kinds で見分ける（kinds に無く quit でもない道具）。kinds を渡さない Start では
-// 見分けられないので、どの道具も表にあるとみなす（処理中は unknown_tool ではなく busy になる）。
+// 一覧に無いツールは kinds で判別する（kinds に無く quit でもないツール）。kinds を渡さない
+// Start では判別できないので、いずれのツールも一覧にあるとみなす（処理中は unknown_tool ではなく
+// busy になる）。
 //
-// 占有の印は変えず、新しい印（空なら占有の終わり）を返す。反映するのは応答を書けたときだけ。
+// 占有のセッション ID は変更せず、新しいセッション ID（空ならば占有の終了）を返す。反映するのは
+// 応答を書き込めた場合のみ。
 func (s *server) answer(tool string, args json.RawMessage, session string) (spool.Response, *string) {
 	switch tool {
 	case spool.ToolTools:
@@ -286,10 +297,11 @@ func (s *server) answer(tool string, args json.RawMessage, session string) (spoo
 	return s.run(tool, args), nil
 }
 
-// run は道具を呼ぶ。応答はプラグインと同じに整える（通信規則「応答」）。成功の result は必ず
-// オブジェクトにし、値を返さなければ {}、オブジェクトでない値は道具の不具合として internal。
-// detail は失敗にだけ載せ、オブジェクトでない detail は道具の不具合として internal（detail なし）。
-// null の detail は、プラグイン（Json の null）と同じく「無い」とみなす。
+// run はツールを呼び出す。応答はプラグインと同一に整える（通信規則「応答」）。成功の result は必ず
+// オブジェクトにし、値を返さなければ {}、オブジェクトでない値はツールの不具合として
+// internal。detail は失敗にのみ含め、オブジェクトでない detail はツールの不具合として
+// internal（detail なし）。null の detail は、プラグイン（Json の null）と同様に
+// 「存在しない」とみなす。
 func (s *server) run(tool string, args json.RawMessage) spool.Response {
 	response := s.handle(tool, args)
 	if string(bytes.TrimSpace(response.Detail)) == "null" {
@@ -311,8 +323,8 @@ func (s *server) run(tool string, args json.RawMessage) spool.Response {
 	return response
 }
 
-// kind は道具の種類。kinds に無い道具は、quit なら app、他は read（本物の道具の表の quit は
-// 種類 app なので、kinds を渡したテストでも quit は占有の中でだけ呼べる）。
+// kind はツールの種類。kinds に存在しないツールは、quit ならば app、他は read（実際のツールの一覧の
+// quit は種類 app なので、kinds を渡したテストでも quit は占有の中でのみ呼び出せる）。
 func (s *server) kind(tool string) string {
 	if kind, found := s.kinds[tool]; found {
 		return kind
@@ -323,7 +335,8 @@ func (s *server) kind(tool string) string {
 	return "read"
 }
 
-// inTable は、道具が道具の表にあるか。kinds が無ければ見分けられないので、どの道具もあるとみなす。
+// inTable は、ツールがツールの一覧にあるか。kinds が無ければ判別できないので、いずれの
+// ツールもあるとみなす。
 func (s *server) inTable(tool string) bool {
 	if s.kinds == nil || tool == "quit" {
 		return true
@@ -332,8 +345,8 @@ func (s *server) inTable(tool string) bool {
 	return found
 }
 
-// quitsOn は、道具が成功したら終了を頼むか。quits が無ければ quit だけ（本物の道具の表で終了を
-// 頼むのは quit だけ）。
+// quitsOn は、ツールが成功したら終了を依頼するか。quits が無ければ quit のみ（実際のツールの一覧で
+// 終了を依頼するのは quit のみ）。
 func (s *server) quitsOn(tool string) bool {
 	if s.quits == nil {
 		return tool == "quit"
@@ -341,7 +354,8 @@ func (s *server) quitsOn(tool string) bool {
 	return s.quits[tool]
 }
 
-// check は占有の中でだけ呼べる要求の印を占有に照らす。実行してよければ空、断るならその code。
+// check は占有の中でのみ呼び出せる要求のセッション ID を占有と照合する。実行してよければ空、
+// 拒否するならばその code。
 func (s *server) check(session string) string {
 	if s.session == "" {
 		return spool.CodeNoSession
@@ -356,14 +370,15 @@ func refuse(code string) spool.Response {
 	return spool.Response{OK: false, Code: code, Error: "refused by the fake plug-in"}
 }
 
-// parseRequest は要求を読む（docs/protocol.md「要求」）。大きすぎる・入れ子が深すぎる・JSON と
-// して壊れている・tool が無い（null・空を含む）・知っているフィールドの型が違う要求は読めない
-// （プラグインは深さを解析の中で数えるが、encoding/json は上限が違うので、解析の前に数える）。
-// args は省略できるフィールドなので、無い・null なら既定値の {} とし、オブジェクト以外は読めない
-// 要求とする。session の null は無いものとする。
+// parseRequest は要求を読み取る（docs/protocol.md「要求」）。大きすぎる・入れ子が
+// 深すぎる・JSON として破損している・tool が無い（null・空を含む）・既知のフィールドの型が異なる
+// 要求は読み取れない（プラグインは深さを解析の中で数えるが、encoding/json は上限が異なるので、
+// 解析の前に数える）。args は省略できるフィールドなので、存在しない・null ならば既定値の {} とし、
+// オブジェクト以外は読み取れない要求とする。session の null は存在しないものとする。
 //
-// 構造体へ直に解析すると encoding/json はキーを大文字と小文字を区別せずに照合し、ARGS のような
-// 知らないキーまで拾ってしまう。通信規則ではキーは区別して照合するので、map に解析して正確な綴りで引く。
+// 構造体へ直接解析すると encoding/json はキーを大文字と小文字を区別せずに照合し、ARGS のような
+// 未知のキーまで取得してしまう。通信規則ではキーは区別して照合するので、map に解析して正確な綴りで
+// 参照する。
 func parseRequest(data []byte) (tool string, args json.RawMessage, session string, ok bool) {
 	if len(data) > spool.MaxRequestBytes || spool.NestingDepth(data) > spool.MaxNestingDepth {
 		return "", nil, "", false

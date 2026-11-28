@@ -9,13 +9,13 @@ on:
 permissions:
   contents: read
 
-# CLI（cli/）の Go のテストとビルド。C++ のテストは cpp.yml が走らせる。
+# CLI（cli/）の Go のテストとビルド。C++ のテストは cpp.yml が実行する。
 # 整形と go vet は format.yml・lint.yml が行う（docs/format.md・docs/lint.md）。
 jobs:
   test:
-    # ジョブ名に go を付ける。cpp.yml と同じ名前だとチェックの名前が重なり、必須のチェックが
-    # どちらのジョブを指すか区別できないため（fuzz も同じ。build も、build.yml の
-    # ビルドと見分けられるように付ける）。
+    # ジョブ名に go を付与する。cpp.yml と同じ名前ではチェックの名前が重複し、必須の
+    # チェックがいずれのジョブを指すか区別できないため（fuzz も同様。build も、build.yml のビルドと
+    # 区別できるように付与する）。
     name: go test (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -33,16 +33,18 @@ jobs:
           go-version-file: cli/go.mod
           cache-dependency-path: cli/go.sum
       # -race と併用するため covermode は atomic にする。
-      # PowerShell は「.」を区切り文字として解釈し -coverprofile=coverage.out が 2 つの引数として入力されるため、bash で実行する。
+      # PowerShell は「.」を区切り文字として解釈し -coverprofile=coverage.out が 2 つの引数として
+      # 入力されるため、bash で実行する。
       - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
         shell: bash
-      # 2025 の CLI（ビルドタグ vw2025。docs/plugin/editions.md）も同じテストで確かめる。版で分かれるファイルが
-      # どちらかの回でだけ走るので、両方の結果を送る。
+      # 2025 の CLI（ビルドタグ vw2025。docs/plugin/editions.md）も同じテストで検証する。版で
+      # 分かれるファイルがいずれかの回でのみ実行されるため、両方の結果を送信する。
       - run: go test -race -tags vw2025 -covermode=atomic -coverprofile=coverage-vw2025.out ./...
         shell: bash
-      # OS ごとに分岐するコード（launch など）があるので、全 OS の結果を送る（Codecov で重なる）。
-      # C++（cpp.yml の cpp）と分けて見られるように、go のフラグを付ける。
-      # 第三者の Action なのでコミットに固定する（上げるのは Dependabot）。
+      # OS ごとに分岐するコード（launch など）があるため、全 OS の結果を送信する（Codecov で
+      # 統合される）。
+      # C++（cpp.yml の cpp）と区別して参照できるように、go のフラグを付与する。
+      # 第三者の Action であるためコミットに固定する（更新するのは Dependabot）。
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -50,8 +52,8 @@ jobs:
           flags: go
           fail_ci_if_error: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
 
-  # NestingDepth のファジング（cli/internal/spool/fuzz_test.go）。OS に依らない純粋な関数なので
-  # ubuntu だけで回す。test の go test は種だけを確かめる。
+  # NestingDepth のファジング（cli/internal/spool/fuzz_test.go）。OS に依存しない
+  # 純粋な関数であるため ubuntu でのみ実行する。test の go test はシードのみを検証する。
   fuzz:
     name: go fuzz
     runs-on: ubuntu-latest
@@ -64,18 +66,19 @@ jobs:
         with:
           go-version-file: cli/go.mod
           cache-dependency-path: cli/go.sum
-      # -fuzz は 1 回に 1 つの対象しか回せないので、対象ごとに分けて 30 秒ずつ回す。
+      # -fuzz は 1 回に 1 つの対象しか実行できないため、対象ごとに分割して 30 秒ずつ実行する。
       - run: go test -run '^$' -fuzz '^FuzzNestingDepth$' -fuzztime 30s ./internal/spool
       - run: go test -run '^$' -fuzz '^FuzzNestingDepthOfRequest$' -fuzztime 30s ./internal/spool
-      # 落ちた入力は testdata/fuzz に書かれる。手元で go test -run で再現できるように残す。
+      # 失敗を引き起こした入力は testdata/fuzz に書き込まれる。ローカル環境で go test -run で
+      # 再現できるように保持する。
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: fuzz-crashers
           path: cli/internal/spool/testdata/fuzz/
 
-  # 配る 3 つのターゲットへ cgo なしでビルドできるかを、SDK を取らずに確かめる。配る実行ファイルは
-  # build.yml が作るので、ここの出力は上げない。
+  # 配布する 3 つのターゲットへ cgo なしでビルドできるかを、SDK を取得せずに確認する。配布する
+  # 実行ファイルは build.yml が作成するため、ここの出力はアップロードしない。
   build:
     name: go build
     needs: test

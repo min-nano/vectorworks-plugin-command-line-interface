@@ -1,5 +1,6 @@
-// Package registry は、vw2026 install が何を・どこから取るかを決める 2 つのファイル（レジストリと
-// マニフェスト）の読み方を持つ（docs/registry.md）。取ってくること・置くことは install が持つ。
+// Package registry は、vw2026 install が何を・どこから取得するかを決定する 2 つの
+// ファイル（レジストリとマニフェスト）の読み取り方を有する（docs/registry.md）。取得と配置は
+// install が担う。
 package registry
 
 import (
@@ -17,20 +18,21 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
-// Version は読めるレジストリの registry_version。
+// Version は読み取れるレジストリの registry_version。
 const Version = 1
 
-// manifestVersion は読めるマニフェストの manifest_version。
+// manifestVersion は読み取れるマニフェストの manifest_version。
 const manifestVersion = 1
 
-// DefaultName は、記録の registry に書く既定のレジストリの名前（docs/registry.md「インストールの記録」）。
+// DefaultName は、記録の registry に記述する既定のレジストリの
+// 名前（docs/registry.md「インストールの記録」）。
 const DefaultName = "default"
 
-// tagPlaceholder は規則の path の中で、@ の後ろの文字列に置き換わる部分。
+// tagPlaceholder は規則の path の中で、@ の後ろの文字列に置換される部分。
 const tagPlaceholder = "{tag}"
 
-// Default は既定のレジストリを返す。埋め込んだものは TestDefaultRegistry が読めることを確かめるので、
-// 誤りは返さない（読めないのはビルドの誤りで、実行時には起きない）。
+// Default は既定のレジストリを返す。埋め込んだものは TestDefaultRegistry が読み取れることを
+// 検証するため、誤りは返さない（読み取れないのはビルドの誤りであり、実行時には発生しない）。
 func Default() *Registry {
 	registry, _ := Parse(defaultJSON, false)
 	return registry
@@ -39,21 +41,22 @@ func Default() *Registry {
 var (
 	namePattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 	tagPattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
-	// match はタグの文字に * を足したもの。
+	// match はタグの文字に * を追加したもの。
 	matchPattern = regexp.MustCompile(`^[A-Za-z0-9._*-]+$`)
 	sha256Hex    = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	// Windows の予約された名前（大文字と小文字を区別しない OS なので、名前が小文字でも当たる）。
+	// Windows の予約された名前（大文字と小文字を区別しない OS であるため、名前が小文字でも
+	// 該当する）。
 	reservedName = regexp.MustCompile(`^(con|nul|aux|prn|com[0-9]|lpt[0-9])$`)
 )
 
-// ValidName は名前が使える文字だけでできているか（docs/registry.md「名前・タグ・ターゲット」）。
-// 名前はプラグインのフォルダ名にもなる。
+// ValidName は名前が使用できる文字のみで構成されているか
+// （docs/registry.md「名前・タグ・ターゲット」）。名前はプラグインのフォルダ名にもなる。
 func ValidName(name string) bool {
 	return len(name) <= 64 && namePattern.MatchString(name) && !reservedName.MatchString(name)
 }
 
-// ValidTag はタグが使える文字だけでできているか。先頭を英数字に限るので、. や .. だけのタグが
-// {tag} の置き換えで上の階層を指さない。
+// ValidTag はタグが使用できる文字のみで構成されているか。先頭を英数字に限るため、. や .. のみの
+// タグが {tag} の置換で上の階層を指さない。
 func ValidTag(tag string) bool {
 	return len(tag) <= 128 && tagPattern.MatchString(tag)
 }
@@ -74,9 +77,10 @@ type Rule struct {
 	Path  string `json:"path"`
 }
 
-// Parse はレジストリを読む。remote は https:// で取ったものか（そうなら path は https:// だけ。
-// 遠くのレジストリが利用者の手元のパスを指さないため）。1 つでも正しくない項目があれば、
-// レジストリ全体を読めないものとして扱う。知らない項目は無視し、知らない版は失敗にする。
+// Parse はレジストリを読み取る。remote は https:// で取得したものか否か（そうであれば path は
+// https:// のみ。遠隔のレジストリが利用者のローカル環境のパスを指さないため）。1 つでも正しくない
+// 項目があれば、レジストリ全体を読み取れないものとして扱う。未知の項目は無視し、未知の版は
+// 失敗とする。
 func Parse(data []byte, remote bool) (*Registry, error) {
 	var raw struct {
 		RegistryVersion *int `json:"registry_version"`
@@ -114,9 +118,10 @@ func Parse(data []byte, remote bool) (*Registry, error) {
 	return registry, nil
 }
 
-// Select は @ の後ろの文字列に最初に合った規則を返す。合わなければ false。取れなくても次の
-// 規則へは進まない（どの場所を使うかが文字列だけで決まり、ネットワークの状態で変わらないため）。
-// タグの綴り（ValidTag）を満たさない文字列にはどの規則も合わない（match の前提）。
+// Select は @ の後ろの文字列に最初に合致した規則を返す。合致しなければ false。取得できなくても次の
+// 規則へは進まない（いずれの場所を使用するかが文字列のみで決定し、ネットワークの状態で
+// 変わらないため）。タグの綴り（ValidTag）を満たさない文字列にはいずれの規則も合致しない（match の
+// 前提）。
 func (e Entry) Select(requested string) (Rule, bool) {
 	if !ValidTag(requested) {
 		return Rule{}, false
@@ -129,44 +134,45 @@ func (e Entry) Select(requested string) (Rule, bool) {
 	return Rule{}, false
 }
 
-// Location はマニフェストの場所（{tag} を置き換えたもの）。
+// Location はマニフェストの場所（{tag} を置換したもの）。
 func (r Rule) Location(requested string) string {
 	return strings.ReplaceAll(r.Path, tagPlaceholder, requested)
 }
 
-// ByTag は規則がタグで直接指すか（path に {tag} がある）。そうならマニフェストの tag が
-// 指定と一致することを求める。
+// ByTag は規則がタグで直接指すか否か（path に {tag} がある）。そうであればマニフェストの tag が
+// 指定と一致することを要求する。
 func (r Rule) ByTag() bool {
 	return strings.Contains(r.Path, tagPlaceholder)
 }
 
-// match はパターン（* は 0 文字以上に合う）が s 全体に合うか。path.Match の * は / に合わず、
-// ? [ ] \ も特別に扱うが、パターンは matchPattern が、s（タグ）は ValidTag（Select が確かめる）が
-// それらを含まないことを確かめているので、ここでは * だけの照合と同じになる（壊れたパターンの誤りも
-// 起きない）。
+// match はパターン（* は 0 文字以上に合致する）が s 全体に合致するか否か。path.Match の * は / に
+// 合致せず、? [ ] \ も特別に扱うが、パターンは matchPattern が、s（タグ）は ValidTag（Select が
+// 検証する）がそれらを含まないことを検証しているため、ここでは * のみの照合と同一になる（壊れた
+// パターンの誤りも発生しない）。
 func match(pattern, s string) bool {
 	ok, _ := path.Match(pattern, s)
 	return ok
 }
 
-// IsURL は参照が https:// の URL か（遠くのもの）。
+// IsURL は参照が https:// の URL か否か（遠隔のもの）。
 func IsURL(ref string) bool {
 	return strings.HasPrefix(ref, "https://")
 }
 
-// isFileURL は参照が file:// の URL か（手元のもの）。
+// isFileURL は参照が file:// の URL か否か（ローカル環境のもの）。
 func isFileURL(ref string) bool {
 	return strings.HasPrefix(ref, "file://")
 }
 
-// FilePath は file:// の URL を、この OS のパスにする（docs/registry.md「参照の記法」）。
+// FilePath は file:// の URL を、この OS のパスに変換する（docs/registry.md「参照の記法」）。
 func FilePath(ref string) (string, error) {
 	return filePath(ref, runtime.GOOS == "windows")
 }
 
-// filePath は file:// の URL を、windows なら Windows の、そうでなければ mac・Linux のパスにする。
-// %XX は解く（空白は %20 と書く）。ホストは、Windows の共有フォルダ（\\host\share）を指すときだけ書ける
-// （localhost は書かないのと同じ）。問い合わせ・断片の付いたもの・相対のものは断る。
+// filePath は file:// の URL を、windows ならば Windows の、そうでなければ mac・Linux のパスに
+// 変換する。%XX はデコードする（空白は %20 と記述する）。ホストは、Windows の
+// 共有フォルダ（\\host\share）を指す場合のみ記述できる（localhost は記述しないことと同等）。
+// クエリ・フラグメントの付いたもの・相対のものは拒否する。
 func filePath(ref string, windows bool) (string, error) {
 	switch {
 	case !isFileURL(ref):
@@ -198,7 +204,7 @@ func filePath(ref string, windows bool) (string, error) {
 	if host != "" {
 		return `\\` + host + path, nil
 	}
-	// file:///C:/… の C: の前の / を除く。ドライブの無いものは絶対ではない。
+	// file:///C:/… の C: の前の / を除去する。ドライブの無いものは絶対ではない。
 	if len(path) < 4 || path[2] != ':' || path[3] != '\\' || !isLetter(path[1]) {
 		return "", fmt.Errorf("%q has no drive (write file:///C:/...)", ref)
 	}
@@ -209,12 +215,14 @@ func isLetter(c byte) bool {
 	return 'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z'
 }
 
-// CheckRef は参照が https:// か file:// の URL かを確かめる。remote なら https:// だけ（遠くのものが
-// 利用者の手元のファイルを指さないため）。--registry に渡したものも、レジストリの中の参照も、これで確かめる。
+// CheckRef は参照が https:// か file:// の URL かを検証する。remote ならば https:// のみ
+// （遠隔のものが利用者のローカル環境のファイルを指さないため）。--registry に渡したものも、
+// レジストリの中の参照も、これで検証する。
 func CheckRef(ref string, remote bool) error {
 	switch {
 	case IsURL(ref):
-		// ホストの無いもの（https://・https:///x・https://?x）は断る（取りに行ってから失敗させない）。
+		// ホストの無いもの（https://・https:///x・https://?x）は拒否する（取得を試みてから
+		// 失敗させない）。
 		if u, err := url.Parse(ref); err != nil || u.Host == "" {
 			return fmt.Errorf("%q has no host", ref)
 		}
@@ -241,13 +249,14 @@ type Asset struct {
 	Hooks  Hooks
 }
 
-// Hooks は install と uninstall のフック。どちらも省略できる（nil）。
+// Hooks は install と uninstall のフック。いずれも省略できる（nil）。
 type Hooks struct {
 	Install   []string `json:"install,omitempty"`
 	Uninstall []string `json:"uninstall,omitempty"`
 }
 
-// ParseManifest はマニフェストを読む。remote は https:// で取ったものか（そうなら asset は https:// だけ）。
+// ParseManifest はマニフェストを読み取る。remote は https:// で取得したものか否か（そうであれば
+// asset は https:// のみ）。
 func ParseManifest(data []byte, remote bool) (*Manifest, error) {
 	var raw struct {
 		ManifestVersion *int   `json:"manifest_version"`
@@ -287,8 +296,8 @@ func ParseManifest(data []byte, remote bool) (*Manifest, error) {
 	return manifest, nil
 }
 
-// Check はフックの書き方を確かめる（docs/registry.md「記法」）。zip の中に実在するかは、
-// 展開した後で install が確かめる。
+// Check はフックの記法を検証する（docs/registry.md「記法」）。zip の中に実在するかは、展開した後で
+// install が検証する。
 func (h Hooks) Check() error {
 	for _, hook := range []struct {
 		name string
@@ -304,18 +313,20 @@ func (h Hooks) Check() error {
 	return nil
 }
 
-// interpreters はフックの 1 つ目に書ける、zip の外のもの。
+// interpreters はフックの 1 つ目に記述できる、zip の外のもの。
 var interpreters = []string{"sh", "powershell"}
 
-// ViaInterpreter は、フックの argv の 1 つ目が zip の外のインタプリタ（interpreters）か。そうなら 2 つ目が
-// zip の中のスクリプト。フックの書き方を確かめる側（Script）と走らせる側（install）が同じこの関数で決める。
+// ViaInterpreter は、フックの argv の 1 つ目が zip の外のインタプリタ（interpreters）か否か。
+// そうであれば 2 つ目が zip の中のスクリプト。フックの記法を検証する側（Script）と実行する
+// 側（install）が同一のこの関数で判定する。
 func ViaInterpreter(argv []string) bool {
 	return len(argv) > 0 && slices.Contains(interpreters, argv[0])
 }
 
-// Script はフックの argv から、zip の中のファイルの相対パス（/ 区切り）を返す。1 つ目が sh・powershell
-// なら 2 つ目、それ以外なら 1 つ目。絶対パス・..・- で始まるもの（sh -c のような指定）・\ は断る。powershell の
-// スクリプトは .ps1 に限る（Windows PowerShell 5.1 の -File は他の拡張子を断るので、付け替えの前に断る）。
+// Script はフックの argv から、zip の中のファイルの相対パス（/ 区切り）を返す。1 つ目が
+// sh・powershell ならば 2 つ目、それ以外ならば 1 つ目。絶対パス・..・- で始まるもの（sh -c のような
+// 指定）・\ は拒否する。powershell のスクリプトは .ps1 に限る（Windows PowerShell 5.1 の -File は
+// 他の拡張子を拒否するため、差し替えの前に拒否する）。
 func Script(argv []string) (string, error) {
 	if len(argv) == 0 {
 		return "", errors.New("empty")
@@ -336,8 +347,8 @@ func Script(argv []string) (string, error) {
 	return script, nil
 }
 
-// checkRelative は、フックが渡すスクリプトの相対パスを確かめる。CheckInside に加えて、- で始まるもの
-// （インタープリターが指定と読む）も断る。
+// checkRelative は、フックが渡すスクリプトの相対パスを検証する。CheckInside に加えて、- で
+// 始まるもの（インタープリターが指定と解釈する）も拒否する。
 func checkRelative(path string) error {
 	if strings.HasPrefix(path, "-") {
 		return fmt.Errorf("%q starts with -", path)
@@ -345,8 +356,8 @@ func checkRelative(path string) error {
 	return CheckInside(path)
 }
 
-// CheckInside は、zip の中の相対パス（区切りは /）が展開先の外へ出ないことを確かめる。zip の項目の
-// 名前（install の展開）とフックのスクリプトのパスの両方が使う（規則を 1 か所に保つ）。
+// CheckInside は、zip の中の相対パス（区切りは /）が展開先の外へ出ないことを検証する。zip の項目の
+// 名前（install の展開）とフックのスクリプトのパスの両方が使用する（規則を 1 か所に保つ）。
 func CheckInside(path string) error {
 	switch {
 	case path == "":

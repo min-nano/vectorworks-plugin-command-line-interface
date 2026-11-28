@@ -1,6 +1,6 @@
-﻿# テストの偽の置き場所（scripts/hooks/lib.ps1 の Get-RegistryPathStore と同じ形）。利用者の Path を
-# 読み書きせず、State に値と、書いた回数・知らせた回数を持つ。Hooks.Tests.ps1 と、それが走らせる
-# 子のプロセスが読み込む。
+﻿# テストの擬似の配置場所（scripts/hooks/lib.ps1 の Get-RegistryPathStore と同じ形式）。利用者の
+# Path を読み書きせず、State に値と、書き込んだ回数・通知した回数を保持する。Hooks.Tests.ps1 と、
+# それが実行する子プロセスが読み込む。
 function Get-FakePathStore {
 	param(
 		[string] $Value = '',

@@ -5,7 +5,8 @@ import (
 	"testing"
 )
 
-// 版から決まる名前が、どの版でも同じ形になる（2026 で vw2026・VW2026_ なら、2025 で vw2025・VW2025_）。
+// 版から決定される名前が、いずれの版でも同じ形式になる（2026 で vw2026・VW2026_ ならば、2025 で
+// vw2025・VW2025_）。
 func TestNames(t *testing.T) {
 	if !regexp.MustCompile(`^20[0-9]{2}$`).MatchString(Year) {
 		t.Fatalf("Year = %q", Year)
@@ -41,7 +42,7 @@ func TestExpand(t *testing.T) {
 	}
 }
 
-// Vars のどの名前も、kong が自分で埋める ${default}・${env} と重ならない。
+// Vars のいずれの名前も、kong が自身で埋める ${default}・${env} と重複しない。
 func TestVarsDoNotShadowKong(t *testing.T) {
 	for _, name := range []string{"default", "env"} {
 		if _, ok := Vars()[name]; ok {

@@ -10,11 +10,12 @@ import (
 	"github.com/min-nano/vectorworks-plugin-command-line-interface/cli/internal/edition"
 )
 
-// 新しい版を残した install（フックの間に Vectorworks が起動した・フックが通ったのに記録を書き換えられなかった）と、
-// それを同じタグの install で終える流れ（docs/plugin/install-and-update.md）。
+// 新しい版を残置した install（フックの間に Vectorworks が起動した・フックが成功したにもかかわらず
+// 記録を書き換えられなかった）と、それを同じタグの install で完了する流れ
+// （docs/plugin/install-and-update.md）。
 
-// failRecordWrite は、dir の記録の書き換えを失敗させる（記録は隣に書いてから置き換えるので、隣のファイルを
-// 書けなくする）。返す関数で途中でも元に戻せる。
+// failRecordWrite は、dir の記録の書き換えを失敗させる（記録は隣に書き込んでから置換するため、隣の
+// ファイルを書き込めなくする）。返す関数で途中でも元に戻せる。
 func failRecordWrite(t *testing.T, dir string) (restore func()) {
 	t.Helper()
 	prefix := filepath.Join(dir, RecordFile) + ".new-"
@@ -26,8 +27,9 @@ func failRecordWrite(t *testing.T, dir string) (restore func()) {
 	})
 }
 
-// checkMovedCLI は、よけた CLI の行き先を確かめる。old に残ったよけた CLI が moved 個で、残ったなら（戻せなかった）
-// 知らせた文言 message が前の版のフォルダ dir の中の戻す先を示し、0 個なら dir に c1 の vw2026 が戻っている。
+// checkMovedCLI は、退避した CLI の移動先を検証する。old に残存した退避した CLI が moved 個で、
+// 残存したならば（復元できなかった）通知した文言 message が以前の版のフォルダ dir の中の復元先を
+// 示し、0 個ならば dir に c1 の vw2026 が復元されている。
 func checkMovedCLI(t *testing.T, h *harness, dir string, moved int, message string) {
 	t.Helper()
 	if left, _ := filepath.Glob(filepath.Join(h.work, "old", oldCLIName+"*")); len(left) != moved {
@@ -44,15 +46,17 @@ func checkMovedCLI(t *testing.T, h *harness, dir string, moved int, message stri
 	}
 }
 
-// keepNewVersion は、c1 を入れてから c2 を残した状態（c1 は old/cli）にする（keepVersion）。
+// keepNewVersion は、c1 をインストールしてから c2 を残置した状態（c1 は old/cli）にする
+// （keepVersion）。
 func keepNewVersion(t *testing.T, h *harness) {
 	t.Helper()
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	keepVersion(t, h, "c2")
 }
 
-// keepVersion は、tag の install のフックの間に Vectorworks を起動させ（ロックを掴み）、tag を残した状態にする。
-// 終わったらロックを放す（Vectorworks を終了した）。残した版のフックは、記録を書き足す通るものにしておく。
+// keepVersion は、tag の install のフックの間に Vectorworks を起動させ（ロックを取得し）、tag を
+// 残置した状態にする。終了したらロックを解放する（Vectorworks を終了した）。残置した版のフックは、
+// 記録を追記し成功するものにしておく。
 func keepVersion(t *testing.T, h *harness, tag string) {
 	t.Helper()
 	h.publish(release{name: "cli", tag: tag, install: h.lockingHook(hookPlan{Exit: 1})})
@@ -70,7 +74,8 @@ func keepVersion(t *testing.T, h *harness, tag string) {
 	os.WriteFile(hook, []byte(planJSON(t, hookPlan{Stdout: "{}", Record: h.runs("cli")})), 0o644)
 }
 
-// 新しい版を残した install を同じタグで終える回は、old に残った前の版のタグを前のタグとしてフックに渡す。
+// 新しい版を残置した install を同じタグで完了する回は、old に残存した以前の版のタグを以前の
+// タグとしてフックに渡す。
 func TestFinishingInstallPassesThePreviousTag(t *testing.T) {
 	h := newHarness(t)
 	keepNewVersion(t, h)
@@ -90,7 +95,8 @@ func TestFinishingInstallPassesThePreviousTag(t *testing.T) {
 	}
 }
 
-// 最初に入れた版を残した後、同じタグで終える回は、前のタグを空にする（最初に入れるのと同じ）。
+// 初回にインストールした版を残置した後、同じタグで完了する回は、以前のタグを空にする（初回の
+// インストールと同じ）。
 func TestFinishingFirstInstallPassesNoPreviousTag(t *testing.T) {
 	h := newHarness(t)
 	keepVersion(t, h, "c1")
@@ -103,8 +109,9 @@ func TestFinishingFirstInstallPassesNoPreviousTag(t *testing.T) {
 	}
 }
 
-// フックは通ったが、退避した版を片付けられずに old に残ったときは、入っている版が入れ終えているので、次の
-// install は入っているタグを前のタグにする（old の残りから推し量らない）。
+// フックは成功したが、退避した版を整理できずに old に残存した場合は、インストールされている版が
+// インストールを完了しているため、次の install はインストールされているタグを以前のタグにする
+// （old の残存物から推測しない）。
 func TestLeftoverOldAfterASuccessfulHookIsNotThePreviousTag(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
@@ -130,7 +137,8 @@ func TestLeftoverOldAfterASuccessfulHookIsNotThePreviousTag(t *testing.T) {
 	}
 }
 
-// 入っている版のフックがまだ通っていなければ、--check は同じタグでも available（入れ終えていない）。
+// インストールされている版のフックがまだ成功していなければ、--check は同じタグでも available
+// （インストールを完了していない）。
 func TestCheckAKeptVersion(t *testing.T) {
 	h := newHarness(t)
 	keepNewVersion(t, h)
@@ -145,8 +153,9 @@ func TestCheckAKeptVersion(t *testing.T) {
 	}
 }
 
-// フックの通っていない版を残し、前の版が old にあるときは、別のタグへ更新しない（old を消してから新しい版の
-// フックが失敗すると、通っていない版だけが残るため）。同じタグで入れ終えれば更新でき、前のタグは入れ終えた版。
+// フックの成功していない版を残置し、以前の版が old にある場合は、別のタグへ更新しない（old を
+// 削除してから新しい版のフックが失敗すると、成功していない版のみが残存するため）。同じタグで
+// インストールを完了すれば更新でき、以前のタグはインストールを完了した版。
 func TestUpdatingAKeptVersionNeedsFinishing(t *testing.T) {
 	h := newHarness(t)
 	keepNewVersion(t, h)
@@ -159,11 +168,13 @@ func TestUpdatingAKeptVersionNeedsFinishing(t *testing.T) {
 	if !validRecord(filepath.Join(h.work, "old", "cli"), "cli") {
 		t.Fatal("removed the previous version")
 	}
-	// --check は断らず、新しいビルドがあると答える（help に、入れ終えるまで install が断ると書く）。
+	// --check は拒否せず、新しいビルドがあると応答する（help に、インストールを完了するまで
+	// install が拒否すると記述する）。
 	if result, err := Install(h.options(), "cli", "c3", true); err != nil || result.Outcome != outcomeAvailable {
 		t.Fatalf("--check: %+v %v", result, err)
 	}
-	// Vectorworks が動いていれば、断る理由より先に vectorworks_running と答える（終了コード 6）。
+	// Vectorworks が実行中であれば、拒否する理由より先に vectorworks_running と応答する
+	// （終了コード 6）。
 	release := h.holdLock()
 	if result, err := h.install("cli", "c3"); !errors.Is(err, ErrRunning) || result.Outcome != outcomeRunning {
 		t.Fatalf("running: %+v %v", result, err)
@@ -182,9 +193,10 @@ func TestUpdatingAKeptVersionNeedsFinishing(t *testing.T) {
 	}
 }
 
-// フックの通っていない版の module が欠けると（隔離された）、同じタグでも入れ直しになる。付け替えの前の片付けが
-// old（フックの通った最後の版）を消さないよう、何も変えずに断り、前の版を戻すか消すかを示す（install と
-// uninstall が互いを指し合わない）。示した通り前の版を戻せば、普通に入れ直せる。
+// フックの成功していない版の module が欠落すると（隔離された）、同じタグでも再インストールとなる。
+// 差し替えの前の後処理が old（フックの成功した最後の版）を削除しないよう、何も変更せずに拒否し、
+// 以前の版を復元するか削除するかを示す（install と uninstall が互いを指し合わない）。示した通りに
+// 以前の版を復元すれば、通常通り再インストールできる。
 func TestReinstallingAKeptVersionWithoutItsModule(t *testing.T) {
 	h := newHarness(t)
 	keepNewVersion(t, h)
@@ -212,7 +224,8 @@ func TestReinstallingAKeptVersionWithoutItsModule(t *testing.T) {
 	}
 }
 
-// フックが通った後に hook_pending を外せなくても、入れたことは変わらず、知らせるだけにする。
+// フックが成功した後に hook_pending を除去できなくても、インストールしたことは変わらず、
+// 通知するのみとする。
 func TestCannotClearHookPending(t *testing.T) {
 	h := newHarness(t)
 	keepNewVersion(t, h)
@@ -222,8 +235,9 @@ func TestCannotClearHookPending(t *testing.T) {
 		!strings.Contains(stderr.String(), "hook succeeded") {
 		t.Fatalf("%+v %v %s", result, err, stderr.String())
 	}
-	// 記録は壊さない（書き換えが途中で止まっても、元の記録が残る）。記録はまだ通っていないと言うので、退避した
-	// 版も片付けない（前のタグを失わない）。次の同じタグの install が外して片付ける。
+	// 記録は破損させない（書き換えが途中で停止しても、元の記録が残存する）。記録はまだ
+	// 成功していないと示すため、退避した版も整理しない（以前のタグを失わない）。次の同じタグの
+	// install が除去して整理する。
 	if got, err := readRecord(filepath.Join(h.plugins, "cli")); err != nil || !got.HookPending {
 		t.Fatal("the record should stay as it was:", got, err)
 	}
@@ -237,7 +251,8 @@ func TestCannotClearHookPending(t *testing.T) {
 	}
 }
 
-// フックが記録を壊しても（ここでは記録に書き足す）、hook_pending を外せないと知らせるだけで、入れたことは変わらない。
+// フックが記録を破損させても（ここでは記録に追記する）、hook_pending を除去できないと
+// 通知するのみで、インストールしたことは変わらない。
 func TestHookBreaksTheRecord(t *testing.T) {
 	h := newHarness(t)
 	record := filepath.Join(h.plugins, "cli", RecordFile)
@@ -249,10 +264,11 @@ func TestHookBreaksTheRecord(t *testing.T) {
 	}
 }
 
-// フックが通ったのに hook_pending を外せず前の版を残すときは、よけた CLI を前の版のフォルダへ戻す（後始末が、
-// 前の版の vw2026 をよけた名前のまま消さない）。戻せなければ、知らせた場所のまま消さない（後始末が消すと、知らせた
-// 場所に無い）。どのケースも、標準エラーの文言（共通の文言と、ケースごとに足す extra）・old に残ったよけた CLI の
-// 数・前の版の vw2026 と戻す先の案内を同じ形で確かめる。
+// フックが成功したにもかかわらず hook_pending を除去できず以前の版を残置する場合は、退避した CLI を
+// 以前の版のフォルダへ復元する（後処理が、以前の版の vw2026 を退避した名前のまま削除しない）。
+// 復元できなければ、通知した場所のまま削除しない（後処理が削除すると、通知した場所に存在しない）。
+// いずれのケースも、標準エラーの文言（共通の文言と、ケースごとに追加する extra）・old に残存した
+// 退避した CLI の数・以前の版の vw2026 と復元先の案内を同じ形で検証する。
 func TestCannotClearHookPendingPutsTheMovedCLIBack(t *testing.T) {
 	for _, c := range []struct {
 		name    string
@@ -283,9 +299,10 @@ func TestCannotClearHookPendingPutsTheMovedCLIBack(t *testing.T) {
 	}
 }
 
-// 新しい版を残すとき、よけた CLI は前の版のフォルダ（old）の元の場所へ戻す（前の版を手で戻しても CLI が欠けず、
-// 後始末がよけた名前のまま消さない）。戻せなければ、その場所を知らせる。どのケースも、誤りの文言（共通の文言と、
-// ケースごとに足す extra）・old に残ったよけた CLI の数・前の版の vw2026 と戻す先の案内を同じ形で確かめる。
+// 新しい版を残置する場合、退避した CLI は以前の版のフォルダ（old）の元の場所へ復元する（以前の版を
+// 手動で復元しても CLI が欠落せず、後処理が退避した名前のまま削除しない）。復元できなければ、その
+// 場所を通知する。いずれのケースも、誤りの文言（共通の文言と、ケースごとに追加する extra）・old に
+// 残存した退避した CLI の数・以前の版の vw2026 と復元先の案内を同じ形で検証する。
 func TestKeepPutsTheMovedCLIIntoThePreviousVersion(t *testing.T) {
 	for _, c := range []struct {
 		name    string
@@ -317,10 +334,11 @@ func TestKeepPutsTheMovedCLIIntoThePreviousVersion(t *testing.T) {
 	}
 }
 
-// 記録の無い前の版を .kept-<時刻> へ脇へ移したときは、よけた CLI をそこへ戻す（利用者が戻すかもしれない版から、
-// vw2026 を消さない）。戻せなければ、その場所を知らせ、よけた CLI を消さない。どのケースも、標準エラーの文言
-// （共通の文言と、ケースごとに足す extra）・脇へ移した版・old に残ったよけた CLI の数・脇へ移した版の vw2026 と
-// 戻す先の案内を同じ形で確かめる。
+// 記録の無い以前の版を .kept-<時刻> へ移動した場合は、退避した CLI をそこへ復元する（利用者が
+// 復元する可能性のある版から、vw2026 を削除しない）。復元できなければ、その場所を通知し、退避した
+// CLI を削除しない。いずれのケースも、標準エラーの文言（共通の文言と、ケースごとに追加する
+// extra）・別の場所へ移動した版・old に残存した退避した CLI の数・別の場所へ移動した版の vw2026 と
+// 復元先の案内を同じ形で検証する。
 func TestKeptPreviousVersionGetsTheMovedCLI(t *testing.T) {
 	for _, c := range []struct {
 		name    string
@@ -335,7 +353,8 @@ func TestKeptPreviousVersionGetsTheMovedCLI(t *testing.T) {
 			h := newHarness(t)
 			h.mustInstall(release{name: "cli", tag: "c1"})
 			h.publish(release{name: "cli", tag: "c2"})
-			// module が欠けた（隔離された）入った cli から更新する。前の版は記録が正しくないので、消さずに脇へ移す。
+			// module が欠落した（隔離された）インストール済みの cli から更新する。以前の版は記録が
+			// 正しくないため、削除せずに別の場所へ移動する。
 			os.RemoveAll(filepath.Join(h.plugins, "cli", "cli.vwlibrary"))
 			if c.blocked {
 				renameWhen(t, func(oldpath, newpath string) error {
@@ -361,12 +380,14 @@ func TestKeptPreviousVersionGetsTheMovedCLI(t *testing.T) {
 	}
 }
 
-// この回が CLI をよけていなければ、前の版を脇へ移しても、前の回までのよけた CLI は消してみる。
+// この回が CLI を退避していなければ、以前の版を別の場所へ移動しても、以前の回までの退避した CLI の
+// 削除を試みる。
 func TestKeptPreviousVersionWithoutAMovedCLICleansUp(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
 	h.publish(release{name: "cli", tag: "c2"})
-	// 記録の無い前回の残り（同じタグの install が脇へ移す）と、前の回までのよけた CLI。
+	// 記録の無い前回の残存物（同じタグの install が別の場所へ移動する）と、以前の回までの退避した
+	// CLI。
 	old := filepath.Join(h.work, "old")
 	os.MkdirAll(filepath.Join(old, "cli"), 0o700)
 	leftover := filepath.Join(old, oldCLIName+"20260101T000000.000000000")
@@ -379,12 +400,14 @@ func TestKeptPreviousVersionWithoutAMovedCLICleansUp(t *testing.T) {
 	}
 }
 
-// 前の版を Vectorworks が使っているかもしれないので残すときの案内は、呼ぶ場面で変わる。付け替えの前なら何も変えて
-// いないので走らせ直すだけ、フックの後なら新しい版が入っているので、入ったタグで走らせ直して片付ける。
+// 以前の版を Vectorworks が使用している可能性があるため残置する場合の案内は、呼び出す場面によって
+// 異なる。差し替えの前ならば何も変更していないため再実行するのみ、フックの後ならば新しい版が
+// インストールされているため、インストールされたタグで再実行して整理する。
 func TestSettleOldAdviceDependsOnTheStage(t *testing.T) {
 	h := newHarness(t)
 	h.mustInstall(release{name: "cli", tag: "c1"})
-	// 付け替えの前: 前回の残りの old/cli があり、マニフェストを取る間に Vectorworks が起動する（片付けの確かめで見つける）。
+	// 差し替えの前: 前回の残存物の old/cli があり、マニフェストを取得する間に Vectorworks が
+	// 起動する（後処理の検証で検出する）。
 	old := filepath.Join(h.work, "old", "cli")
 	if err := os.CopyFS(old, os.DirFS(filepath.Join(h.plugins, "cli"))); err != nil {
 		t.Fatal(err)
@@ -399,7 +422,7 @@ func TestSettleOldAdviceDependsOnTheStage(t *testing.T) {
 	unlock()
 	os.RemoveAll(old)
 
-	// フックの後: フックの間に Vectorworks が起動し、フックは通る。
+	// フックの後: フックの間に Vectorworks が起動し、フックは成功する。
 	h.publish(release{name: "cli", tag: "c3", install: h.lockingHook(hookPlan{})})
 	done, _ := h.lockWhenHookStarts(h.cliSpool())
 	o, stderr := h.capturing()

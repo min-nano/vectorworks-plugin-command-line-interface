@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-// 受け付け 1 回の内、通信規則の見本（FixtureTests.cpp）で表しにくいもの。
+// 1 回の受付処理の内、通信規則のフィクスチャ（FixtureTests.cpp）で表現しにくいもの。
 
 using VwCli::core::ErrorCode;
 using VwCli::core::Json;
@@ -33,7 +33,7 @@ using VwCli::test::Caller;
 std::vector<std::string> gCalls;
 Caller *gCaller = nullptr;
 Server *gServer = nullptr;
-// nests が入れ子に渡す道具の表（表の定義より前に使うので、テストが置く）。
+// nests が入れ子に渡すツールの一覧（一覧の定義より前に使用するため、テストが設定する）。
 std::span<const Tool> gTools;
 bool gSession = false;
 bool gStarted = false;
@@ -45,21 +45,21 @@ Json record(const char *name) {
 
 Json first(const Json &, const ToolContext &, ToolStatus &) { return record("first"); }
 
-// putLater は回の途中で要求を置く（並べた後に置かれた要求は次の回に回る）。
+// putLater は回の途中で要求を配置する（並べた後に配置された要求は次の回に回される）。
 Json putLater(const Json &, const ToolContext &, ToolStatus &) {
 	gCaller->put("zzz", R"({"tool":"first"})");
 	return record("put_later");
 }
 
-// nests は道具の中で Vectorworks
-// がイベントを回し、刻みが又届いたことを真似る（受け付けの入れ子）。
+// nests はツールの中で Vectorworks がイベントを処理し、周期処理が再度届いたことを模倣する
+// （受付処理の入れ子）。
 Json nests(const Json &, const ToolContext &, ToolStatus &) {
 	gCaller->put("c", R"({"tool":"first"})");
 	gServer->serve(gTools, kNow);
 	return record("nests");
 }
 
-// quitFails は終了を頼んでから失敗する（失敗した道具の終了の依頼は出さない）。
+// quitFails は終了を依頼してから失敗する（失敗したツールの終了の依頼は発行しない）。
 Json quitFails(const Json &, const ToolContext &, ToolStatus &status) {
 	record("quit_fails");
 	status.code = ErrorCode::Internal;
@@ -73,7 +73,7 @@ Json quits(const Json &, const ToolContext &, ToolStatus &status) {
 	return record("quits");
 }
 
-// badDetail は detail にオブジェクトでない値を返す（道具の不具合）。
+// badDetail は detail にオブジェクトでない値を返す（ツールの不具合）。
 Json badDetail(const Json &, const ToolContext &, ToolStatus &status) {
 	status.code = ErrorCode::InvalidArgs;
 	status.message = "引数が誤っています";
@@ -83,7 +83,7 @@ Json badDetail(const Json &, const ToolContext &, ToolStatus &status) {
 
 Json throwsInt(const Json &, const ToolContext &, ToolStatus &) {
 	record("throws_int");
-	// std::exception から派生しない例外も受け止めることを確かめるので、わざと int を投げる。
+	// std::exception から派生しない例外も捕捉することを確認するため、意図的に int を投げる。
 	// NOLINTNEXTLINE(bugprone-std-exception-baseclass)
 	throw 42;
 }
@@ -105,7 +105,7 @@ const Tool kTools[] = {
     {{"context", "", "{}", ToolKind::Read}, readContext},
 };
 
-// startSession は占有の印を受け取る。
+// startSession は占有のセッション ID を受け取る。
 std::string startSession(Server &server, Caller &caller, const std::string &id) {
 	caller.put(id, R"({"tool":"@session_start"})");
 	server.serve(kTools, kNow);
@@ -149,7 +149,7 @@ TEST(ServeDoesNotQuitWhenTheToolFails) {
 	CHECK_EQ(gCalls, (std::vector<std::string>{"quit_fails", "first", "first"}));
 }
 
-// detail がオブジェクトでなければ、道具の不具合として internal で応え、detail を付けない。
+// detail がオブジェクトでなければ、ツールの不具合として internal で応答し、detail を付けない。
 TEST(ServeAnswersInternalForADetailThatIsNotAnObject) {
 	TempDir dir;
 	Server server(dir.utf8Path());
@@ -160,9 +160,9 @@ TEST(ServeAnswersInternalForADetailThatIsNotAnObject) {
 	CHECK(!caller.response("1").find("detail"));
 }
 
-// 受け付けの入れ子では、外の回が並べた要求（b・s）も、回の途中に置かれた要求（c）も、解析せずに
-// busy で断る。占有の印は発行しない。外の回は、断られた要求を取り出せずに飛ばす。待つ印は入れ子でも
-// 確かめる（放されていれば応えずに消し、無ければ no_wait）。
+// 受付処理の入れ子では、外の回が並べた要求（b・s）も、回の途中に配置された要求（c）も、解析せずに
+// busy で拒否する。占有のセッション ID は発行しない。外の回は、拒否された要求を取り出せずに飛ばす。
+// 待機標識は入れ子でも確認する（解放されていれば応答せずに削除し、存在しなければ no_wait）。
 TEST(ServeRefusesEveryRequestWhileNested) {
 	TempDir dir;
 	gCalls.clear();
@@ -171,7 +171,8 @@ TEST(ServeRefusesEveryRequestWhileNested) {
 	gCaller = &caller;
 	gServer = &server;
 	gTools = kTools;
-	// 先にロックを取る（取るときの掃除で、待つ印の放された・無い要求が消えないように）。
+	// 先にロックを取得する（取得する際の整理で、待機標識が解放された・存在しない要求が消えない
+	// ように）。
 	server.serve(kTools, kNow);
 	caller.put("a", R"({"tool":"nests"})");
 	caller.put("b", R"({"tool":"first"})");
@@ -189,7 +190,7 @@ TEST(ServeRefusesEveryRequestWhileNested) {
 	CHECK_EQ(caller.code("c"), std::string("busy"));
 	CHECK_EQ(caller.code("s"), std::string("busy"));
 	CHECK(!server.inSession());
-	// 入れ子から戻った後は、普通に受け付ける。
+	// 入れ子から戻った後は、通常通り受け付ける。
 	caller.put("d", R"({"tool":"first"})");
 	server.serve(kTools, kNow);
 	CHECK(caller.ok("d"));
@@ -247,7 +248,7 @@ TEST(ServeTellsToolsWhetherASessionIsIssued) {
 	CHECK(gSession);
 }
 
-// 起動を終えたか（受け付けの外の状態）は、serve に渡した通りに道具へ渡す（quit が見る）。
+// 起動を終了したか（受付処理の外の状態）は、serve に渡した通りにツールへ渡す（quit が参照する）。
 TEST(ServeTellsToolsWhetherVectorworksHasStarted) {
 	TempDir dir;
 	Server server(dir.utf8Path());
@@ -268,17 +269,18 @@ TEST(ServeIssuesSessionsSpelledLikeIds) {
 	std::string session = startSession(server, caller, "1");
 	CHECK(VwCli::core::protocol::validId(session));
 	CHECK_EQ(session.size(), std::size_t{36});
-	// 印の頭は、受け付けに渡した今の時刻と区切り。
+	// セッション ID の先頭は、受付処理に渡した現在時刻と区切り。
 	std::string head = std::to_string(kNow) + "-";
 	CHECK_EQ(session.substr(0, head.size()), head);
-	// 2 つ目の印は別の乱数になる。
+	// 2 つ目のセッション ID は別の乱数になる。
 	caller.put("2", R"({"tool":"@session_end","session":")" + session + R"("})");
 	server.serve(kTools, kNow);
 	CHECK(startSession(server, caller, "3") != session);
 }
 
-// 応答を書けなければ、占有の印を変えない（呼ぶ側が受け取れない印で占有が残る・応答が届かないのに
-// 占有だけが消える、を避ける）。書きかけの名前にディレクトリを置くと、応答を書けない。
+// 応答を書き込めなければ、占有のセッション ID を変更しない（呼び出し元が受け取れない
+// セッション ID で占有が残る・応答が届かないにもかかわらず占有のみが消える、を回避する）。
+// 書き込み途中の名前にディレクトリを配置すると、応答を書き込めない。
 TEST(ServeKeepsTheSessionWhenTheReplyCannotBeWritten) {
 	TempDir dir;
 	Server server(dir.utf8Path());
@@ -295,7 +297,7 @@ TEST(ServeKeepsTheSessionWhenTheReplyCannotBeWritten) {
 	CHECK(server.inSession());
 }
 
-// 終了の依頼も、応答を書けたときだけ出す（応答が届かないまま Vectorworks を終わらせない）。
+// 終了の依頼も、応答を書き込めた場合のみ発行する（応答が届かないまま Vectorworks を終了させない）。
 TEST(ServeDoesNotQuitWhenTheReplyCannotBeWritten) {
 	TempDir dir;
 	gCalls.clear();
@@ -307,7 +309,7 @@ TEST(ServeDoesNotQuitWhenTheReplyCannotBeWritten) {
 	caller.put("2", R"({"tool":"first","session":")" + session + R"("})");
 	CHECK(!server.serve(kTools, kNow).quit);
 	CHECK_EQ(gCalls, (std::vector<std::string>{"quits", "first"}));
-	// 書ければ終了を頼み、その回の残りは取り出さない。
+	// 書き込めれば終了を依頼し、その回の残りは取り出さない。
 	caller.put("3", R"({"tool":"quits","session":")" + session + R"("})");
 	caller.put("4", R"({"tool":"first","session":")" + session + R"("})");
 	CHECK(server.serve(kTools, kNow).quit);
@@ -339,13 +341,13 @@ TEST(ServeReportsAnErrorAndRetries) {
 	VwCli::core::ServeResult result = server.serve(kTools, kNow);
 	CHECK(result.phase == Phase::Error);
 	CHECK(!result.message.empty());
-	// 次の回にやり直す。
+	// 次の回に再試行する。
 	CHECK(files::remove(dir.sub("spool")));
 	CHECK(server.serve(kTools, kNow).phase == Phase::Serving);
 }
 
-// ロックのファイルを開けなければ（名前にディレクトリがある）、誤りを返し、次の回にやり直す。
-// ディレクトリは開けないので、断ったことにならず、作り直さない（通信規則「ロック」）。
+// ロックのファイルを開けなければ（名前にディレクトリがある）、誤りを返し、次の回に再試行する。
+// ディレクトリは開けないため、拒否したことにならず、再作成しない（通信規則「ロック」）。
 TEST(ServeReportsAnErrorWhenTheLockCannotBeOpened) {
 	TempDir dir;
 	std::filesystem::create_directory(dir.path() / "bridge.lock");
@@ -359,7 +361,7 @@ TEST(ServeReportsAnErrorWhenTheLockCannotBeOpened) {
 	CHECK(server.serve(kTools, kNow).phase == Phase::Serving);
 }
 
-// 読めない要求（名前にディレクトリがある）は黙って飛ばし（応答しない）、残りに応える
+// 読み取れない要求（名前にディレクトリがある）は通知せずに飛ばし（応答しない）、残りに応答する
 // （通信規則「プラグイン側の義務」）。
 TEST(ServeSkipsRequestsItCannotRead) {
 	TempDir dir;
