@@ -15,14 +15,15 @@ type sessionCmd struct {
 func (sessionCmd) Help() string {
 	return edition.Expand(`
 A session occupies the bridge: while it lasts, the plug-in runs a tool that
-changes the drawing or Vectorworks (kind write or app, such as quit; see "call
-tools") only for the calls that carry it (--session, or ${prefix}SESSION). Other
+changes the drawing or Vectorworks (kind write or app, such as quit; see
+"${cmd} tools") only for the calls that carry it (--session, or ${prefix}SESSION). Other
 calls of such a tool exit with 23 and do not run. Without a session, nobody
 occupies the bridge, and such a tool does not run at all (23). A tool that only
-reads (kind read, such as ping) and "call tools" run for every call, in a
+reads (kind read, such as ping) and "${cmd} tools" run for every call, in a
 session or not (but while Vectorworks is quitting, every tool exits with 23
-except "call tools", "session start" and "session end", and a tool the plug-in
-does not have exits with 22; see "${cmd} help call").
+except "${cmd} tools", "session start" and "session end", and a tool the plug-in
+does not have exits with 22; on Windows, while a tool shows a dialog, every call
+exits with 23, "${cmd} tools" included; see "${cmd} help call").
 
 	${cmd} session start                     # {"session":"<ID>"}
 	${cmd} call <TOOL> --session <ID>        # a tool of kind write or app
@@ -80,10 +81,4 @@ func (c *sessionEndCmd) run(e *env) int {
 		return exitUsage
 	}
 	return callReserved(e, spool.ToolSessionEnd, c.Session, c.Timeout)
-}
-
-// callReserved は予約された道具を引数なしで呼び、結果を出す。出力・終了コードは call と同じ。
-func callReserved(e *env, tool, session string, timeout float64) int {
-	c := callCmd{Tool: tool, Session: session, Timeout: timeout}
-	return c.run(e)
 }

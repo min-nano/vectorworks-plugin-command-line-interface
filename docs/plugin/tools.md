@@ -12,7 +12,7 @@
 
 | 道具 | 種類 | 引数 | 結果 |
 | --- | --- | --- | --- |
-| `tools` | （予約） | なし | [通信規則「予約された道具」](../protocol.md#予約された道具) |
+| `@tools` | （予約。`vw2026 tools` が呼ぶ） | なし | [通信規則「予約された道具」](../protocol.md#予約された道具) |
 | `ping` | read | なし | 下記 |
 | `layers` | read | `include_sheets`（既定 true） | `{"layers":[{"name","kind":"design"\|"sheet","referenced","scale","objects","current"}],"count"}`（[読む道具](#読む道具layersclasseslayer_objectsobject_counts)） |
 | `classes` | read | なし | `{"classes":[名前…],"count"}`（同上） |
@@ -88,7 +88,7 @@
 ## `ping`
 
 ```json
-{"version":"abc1234","branch":"main","protocol":6,"pid":4242,"session":false,"document_open":true,"current_layer":"1F"}
+{"version":"abc1234","branch":"main","protocol":7,"pid":4242,"session":false,"document_open":true,"current_layer":"1F"}
 ```
 
 | フィールド | 値 |
@@ -104,7 +104,7 @@
 図面が無いときは次のように答えます（`GetCurrentLayer()` は落ちずに `nullptr` を返します）。
 
 ```json
-{"version":"abc1234","branch":"main","protocol":6,"pid":4242,"session":false,"document_open":false,"current_layer":null}
+{"version":"abc1234","branch":"main","protocol":7,"pid":4242,"session":false,"document_open":false,"current_layer":null}
 ```
 
 例の `protocol` は書いた時点の版です（[通信規則「版」](../protocol.md#版)）。
@@ -312,7 +312,7 @@ CLI はプログラムやスクリプトから使うので、**保存の確認�
   `no_session`、他が占有していれば `occupied` で断られる）。Vectorworks が終われば占有も消えます。
 - **終了の依頼の最中は断られます**（`busy`。[通信規則「Vectorworks が処理中」](../protocol.md#vectorworks-が処理中)）。
   上の競合で保存の確認が開いている間に届いた 2 つ目の `quit` も `busy` で断られるので、終了の依頼は重なりません。
-  その間は `ping` と読む道具も `busy` で断られ、`tools`・`session start`・`session end` だけが応えます（表に無い道具は `unknown_tool`）
+  その間は `ping` と読む道具も `busy` で断られ、`vw2026 tools`・`vw2026 session start`・`vw2026 session end` だけが応えます（表に無い道具は `unknown_tool`）
   （[構成「Vectorworks が処理中」](architecture.md#vectorworks-が処理中)）。
 - **再起動の手段は持ちません**。起動し直すのは呼ぶ側で、`session start` で占有を
   取ってから `quit`（`--session` を付ける）・止まるのを待つ・`launch`・動き出すのを待つ、を組み合わせます（更新を

@@ -34,7 +34,7 @@ const (
 	// ProtocolVersion は受け渡しの版（上げる場合は docs/protocol.md「互換性」）。表示のためだけで、
 	// 実行時に照合はしない（CLI とプラグインは同じ zip から同時に入り、更新は Vectorworks の
 	// 終了後にしか行わないので、両側は常に同じビルドである。docs/protocol.md「版」）。
-	ProtocolVersion = 6
+	ProtocolVersion = 7
 
 	// MaxRequestBytes はプラグイン側が受け付ける要求 1 件の上限。超える要求は置く前に断る
 	// （置いても「読めない要求」として失敗が返るだけなので）。
@@ -171,7 +171,7 @@ func NewID(now time.Time) string {
 	return fmt.Sprintf("%019d-%s", now.UnixNano(), hex.EncodeToString(suffix[:]))
 }
 
-// Call は道具を 1 つ呼び、応答を待つ。session は占有の印（session_start が返す。占有しないなら
+// Call は道具を 1 つ呼び、応答を待つ。session は占有の印（@session_start が返す。占有しないなら
 // 空）で、要求に載せる（docs/protocol.md「占有」）。
 //
 // 刻みが届かずに応えない間も要求を置いて timeout まで待つ（刻みが戻れば処理される）。

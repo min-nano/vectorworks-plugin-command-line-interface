@@ -95,8 +95,8 @@ Windows では Vectorworks 2026 を 2 つ起動でき、どちらのプラグイ
 - **道具を足すときに触るのは表の 1 行と中身 1 つだけ**です。CLI は道具を知らないので直しません。
   名前・説明・`inputSchema`・種類は `src/core` の `ToolSpec`（`Ping.h`・`ReadTools.h`・`DocumentTools.h`・`Quit.h`）に置き、表は
   `core::toolOf(spec, &中身)` で組み立てます（種類を無 SDK のテストで確かめるため）。
-- `tools` の結果の形と `kind` の意味は[通信規則「予約された道具」](../protocol.md#予約された道具)にあります。
-  予約された道具の内 `tools`・`session_start`・`session_end` は表に載せず、`ping` と `quit` は表に載せます。
+- `@tools` の結果の形と `kind` の意味は[通信規則「予約された道具」](../protocol.md#予約された道具)にあります。
+  予約された道具の内 `@tools`・`@session_start`・`@session_end` は表に載せず、`ping` と `quit` は表に載せます。
 - 道具の結果は JSON のオブジェクトで返します（[通信規則「応答」](../protocol.md#応答idresjson)）。
   返す値が無ければ `Json()` でよく、`Server` が `{}` にします。
 - 道具が受け付けの状態を知るのは `ToolContext` からだけです（`ping` の `session`・`quit` が見る起動の状態の

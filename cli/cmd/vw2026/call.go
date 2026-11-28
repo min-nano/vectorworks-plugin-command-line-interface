@@ -12,7 +12,7 @@ import (
 )
 
 type callCmd struct {
-	Tool    string  `arg:"" help:"Tool to call (\"${cmd} call tools\" lists them)."`
+	Tool    string  `arg:"" help:"Tool to call (\"${cmd} tools\" lists them)."`
 	Args    string  `arg:"" optional:"" name:"args" help:"Arguments as a JSON object, or - to read them from the standard input."`
 	Raw     bool    `env:"${prefix}CALL_RAW" negatable:"" help:"Print the whole response (ok, result, error, and detail)."`
 	Timeout float64 `env:"${prefix}CALL_TIMEOUT" default:"30" placeholder:"SECONDS" help:"How long to wait for the response (default ${default})."`
@@ -21,8 +21,9 @@ type callCmd struct {
 
 func (callCmd) Help() string {
 	return edition.Expand(`
-Call calls one tool of the bridge and prints its result. "${cmd} call tools"
-lists the tools; docs/plugin/tools.md describes them.
+Call calls one tool of the bridge and prints its result. "${cmd} tools"
+lists the tools; docs/plugin/tools.md describes them. Call passes the name to
+the plug-in as it is and reserves no names of its own.
 
 The arguments are a JSON object. "-" reads them from the standard input.
 Without them, the tool is called with no arguments. Call does not check the
@@ -63,7 +64,7 @@ tool did not run, so call exits with 3 for it, not with 21 or 22. A call that
 is killed while waiting leaves a request that will not run either.
 
 A tool that changes the drawing or Vectorworks (kind write or app, such as
-quit; see "call tools") runs only in a session (see "${cmd} help session").
+quit; see "${cmd} tools") runs only in a session (see "${cmd} help session").
 Called outside its session, it exits with 23: the tool did not run. So it does
 when another session occupies the bridge, when the session it calls in has
 ended, and when there is no session at all. A tool that only reads (kind read,
@@ -72,7 +73,7 @@ such as ping) runs for every call, except while Vectorworks is quitting (below).
 While Vectorworks is quitting (after "call quit", while it asks whether to save
 the drawings), the plug-in refuses every tool, ping and the tools of kind read
 included, with busy, and call exits with 23: the tool did not run. Only the
-list of tools ("call tools") and "session start" and "session end" still
+list of tools ("${cmd} tools") and "session start" and "session end" still
 answer, and a tool the plug-in does not have still exits with 22.
 
 A tool may take long (saving or closing a large drawing) or wait for the user
@@ -185,4 +186,12 @@ func codeFor(err error) int {
 	default:
 		return exitFailure
 	}
+}
+
+// callReserved は予約された道具（@tools・@session_start・@session_end）を引数なしで呼び、結果を出す。
+// 出力・終了コードは call と同じ。call は名前をそのまま渡すので call @tools なども通るが、呼ぶ側が
+// 予約された道具の名前を綴らずに済むように、それぞれのコマンド（tools・session start・session end）を置く。
+func callReserved(e *env, tool, session string, timeout float64) int {
+	c := callCmd{Tool: tool, Session: session, Timeout: timeout}
+	return c.run(e)
 }

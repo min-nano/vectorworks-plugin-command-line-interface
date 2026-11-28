@@ -68,7 +68,7 @@ vw2026 call ping
 # {"version":"abc1234","branch":"main","protocol":…,"pid":4242,"session":false,"document_open":true,"current_layer":"1F"}
 
 # 使える道具の一覧を見る
-vw2026 call tools
+vw2026 tools
 # {"protocol":…,"tools":[{"name":"layers","description":"…","inputSchema":{…},"kind":"read"},…]}
 ```
 

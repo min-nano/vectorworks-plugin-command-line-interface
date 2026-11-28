@@ -110,7 +110,7 @@ const Tool *findTool(std::span<const Tool> tools, const std::string &name) {
 	return found == tools.end() ? nullptr : &*found;
 }
 
-// toolsList は予約された道具 tools の結果（通信規則「予約された道具」）。
+// toolsList は予約された道具 @tools の結果（通信規則「予約された道具」）。
 std::optional<Json> toolsList(std::span<const Tool> tools, std::string &reason) {
 	Json list = Json::array();
 	for (const Tool &tool : tools) {
@@ -128,7 +128,7 @@ std::optional<Json> toolsList(std::span<const Tool> tools, std::string &reason) 
 	    {{"protocol", Json::integer(protocol::kVersion)}, {"tools", std::move(list)}});
 }
 
-// refuseOutsideSession は、占有の中でだけ呼べる要求（session_end・種類 Write と App）を、今の占有
+// refuseOutsideSession は、占有の中でだけ呼べる要求（@session_end・種類 Write と App）を、今の占有
 // current に照らす（通信規則「占有」の表）。断るなら応答を返す。
 std::optional<Json> refuseOutsideSession(const std::string &current, const Request &request) {
 	if (current.empty()) {
@@ -363,8 +363,8 @@ Server::Outcome Server::answer(const std::string &text, std::span<const Tool> to
 		return respond(failure(protocol::kCodeUnknownTool, "知らない道具です: " + name));
 	}
 	// 終了の依頼の最中は、表の道具を全て断る（種類 Read と ping も）。終了の呼び出しの途中で、
-	// 道具に SDK を呼ばせないため。SDK を呼ばない 3 つの道具（上の tools・session_start・
-	// session_end）は応える。占有に照らすのが先。
+	// 道具に SDK を呼ばせないため。SDK を呼ばない 3 つの道具（上の @tools・@session_start・
+	// @session_end）は応える。占有に照らすのが先。
 	if (activity == Activity::Quitting) {
 		return respond(failure(protocol::kCodeBusy,
 		                       "Vectorworks に終了を頼んでいる最中なので実行しませんでした"));

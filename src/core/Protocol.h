@@ -10,8 +10,8 @@
 
 namespace VwCli::core::protocol {
 
-// 通信規則の版。tools と ping の結果に載せるだけで、実行時に照合しない（通信規則「版」）。
-inline constexpr int kVersion = 6;
+// 通信規則の版。@tools と ping の結果に載せるだけで、実行時に照合しない（通信規則「版」）。
+inline constexpr int kVersion = 7;
 
 // cli のプラグインのフォルダ（<Plug-Ins>/cli/）の下のスプールの名前（通信規則「スプールの場所」）。
 inline constexpr std::string_view kSpoolDirName = "spool";
@@ -31,13 +31,15 @@ inline constexpr int kMaxNestingDepth = 64;
 // id の長さの上限（綴りは [0-9A-Za-z_-]{1,64}。通信規則「id」）。
 inline constexpr std::size_t kMaxIdLength = 64;
 
-// 予約された道具（通信規則「予約された道具」）。ping は種類 read の道具として道具の表に載る。
-inline constexpr std::string_view kToolTools = "tools";
+// 予約された道具（通信規則「予約された道具」）。通信規則そのものが受け持つ 3 つは、道具の名前の綴り
+// （[a-z0-9_]+(\.[a-z0-9_]+)*）では書けない @ で始め、道具の名前と重ならないようにする。ping は
+// このプラグインの道具（種類 read）として道具の表に載る。
+inline constexpr std::string_view kToolTools = "@tools";
 inline constexpr std::string_view kToolPing = "ping";
-inline constexpr std::string_view kToolSessionStart = "session_start";
-inline constexpr std::string_view kToolSessionEnd = "session_end";
+inline constexpr std::string_view kToolSessionStart = "@session_start";
+inline constexpr std::string_view kToolSessionEnd = "@session_end";
 
-// 道具の種類（tools の結果の kind）。
+// 道具の種類（@tools の結果の kind）。
 inline constexpr std::string_view kKindRead = "read";
 inline constexpr std::string_view kKindWrite = "write";
 inline constexpr std::string_view kKindApp = "app";

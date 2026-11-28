@@ -147,7 +147,7 @@ type server struct {
 	// 成功したら終了を頼む道具（道具が返す終了の依頼）。nil なら quit だけ
 	quits map[string]bool
 	// 受け付けの外の状態（"quitting"）。空でなければ表の道具を全て busy で断る（SDK を呼ばない
-	// tools・session_start・session_end と、表に無い道具は除く）
+	// @tools・@session_start・@session_end と、表に無い道具は除く）
 	activity string
 	// 掴んでいるロックを放す。nil ならロックを掴んでいない
 	unlock func()
@@ -240,13 +240,13 @@ func (s *server) serveOnce() (serving, quit bool) {
 
 // answer は要求を占有に照らしてから応える（docs/protocol.md「占有」）。
 //
-//   - tools と種類 read の道具は占有に照らさない（図面を変えないので、占有している呼ぶ側の作業と
+//   - @tools と種類 read の道具は占有に照らさない（図面を変えないので、占有している呼ぶ側の作業と
 //     混ざらない）。表に無い道具も占有に照らさず、handle が unknown_tool で応える（Vectorworks が
 //     処理中でも）。
-//   - session_start は占有されていなければ印を発行し、されていれば occupied。
-//   - session_end と種類 write・app は占有の中でだけ呼べる。
+//   - @session_start は占有されていなければ印を発行し、されていれば occupied。
+//   - @session_end と種類 write・app は占有の中でだけ呼べる。
 //   - Vectorworks が処理中（activity）なら、表の道具を全て busy で断る（種類 read と ping も）。
-//     SDK を呼ばない tools・session_start・session_end は応える。種類 write・app は占有に照らすのが先。
+//     SDK を呼ばない @tools・@session_start・@session_end は応える。種類 write・app は占有に照らすのが先。
 //
 // 表に無い道具は kinds で見分ける（kinds に無く quit でもない道具）。kinds を渡さない Start では
 // 見分けられないので、どの道具も表にあるとみなす（処理中は unknown_tool ではなく busy になる）。

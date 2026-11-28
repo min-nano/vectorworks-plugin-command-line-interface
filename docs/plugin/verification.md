@@ -73,7 +73,7 @@ mac でも Windows でも、起動の途中に「開発元不明のプラグイ�
 ### 起動と `ping`（どの変更でも）
 
 - `launch` の後 `status` が `running:true` になり、`call ping` の `version` が PR の head の短い sha、`branch` が
-  その PR のブランチになる。`call tools` に道具が並ぶ。
+  その PR のブランチになる。`vw2026 tools` に道具が並ぶ。
 - `launch` の直後から `status` を短い間隔で繰り返し、`running:true` になった直後（起動画面の間）の `call ping` が
   落ちずに応える。
 - 図面を 1 枚も開いていないときの `ping` が、`document_open` が偽・`current_layer` が `null` で応える。

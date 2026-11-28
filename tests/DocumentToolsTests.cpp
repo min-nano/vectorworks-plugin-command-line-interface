@@ -606,7 +606,7 @@ TEST(ServeRefusesSaveAndCloseOutsideTheSession) {
 		                         std::string(R"({"tool":")") + tool + "\"}");
 		CHECK_EQ(*refused.find("code"), Json::string("no_session"));
 	}
-	Json started = serveOnce(server, caller, tools, "b", R"({"tool":"session_start"})");
+	Json started = serveOnce(server, caller, tools, "b", R"({"tool":"@session_start"})");
 	REQUIRE(started.find("result"));
 	std::string session = started.find("result")->find("session")->asString();
 	for (const char *tool : {"save", "close"}) {
