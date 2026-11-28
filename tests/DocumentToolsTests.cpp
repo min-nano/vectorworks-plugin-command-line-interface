@@ -670,6 +670,8 @@ public:
 	std::string throwsAt;
 	// 書き終えてもファイルを置かない（出力先のフォルダが無い場合を模倣する）。
 	bool writes = true;
+	// 書き終えた後の to の問い合わせを失敗させる。
+	std::optional<Probe> probeAfterClose;
 
 	std::vector<std::string> sheets() override {
 		log_.emplace_back("sheets");
@@ -691,6 +693,9 @@ public:
 		log_.emplace_back("close pdf");
 		if (writes) {
 			fs_.files.push_back(path_);
+		}
+		if (probeAfterClose) {
+			fs_.toFails = probeAfterClose;
 		}
 		return closeError;
 	}
@@ -946,6 +951,16 @@ TEST(ExportPdfChecksTheFileAfterWriting) {
 	CHECK_EQ(status.detail, must(R"({"reason":"export_failed","step":"file"})"));
 	CHECK(docs.calls == calls({"list", "switch 22", "list", "sheets", "open /Users/me/tmp/a.pdf",
 	                           "page S-1", "close pdf", "list", "switch 11"}));
+
+	// 書き終えた後の問い合わせが「無い」以外で失敗したら、os_error を付ける。
+	FakeDocuments failing = sample();
+	Fs probe;
+	FakePdf failingPdf(failing.calls, probe);
+	failingPdf.probeAfterClose = Probe{Entry::Failed, 13};
+	ToolStatus failed;
+	VwCli::core::exportPdf(exportArgs(kUntitled, {"S-1"}, "/Users/me/tmp/a.pdf"), failing,
+	                       failingPdf, probe.environment(), failed);
+	CHECK_EQ(failed.detail, must(R"({"reason":"export_failed","step":"file","os_error":13})"));
 }
 
 // 頁の途中で投げた場合も、PDF を閉じ、前面を戻してから投げる（Server が internal で応答する）。
