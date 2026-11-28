@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -37,6 +38,9 @@ public:
 	bool remnantsStick = false;
 	// 片付けの最中に開く図面。一覧が空のときの CloseDocument の間に、一覧へ加わる。
 	std::optional<core::OpenDocument> opensWhileClearing;
+	// この回目（1 から数える）の一覧の読み出しで投げる（0
+	// なら投げない。パスを読めない・確保できない ことを真似る）。投げた回も calls に残す。
+	int listThrowsAt = 0;
 
 	// count は name の呼び出しの回数（"list" など）。
 	int count(std::string_view name) const {
@@ -56,6 +60,9 @@ public:
 
 	std::vector<core::OpenDocument> list() override {
 		calls.emplace_back("list");
+		if (listThrowsAt > 0 && count("list") == listThrowsAt) {
+			throw std::runtime_error("cannot read the list");
+		}
 		return open;
 	}
 	bool switchTo(std::int32_t ref) override {

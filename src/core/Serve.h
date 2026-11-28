@@ -143,6 +143,9 @@ public:
 
 	bool inSession() const { return !session_.empty(); }
 
+	// serving は serve の途中か（道具の SDK 呼び出しが回すイベントから入り直した刻みで真）。
+	bool serving() const { return serving_; }
+
 private:
 	struct Outcome {
 		// 書き出した応答。

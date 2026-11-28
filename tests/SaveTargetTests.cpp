@@ -474,6 +474,20 @@ TEST(WindowsPathRefusesFormsItDoesNotOpen) {
 	CHECK(windows_path::narrow(windows_path::widen("図面.vwx")) == "図面.vwx");
 }
 
+// \\?\ の形にできないパス（相対・ドライブ相対・\\.\）は、OS
+// に聞かずに確かめられない（Failed）とする。
+// 「無い」と答えると、上書きの確かめを素通りするため。checkWindowsTo が先に断る形と同じ。
+TEST(ProbesRefuseFormsThatCannotBeExtended) {
+	for (const char *path : {"a.vwx", "C:a.vwx", "\\a.vwx", "\\\\.\\C:\\a.vwx"}) {
+		Probe target = save_target::probeTo(path);
+		Probe parent = save_target::probeParent(path);
+		CHECK(target.entry == Entry::Failed);
+		CHECK_EQ(target.osError, std::int64_t{ERROR_INVALID_NAME});
+		CHECK(parent.entry == Entry::Failed);
+		CHECK_EQ(parent.osError, std::int64_t{ERROR_INVALID_NAME});
+	}
+}
+
 // CON.vwx は装置ではなくファイルの名前として聞く（\\?\ を付けるので「無い」）。
 TEST(ProbesAskReservedNamesAsFiles) {
 	TempDir dir;

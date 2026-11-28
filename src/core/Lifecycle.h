@@ -25,6 +25,21 @@ public:
 
 	bool notificationRegistered() const { return notificationRegistered_; }
 
+	// registerNotification は、通知をまだ登録していなければ registerOnce を呼び（登録できたら真を
+	// 返す）、できたら印を立てる。受け付けの途中（道具の SDK
+	// 呼び出しが回すイベントから入り直した刻み）と 終了の依頼の最中は呼ばない（道具・終了の SDK
+	// 呼び出しの途中で SDK を呼ばない。
+	// docs/plugin/architecture.md「受け付けの流れ」）。呼ばなかった回は、次の刻みでやり直す。
+	template <typename Register>
+	void registerNotification(const Server &server, Register &&registerOnce) {
+		if (notificationRegistered_ || quitting_ || server.serving()) {
+			return;
+		}
+		if (std::forward<Register>(registerOnce)()) {
+			notificationRegistered_ = true;
+		}
+	}
+
 	// startup は起動の状態（道具 quit が ToolContext で見る）。
 	Startup startup() const { return Startup{started_, notificationRegistered_}; }
 

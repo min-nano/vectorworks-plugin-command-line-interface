@@ -648,3 +648,42 @@ TEST(SaveRestoresTheFrontWhenSavingThrows) {
 	CHECK(docs.calls ==
 	      calls({"list", "switch 22", "list", "save /Users/me/tmp/a.vwx", "list", "switch 11"}));
 }
+
+// 前面を切り替えた後に一覧を読めずに投げたとき（前面を確かめる・保存や閉じるの後に読み直す）も、
+// 前面を戻してから投げる（Server が internal で応える）。どちらの道具も同じ。
+TEST(SaveAndCloseRestoreTheFrontWhenTheListThrows) {
+	struct Case {
+		const char *tool;
+		int throwsAt;
+		std::vector<std::string> calls;
+	};
+	const std::vector<Case> cases = {
+	    {"save", 2, calls({"list", "switch 22", "list", "list", "switch 11"})},
+	    {"save", 3,
+		 calls({"list", "switch 22", "list", "save /Users/me/tmp/a.vwx", "list", "list",
+		        "switch 11"})},
+	    {"close", 2, calls({"list", "switch 22", "list", "list", "switch 11"})},
+	    {"close", 3, calls({"list", "switch 22", "list", "close", "list", "list", "switch 11"})},
+	};
+	for (const Case &c : cases) {
+		FakeDocuments docs = sample();
+		docs.listThrowsAt = c.throwsAt;
+		Fs fs;
+		ToolStatus status;
+		bool threw = false;
+		try {
+			if (std::string_view(c.tool) == "save") {
+				VwCli::core::save(saveArgs(kUntitled, "/Users/me/tmp/a.vwx"), docs,
+				                  fs.environment(), status);
+			} else {
+				VwCli::core::close(
+				    Json::object({{"document", Json::string(std::string(kUntitled))}}), docs,
+				    status);
+			}
+		} catch (const std::runtime_error &) {
+			threw = true;
+		}
+		CHECK(threw);
+		CHECK(docs.calls == c.calls);
+	}
+}

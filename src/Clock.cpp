@@ -47,15 +47,10 @@ void onNotify(StatusID id, StatusData /*data*/) {
 // Vectorworks は起動時にモジュールを一度降ろして読み込み直すので、留める前に渡した番地は残らない。
 // 刻みはモジュールを留めてから作ったタイマーから来る。docs/plugin/architecture.md「入口」）。
 // 登録できなければ次の刻みでやり直す（その間 quit は starting で断り、detail に登録できて
-// いないことを示す）。
-void registerNotify() {
-	if (gLifecycle.notificationRegistered()) {
-		return;
-	}
-	if (gSDK->RegisterNotificationProcedure(&onNotify,
-	                                        static_cast<OSType>(kNotifyBeforePendingUpdate))) {
-		gLifecycle.markNotificationRegistered();
-	}
+// いないことを示す）。受け付けの入れ子の刻みと終了の依頼の最中は呼ばない（core::Lifecycle）。
+bool registerNotify() {
+	return gSDK->RegisterNotificationProcedure(&onNotify,
+	                                           static_cast<OSType>(kNotifyBeforePendingUpdate));
 }
 
 // requestQuit は終了を頼む。保存の確認を出すかは図面しだい（quit は図面が 0 枚のときだけ終了の
@@ -70,9 +65,8 @@ void tick() {
 		return;
 	}
 	try {
-		registerNotify();
 		// 受け付けは Vectorworks が終わるまで 1 つ。スプールの場所を求められなければ、次の刻みで
-		// やり直す。
+		// やり直す（通知も登録しない。受け付けなければ quit も呼ばれない）。
 		static std::optional<core::Server> server;
 		if (!server) {
 			std::optional<std::string> dir = core::defaultSpoolDir();
@@ -81,6 +75,7 @@ void tick() {
 			}
 			server.emplace(std::move(*dir));
 		}
+		gLifecycle.registerNotification(*server, &registerNotify);
 		core::tick(*server, tools::table(), nowNanos(), gLifecycle, &requestQuit);
 	} catch (...) {
 		// 次の刻みでやり直す。

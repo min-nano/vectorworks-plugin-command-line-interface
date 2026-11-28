@@ -65,11 +65,43 @@ void restoreFront(Documents &docs, const Target &target, const std::vector<OpenD
 	}
 }
 
+// FrontGuard は、名指した図面を前面にしてから抜けるまでの間を受け持ち、どの道で抜けても前面を戻す。
+// restore を呼ばずに抜けたら（例外で抜けたときも）、壊すときに今の一覧で戻す（利用者の前面の図面が
+// 変わったまま残らないように）。壊すときは投げない（一覧を読めなければ戻さない）。
+class FrontGuard {
+public:
+	FrontGuard(Documents &docs, const Target &target) : docs_(docs), target_(target) {}
+	FrontGuard(const FrontGuard &) = delete;
+	FrontGuard &operator=(const FrontGuard &) = delete;
+	~FrontGuard() {
+		if (restored_ || !target_.hasFront) {
+			return;
+		}
+		try {
+			restoreFront(docs_, target_, docs_.list());
+		} catch (...) {
+			// 戻せなくても失敗にしない（restoreFront と同じ）。抜ける理由の例外を差し替えない。
+			return;
+		}
+	}
+
+	// restore は after（読み直した一覧）で前面を戻す。1 度だけ戻す（壊すときに戻し直さない）。
+	void restore(const std::vector<OpenDocument> &after) {
+		restored_ = true;
+		restoreFront(docs_, target_, after);
+	}
+
+private:
+	Documents &docs_;
+	const Target &target_;
+	bool restored_ = false;
+};
+
 // bringForward は名指した図面を前面にする（前面なら何もしない）。SwitchToOpenFile の戻り値だけを
 // 信じず、切り替えた後の一覧で前面が名指した図面になったことを確かめる（前面が変わらないまま
 // 保存・閉じるを呼ぶと、利用者の別の図面に効いてしまう。CLAUDE.md の 5）。前面にできなければ、
 // 前面を戻してから internal で失敗する。
-bool bringForward(Documents &docs, const Target &target, ToolStatus &status) {
+bool bringForward(Documents &docs, const Target &target, FrontGuard &guard, ToolStatus &status) {
 	if (target.document.active) {
 		return true;
 	}
@@ -82,7 +114,7 @@ bool bringForward(Documents &docs, const Target &target, ToolStatus &status) {
 	if (front) {
 		return true;
 	}
-	restoreFront(docs, target, after);
+	guard.restore(after);
 	args::fail(status, ErrorCode::Internal,
 	           "図面 " + target.document.path + " を前面にできませんでした（SwitchToOpenFile）");
 	return false;
@@ -163,26 +195,23 @@ Json save(const Json &args, Documents &docs, const SaveEnvironment &environment,
 	// 4. 保存先の状態（前面を切り替える前に断る）。
 	std::vector<std::string> openPaths;
 	std::ranges::transform(before, std::back_inserter(openPaths), &OpenDocument::path);
-	if (!save_target::check(to, parent, openPaths, environment.checks, status) ||
-	    !bringForward(docs, target, status)) {
+	if (!save_target::check(to, parent, openPaths, environment.checks, status)) {
 		return Json();
 	}
-	std::uint32_t error = 0;
-	try {
-		error = docs.saveActive(to);
-	} catch (...) {
-		// 保存を呼べなかった（SDK の口を作れないなど）。前面を戻してから、Server に internal で
-		// 応えさせる。
-		restoreFront(docs, target, docs.list());
-		throw;
+	// ここから抜けるまで、どの道でも前面を戻す（保存を呼べずに投げた・一覧を読めずに投げたときも。
+	// 投げた例外は Server が internal で応える）。
+	FrontGuard guard(docs, target);
+	if (!bringForward(docs, target, guard, status)) {
+		return Json();
 	}
+	std::uint32_t error = docs.saveActive(to);
 	// 結果の path は、保存の直後に前面になっている項目から、前面を戻す前に読む。
 	std::vector<OpenDocument> after = docs.list();
 	auto active = std::ranges::find_if(after, &OpenDocument::active);
 	const bool saved = active != after.end();
 	std::string path = saved ? active->path : std::string();
 	// 成否によらず前面を戻す。
-	restoreFront(docs, target, after);
+	guard.restore(after);
 	if (error != 0) {
 		args::fail(status, ErrorCode::Internal,
 		           "保存できませんでした（SaveActiveDocumentPath が " + std::to_string(error) +
@@ -212,13 +241,18 @@ Json close(const Json &args, Documents &docs, ToolStatus &status) {
 		return Json();
 	}
 	Target target = findTarget(before, document, kCloseSpec.name, "閉じ", status);
-	if (!target.found || !bringForward(docs, target, status)) {
+	if (!target.found) {
+		return Json();
+	}
+	// ここから抜けるまで、どの道でも前面を戻す（save と同じ）。
+	FrontGuard guard(docs, target);
+	if (!bringForward(docs, target, guard, status)) {
 		return Json();
 	}
 	docs.closeActive();
 	// 戻り値では成否が分からないので、閉じた後の一覧で決める。
 	std::vector<OpenDocument> after = docs.list();
-	restoreFront(docs, target, after);
+	guard.restore(after);
 	if (std::ranges::find(after, document, &OpenDocument::path) != after.end()) {
 		args::failWithReason(status, kNotClosed, "図面 " + document + " が閉じませんでした");
 		return Json();

@@ -23,6 +23,13 @@ Probe failure(DWORD error) {
 	return {isMissing(code) ? Entry::Missing : Entry::Failed, code};
 }
 
+// unformed は、\\?\ の形にできないパス（相対・ドライブ相対・\\.\ など）の答え。OS
+// に聞かずに確かめられない （ERROR_INVALID_NAME）とする。空のパスを OS
+// に渡すと「無い」と答えうるので、確かめを素通りして既にある
+// ファイルを上書きしないように、失敗する側に倒す。checkWindowsTo がこうした形を先に断るので、普通は
+// 来ない（2 つの関数の綴りが食い違ったときの歯止め）。
+Probe unformed() { return {Entry::Failed, static_cast<std::int64_t>(ERROR_INVALID_NAME)}; }
+
 }
 
 bool isMissing(std::int64_t osError) {
@@ -35,7 +42,11 @@ bool isMissing(std::int64_t osError) {
 Probe probeTo(const std::string &path) {
 	// GetFileAttributesW はリパースポイントをたどらない
 	// （壊れたリンク・ジャンクションもあるとする）。
-	DWORD attributes = ::GetFileAttributesW(windows_path::extended(path).c_str());
+	std::wstring wide = windows_path::extended(path);
+	if (wide.empty()) {
+		return unformed();
+	}
+	DWORD attributes = ::GetFileAttributesW(wide.c_str());
 	if (attributes == INVALID_FILE_ATTRIBUTES) {
 		return failure(::GetLastError());
 	}
@@ -46,9 +57,13 @@ Probe probeParent(const std::string &path) {
 	// リパースポイントをたどって開く（先の無いリンク・ジャンクションの親は「無い」）。望むアクセスを
 	// 0 にし、共有を全て許すので、他のプロセスが共有を絞って開いているフォルダでも 32・5 に
 	// ならない。
-	HANDLE handle = ::CreateFileW(windows_path::extended(path).c_str(), 0,
-	                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-	                              OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+	std::wstring wide = windows_path::extended(path);
+	if (wide.empty()) {
+		return unformed();
+	}
+	HANDLE handle =
+	    ::CreateFileW(wide.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+		              nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
 	if (handle == INVALID_HANDLE_VALUE) {
 		return failure(::GetLastError());
 	}
